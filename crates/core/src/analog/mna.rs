@@ -77,9 +77,9 @@ use super::behavioural::Control as BehaviouralControl;
 use super::device;
 use super::eigen::{self, PencilError};
 use super::netlist::{
-    AnalogError, Bjt, BjtModel, Circuit, DcSweep, DiodeModel, MosChannelChargeModel, Mosfet,
-    NodeRef, PoleZero, PoleZeroFind, PoleZeroInput, SwitchSense, TransferOutput,
-    MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
+    AnalogError, Bjt, BjtModel, Circuit, DcSweep, DiodeModel, InstanceParameter,
+    MosChannelChargeModel, Mosfet, NodeRef, PoleZero, PoleZeroFind, PoleZeroInput, SwitchSense,
+    TransferOutput, MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
 };
 
 /// Largest MNA system the in-core engine solves: `N` nodes + `M` branch
@@ -223,8 +223,26 @@ pub struct SensitivityResponse {
     /// ohm, volt or ampere), `<name>_gain` for an `E`, `F`, `G` or `H`, and
     /// `<device>:<param>` for a model parameter of a `D`, `Q`, `J` or `M`
     /// (per unit of the parameter; see
-    /// [`Solver::model_sensitivity_analysis`]).
+    /// [`Solver::model_sensitivity_analysis`]), and `<device>_<param>` for
+    /// an instance parameter (see [`Solver::instance_sensitivity_analysis`]).
     pub entries: Vec<(String, f64)>,
+}
+
+/// One device parameter `.sens` moves; see
+/// [`Solver::model_sensitivity_analysis`] and
+/// [`Solver::instance_sensitivity_analysis`].
+struct ParameterMove {
+    /// The entry name, as ngspice prints it.
+    entry: String,
+    instance: String,
+    target: MoveTarget,
+    /// The value the device runs with.
+    value: f64,
+}
+
+enum MoveTarget {
+    Model { model: String, parameter: String },
+    Instance(InstanceParameter),
 }
 
 impl SensitivityResponse {
@@ -2769,6 +2787,9 @@ impl Solver {
         response
             .entries
             .extend(self.model_sensitivity_analysis(&card.output)?.entries);
+        response
+            .entries
+            .extend(self.instance_sensitivity_analysis(&card.output)?.entries);
         Ok(response)
     }
 
@@ -2783,7 +2804,7 @@ impl Solver {
     /// so it has no two-sided neighbourhood), a level or law selector, and a
     /// device this engine added for a macromodel (a name holding `#`) are
     /// not reported. Instance parameters (`AREA`, `M`, `W`, `L`, `TEMP`) are
-    /// not reported either.
+    /// [`Solver::instance_sensitivity_analysis`]'s.
     ///
     /// Each entry is `−wᵀ·∂F/∂p` with the same adjoint `w` as
     /// [`Solver::sensitivity_analysis`]. `∂F/∂p` is a central difference of
@@ -2804,8 +2825,6 @@ impl Solver {
         &mut self,
         output: &TransferOutput,
     ) -> Result<SensitivityResponse, AnalogError> {
-        const STEP: f64 = 1e-3;
-        let output_port = self.output_port(output, ".sens")?;
         let circuit = &self.circuit;
         let mut moves = Vec::new();
         for (name, model) in circuit
@@ -2819,10 +2838,117 @@ impl Solver {
         {
             for (parameter, value) in circuit.model_parameters(model) {
                 if *value != 0.0 {
-                    moves.push((name.clone(), model.clone(), parameter.clone(), *value));
+                    moves.push(ParameterMove {
+                        entry: format!("{}:{parameter}", name.to_ascii_lowercase()),
+                        instance: name.clone(),
+                        target: MoveTarget::Model {
+                            model: model.clone(),
+                            parameter: parameter.clone(),
+                        },
+                        value: *value,
+                    });
                 }
             }
         }
+        self.parameter_sensitivity(output, moves)
+    }
+
+    /// DC sensitivity to device instance parameters, the
+    /// `<device>_<param>` entries ngspice's `.sens` prints: `_area`, `_m`
+    /// and `_temp` of every `D`, `Q` and `J`, and `_w`, `_l`, `_m` and
+    /// `_temp` of every `M`, in that order and netlist order within each
+    /// kind, per unit of the parameter (per °C for `_temp`). The value moved
+    /// is the one the device runs with, so an `AREA`, `M`, `W` or `L` the
+    /// line does not write is moved from its default. `_temp` is reported
+    /// only for a device with a temperature: its own `temp=` or the deck's
+    /// `.temp` / `.options temp=`; without one the device keeps this engine's
+    /// fixed 300 K laws, which have no temperature to move. A device this
+    /// engine added for a macromodel (a name holding `#`) is not reported.
+    ///
+    /// The method is [`Solver::model_sensitivity_analysis`]'s: the deck is
+    /// lowered again with the one instance parameter moved, and the moved DC
+    /// residual at the present solution is projected through the `.sens`
+    /// adjoint. ngspice-42 reports `_m` of a diode as zero; this engine
+    /// reports the derivative of the parallel-device law it stamps.
+    ///
+    /// The transient state is left exactly as it was, as for
+    /// [`Solver::ac_analysis`].
+    pub fn instance_sensitivity_analysis(
+        &mut self,
+        output: &TransferOutput,
+    ) -> Result<SensitivityResponse, AnalogError> {
+        use InstanceParameter::{Area, Length, Multiplier, Temperature, Width};
+        let circuit = &self.circuit;
+        let mut moves = Vec::new();
+        let mut push = |name: &str, written: &[(InstanceParameter, Option<f64>)]| {
+            if name.contains('#') {
+                return;
+            }
+            for &(parameter, value) in written {
+                if let Some(value) = value {
+                    moves.push(ParameterMove {
+                        entry: format!("{}_{}", name.to_ascii_lowercase(), parameter.name()),
+                        instance: name.to_string(),
+                        target: MoveTarget::Instance(parameter),
+                        value,
+                    });
+                }
+            }
+        };
+        for d in &circuit.diodes {
+            push(
+                &d.name,
+                &[
+                    (Area, Some(d.area)),
+                    (Multiplier, Some(d.multiplier)),
+                    (Temperature, d.temperature_celsius),
+                ],
+            );
+        }
+        for q in &circuit.bjts {
+            push(
+                &q.name,
+                &[
+                    (Area, Some(q.area)),
+                    (Multiplier, Some(q.multiplier)),
+                    (Temperature, q.temperature_celsius),
+                ],
+            );
+        }
+        for j in &circuit.jfets {
+            push(
+                &j.name,
+                &[
+                    (Area, Some(j.area)),
+                    (Multiplier, Some(j.multiplier)),
+                    (Temperature, j.temperature_celsius),
+                ],
+            );
+        }
+        for m in &circuit.mosfets {
+            push(
+                &m.name,
+                &[
+                    (Width, Some(m.w)),
+                    (Length, Some(m.l)),
+                    (Multiplier, Some(m.multiplier)),
+                    (Temperature, m.temperature_celsius),
+                ],
+            );
+        }
+        self.parameter_sensitivity(output, moves)
+    }
+
+    /// `−wᵀ·∂F/∂p` for each move, with `w` the `.sens` adjoint and `∂F/∂p` a
+    /// Richardson-extrapolated central difference of the DC residual at the
+    /// present solution with the deck lowered again around the move.
+    fn parameter_sensitivity(
+        &mut self,
+        output: &TransferOutput,
+        moves: Vec<ParameterMove>,
+    ) -> Result<SensitivityResponse, AnalogError> {
+        const STEP: f64 = 1e-3;
+        let output_port = self.output_port(output, ".sens")?;
         if moves.is_empty() {
             return Ok(SensitivityResponse {
                 entries: Vec::new(),
@@ -2832,15 +2958,24 @@ impl Solver {
         let dim = self.dim();
         let x: Vec<f64> = self.node_v.iter().chain(&self.branch_i).copied().collect();
         let mut entries = Vec::new();
-        for (name, model, parameter, value) in moves {
+        for movement in moves {
             let residual = |moved: f64| -> Result<Vec<f64>, AnalogError> {
-                let lowered = self
-                    .circuit
-                    .with_model_parameter(&name, &model, &parameter, moved)?;
+                let lowered =
+                    match &movement.target {
+                        MoveTarget::Model { model, parameter } => self
+                            .circuit
+                            .with_model_parameter(&movement.instance, model, parameter, moved)?,
+                        MoveTarget::Instance(parameter) => self.circuit.with_instance_parameter(
+                            &movement.instance,
+                            *parameter,
+                            moved,
+                        )?,
+                    };
                 let mut solver = Solver::new(lowered, self.integration)?;
                 if solver.dim() != dim {
                     return Err(AnalogError::Config(format!(
-                        "moving `{name}:{parameter}` changed the circuit's unknowns"
+                        "moving `{}` changed the circuit's unknowns",
+                        movement.entry
                     )));
                 }
                 solver.dc_residual(&x)
@@ -2850,15 +2985,24 @@ impl Solver {
             // the residual's rounding (cells shared with a terminal
             // resistance hold O(1) siemens) stays far below the change.
             let difference = |step: f64| -> Result<f64, AnalogError> {
-                let (up, down) = (residual(value + step)?, residual(value - step)?);
+                let (up, down) = (
+                    residual(movement.value + step)?,
+                    residual(movement.value - step)?,
+                );
                 Ok(-(0..dim)
                     .map(|row| w[row] * (up[row] - down[row]))
                     .sum::<f64>()
                     / (2.0 * step))
             };
-            let step = STEP * value;
+            // A temperature moves in °C, whose zero is not a scale: step it
+            // by a part in 10³ of its absolute value.
+            let scale = match movement.target {
+                MoveTarget::Instance(InstanceParameter::Temperature) => movement.value + 273.15,
+                _ => movement.value,
+            };
+            let step = STEP * scale;
             let slope = (4.0 * difference(step)? - difference(2.0 * step)?) / 3.0;
-            entries.push((format!("{}:{parameter}", name.to_ascii_lowercase()), slope));
+            entries.push((movement.entry, slope));
         }
         Ok(SensitivityResponse { entries })
     }

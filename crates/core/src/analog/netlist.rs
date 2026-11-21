@@ -396,7 +396,9 @@
 //! `E`/`F`/`G`/`H` gain, linearised at the operating point, and
 //! [`crate::analog::Solver::model_sensitivity_analysis`] adds one
 //! `<device>:<param>` entry per numeric parameter each `D`, `Q`, `J` and `M`
-//! device's `.model` card writes.
+//! device's `.model` card writes, and
+//! [`crate::analog::Solver::instance_sensitivity_analysis`] one
+//! `<device>_<param>` entry per instance `AREA`, `M`, `W`, `L` and `TEMP`.
 //! `.sens v(<out>[,<ref>])|i(<element>) ac dec|oct|lin <points> <fstart>
 //! <fstop>` is the AC form, run by
 //! [`crate::analog::Solver::ac_sensitivity_analysis`]: the derivative of the
@@ -2925,6 +2927,9 @@ pub struct Diode {
     /// stamps, including its terminal resistances and GMIN, is scaled by it,
     /// as ngspice's `*load.c` does. `1` for a single device.
     pub multiplier: f64,
+    /// SPICE instance `AREA` the model is scaled by; `1` when the line
+    /// does not write one, and for a junction this engine adds.
+    pub area: f64,
     /// SPICE `off`: the operating point starts with this junction at 0 V and
     /// holds it there until the rest of the circuit has converged, then
     /// releases it (ngspice's `MODEINITFIX`). It selects one state of a
@@ -3096,6 +3101,9 @@ pub struct Bjt {
     /// stamps, including its terminal resistances and GMIN, is scaled by it,
     /// as ngspice's `*load.c` does. `1` for a single device.
     pub multiplier: f64,
+    /// SPICE instance `AREA` the model is scaled by; `1` when the line
+    /// does not write one, and for a junction this engine adds.
+    pub area: f64,
     /// SPICE `off`: the operating point starts with both junctions at 0 V
     /// and holds them there until the rest of the circuit has converged
     /// (ngspice's `MODEINITFIX`). See [`Diode::off`].
@@ -3304,6 +3312,9 @@ pub struct Jfet {
     /// stamps, including its terminal resistances and GMIN, is scaled by it,
     /// as ngspice's `*load.c` does. `1` for a single device.
     pub multiplier: f64,
+    /// SPICE instance `AREA` the model is scaled by; `1` when the line
+    /// does not write one, and for a junction this engine adds.
+    pub area: f64,
     /// SPICE `off`: the operating point starts with both gate junctions at
     /// 0 V and holds them there until the rest of the circuit has converged
     /// (ngspice's `MODEINITFIX`). See [`Diode::off`].
@@ -3631,10 +3642,41 @@ impl Circuit {
                     .to_string(),
             )
         })?;
-        let perturbation = ModelPerturbation {
+        let perturbation = Perturbation {
             instance: instance.to_ascii_lowercase(),
-            model: model.to_ascii_lowercase(),
-            parameter: parameter.to_string(),
+            target: PerturbationTarget::Model {
+                model: model.to_ascii_lowercase(),
+                parameter: parameter.to_string(),
+            },
+            value,
+        };
+        parse_lines_at(
+            deck.as_ref().clone(),
+            self.temperature_celsius,
+            Some(&perturbation),
+        )
+    }
+
+    /// The same deck lowered again with instance parameter `parameter` of
+    /// the `D`, `Q`, `J` or `M` line `instance` set to `value`, as ngspice
+    /// moves an instance parameter for `.sens`. The temperature is this
+    /// circuit's. Only a parsed deck with a `.sens` or `.dc` card can do this.
+    pub(crate) fn with_instance_parameter(
+        &self,
+        instance: &str,
+        parameter: InstanceParameter,
+        value: f64,
+    ) -> Result<Circuit, AnalogError> {
+        let deck = self.source_deck.as_ref().ok_or_else(|| {
+            AnalogError::Config(
+                "instance-parameter `.sens` needs a circuit parsed from a netlist with its \
+                 `.sens` card"
+                    .to_string(),
+            )
+        })?;
+        let perturbation = Perturbation {
+            instance: instance.to_ascii_lowercase(),
+            target: PerturbationTarget::Instance(parameter),
             value,
         };
         parse_lines_at(
@@ -5269,20 +5311,64 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
     parse_lines_at(lines, None, None)
 }
 
-/// One model parameter of one device moved for `.sens`; see
-/// [`Circuit::with_model_parameter`]. Names are lower case.
-struct ModelPerturbation {
+/// An instance parameter of a `D`, `Q`, `J` or `M` line that `.sens` moves;
+/// see [`Circuit::with_instance_parameter`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum InstanceParameter {
+    /// `AREA` of a `D`, `Q` or `J`.
+    Area,
+    /// The parallel multiplier `M`.
+    Multiplier,
+    /// Channel width `W` of an `M`.
+    Width,
+    /// Drawn channel length `L` of an `M`.
+    Length,
+    /// Instance `TEMP`, °C.
+    Temperature,
+}
+
+impl InstanceParameter {
+    /// The suffix ngspice's `.sens` prints after `<device>_`.
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Area => "area",
+            Self::Multiplier => "m",
+            Self::Width => "w",
+            Self::Length => "l",
+            Self::Temperature => "temp",
+        }
+    }
+}
+
+/// One parameter of one device moved for `.sens`; see
+/// [`Circuit::with_model_parameter`] and
+/// [`Circuit::with_instance_parameter`]. Names are lower case.
+struct Perturbation {
     instance: String,
-    model: String,
-    parameter: String,
+    target: PerturbationTarget,
     value: f64,
 }
 
-impl ModelPerturbation {
+enum PerturbationTarget {
+    /// A parameter of the instance's `.model` card.
+    Model { model: String, parameter: String },
+    /// A parameter written on the instance line.
+    Instance(InstanceParameter),
+}
+
+impl Perturbation {
+    /// The model card and parameter moved, when the move is on a card.
+    fn model(&self) -> Option<(&str, &str)> {
+        match &self.target {
+            PerturbationTarget::Model { model, parameter } => Some((model, parameter)),
+            PerturbationTarget::Instance(_) => None,
+        }
+    }
+
     /// The private card the perturbed instance binds to. `#` cannot appear
     /// in a model name a deck writes.
-    fn card_key(&self) -> String {
-        format!("{}#sens", self.model)
+    fn card_key(model: &str) -> String {
+        format!("{model}#sens")
     }
 }
 
@@ -5291,7 +5377,7 @@ impl ModelPerturbation {
 fn parse_lines_at(
     lines: Vec<LogicalLine>,
     temperature: Option<f64>,
-    perturbation: Option<&ModelPerturbation>,
+    perturbation: Option<&Perturbation>,
 ) -> Result<Circuit, AnalogError> {
     let mut circuit = Circuit::default();
     let keeps_deck = lines.iter().any(|line| {
@@ -5415,8 +5501,11 @@ fn parse_lines_at(
                         None,
                     )?;
                     let key = tokens[1].to_ascii_lowercase();
-                    if let Some(perturbation) = perturbation.filter(|p| p.model == key) {
-                        let card_key = perturbation.card_key();
+                    if let Some((model, parameter, value)) = perturbation
+                        .and_then(|p| p.model().map(|(m, q)| (m, q, p.value)))
+                        .filter(|(model, _, _)| *model == key)
+                    {
+                        let card_key = Perturbation::card_key(model);
                         let mut variant = tokens[1..].to_vec();
                         variant[0] = &card_key;
                         parse_model(
@@ -5424,7 +5513,7 @@ fn parse_lines_at(
                             &ctx,
                             &variant,
                             temperatures.nominal_celsius(),
-                            Some((&perturbation.parameter, perturbation.value)),
+                            Some((parameter, value)),
                         )?;
                     }
                     if !written.is_empty() {
@@ -6854,19 +6943,38 @@ fn bind_models(
     circuit: &mut Circuit,
     models: &BTreeMap<String, ModelCard>,
     pending: Vec<PendingDevice>,
-    perturbation: Option<&ModelPerturbation>,
+    perturbation: Option<&Perturbation>,
 ) -> Result<(), AnalogError> {
-    for device in pending {
+    for mut device in pending {
+        let mut key = device.model_name.to_ascii_lowercase();
+        if let Some(perturbation) =
+            perturbation.filter(|p| device.name.eq_ignore_ascii_case(&p.instance))
+        {
+            let value = perturbation.value;
+            match perturbation.target {
+                PerturbationTarget::Model { ref model, .. } if *model == key => {
+                    key = Perturbation::card_key(model);
+                }
+                PerturbationTarget::Model { .. } => {}
+                PerturbationTarget::Instance(InstanceParameter::Area) => device.area = value,
+                PerturbationTarget::Instance(InstanceParameter::Multiplier) => {
+                    device.multiplier = value
+                }
+                PerturbationTarget::Instance(InstanceParameter::Width) => {
+                    device.width = Some(value)
+                }
+                PerturbationTarget::Instance(InstanceParameter::Length) => {
+                    device.length = Some(value)
+                }
+                PerturbationTarget::Instance(InstanceParameter::Temperature) => {
+                    device.temperature_celsius = Some(value)
+                }
+            }
+        }
         let ctx = LineCtx {
             number: device.line,
             text: &device.text,
         };
-        let mut key = device.model_name.to_ascii_lowercase();
-        if let Some(perturbation) =
-            perturbation.filter(|p| p.model == key && device.name.eq_ignore_ascii_case(&p.instance))
-        {
-            key = perturbation.card_key();
-        }
         let resolved = models
             .get(&key)
             .copied()
@@ -7107,6 +7215,7 @@ fn bind_models(
                 circuit.diodes.push(Diode {
                     name: device.name,
                     multiplier: device.multiplier,
+                    area: device.area,
                     off: device.off,
                     ic: device.ic.first().copied(),
                     anode: device.nodes[0],
@@ -7508,6 +7617,7 @@ fn bind_models(
                 circuit.diodes.push(Diode {
                     name: internal_name,
                     multiplier: device.multiplier,
+                    area: 1.0,
                     off: device.off,
                     ic: None,
                     anode,
@@ -7523,6 +7633,7 @@ fn bind_models(
                 circuit.bjts.push(Bjt {
                     name: device.name,
                     multiplier: device.multiplier,
+                    area: device.area,
                     off: device.off,
                     ic: (device.ic.len() == 2).then(|| [device.ic[0], device.ic[1]]),
                     c: device.nodes[0],
@@ -7899,6 +8010,7 @@ fn bind_models(
                 circuit.jfets.push(Jfet {
                     name: device.name,
                     multiplier: device.multiplier,
+                    area: device.area,
                     off: device.off,
                     ic: (device.ic.len() == 2).then(|| [device.ic[0], device.ic[1]]),
                     d: device.nodes[0],
@@ -9128,6 +9240,7 @@ impl Lowering<'_> {
         self.circuit.diodes.push(Diode {
             name,
             multiplier: 1.0,
+            area: 1.0,
             off: false,
             ic: None,
             anode,
@@ -9686,6 +9799,7 @@ fn lower_regulator(
     lower.circuit.diodes.push(Diode {
         name,
         multiplier: 1.0,
+        area: 1.0,
         off: false,
         ic: None,
         anode: a,

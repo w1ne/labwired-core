@@ -196,10 +196,10 @@ mod analog {
 
     #[test]
     fn a_degenerated_bjt_stage_matches_ngspice() {
-        // ngspice-42 also prints the `q1_` instance entries and the `q1:`
-        // parameters the card leaves at their defaults, which this engine
-        // does not report. The `q1:` values are ngspice central differences
-        // of `.op` (see `MODEL_ORACLE`).
+        // ngspice-42 also prints the `q1:` parameters the card leaves at
+        // their defaults, and `q1_areab`/`q1_areac`, which this engine does
+        // not report. The `q1:` and `q1_` values are ngspice central
+        // differences of `.op` (see `MODEL_ORACLE`).
         assert_table(
             &format!("{BJT}.sens v(c)\n"),
             &[
@@ -216,6 +216,9 @@ mod analog {
                 ("q1:rb", 3.462803501719e-05),
                 ("q1:rc", 7.480718400288e-06),
                 ("q1:re", 5.366519735261e-03),
+                ("q1_area", -1.257657456843e-01),
+                ("q1_m", -1.257659364207e-01),
+                ("q1_temp", -7.504881456377e-03),
             ],
             1e-5,
             0.0,
@@ -242,6 +245,9 @@ mod analog {
                 ("q1:rb", 7.367667001663e-09),
                 ("q1:rc", 1.591642250398e-09),
                 ("q1:re", 1.141812701246e-06),
+                ("q1_area", -2.675866929945e-05),
+                ("q1_m", -2.675870984970e-05),
+                ("q1_temp", -1.596783288666e-06),
             ],
             2e-4,
             0.0,
@@ -324,7 +330,8 @@ mod analog {
     fn a_mosfet_stage_matches_ngspice() {
         // The bulk is on the source, so `gamma` and `phi` do not move the
         // threshold: ngspice prints 0, and so does this engine, exactly.
-        // `level` is a selector and is not reported.
+        // `level` is a selector and is not reported. The deck has no
+        // temperature, so there is no `m1_temp`.
         assert_table(
             &format!("{MOS}.sens v(dr)\n"),
             &[
@@ -336,6 +343,9 @@ mod analog {
                 ("m1:lambda", -5.366646189331e+00),
                 ("m1:gamma", 0.0),
                 ("m1:phi", 0.0),
+                ("m1_w", -1.844784644494e+05),
+                ("m1_l", 9.223923308321e+05),
+                ("m1_m", -1.844784644591e+00),
             ],
             1e-5,
             0.0,
@@ -356,7 +366,9 @@ mod analog {
         // series conductance); the `d1:`/`d2:` values here are ngspice
         // central differences of `.op` with each instance on its own copy
         // of the card (see `MODEL_ORACLE`). D2's series resistance is
-        // `rs/2`, so it carries half of D1's `∂v/∂rs`.
+        // `rs/2`, so it carries half of D1's `∂v/∂rs`. ngspice-42's own
+        // `.sens` prints `d1_m` as 0; the `_m` values are the `.op`
+        // difference, which is twice `d2_area` for D2 (area 2).
         let sens = build(&format!("{DIODES}.sens v(k)\n"))
             .sensitivity()
             .unwrap();
@@ -369,13 +381,22 @@ mod analog {
             ("d2:is", -3.768071699994e+12),
             ("d2:n", 6.461886265274e-01),
             ("d2:rs", 1.442589634415e-03),
+            ("d1_area", -4.345107567083e-02),
+            ("d1_m", -4.345107567083e-02),
+            ("d1_temp", -5.285047635528e-04),
+            ("d2_area", -2.028294814216e-02),
+            ("d2_m", -4.056589632428e-02),
+            ("d2_temp", -6.155657056676e-04),
         ] {
             assert_close(name, sens.get(name).unwrap(), expected, 1e-5);
         }
         let names: Vec<&str> = sens.entries.iter().map(|(name, _)| name.as_str()).collect();
         assert_eq!(
             names,
-            ["r1", "v1", "d1:is", "d1:n", "d1:rs", "d2:is", "d2:n", "d2:rs"]
+            [
+                "r1", "v1", "d1:is", "d1:n", "d1:rs", "d2:is", "d2:n", "d2:rs", "d1_area", "d1_m",
+                "d1_temp", "d2_area", "d2_m", "d2_temp"
+            ]
         );
     }
 
@@ -417,6 +438,100 @@ mod analog {
         }
     }
 
+    fn instance_entry(deck: &str, probe: &TransferOutput, name: &str) -> f64 {
+        let sens = build(deck)
+            .instance_sensitivity_analysis(probe)
+            .unwrap_or_else(|error| panic!("{error}"));
+        sens.get(name)
+            .unwrap_or_else(|| panic!("no `{name}` in {:?}", sens.entries))
+    }
+
+    const HOT_JFET: &str = "* self-biased n-JFET at 40 °C\n\
+                            .options temp=40 tnom=26.85\n\
+                            VDD d 0 DC 9\n\
+                            RD d dr 2000\n\
+                            RS s 0 500\n\
+                            J1 dr 0 s jn area=1.5\n\
+                            .model jn njf vto=-2 beta=1e-3 lambda=0.01 is=1e-14 \
+                            vtotc=-2.5e-3 betatce=-0.5\n\
+                            .sens v(dr)\n";
+
+    #[test]
+    fn jfet_instance_entries_match_ngspice() {
+        // ngspice-42 has no JFET sensitivity; these are its `.op` central
+        // differences (see `MODEL_ORACLE`). `vtotc` and `betatce` give the
+        // temperature a channel law to move.
+        for (probe, table) in [
+            (
+                v("dr"),
+                [
+                    ("j1_area", -9.100785898812e-01),
+                    ("j1_m", -1.365117896484e+00),
+                    ("j1_temp", 6.823125508806e-04),
+                ],
+            ),
+            (
+                v("s"),
+                [
+                    ("j1_area", 2.275196477508e-01),
+                    ("j1_m", 3.412794714153e-01),
+                    ("j1_temp", -1.705781499214e-04),
+                ],
+            ),
+        ] {
+            for (name, expected) in table {
+                assert_close(name, instance_entry(HOT_JFET, &probe, name), expected, 1e-5);
+            }
+        }
+    }
+
+    #[test]
+    fn area_and_multiplier_agree_where_the_laws_coincide() {
+        // A unit-area JFET scales every law it stamps the same way under
+        // AREA and under M, so the two entries are equal; at AREA = 1.5,
+        // `_m` is `1.5·_area`.
+        let unit = HOT_JFET.replace(" area=1.5", "");
+        let probe = v("dr");
+        let area = instance_entry(&unit, &probe, "j1_area");
+        assert_close("j1_m", instance_entry(&unit, &probe, "j1_m"), area, 1e-6);
+        let area = instance_entry(HOT_JFET, &probe, "j1_area");
+        assert_close(
+            "j1_m",
+            instance_entry(HOT_JFET, &probe, "j1_m"),
+            1.5 * area,
+            1e-6,
+        );
+    }
+
+    #[test]
+    fn instance_temp_moves_the_device_alone() {
+        // `_temp` moves one instance's temperature; the deck's `.temp` moves
+        // every device and resistor law. With one temperature-sensitive
+        // device and no resistor law, the two are the same derivative.
+        let deck = HOT_JFET.replace(".sens v(dr)\n", "");
+        let at = |celsius: f64| {
+            output(
+                &deck.replace("temp=40 ", &format!("temp={celsius:.17e} ")),
+                &v("dr"),
+            )
+        };
+        let step = 1e-3 * (40.0 + 273.15);
+        let slope = (at(40.0 + step) - at(40.0 - step)) / (2.0 * step);
+        assert_close(
+            "j1_temp",
+            instance_entry(HOT_JFET, &v("dr"), "j1_temp"),
+            slope,
+            1e-5,
+        );
+        // Without a temperature the device has no `_temp` entry.
+        let cold = HOT_JFET.replace(".options temp=40 tnom=26.85\n", "");
+        let sens = build(&cold)
+            .instance_sensitivity_analysis(&v("dr"))
+            .unwrap();
+        let names: Vec<&str> = sens.entries.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(names, ["j1_area", "j1_m"]);
+    }
+
     #[test]
     fn model_entries_need_the_deck_and_leave_the_solver_alone() {
         let mut solver = build(BJT);
@@ -424,10 +539,12 @@ mod analog {
             solver.model_sensitivity_analysis(&v("c")).is_err(),
             "a deck without `.sens` cannot be lowered again"
         );
+        assert!(solver.instance_sensitivity_analysis(&v("c")).is_err());
         let mut solver = build(&format!("{BJT}.sens v(c)\n"));
         let c = solver.circuit().node("c").unwrap();
         let before = solver.node_voltage(c).to_bits();
         solver.model_sensitivity_analysis(&v("c")).unwrap();
+        solver.instance_sensitivity_analysis(&v("c")).unwrap();
         assert_eq!(solver.node_voltage(c).to_bits(), before);
         solver.advance(1e-6).unwrap();
         assert!(solver.model_sensitivity_analysis(&v("nowhere")).is_err());
