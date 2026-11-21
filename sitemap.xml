@@ -3292,6 +3292,9 @@
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/stm32f401cdu6-blackpill/2026-11-12-vfp4-attribute-unstable/onboarding-summary/</loc>
     </url>
     <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/stm32f401cdu6-blackpill/2026-11-21-negative-control-tim1-9-10-11-irq-old-descriptor/</loc>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/stm32f412/2026-11-13-stale-profile-current-firmware/</loc>
     </url>
     <url>
