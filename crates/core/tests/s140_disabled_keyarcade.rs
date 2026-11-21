@@ -15,7 +15,6 @@ use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::CortexM;
 use labwired_core::machine::AdvanceStop;
-use labwired_core::peripherals::cortex_m_fpu::CortexMFpu;
 use labwired_core::s140_disabled::{self, APP_BASE};
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::system::node::parse_elf_image;
@@ -42,17 +41,9 @@ fn nrf52840_machine() -> Machine<CortexM> {
         .join(&manifest.chip);
     manifest.chip = anchored.to_string_lossy().into_owned();
     let mut bus = SystemBus::from_config(&chip, &manifest).expect("nrf52840 bus");
-    // The chip yaml does not yet declare the Cortex-M4F FPU window. FreeRTOS
-    // (`xPortStartScheduler`) writes ASPEN/LSPEN in FPCCR at 0xE000_EF34, so
-    // the test installs the architectural block before `configure_cortex_m`
-    // wires CPACR. This is the same `cortex_m_fpu` model other M4F chips use.
-    bus.add_peripheral(
-        "fpu",
-        0xE000_EF30,
-        28,
-        None,
-        Box::new(CortexMFpu::default()),
-    );
+    // The nRF52840 chip yaml now declares the Cortex-M4F FPU window
+    // (`cortex_m_fpu` at 0xE000_EF30), so FreeRTOS FPCCR writes land on the
+    // catalog model. Do not install a second copy from the test.
     let (cpu, _nvic) = configure_cortex_m(&mut bus);
     Machine::new(cpu, bus)
 }
