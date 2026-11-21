@@ -233,6 +233,7 @@ peripherals:
     irq: 13
     config:
       capture_compare_irq: 14
+      advanced: true
     clock: { reg: "apb2enr", bit: 11 }
   - id: "tim2"
     type: "timer"

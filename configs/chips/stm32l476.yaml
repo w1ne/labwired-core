@@ -399,10 +399,12 @@ peripherals:
     base_address: 0x40012C00
     size: "1KB"
     # TIM1_UP_TIM16_IRQn = 25, TIM1_CC_IRQn = 27 (stm32l4xx CMSIS).
-    # BRK (24) and TRG/COM (26) are not routed.
+    # BRK (24) and TRG/COM (26) route BIF and TIF/COMIF.
     irq: 25
     config:
       capture_compare_irq: 27
+      trigger_com_irq: 26
+      break_irq: 24
       # Channel outputs reach the pads through the L4 AF table
       # (bus/attach.rs STM32L4_TIMER_PADS, from stm32duino PinMap_TIM).
       pad_map: "stm32l4"
@@ -414,10 +416,12 @@ peripherals:
     base_address: 0x40013400
     size: "1KB"
     # TIM8_UP_IRQn = 44, TIM8_CC_IRQn = 46 (stm32l476xx.h).
-    # BRK (43) and TRG/COM (45) are not routed.
+    # BRK (43) and TRG/COM (45) route BIF and TIF/COMIF.
     irq: 44
     config:
       capture_compare_irq: 46
+      trigger_com_irq: 45
+      break_irq: 43
       debug_schema: "../peripherals/stm32l476/tim8.yaml"
       advanced: true
 
