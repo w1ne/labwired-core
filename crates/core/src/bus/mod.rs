@@ -57,6 +57,7 @@ mod spi_cs;
 mod tick;
 mod timed_can;
 mod timer_kernel_clock;
+#[cfg(feature = "event-scheduler")]
 pub(crate) use tick::reconcile_nvic_level;
 
 pub use can_devices::*;
