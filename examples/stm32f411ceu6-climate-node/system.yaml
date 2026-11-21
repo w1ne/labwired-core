@@ -48,6 +48,7 @@ board_io:
     pin: 5
     signal: "output"
     active_high: true
+    emission: { color: "#ff2a1a" }
   - id: "bz1"
     kind: "pwm_output"
     peripheral: "gpioa"
