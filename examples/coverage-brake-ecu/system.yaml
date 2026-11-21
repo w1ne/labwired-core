@@ -5,5 +5,5 @@
 # See the LICENSE file in the project root for full license information.
 
 name: "coverage-brake-ecu"
-chip: "../../configs/chips/ci-fixture-cortex-m3-uart1.yaml"
+chip: "chip-cm3.yaml"
 external_devices: []
