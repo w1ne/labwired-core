@@ -26,9 +26,10 @@
 #
 # REUSE BOUNDARY, STATED PLAINLY: G431x6 (32 KB) and G431x8 (64 KB) parts share
 #   this G431xB (128 KB) map; they are not modelled as separate descriptors here.
-#   The CCM SRAM (10 KB @ 0x10000000) is NOT declared, exactly as the F407IE
-#   descriptor does not declare its CCM — only the contiguous main SRAM is
-#   declared, so the sim faults identically to silicon past the main bank.
+#   The 10 KB CCM SRAM is also aliased at 0x20005800, directly after SRAM2
+#   (RM0440 memory map), so the RAM window below is the 32 KB contiguous block
+#   the stock stm32duino ldscript links against (_estack = 0x20008000). The
+#   0x10000000 CCM address is not mapped.
 name: "stm32g431rb"
 arch: "arm"
 core: "cortex-m4"
@@ -48,10 +49,23 @@ flash:
   size: "128KB"
 ram:
   base: 0x20000000
-  # STM32G431xB main SRAM: 22 KB (DS12589 Features: "22 Kbytes of SRAM").
-  # The separate 10 KB CCM SRAM @ 0x10000000 is not declared (reuse boundary
-  # above). Firmware running past 0x2000_5800 faults as it does on silicon.
-  size: "22KB"
+  # SRAM1 16 KB + SRAM2 6 KB (stm32g431xx.h SRAM2_BASE 0x20004000) + the CCM
+  # SRAM alias, 10 KB at 0x20005800: 32 KB contiguous, as the G474 descriptor
+  # declares its 128 KB. stm32duino's NUCLEO_G431RB ldscript puts the initial
+  # SP at 0x20008000; with 22 KB here the first push faulted at 0x20007FFC.
+  size: "32KB"
+
+# SRAMCAN (stm32g431xx.h SRAMCAN_BASE) sits at 0x4000A400, 0x4000 above
+# FDCAN1's registers, while the shared `fdcan` model serves its message RAM at
+# window offset +0x800. A window that wide would claim PWR, I2C3, LPUART1 and
+# the other APB1 blocks in between, so this same-backing mirror routes SRAMCAN
+# onto the model's RAM instead (the stm32g474re pattern). The mirror is 1 KiB:
+# the FDCAN1 section (0x350, HAL SRAMCAN_SIZE) and unused space after it.
+memory_regions:
+  - name: "sramcan"
+    base: 0x4000A400
+    size: "1KB"
+    alias_of: 0x40006C00
 
 peripherals:
   - id: "rcc"
@@ -120,7 +134,8 @@ peripherals:
     size: "1KB"
     config:
       debug_schema: "../peripherals/stm32g474re/flash.yaml"
-      profile: "l4"
+      # L4 register file with a 4-bit ACR.LATENCY (RM0440 §3.7.1).
+      profile: "stm32g4"
   - id: "pwr"
     type: "pwr"
     base_address: 0x40007000
@@ -155,6 +170,9 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32g474re/tim2.yaml"
       width: 32
+      # Channel outputs reach the pads through the G4 AF table (TIM2 AF1;
+      # bus/attach.rs STM32G4_TIMER_PADS).
+      pad_map: "stm32g4"
     clock: { reg: "apb1enr", bit: 0 }
   # TIM1 — advanced-control PWM timer (APB2). The `_pwm` id suffix declares the
   # pwm class alongside timer. RCC_APB2ENR.TIM1EN (bit 11).
@@ -169,7 +187,25 @@ peripherals:
       capture_compare_irq: 27
       debug_schema: "../peripherals/stm32g474re/tim1.yaml"
       advanced: true
+      pad_map: "stm32g4"
     clock: { reg: "apb2enr", bit: 11 }
+  # FDCAN1 (FDCAN1_BASE 0x40006400), the only FDCAN instance on the G431
+  # (DS12589 Table 2). The same Bosch M_CAN register map and fixed SRAMCAN
+  # layout as the G474 (stm32g4xx_hal_fdcan.c SRAMCAN_RF0SA 0xB0, SRAMCAN_TFQSA
+  # 0x278, SRAMCAN_SIZE 0x350), so it uses the shared `fdcan` model. Message
+  # RAM: see `sramcan` in memory_regions. No G431 silicon capture backs this
+  # block; the register behaviour is the H5 capture13 pin.
+  - id: "fdcan1"
+    type: "fdcan"
+    base_address: 0x40006400
+    # 3 KiB: registers + message RAM at +0x800, ending where PWR (0x40007000)
+    # begins. A 4 KiB window collides with PWR.
+    size: "3KB"
+    irq: 21  # FDCAN1_IT0; IT1 = 22 via ILS not modeled
+    # RCC_APB1ENR1.FDCANEN (bit 25, RCC_APB1ENR1_FDCANEN_Pos).
+    clock: { reg: "apb1enr", bit: 25 }
+    config:
+      debug_schema: "../peripherals/stm32h563/fdcan1.yaml"
   # I2C1 (APB1) — modern v2 controller. RCC_APB1ENR1.I2C1EN (bit 21).
   - id: "i2c1"
     type: "i2c"

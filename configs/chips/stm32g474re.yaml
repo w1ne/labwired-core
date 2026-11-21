@@ -99,7 +99,8 @@ peripherals:
     size: "1KB"
     config:
       debug_schema: "../peripherals/stm32g474re/flash.yaml"
-      profile: "l4"
+      # L4 register file with a 4-bit ACR.LATENCY (RM0440 §3.7.1).
+      profile: "stm32g4"
   - id: "pwr"
     type: "pwr"
     base_address: 0x40007000

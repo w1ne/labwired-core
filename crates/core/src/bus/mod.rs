@@ -504,6 +504,9 @@ pub struct SystemBus {
     pub riscv_clint: Option<crate::cpu::riscv::Rv32Clint>,
     /// PLIC geometry of an RV32 chip whose core complex carries one.
     pub riscv_plic: Option<crate::cpu::riscv64_plic::PlicParams>,
+    /// True when the chip's RV32 core complex carries a WCH QingKe V2 PFIC
+    /// ([`crate::cpu::qingke_pfic::QingKePfic::for_chip`]).
+    pub riscv_pfic: bool,
     /// Stable allocation-unique identity for native instruction translators
     /// that execute directly against this bus without an ARMv7 fabric.
     pub(crate) native_code_identity: u64,
