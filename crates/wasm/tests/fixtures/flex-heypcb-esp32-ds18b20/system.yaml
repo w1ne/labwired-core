@@ -9,10 +9,12 @@ assumptions:
   - SNS_IO1 is the wired-AND of the IO4 drive and U4, pulled up by R6 to an ideal high level. A released IO4 is high.
   - The model sees a line edge at the next 1 µs step. Firmware instructions take no virtual time.
   - The IO48 user LED is represented by digital logic state only.
+  - "`probe_connected` at 0 stands for an open DQ connection (for example, a cracked U4 pad 2 joint): U4 gives no presence pulse and releases DQ. U4 stays powered on 3V3, so its scratchpad, TH, TL and resolution are kept."
   - The console stands for the ESP32-S3 native USB serial port on J1, as the source README states for flashing. A write arrives whole at the time of the call and takes no virtual time.
 unsupported_checks:
   - Original ESP32-S3 firmware execution and target instruction or GPIO controller fidelity; the pinned source contains no board firmware.
   - The SNS_IO1 analog waveform, the 4.7 kΩ R6 pull-up rise time, line capacitance and the AN126 timing margins they set.
+  - A probe that loses 3V3 or GND and powers on again (scratchpad reload from EEPROM, +85 °C); the `connected` input models an open DQ only.
   - Parasite power, ALARM SEARCH and the alarm flag; the catalog model never answers an alarm search.
   - EEPROM write endurance and the 10 ms COPY SCRATCHPAD time on silicon; this firmware does not copy to EEPROM.
   - Conversion accuracy (±0.5 °C), self-heating, sensor response time and production spread of a physical DS18B20 or its UMW second source.
@@ -22,6 +24,7 @@ ports:
   - { name: dq_drive, signal: source.U3.GPIO4, access: write, kind: bool, initial: 1 }
   - { name: dq, signal: source.SNS_IO1, access: read, kind: bool }
   - { name: probe_c, signal: environment.temperature, access: write, kind: number, unit: "°C", initial: 25 }
+  - { name: probe_connected, signal: environment.probe_connected, access: write, kind: bool, initial: 1 }
   - { name: user_led_drive, signal: source.U3.GPIO48, access: write, kind: bool, initial: 0 }
   - { name: user_led_state, signal: source.D1.logic_state, access: read, kind: bool }
 cosim_models:
@@ -29,7 +32,7 @@ cosim_models:
   - id: source-u4-ds18b20
     adapter: behavior
     step_ns: 1000
-    inputs: { DQ: source.U3.GPIO4, temperature: environment.temperature }
+    inputs: { DQ: source.U3.GPIO4, temperature: environment.temperature, connected: environment.probe_connected }
     outputs: { DQ: source.SNS_IO1 }
     config: { device_type: ds18b20 }
   - id: source-d1-user-led

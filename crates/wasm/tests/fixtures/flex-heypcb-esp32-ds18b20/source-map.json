@@ -40,6 +40,7 @@
       "dq_drive": "source.U3.GPIO4 -> U4 input DQ",
       "dq": "U4 output DQ -> source.SNS_IO1 (wired-AND line level)",
       "probe_c": "environment.temperature -> U4 input temperature",
+      "probe_connected": "environment.probe_connected -> U4 input connected (open DQ at 0)",
       "user_led_drive": "source.U3.GPIO48",
       "user_led_state": "source.D1.logic_state"
     }

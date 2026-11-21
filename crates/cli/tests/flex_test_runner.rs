@@ -679,7 +679,7 @@ fn every_flex_fixture_runs_unchanged_through_the_generic_runner() {
             scripts_run += 1;
         }
     }
-    assert!(scripts_run >= 61, "only {scripts_run} Flex scripts ran");
+    assert!(scripts_run >= 62, "only {scripts_run} Flex scripts ran");
 }
 
 fn thermostat() -> PathBuf {
