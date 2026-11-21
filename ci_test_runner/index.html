@@ -1770,6 +1770,56 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#portable-flex-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Portable Flex script
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Portable Flex script">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#i2c-devices-from-the-catalog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I2C devices from the catalog
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#console-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Console output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-same-script-in-the-browser" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The same script in the browser
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#exit-codes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5156,6 +5206,56 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#portable-flex-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Portable Flex script
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Portable Flex script">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#i2c-devices-from-the-catalog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I2C devices from the catalog
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#console-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Console output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-same-script-in-the-browser" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The same script in the browser
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#exit-codes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5373,8 +5473,9 @@
 <p>LabWired provides a CI-friendly runner mode driven by a YAML test script:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>labwired<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>test.yaml
 </span></code></pre></div>
-<p>Every v1.0 script selects exactly one run shape: a single machine or an
-environment world. The two <code>inputs</code> forms are mutually exclusive.</p>
+<p>Every v1.0 script selects exactly one run shape: a single machine, an
+environment world, or a portable Flex project. The <code>inputs</code> forms are mutually
+exclusive.</p>
 <h3 id="single-machine-script">Single-machine script</h3>
 <p>Use <code>inputs.firmware</code> (and optionally <code>inputs.system</code>) to run one machine. A
 per-machine <code>system.yaml</code> is the same system manifest consumed by the
@@ -5483,6 +5584,328 @@ regression restarts that window. A runtime failure or a same-round
 allowed world round reports <code>assertions_passed</code>; otherwise the result has
 <code>stop_reason: assertions_passed</code>. The three fields are respectively a boolean
 and non-negative integers; explicit YAML <code>null</code> is rejected.</p>
+<h3 id="portable-flex-script">Portable Flex script</h3>
+<p>Use <code>inputs.flex</code> to run portable firmware against a Flex manifest. The
+firmware is a WebAssembly module that imports <code>labwired.read(i32) -&gt; f64</code>,
+<code>labwired.write(i32, f64)</code> and <code>labwired.advance_ns(i32)</code>,
+<code>labwired.i2c_transfer</code> if the manifest has an I2C bus, and
+<code>labwired.console_write</code> if the manifest has a console. The runner calls one
+export once (<code>entry</code>), or runs a <code>sequence</code> of calls and test-bench stimuli on
+one firmware instance. This path does not emulate a target CPU, and it never falls back
+to one. A script that needs target instructions, MMIO or interrupts names
+<code>inputs.system</code> or <code>inputs.chip</code> instead; a script that names both is rejected.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># test-bright.yaml</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">schema_version</span><span class="p">:</span><span class="w"> </span><span class="s">"1.0"</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">inputs</span><span class="p">:</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">flex</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">system.yaml</span><span class="w">        </span><span class="c1"># Flex manifest (ports, models, assumptions)</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="nt">firmware</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">firmware.wasm</span><span class="w">  </span><span class="c1"># portable firmware module</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="nt">entry</span><span class="p">:</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span><span class="nt">export</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">run</span><span class="w">              </span><span class="c1"># default: run</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">  </span><span class="nt">args</span><span class="p">:</span><span class="w">                    </span><span class="c1"># in the export's parameter order</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">lux</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">        </span><span class="c1"># the id of a named manifest port (i32)</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">sensor_v</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">user_led_drive</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">user_led_state</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> number</span><span class="p">:</span><span class="w"> </span><span class="nv">100</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">      </span><span class="c1"># a plain number, exact in the parameter's type</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="nt">limits</span><span class="p">:</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">  </span><span class="nt">max_steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100000</span><span class="w">        </span><span class="c1"># WebAssembly fuel for the firmware call</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">  </span><span class="nt">max_time_ns</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10000000</span><span class="w">    </span><span class="c1"># virtual-time ceiling</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="nt">assertions</span><span class="p">:</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">entry_result</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> equals</span><span class="p">:</span><span class="w"> </span><span class="nv">2974</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">                        </span><span class="c1"># the export's i32 result</span>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">port_value</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">sensor_v</span><span class="p p-Indicator">,</span><span class="nt"> min</span><span class="p">:</span><span class="w"> </span><span class="nv">2.396</span><span class="p p-Indicator">,</span><span class="nt"> max</span><span class="p">:</span><span class="w"> </span><span class="nv">2.398</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="c1"># final read-port value</span>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">digital_edges</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">user_led_state</span><span class="p p-Indicator">,</span><span class="nt"> count</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">     </span><span class="c1"># exact captured edges</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">digital_edges</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">user_led_state</span><span class="p p-Indicator">,</span><span class="nt"> times_ns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">4001000</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">4002000</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">digital_edges</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">user_led_state</span><span class="p p-Indicator">,</span><span class="nt"> count</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="nt"> from_ns</span><span class="p">:</span><span class="w"> </span><span class="nv">4001500</span><span class="p p-Indicator">,</span><span class="nt"> to_ns</span><span class="p">:</span><span class="w"> </span><span class="nv">4002000</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">analog_sample</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">sensor_v</span><span class="p p-Indicator">,</span><span class="nt"> at_ns</span><span class="p">:</span><span class="w"> </span><span class="nv">350000</span><span class="p p-Indicator">,</span><span class="nt"> min</span><span class="p">:</span><span class="w"> </span><span class="nv">2.033</span><span class="p p-Indicator">,</span><span class="nt"> max</span><span class="p">:</span><span class="w"> </span><span class="nv">2.034</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">analog_window</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">sensor_v</span><span class="p p-Indicator">,</span><span class="nt"> from_ns</span><span class="p">:</span><span class="w"> </span><span class="nv">2000000</span><span class="p p-Indicator">,</span><span class="nt"> min</span><span class="p">:</span><span class="w"> </span><span class="nv">2.395</span><span class="p p-Indicator">,</span><span class="nt"> max</span><span class="p">:</span><span class="w"> </span><span class="nv">2.398</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">analog_crossings</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">sensor_v</span><span class="p p-Indicator">,</span><span class="nt"> level</span><span class="p">:</span><span class="w"> </span><span class="nv">2.001</span><span class="p p-Indicator">,</span><span class="nt"> direction</span><span class="p">:</span><span class="w"> </span><span class="nv">rising</span><span class="p p-Indicator">,</span><span class="nt"> times_ns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">350000</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">final_time_ns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> equals</span><span class="p">:</span><span class="w"> </span><span class="nv">4002000</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Assertion</th>
+<th>Reads</th>
+<th>Passes when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>entry_result</code></td>
+<td>The i32 result of a firmware call</td>
+<td>It equals <code>equals</code>.</td>
+</tr>
+<tr>
+<td><code>port_value</code></td>
+<td>A read port after the last step</td>
+<td>It is <code>equals</code>, or inside <code>min</code>..<code>max</code>.</td>
+</tr>
+<tr>
+<td><code>digital_edges</code></td>
+<td>One logic-analyzer channel: <code>port</code> (a Boolean port) or <code>signal</code> (a traced model signal with no port). <code>from_ns</code> and <code>to_ns</code> limit it to the edges with <code>from_ns &lt;= time &lt;= to_ns</code>; the default is the whole run.</td>
+<td>The edge <code>count</code> matches, every edge time matches <code>times_ns</code> in order, or both.</td>
+</tr>
+<tr>
+<td><code>analog_sample</code></td>
+<td>One oscilloscope channel: <code>port</code> (a numeric read port) or <code>channel</code> (a channel name with no port)</td>
+<td>The last sample at or before <code>at_ns</code> is <code>equals</code>, or inside <code>min</code>..<code>max</code>, in the channel's unit.</td>
+</tr>
+<tr>
+<td><code>analog_window</code></td>
+<td>Every value of one oscilloscope channel with <code>from_ns &lt;= time &lt;= to_ns</code>, and the value the channel holds at <code>from_ns</code>. The default is the whole run.</td>
+<td>The lowest value is at or above <code>min</code> and the highest is at or below <code>max</code>.</td>
+</tr>
+<tr>
+<td><code>analog_crossings</code></td>
+<td>The times one oscilloscope channel crosses <code>level</code> in one <code>direction</code>: <code>rising</code> (from below to at or above) or <code>falling</code> (from above to at or below). <code>from_ns</code> and <code>to_ns</code> limit it as for <code>digital_edges</code>.</td>
+<td>The crossing <code>count</code> matches, every crossing time matches <code>times_ns</code> in order, or both.</td>
+</tr>
+<tr>
+<td><code>final_time_ns</code></td>
+<td>The virtual time at the end of the run</td>
+<td>It is <code>equals</code>, or inside <code>min</code>..<code>max</code>.</td>
+</tr>
+<tr>
+<td><code>console_contains</code></td>
+<td>The text the firmware wrote to the manifest <code>console</code> in the whole run</td>
+<td>The text contains the string. <code>observed</code> is the byte offset of the first match.</td>
+</tr>
+<tr>
+<td><code>i2c_transfers</code></td>
+<td>The number of <code>labwired.i2c_transfer</code> calls on one <code>bus</code> in the whole run. <code>address</code> limits it to one 7-bit address. <code>ack: true</code> counts the transfers a device acknowledged, <code>ack: false</code> those no device answered.</td>
+<td>The count is <code>equals</code>, or inside <code>min</code>..<code>max</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>A port or channel that the instrument does not have is a <code>config_error</code>
+before the firmware runs. An <code>at_ns</code> or a <code>to_ns</code> after the end of the run was
+not observed: the assertion fails with <code>observed: null</code>. <code>result.json</code> gives
+each <code>digital_edges</code> assertion its edge times, each <code>analog_crossings</code>
+assertion its crossing times, and each <code>analog_sample</code> assertion the time of
+the sample it read, in <code>observed_times_ns</code>. For an <code>analog_window</code>, <code>observed</code>
+is the lowest value, <code>observed_max</code> is the highest, and <code>observed_times_ns</code>
+holds the times of the two. A value held from before the window has the time
+<code>from_ns</code>.</p>
+<p>A crossing has the time of the first sample at or past the level. The runner
+does not interpolate between samples, so the time is a multiple of the model
+<code>step_ns</code>. A channel that starts at or past the level has not crossed it.</p>
+<p>The runner counts the edges of each <code>digital_edges</code> assertion when the logic
+analyzer records them. The count and the <code>times_ns</code> comparison are exact for a
+run of any length. The capture itself keeps the newest 65,536 edges of all
+channels: after a longer run, <code>flex-trace.json</code> and <code>--vcd</code> hold those edges,
+and <code>traces.digital_dropped</code> in <code>result.json</code> is the number of older edges
+they do not hold. <code>observed_times_ns</code> lists at most the first 4,096 edge times
+of a window, or one more than <code>times_ns</code> expects if that is larger;
+<code>observed_times_truncated: true</code> marks a shortened list.</p>
+<p>The analog assertions use the same method. The runner reads each sample when
+the oscilloscope records it, so <code>analog_sample</code>, <code>analog_window</code> and
+<code>analog_crossings</code> are exact for a run of any length. The oscilloscope capture
+keeps the newest 20,000 samples (or the model's <code>trace_samples</code>);
+<code>traces.analog_dropped</code> is the number of older samples that <code>flex-trace.json</code>
+and <code>--analog-trace</code> do not hold. <code>flex-trace.json</code> also holds <code>analog_series</code>,
+the run-long change-point series of every channel that the detailed path
+writes to <code>result.json</code>: a point is written when a value leaves the series
+deadband (the larger of 0.5 % of the held value and 0.001 in the channel
+unit; 1e-5 for <code>A</code>, 1 for <code>rpm</code>), up to 65,536 points per
+channel. When the capture dropped samples, <code>traces.analog_series_points</code> and
+<code>traces.analog_series_dropped</code> tell whether that series still holds the whole
+run. The browser runtime gives the same series from <code>analog_series()</code>.</p>
+<p>A <code>sequence</code> replaces <code>entry</code> when the firmware has more than one entry
+point, for example <code>setup</code> and <code>loop</code>, or when the environment changes during
+the run. The firmware keeps its memory between steps. The limits apply to the
+whole sequence.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># test-heat-cycle.yaml</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nt">sequence</span><span class="p">:</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">call</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> export</span><span class="p">:</span><span class="w"> </span><span class="nv">setup</span><span class="p p-Indicator">,</span><span class="nt"> args</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[{</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">temperature_mv</span><span class="w"> </span><span class="p p-Indicator">},</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">fan_drive</span><span class="w"> </span><span class="p p-Indicator">}]</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">call</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> export</span><span class="p">:</span><span class="w"> </span><span class="nv">loop</span><span class="p p-Indicator">,</span><span class="nt"> repeat</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">          </span><span class="c1"># two calls in a row</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">set</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">temperature_c</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="nv">50</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">    </span><span class="c1"># the test bench writes a write port</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">call</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> export</span><span class="p">:</span><span class="w"> </span><span class="nv">loop</span><span class="p p-Indicator">,</span><span class="nt"> repeat</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="nt">assertions</span><span class="p">:</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">entry_result</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> equals</span><span class="p">:</span><span class="w"> </span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="nt"> step</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">       </span><span class="c1"># last result of sequence step 1</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">entry_result</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> equals</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">                </span><span class="c1"># default: the last call step</span>
+</span></code></pre></div>
+<p>Each step is resolved against the firmware and the manifest before step 0
+runs: an unknown export, a wrong argument count, or a <code>set</code> on a read port is
+a <code>config_error</code>. A <code>set</code> does not advance time; the models see the value at
+the next firmware <code>advance_ns</code>. <code>result.json</code> lists each step with the number
+of completed calls, the last result, and the virtual time at its end
+(<code>time_ns: null</code> for a step the run did not reach). A call step that a limit
+or an error interrupted has no result for <code>entry_result</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Stop reason</th>
+<th>Status</th>
+<th style="text-align: right;">Exit code</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>completed</code></td>
+<td><code>pass</code> or <code>fail</code></td>
+<td style="text-align: right;"><code>0</code> or <code>1</code></td>
+<td>Every call returned. The assertions decide.</td>
+</tr>
+<tr>
+<td><code>max_steps</code></td>
+<td><code>fail</code></td>
+<td style="text-align: right;"><code>1</code></td>
+<td>The firmware used all its fuel.</td>
+</tr>
+<tr>
+<td><code>max_time_ns</code></td>
+<td><code>fail</code></td>
+<td style="text-align: right;"><code>1</code></td>
+<td>The firmware asked to advance past the ceiling.</td>
+</tr>
+<tr>
+<td><code>model_error</code></td>
+<td><code>error</code></td>
+<td style="text-align: right;"><code>3</code></td>
+<td>A port or model rejected a host call, for example an input outside a modeled range.</td>
+</tr>
+<tr>
+<td><code>firmware_trap</code></td>
+<td><code>error</code></td>
+<td style="text-align: right;"><code>3</code></td>
+<td>The firmware module trapped.</td>
+</tr>
+<tr>
+<td><code>config_error</code></td>
+<td><code>error</code></td>
+<td style="text-align: right;"><code>2</code></td>
+<td>The script, manifest or module was rejected before the firmware ran.</td>
+</tr>
+</tbody>
+</table>
+<p><code>--output-dir</code> receives <code>result.json</code>, <code>junit.xml</code> and <code>flex-trace.json</code>, and
+<code>console.log</code> when the manifest has a console.
+<code>result.json</code> carries the final value of each read port, each assertion with
+its observed value, and <code>run_report</code>: the execution path
+(<code>flex_portable_wasm</code>), <code>target_cpu_emulated: false</code>, the manifest SHA-256, the
+named ports, the model configuration, and the manifest's <code>assumptions</code> and
+<code>unsupported_checks</code>. <code>config.firmware_sha256</code> pins the firmware bytes.
+<code>flex-trace.json</code> holds the logic-analyzer edges and oscilloscope samples in
+nanoseconds with their port names. <code>--vcd</code> writes the digital edges and
+<code>--analog-trace</code> writes the analog samples (<code>.csv</code> or <code>.vcd</code>), both in
+nanoseconds. Options that need a target machine, such as <code>--system</code>,
+<code>--breakpoint</code>, <code>--max-cycles</code> and <code>--trace</code>, are rejected with a
+configuration error.</p>
+<p>A pass shows that this firmware module satisfied the assertions against the
+declared model. It is not evidence for original target firmware, MCU
+instruction or peripheral fidelity, full-board coverage, or chip parity.</p>
+<h4 id="i2c-devices-from-the-catalog">I2C devices from the catalog</h4>
+<p>A Flex manifest can declare I2C buses. Each device is a catalog I2C device
+model, the same model that <code>external_devices</code> attaches to an MCU's I2C
+controller on the detailed path. The firmware is the only controller of the
+bus.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># system.yaml</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nt">ports</span><span class="p">:</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">ambient_c</span><span class="p p-Indicator">,</span><span class="nt"> signal</span><span class="p">:</span><span class="w"> </span><span class="nv">environment.temperature</span><span class="p p-Indicator">,</span><span class="nt"> access</span><span class="p">:</span><span class="w"> </span><span class="nv">write</span><span class="p p-Indicator">,</span><span class="nt"> kind</span><span class="p">:</span><span class="w"> </span><span class="nv">number</span><span class="p p-Indicator">,</span><span class="nt"> unit</span><span class="p">:</span><span class="w"> </span><span class="s">"°C"</span><span class="p p-Indicator">,</span><span class="nt"> initial</span><span class="p">:</span><span class="w"> </span><span class="nv">25</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="nt">i2c_buses</span><span class="p">:</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sensor_i2c</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span><span class="nt">frequency_hz</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100000</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span><span class="nt">devices</span><span class="p">:</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">source-u4-bme280</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">        </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bme280</span><span class="w">                      </span><span class="c1"># catalog device type</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">        </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> i2c_address</span><span class="p">:</span><span class="w"> </span><span class="nv">0x76</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">     </span><span class="c1"># the device's external_devices config</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">        </span><span class="nt">inputs</span><span class="p">:</span><span class="w">                           </span><span class="c1"># device input channel -&gt; signal</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">          </span><span class="nt">temperature</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">environment.temperature</span>
+</span></code></pre></div>
+<p>The firmware imports one more function:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>labwired.i2c_transfer(bus: i32, address: i32,
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>                      write_ptr: i32, write_len: i32,
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>                      read_ptr: i32, read_len: i32) -&gt; i32
+</span></code></pre></div>
+<ul>
+<li>The call writes <code>write_len</code> bytes to the 7-bit <code>address</code>, reads <code>read_len</code>
+  bytes after a repeated START, and sends a STOP. Either length can be 0. Both
+  lengths 0 is an address probe.</li>
+<li>The result is 0 when a device acknowledged the address and 1 when no device
+  answered. A refused address is a result, not an error.</li>
+<li>The byte ranges are in the firmware's exported <code>memory</code>. Each range is at
+  most 4,096 bytes.</li>
+<li>The call takes virtual time: one SCL period for each bit, for START and for
+  STOP, at the bus <code>frequency_hz</code>. This time counts against <code>max_time_ns</code>, and
+  an <code>until_ns</code> can suspend the firmware inside a transfer.</li>
+<li>A script passes the bus to the firmware with a <code>{ bus: sensor_i2c }</code> call
+  argument. The value is the bus id (i32).</li>
+</ul>
+<p>A device input channel takes its value from a signal: a write port, or a model
+output. The signal must have the unit that the channel declares (<code>°C</code> for the
+BME280 <code>temperature</code> channel); there is no unit conversion. A <code>set</code> on that
+port changes the device at once. A value outside the channel's range stops the
+run with <code>model_error</code>.</p>
+<p><code>result.json</code> gives the number of transfers in <code>traces.i2c_transfers</code>, and
+<code>run_report.i2c_buses</code> lists each bus with its devices, their addresses, and
+<code>not_modeled</code>. <code>flex-trace.json</code> gets an <code>i2c</code> record: each transfer with its
+start time, duration, address, <code>ack</code>, and the bytes written and read. The
+record keeps the newest 4,096 transfers; the <code>i2c_transfers</code> counts are exact
+for a run of any length.</p>
+<p>This path exchanges whole bytes with the device model. It does not model the
+SCL and SDA waveforms, pull-ups, bus capacitance, clock stretching, a second
+controller, or device pin outputs such as an interrupt line. An unknown bus
+name, an unknown device type, an unknown input channel, a unit mismatch, or
+two devices with one address on a bus is a <code>config_error</code>.</p>
+<h4 id="console-output">Console output</h4>
+<p>A Flex manifest can declare one console: the place where target firmware
+prints, for example a UART or a USB serial port.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># system.yaml</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nt">console</span><span class="p">:</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">usb_serial</span>
+</span></code></pre></div>
+<p>The firmware imports one more function:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>labwired.console_write(ptr: i32, len: i32)
+</span></code></pre></div>
+<ul>
+<li>The call appends <code>len</code> bytes of the firmware's exported <code>memory</code> to the
+  console. A write is at most 1 MiB.</li>
+<li>The call takes no virtual time. Each write keeps the virtual time of the
+  call.</li>
+<li>A <code>console_write</code> with no <code>console</code> in the manifest stops the run with
+  <code>model_error</code>. A <code>console_contains</code> assertion with no console is a
+  <code>config_error</code>.</li>
+</ul>
+<p><code>result.json</code> and <code>flex-trace.json</code> get a <code>console</code> record: <code>text</code> (the bytes
+as UTF-8), <code>bytes</code>, <code>dropped_bytes</code>, and <code>writes</code>, each with its <code>time_ns</code>,
+<code>offset</code> and <code>len</code> in the text. <code>--output-dir</code> also receives <code>console.log</code>,
+the text alone. The console keeps the first 1 MiB of a run; later bytes count
+in <code>dropped_bytes</code>, and <code>console_contains</code> does not see them.
+<code>run_report.console</code> gives the name and <code>not_modeled</code>: the baud rate and
+transfer time, UART framing and the TX pin, USB enumeration and host polling,
+and input to the firmware.</p>
+<h4 id="the-same-script-in-the-browser">The same script in the browser</h4>
+<p>The browser package (<code>labwired-wasm</code>) runs a Flex script with the runner that
+<code>labwired test</code> uses. The page gives the three texts the script names; there
+are no paths in the browser.</p>
+<div class="language-js highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kd">const</span><span class="w"> </span><span class="nx">run</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">WasmFlexTestRun</span><span class="p">.</span><span class="nx">run</span><span class="p">(</span><span class="s1">'test-heat-cycle.yaml'</span><span class="p">,</span><span class="w"> </span><span class="nx">scriptYaml</span><span class="p">,</span><span class="w"> </span><span class="nx">manifestYaml</span><span class="p">,</span><span class="w"> </span><span class="nx">firmwareBytes</span><span class="p">);</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">JSON</span><span class="p">.</span><span class="nx">parse</span><span class="p">(</span><span class="nx">run</span><span class="p">.</span><span class="nx">result_json</span><span class="p">());</span><span class="w">   </span><span class="c1">// the content of result.json</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="kd">const</span><span class="w"> </span><span class="nx">runtime</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">run</span><span class="p">.</span><span class="nx">take_runtime</span><span class="p">();</span><span class="w">              </span><span class="c1">// a WasmFlexRuntime</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="kd">const</span><span class="w"> </span><span class="nx">edges</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">runtime</span><span class="p">.</span><span class="nx">digital_trace_snapshot</span><span class="p">(</span><span class="mf">0</span><span class="p">);</span><span class="w"> </span><span class="c1">// logic analyzer</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="kd">const</span><span class="w"> </span><span class="nx">samples</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">runtime</span><span class="p">.</span><span class="nx">analog_trace_snapshot</span><span class="p">(</span><span class="mf">0</span><span class="p">);</span><span class="w"> </span><span class="c1">// oscilloscope</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="kd">const</span><span class="w"> </span><span class="nx">transfers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">runtime</span><span class="p">.</span><span class="nx">i2c_trace_snapshot</span><span class="p">(</span><span class="mf">0</span><span class="p">);</span><span class="w">  </span><span class="c1">// I2C transfer record</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="kd">const</span><span class="w"> </span><span class="nx">console</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">runtime</span><span class="p">.</span><span class="nx">console_capture</span><span class="p">();</span><span class="w">        </span><span class="c1">// console text, or undefined</span>
+</span></code></pre></div>
+<ul>
+<li><code>result_json()</code> is the text of <code>result.json</code>. It differs from the CLI file
+  only in <code>config.script</code>, <code>config.flex</code> and <code>config.firmware</code>: the browser
+  keeps the names as the script writes them.</li>
+<li><code>take_runtime()</code> gives the runtime of the run to the existing instrument
+  methods. It is an error after a <code>config_error</code>, because no runtime exists.</li>
+<li>A script that does not parse or validate throws. Every later failure is a
+  result with a <code>stop_reason</code>, as in the table above.</li>
+<li><code>sequence</code>, <code>until_ns</code>, <code>resume</code>, all assertions and both limits work as in
+  the CLI. The firmware module runs in the <code>wasmi</code> interpreter on both hosts,
+  so <code>steps_executed</code> is the same number.</li>
+<li>The call returns when the script ends. Call it from a worker if the script
+  is long.</li>
+</ul>
+<p><code>scripts/test_browser_flex_scripts.mjs</code> runs each <code>test-*.yaml</code> of the Flex
+fixtures in Chromium and in the CLI and compares the result text and both
+instrument captures. <code>crates/wasm/tests/fixtures/browser-flex-scripts.json</code> is
+the receipt of that run; a unit test of <code>labwired-wasm</code> fails when a script is
+missing from it or when the runner gives a different result text.</p>
 <h2 id="exit-codes">Exit Codes</h2>
 <table>
 <thead>
@@ -5521,23 +5944,23 @@ and non-negative integers; explicit YAML <code>null</code> is rejected.</p>
 3) Runtime error stop without matching <code>expected_stop_reason</code> ⇒ <code>3</code>
 4) Otherwise ⇒ <code>0</code></p>
 <h2 id="script-schema-v10">Script Schema (v1.0)</h2>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">schema_version</span><span class="p">:</span><span class="w"> </span><span class="s">"1.0"</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">inputs</span><span class="p">:</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">firmware</span><span class="p">:</span><span class="w"> </span><span class="s">"relative/or/absolute/path/to/fw.elf"</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">system</span><span class="p">:</span><span class="w"> </span><span class="s">"optional/path/to/system.yaml"</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="nt">limits</span><span class="p">:</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span><span class="nt">max_steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100000</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span><span class="nt">max_cycles</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">123456</span><span class="w">     </span><span class="c1"># optional</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">  </span><span class="nt">max_uart_bytes</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4096</span><span class="w">   </span><span class="c1"># optional</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">  </span><span class="nt">no_progress_steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">500</span><span class="w"> </span><span class="c1"># optional (PC unchanged for N steps)</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">  </span><span class="nt">wall_time_ms</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5000</span><span class="w">   </span><span class="c1"># optional</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="nt">assertions</span><span class="p">:</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uart_contains</span><span class="p">:</span><span class="w"> </span><span class="s">"Hello"</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uart_regex</span><span class="p">:</span><span class="w"> </span><span class="s">"^Hello.*$"</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">rtt_contains</span><span class="p">:</span><span class="w"> </span><span class="s">"Boot</span><span class="nv"> </span><span class="s">complete"</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">fidelity_clean</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">peripheral_log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">peripheral</span><span class="p">:</span><span class="w"> </span><span class="nv">i2c1</span><span class="p p-Indicator">,</span><span class="nt"> log</span><span class="p">:</span><span class="w"> </span><span class="nv">bus_trace</span><span class="p p-Indicator">,</span><span class="nt"> contains</span><span class="p">:</span><span class="w"> </span><span class="s">"addr</span><span class="nv"> </span><span class="s">0x48</span><span class="nv"> </span><span class="s">W</span><span class="nv"> </span><span class="s">ack"</span><span class="p p-Indicator">}</span>
-</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">expected_stop_reason</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">max_steps</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">schema_version</span><span class="p">:</span><span class="w"> </span><span class="s">"1.0"</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="nt">inputs</span><span class="p">:</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="nt">firmware</span><span class="p">:</span><span class="w"> </span><span class="s">"relative/or/absolute/path/to/fw.elf"</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span><span class="nt">system</span><span class="p">:</span><span class="w"> </span><span class="s">"optional/path/to/system.yaml"</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="nt">limits</span><span class="p">:</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">  </span><span class="nt">max_steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100000</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">  </span><span class="nt">max_cycles</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">123456</span><span class="w">     </span><span class="c1"># optional</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">  </span><span class="nt">max_uart_bytes</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4096</span><span class="w">   </span><span class="c1"># optional</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">  </span><span class="nt">no_progress_steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">500</span><span class="w"> </span><span class="c1"># optional (PC unchanged for N steps)</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="w">  </span><span class="nt">wall_time_ms</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5000</span><span class="w">   </span><span class="c1"># optional</span>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="nt">assertions</span><span class="p">:</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uart_contains</span><span class="p">:</span><span class="w"> </span><span class="s">"Hello"</span>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uart_regex</span><span class="p">:</span><span class="w"> </span><span class="s">"^Hello.*$"</span>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">rtt_contains</span><span class="p">:</span><span class="w"> </span><span class="s">"Boot</span><span class="nv"> </span><span class="s">complete"</span>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">fidelity_clean</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">peripheral_log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">peripheral</span><span class="p">:</span><span class="w"> </span><span class="nv">i2c1</span><span class="p p-Indicator">,</span><span class="nt"> log</span><span class="p">:</span><span class="w"> </span><span class="nv">bus_trace</span><span class="p p-Indicator">,</span><span class="nt"> contains</span><span class="p">:</span><span class="w"> </span><span class="s">"addr</span><span class="nv"> </span><span class="s">0x48</span><span class="nv"> </span><span class="s">W</span><span class="nv"> </span><span class="s">ack"</span><span class="p p-Indicator">}</span>
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">expected_stop_reason</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">max_steps</span>
 </span></code></pre></div>
 <p>Notes:
 - Unknown fields are rejected (script parse/validation returns exit code <code>2</code>).
@@ -5571,14 +5994,14 @@ identical events as one line with a repeat count: the line ends in <code>x{count
 (for example <code>seq 2 cmd 0x05 addr 0x00000000 size 1 x5000</code>). Such a line counts
 as <code>count</code> matches, and <code>contains</code> matches the text before the <code>x{count}</code>. The check runs once, when the run
 ends. It does not hold a <code>stop_when_assertions_pass</code> run open.</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">assertions</span><span class="p">:</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">peripheral_log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">peripheral</span><span class="p">:</span><span class="w"> </span><span class="nv">usb1</span><span class="p p-Indicator">,</span><span class="nt"> log</span><span class="p">:</span><span class="w"> </span><span class="nv">host</span><span class="p p-Indicator">,</span><span class="nt"> contains</span><span class="p">:</span><span class="w"> </span><span class="s">"device</span><span class="nv"> </span><span class="s">1fc9:0135"</span><span class="p p-Indicator">}</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">peripheral_log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">peripheral</span><span class="p">:</span><span class="w"> </span><span class="nv">flexio2</span><span class="p p-Indicator">,</span><span class="nt"> log</span><span class="p">:</span><span class="w"> </span><span class="nv">wire</span><span class="p p-Indicator">,</span><span class="nt"> contains</span><span class="p">:</span><span class="w"> </span><span class="s">"pin</span><span class="nv"> </span><span class="s">2</span><span class="nv"> </span><span class="s">"</span><span class="p p-Indicator">,</span><span class="nt"> min_count</span><span class="p">:</span><span class="w"> </span><span class="nv">960</span><span class="p p-Indicator">}</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">assertions</span><span class="p">:</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">peripheral_log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">peripheral</span><span class="p">:</span><span class="w"> </span><span class="nv">usb1</span><span class="p p-Indicator">,</span><span class="nt"> log</span><span class="p">:</span><span class="w"> </span><span class="nv">host</span><span class="p p-Indicator">,</span><span class="nt"> contains</span><span class="p">:</span><span class="w"> </span><span class="s">"device</span><span class="nv"> </span><span class="s">1fc9:0135"</span><span class="p p-Indicator">}</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">peripheral_log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">peripheral</span><span class="p">:</span><span class="w"> </span><span class="nv">flexio2</span><span class="p p-Indicator">,</span><span class="nt"> log</span><span class="p">:</span><span class="w"> </span><span class="nv">wire</span><span class="p p-Indicator">,</span><span class="nt"> contains</span><span class="p">:</span><span class="w"> </span><span class="s">"pin</span><span class="nv"> </span><span class="s">2</span><span class="nv"> </span><span class="s">"</span><span class="p p-Indicator">,</span><span class="nt"> min_count</span><span class="p">:</span><span class="w"> </span><span class="nv">960</span><span class="p p-Indicator">}</span>
 </span></code></pre></div>
 <p><code>peripheral</code> is a peripheral name or the <code>external_devices:</code> id of an
 attached device (a device that records logs, such as the NAU88L21 codec):</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">assertions</span><span class="p">:</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">peripheral_log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">peripheral</span><span class="p">:</span><span class="w"> </span><span class="nv">codec</span><span class="p p-Indicator">,</span><span class="nt"> log</span><span class="p">:</span><span class="w"> </span><span class="nv">writes</span><span class="p p-Indicator">,</span><span class="nt"> contains</span><span class="p">:</span><span class="w"> </span><span class="s">"write</span><span class="nv"> </span><span class="s">0x001c</span><span class="nv"> </span><span class="s">=</span><span class="nv"> </span><span class="s">0x000e"</span><span class="p p-Indicator">}</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">assertions</span><span class="p">:</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">peripheral_log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">peripheral</span><span class="p">:</span><span class="w"> </span><span class="nv">codec</span><span class="p p-Indicator">,</span><span class="nt"> log</span><span class="p">:</span><span class="w"> </span><span class="nv">writes</span><span class="p p-Indicator">,</span><span class="nt"> contains</span><span class="p">:</span><span class="w"> </span><span class="s">"write</span><span class="nv"> </span><span class="s">0x001c</span><span class="nv"> </span><span class="s">=</span><span class="nv"> </span><span class="s">0x000e"</span><span class="p p-Indicator">}</span>
 </span></code></pre></div>
 <p>A peripheral, device or log name that does not exist is a config error (exit
 code <code>2</code>), found before the run starts. The error lists the logs the
@@ -5682,12 +6105,12 @@ node-qualified <code>memory_value</code> assertion and support <code>max_steps</
 <h3 id="deprecated-legacy-schema-v1">Deprecated Legacy Schema (v1)</h3>
 <p>For backward compatibility, <code>schema_version: 1</code> is still accepted, but is deprecated and will be removed in a future release.</p>
 <p>Legacy shape:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">schema_version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nt">firmware</span><span class="p">:</span><span class="w"> </span><span class="s">"optional/path/to/fw.elf"</span><span class="w">   </span><span class="c1"># optional (can be provided by --firmware)</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="nt">system</span><span class="p">:</span><span class="w"> </span><span class="s">"optional/path/to/system.yaml"</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="nt">max_steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100000</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="nt">wall_time_ms</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5000</span><span class="w">   </span><span class="c1"># optional</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="nt">assertions</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">schema_version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="nt">firmware</span><span class="p">:</span><span class="w"> </span><span class="s">"optional/path/to/fw.elf"</span><span class="w">   </span><span class="c1"># optional (can be provided by --firmware)</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="nt">system</span><span class="p">:</span><span class="w"> </span><span class="s">"optional/path/to/system.yaml"</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="nt">max_steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100000</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="nt">wall_time_ms</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5000</span><span class="w">   </span><span class="c1"># optional</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="nt">assertions</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
 </span></code></pre></div>
 <h2 id="stop-reasons">Stop Reasons</h2>
 <p><code>expected_stop_reason</code> supports:
@@ -5719,7 +6142,7 @@ node-qualified <code>memory_value</code> assertion and support <code>max_steps</
 - <code>status</code>: one of <code>pass</code>, <code>fail</code>, <code>error</code></p>
 <h2 id="artifacts">Artifacts</h2>
 <p>Use <code>--output-dir</code> to write artifacts:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>labwired<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>test.yaml<span class="w"> </span>--output-dir<span class="w"> </span>out/artifacts
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>labwired<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>test.yaml<span class="w"> </span>--output-dir<span class="w"> </span>out/artifacts
 </span></code></pre></div>
 <p>Artifacts:
 - <code>out/artifacts/result.json</code>: machine-readable summary
@@ -5728,7 +6151,7 @@ node-qualified <code>memory_value</code> assertion and support <code>max_steps</
 - <code>out/artifacts/rtt.log</code>: captured SEGGER RTT bytes (empty unless RTT was enabled)
 - <code>out/artifacts/junit.xml</code>: JUnit XML report (one testcase for <code>run</code> + one per assertion)</p>
 <p>Alternatively, you can write JUnit XML to a specific path:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>labwired<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>test.yaml<span class="w"> </span>--junit<span class="w"> </span>out/junit.xml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>labwired<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>test.yaml<span class="w"> </span>--junit<span class="w"> </span>out/junit.xml
 </span></code></pre></div>
 <h2 id="path-resolution-rules">Path Resolution Rules</h2>
 <ul>
@@ -5750,118 +6173,118 @@ a discriminated union. Consumers must branch on
 <code>result_schema_version</code>—and, for worlds, <code>run_type</code>—rather than assuming one
 firmware identity.</p>
 <h3 id="json-schema">JSON Schema</h3>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="p">{</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">"$schema"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://json-schema.org/draft/2020-12/schema"</span><span class="p">,</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"LabWired CI runner result.json"</span><span class="p">,</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span><span class="nt">"$defs"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">    </span><span class="nt">"common"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">      </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">      </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">        </span><span class="s2">"status"</span><span class="p">,</span>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="w">        </span><span class="s2">"steps_executed"</span><span class="p">,</span>
-</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="w">        </span><span class="s2">"cycles"</span><span class="p">,</span>
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="w">        </span><span class="s2">"instructions"</span><span class="p">,</span>
-</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="w">        </span><span class="s2">"stop_reason"</span><span class="p">,</span>
-</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="w">        </span><span class="s2">"stop_reason_details"</span><span class="p">,</span>
-</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="w">        </span><span class="s2">"limits"</span><span class="p">,</span>
-</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="w">        </span><span class="s2">"assertions"</span>
-</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="w">      </span><span class="p">],</span>
-</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="w">      </span><span class="nt">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a><span class="w">        </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"enum"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"pass"</span><span class="p">,</span><span class="w"> </span><span class="s2">"fail"</span><span class="p">,</span><span class="w"> </span><span class="s2">"error"</span><span class="p">]</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a><span class="w">        </span><span class="nt">"steps_executed"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"integer"</span><span class="p">,</span><span class="w"> </span><span class="nt">"minimum"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a><span class="w">        </span><span class="nt">"cycles"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"integer"</span><span class="p">,</span><span class="w"> </span><span class="nt">"minimum"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-21"><a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a><span class="w">        </span><span class="nt">"instructions"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"integer"</span><span class="p">,</span><span class="w"> </span><span class="nt">"minimum"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-22"><a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a><span class="w">        </span><span class="nt">"stop_reason"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-12-23"><a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a><span class="w">          </span><span class="nt">"enum"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-12-24"><a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a><span class="w">            </span><span class="s2">"config_error"</span><span class="p">,</span>
-</span><span id="__span-12-25"><a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a><span class="w">            </span><span class="s2">"max_steps"</span><span class="p">,</span>
-</span><span id="__span-12-26"><a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a><span class="w">            </span><span class="s2">"max_cycles"</span><span class="p">,</span>
-</span><span id="__span-12-27"><a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a><span class="w">            </span><span class="s2">"max_uart_bytes"</span><span class="p">,</span>
-</span><span id="__span-12-28"><a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a><span class="w">            </span><span class="s2">"no_progress"</span><span class="p">,</span>
-</span><span id="__span-12-29"><a id="__codelineno-12-29" name="__codelineno-12-29" href="#__codelineno-12-29"></a><span class="w">            </span><span class="s2">"wall_time"</span><span class="p">,</span>
-</span><span id="__span-12-30"><a id="__codelineno-12-30" name="__codelineno-12-30" href="#__codelineno-12-30"></a><span class="w">            </span><span class="s2">"assertions_passed"</span><span class="p">,</span>
-</span><span id="__span-12-31"><a id="__codelineno-12-31" name="__codelineno-12-31" href="#__codelineno-12-31"></a><span class="w">            </span><span class="s2">"memory_violation"</span><span class="p">,</span>
-</span><span id="__span-12-32"><a id="__codelineno-12-32" name="__codelineno-12-32" href="#__codelineno-12-32"></a><span class="w">            </span><span class="s2">"decode_error"</span><span class="p">,</span>
-</span><span id="__span-12-33"><a id="__codelineno-12-33" name="__codelineno-12-33" href="#__codelineno-12-33"></a><span class="w">            </span><span class="s2">"halt"</span><span class="p">,</span>
-</span><span id="__span-12-34"><a id="__codelineno-12-34" name="__codelineno-12-34" href="#__codelineno-12-34"></a><span class="w">            </span><span class="s2">"exception"</span>
-</span><span id="__span-12-35"><a id="__codelineno-12-35" name="__codelineno-12-35" href="#__codelineno-12-35"></a><span class="w">          </span><span class="p">]</span>
-</span><span id="__span-12-36"><a id="__codelineno-12-36" name="__codelineno-12-36" href="#__codelineno-12-36"></a><span class="w">        </span><span class="p">},</span>
-</span><span id="__span-12-37"><a id="__codelineno-12-37" name="__codelineno-12-37" href="#__codelineno-12-37"></a><span class="w">        </span><span class="nt">"stop_reason_details"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-38"><a id="__codelineno-12-38" name="__codelineno-12-38" href="#__codelineno-12-38"></a><span class="w">        </span><span class="nt">"limits"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-39"><a id="__codelineno-12-39" name="__codelineno-12-39" href="#__codelineno-12-39"></a><span class="w">        </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"string"</span><span class="p">,</span><span class="w"> </span><span class="s2">"null"</span><span class="p">]</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-40"><a id="__codelineno-12-40" name="__codelineno-12-40" href="#__codelineno-12-40"></a><span class="w">        </span><span class="nt">"assertions"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-41"><a id="__codelineno-12-41" name="__codelineno-12-41" href="#__codelineno-12-41"></a><span class="w">        </span><span class="nt">"fidelity"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-12-42"><a id="__codelineno-12-42" name="__codelineno-12-42" href="#__codelineno-12-42"></a><span class="w">      </span><span class="p">}</span>
-</span><span id="__span-12-43"><a id="__codelineno-12-43" name="__codelineno-12-43" href="#__codelineno-12-43"></a><span class="w">    </span><span class="p">},</span>
-</span><span id="__span-12-44"><a id="__codelineno-12-44" name="__codelineno-12-44" href="#__codelineno-12-44"></a><span class="w">    </span><span class="nt">"environment_node"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-12-45"><a id="__codelineno-12-45" name="__codelineno-12-45" href="#__codelineno-12-45"></a><span class="w">      </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span>
-</span><span id="__span-12-46"><a id="__codelineno-12-46" name="__codelineno-12-46" href="#__codelineno-12-46"></a><span class="w">      </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"id"</span><span class="p">,</span><span class="w"> </span><span class="s2">"system"</span><span class="p">,</span><span class="w"> </span><span class="s2">"firmware"</span><span class="p">,</span><span class="w"> </span><span class="s2">"system_hash"</span><span class="p">,</span><span class="w"> </span><span class="s2">"firmware_hash"</span><span class="p">],</span>
-</span><span id="__span-12-47"><a id="__codelineno-12-47" name="__codelineno-12-47" href="#__codelineno-12-47"></a><span class="w">      </span><span class="nt">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-12-48"><a id="__codelineno-12-48" name="__codelineno-12-48" href="#__codelineno-12-48"></a><span class="w">        </span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-49"><a id="__codelineno-12-49" name="__codelineno-12-49" href="#__codelineno-12-49"></a><span class="w">        </span><span class="nt">"system"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-50"><a id="__codelineno-12-50" name="__codelineno-12-50" href="#__codelineno-12-50"></a><span class="w">        </span><span class="nt">"firmware"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-51"><a id="__codelineno-12-51" name="__codelineno-12-51" href="#__codelineno-12-51"></a><span class="w">        </span><span class="nt">"system_hash"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-52"><a id="__codelineno-12-52" name="__codelineno-12-52" href="#__codelineno-12-52"></a><span class="w">        </span><span class="nt">"firmware_hash"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-12-53"><a id="__codelineno-12-53" name="__codelineno-12-53" href="#__codelineno-12-53"></a><span class="w">      </span><span class="p">}</span>
-</span><span id="__span-12-54"><a id="__codelineno-12-54" name="__codelineno-12-54" href="#__codelineno-12-54"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-12-55"><a id="__codelineno-12-55" name="__codelineno-12-55" href="#__codelineno-12-55"></a><span class="w">  </span><span class="p">},</span>
-</span><span id="__span-12-56"><a id="__codelineno-12-56" name="__codelineno-12-56" href="#__codelineno-12-56"></a><span class="w">  </span><span class="nt">"oneOf"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-12-57"><a id="__codelineno-12-57" name="__codelineno-12-57" href="#__codelineno-12-57"></a><span class="w">    </span><span class="p">{</span>
-</span><span id="__span-12-58"><a id="__codelineno-12-58" name="__codelineno-12-58" href="#__codelineno-12-58"></a><span class="w">      </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"single-machine result"</span><span class="p">,</span>
-</span><span id="__span-12-59"><a id="__codelineno-12-59" name="__codelineno-12-59" href="#__codelineno-12-59"></a><span class="w">      </span><span class="nt">"allOf"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-12-60"><a id="__codelineno-12-60" name="__codelineno-12-60" href="#__codelineno-12-60"></a><span class="w">        </span><span class="p">{</span><span class="w"> </span><span class="nt">"$ref"</span><span class="p">:</span><span class="w"> </span><span class="s2">"#/$defs/common"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-61"><a id="__codelineno-12-61" name="__codelineno-12-61" href="#__codelineno-12-61"></a><span class="w">        </span><span class="p">{</span>
-</span><span id="__span-12-62"><a id="__codelineno-12-62" name="__codelineno-12-62" href="#__codelineno-12-62"></a><span class="w">          </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span>
-</span><span id="__span-12-63"><a id="__codelineno-12-63" name="__codelineno-12-63" href="#__codelineno-12-63"></a><span class="w">          </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"result_schema_version"</span><span class="p">,</span><span class="w"> </span><span class="s2">"firmware_hash"</span><span class="p">,</span><span class="w"> </span><span class="s2">"config"</span><span class="p">],</span>
-</span><span id="__span-12-64"><a id="__codelineno-12-64" name="__codelineno-12-64" href="#__codelineno-12-64"></a><span class="w">          </span><span class="nt">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-12-65"><a id="__codelineno-12-65" name="__codelineno-12-65" href="#__codelineno-12-65"></a><span class="w">            </span><span class="nt">"result_schema_version"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"const"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1.0"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-66"><a id="__codelineno-12-66" name="__codelineno-12-66" href="#__codelineno-12-66"></a><span class="w">            </span><span class="nt">"firmware_hash"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-12-67"><a id="__codelineno-12-67" name="__codelineno-12-67" href="#__codelineno-12-67"></a><span class="w">              </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="p">,</span>
-</span><span id="__span-12-68"><a id="__codelineno-12-68" name="__codelineno-12-68" href="#__codelineno-12-68"></a><span class="w">              </span><span class="nt">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"SHA-256 of the firmware ELF bytes."</span>
-</span><span id="__span-12-69"><a id="__codelineno-12-69" name="__codelineno-12-69" href="#__codelineno-12-69"></a><span class="w">            </span><span class="p">},</span>
-</span><span id="__span-12-70"><a id="__codelineno-12-70" name="__codelineno-12-70" href="#__codelineno-12-70"></a><span class="w">            </span><span class="nt">"config"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-12-71"><a id="__codelineno-12-71" name="__codelineno-12-71" href="#__codelineno-12-71"></a><span class="w">              </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span>
-</span><span id="__span-12-72"><a id="__codelineno-12-72" name="__codelineno-12-72" href="#__codelineno-12-72"></a><span class="w">              </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"firmware"</span><span class="p">,</span><span class="w"> </span><span class="s2">"system"</span><span class="p">,</span><span class="w"> </span><span class="s2">"script"</span><span class="p">],</span>
-</span><span id="__span-12-73"><a id="__codelineno-12-73" name="__codelineno-12-73" href="#__codelineno-12-73"></a><span class="w">              </span><span class="nt">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-12-74"><a id="__codelineno-12-74" name="__codelineno-12-74" href="#__codelineno-12-74"></a><span class="w">                </span><span class="nt">"firmware"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-75"><a id="__codelineno-12-75" name="__codelineno-12-75" href="#__codelineno-12-75"></a><span class="w">                </span><span class="nt">"system"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"string"</span><span class="p">,</span><span class="w"> </span><span class="s2">"null"</span><span class="p">]</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-76"><a id="__codelineno-12-76" name="__codelineno-12-76" href="#__codelineno-12-76"></a><span class="w">                </span><span class="nt">"script"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-12-77"><a id="__codelineno-12-77" name="__codelineno-12-77" href="#__codelineno-12-77"></a><span class="w">              </span><span class="p">}</span>
-</span><span id="__span-12-78"><a id="__codelineno-12-78" name="__codelineno-12-78" href="#__codelineno-12-78"></a><span class="w">            </span><span class="p">}</span>
-</span><span id="__span-12-79"><a id="__codelineno-12-79" name="__codelineno-12-79" href="#__codelineno-12-79"></a><span class="w">          </span><span class="p">}</span>
-</span><span id="__span-12-80"><a id="__codelineno-12-80" name="__codelineno-12-80" href="#__codelineno-12-80"></a><span class="w">        </span><span class="p">}</span>
-</span><span id="__span-12-81"><a id="__codelineno-12-81" name="__codelineno-12-81" href="#__codelineno-12-81"></a><span class="w">      </span><span class="p">]</span>
-</span><span id="__span-12-82"><a id="__codelineno-12-82" name="__codelineno-12-82" href="#__codelineno-12-82"></a><span class="w">    </span><span class="p">},</span>
-</span><span id="__span-12-83"><a id="__codelineno-12-83" name="__codelineno-12-83" href="#__codelineno-12-83"></a><span class="w">    </span><span class="p">{</span>
-</span><span id="__span-12-84"><a id="__codelineno-12-84" name="__codelineno-12-84" href="#__codelineno-12-84"></a><span class="w">      </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"environment/world result"</span><span class="p">,</span>
-</span><span id="__span-12-85"><a id="__codelineno-12-85" name="__codelineno-12-85" href="#__codelineno-12-85"></a><span class="w">      </span><span class="nt">"allOf"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-12-86"><a id="__codelineno-12-86" name="__codelineno-12-86" href="#__codelineno-12-86"></a><span class="w">        </span><span class="p">{</span><span class="w"> </span><span class="nt">"$ref"</span><span class="p">:</span><span class="w"> </span><span class="s2">"#/$defs/common"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-87"><a id="__codelineno-12-87" name="__codelineno-12-87" href="#__codelineno-12-87"></a><span class="w">        </span><span class="p">{</span>
-</span><span id="__span-12-88"><a id="__codelineno-12-88" name="__codelineno-12-88" href="#__codelineno-12-88"></a><span class="w">          </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span>
-</span><span id="__span-12-89"><a id="__codelineno-12-89" name="__codelineno-12-89" href="#__codelineno-12-89"></a><span class="w">          </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"result_schema_version"</span><span class="p">,</span><span class="w"> </span><span class="s2">"run_type"</span><span class="p">,</span><span class="w"> </span><span class="s2">"config"</span><span class="p">],</span>
-</span><span id="__span-12-90"><a id="__codelineno-12-90" name="__codelineno-12-90" href="#__codelineno-12-90"></a><span class="w">          </span><span class="nt">"not"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"firmware_hash"</span><span class="p">]</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-91"><a id="__codelineno-12-91" name="__codelineno-12-91" href="#__codelineno-12-91"></a><span class="w">          </span><span class="nt">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-12-92"><a id="__codelineno-12-92" name="__codelineno-12-92" href="#__codelineno-12-92"></a><span class="w">            </span><span class="nt">"result_schema_version"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"const"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1.0-environment"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-93"><a id="__codelineno-12-93" name="__codelineno-12-93" href="#__codelineno-12-93"></a><span class="w">            </span><span class="nt">"run_type"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"const"</span><span class="p">:</span><span class="w"> </span><span class="s2">"environment"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-94"><a id="__codelineno-12-94" name="__codelineno-12-94" href="#__codelineno-12-94"></a><span class="w">            </span><span class="nt">"config"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-12-95"><a id="__codelineno-12-95" name="__codelineno-12-95" href="#__codelineno-12-95"></a><span class="w">              </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span>
-</span><span id="__span-12-96"><a id="__codelineno-12-96" name="__codelineno-12-96" href="#__codelineno-12-96"></a><span class="w">              </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"script"</span><span class="p">,</span><span class="w"> </span><span class="s2">"environment"</span><span class="p">,</span><span class="w"> </span><span class="s2">"world_firmware_hash"</span><span class="p">,</span><span class="w"> </span><span class="s2">"nodes"</span><span class="p">],</span>
-</span><span id="__span-12-97"><a id="__codelineno-12-97" name="__codelineno-12-97" href="#__codelineno-12-97"></a><span class="w">              </span><span class="nt">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-12-98"><a id="__codelineno-12-98" name="__codelineno-12-98" href="#__codelineno-12-98"></a><span class="w">                </span><span class="nt">"script"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-99"><a id="__codelineno-12-99" name="__codelineno-12-99" href="#__codelineno-12-99"></a><span class="w">                </span><span class="nt">"environment"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-100"><a id="__codelineno-12-100" name="__codelineno-12-100" href="#__codelineno-12-100"></a><span class="w">                </span><span class="nt">"world_firmware_hash"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-12-101"><a id="__codelineno-12-101" name="__codelineno-12-101" href="#__codelineno-12-101"></a><span class="w">                </span><span class="nt">"nodes"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-12-102"><a id="__codelineno-12-102" name="__codelineno-12-102" href="#__codelineno-12-102"></a><span class="w">                  </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span><span class="p">,</span>
-</span><span id="__span-12-103"><a id="__codelineno-12-103" name="__codelineno-12-103" href="#__codelineno-12-103"></a><span class="w">                  </span><span class="nt">"items"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"$ref"</span><span class="p">:</span><span class="w"> </span><span class="s2">"#/$defs/environment_node"</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-12-104"><a id="__codelineno-12-104" name="__codelineno-12-104" href="#__codelineno-12-104"></a><span class="w">                </span><span class="p">}</span>
-</span><span id="__span-12-105"><a id="__codelineno-12-105" name="__codelineno-12-105" href="#__codelineno-12-105"></a><span class="w">              </span><span class="p">}</span>
-</span><span id="__span-12-106"><a id="__codelineno-12-106" name="__codelineno-12-106" href="#__codelineno-12-106"></a><span class="w">            </span><span class="p">}</span>
-</span><span id="__span-12-107"><a id="__codelineno-12-107" name="__codelineno-12-107" href="#__codelineno-12-107"></a><span class="w">          </span><span class="p">}</span>
-</span><span id="__span-12-108"><a id="__codelineno-12-108" name="__codelineno-12-108" href="#__codelineno-12-108"></a><span class="w">        </span><span class="p">}</span>
-</span><span id="__span-12-109"><a id="__codelineno-12-109" name="__codelineno-12-109" href="#__codelineno-12-109"></a><span class="w">      </span><span class="p">]</span>
-</span><span id="__span-12-110"><a id="__codelineno-12-110" name="__codelineno-12-110" href="#__codelineno-12-110"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-12-111"><a id="__codelineno-12-111" name="__codelineno-12-111" href="#__codelineno-12-111"></a><span class="w">  </span><span class="p">]</span>
-</span><span id="__span-12-112"><a id="__codelineno-12-112" name="__codelineno-12-112" href="#__codelineno-12-112"></a><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="p">{</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nt">"$schema"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://json-schema.org/draft/2020-12/schema"</span><span class="p">,</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"LabWired CI runner result.json"</span><span class="p">,</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">  </span><span class="nt">"$defs"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">    </span><span class="nt">"common"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="w">      </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="w">      </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="w">        </span><span class="s2">"status"</span><span class="p">,</span>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="w">        </span><span class="s2">"steps_executed"</span><span class="p">,</span>
+</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="w">        </span><span class="s2">"cycles"</span><span class="p">,</span>
+</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="w">        </span><span class="s2">"instructions"</span><span class="p">,</span>
+</span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a><span class="w">        </span><span class="s2">"stop_reason"</span><span class="p">,</span>
+</span><span id="__span-19-13"><a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a><span class="w">        </span><span class="s2">"stop_reason_details"</span><span class="p">,</span>
+</span><span id="__span-19-14"><a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a><span class="w">        </span><span class="s2">"limits"</span><span class="p">,</span>
+</span><span id="__span-19-15"><a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a><span class="w">        </span><span class="s2">"assertions"</span>
+</span><span id="__span-19-16"><a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a><span class="w">      </span><span class="p">],</span>
+</span><span id="__span-19-17"><a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a><span class="w">      </span><span class="nt">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-19-18"><a id="__codelineno-19-18" name="__codelineno-19-18" href="#__codelineno-19-18"></a><span class="w">        </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"enum"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"pass"</span><span class="p">,</span><span class="w"> </span><span class="s2">"fail"</span><span class="p">,</span><span class="w"> </span><span class="s2">"error"</span><span class="p">]</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-19"><a id="__codelineno-19-19" name="__codelineno-19-19" href="#__codelineno-19-19"></a><span class="w">        </span><span class="nt">"steps_executed"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"integer"</span><span class="p">,</span><span class="w"> </span><span class="nt">"minimum"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-20"><a id="__codelineno-19-20" name="__codelineno-19-20" href="#__codelineno-19-20"></a><span class="w">        </span><span class="nt">"cycles"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"integer"</span><span class="p">,</span><span class="w"> </span><span class="nt">"minimum"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-21"><a id="__codelineno-19-21" name="__codelineno-19-21" href="#__codelineno-19-21"></a><span class="w">        </span><span class="nt">"instructions"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"integer"</span><span class="p">,</span><span class="w"> </span><span class="nt">"minimum"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-22"><a id="__codelineno-19-22" name="__codelineno-19-22" href="#__codelineno-19-22"></a><span class="w">        </span><span class="nt">"stop_reason"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-19-23"><a id="__codelineno-19-23" name="__codelineno-19-23" href="#__codelineno-19-23"></a><span class="w">          </span><span class="nt">"enum"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-19-24"><a id="__codelineno-19-24" name="__codelineno-19-24" href="#__codelineno-19-24"></a><span class="w">            </span><span class="s2">"config_error"</span><span class="p">,</span>
+</span><span id="__span-19-25"><a id="__codelineno-19-25" name="__codelineno-19-25" href="#__codelineno-19-25"></a><span class="w">            </span><span class="s2">"max_steps"</span><span class="p">,</span>
+</span><span id="__span-19-26"><a id="__codelineno-19-26" name="__codelineno-19-26" href="#__codelineno-19-26"></a><span class="w">            </span><span class="s2">"max_cycles"</span><span class="p">,</span>
+</span><span id="__span-19-27"><a id="__codelineno-19-27" name="__codelineno-19-27" href="#__codelineno-19-27"></a><span class="w">            </span><span class="s2">"max_uart_bytes"</span><span class="p">,</span>
+</span><span id="__span-19-28"><a id="__codelineno-19-28" name="__codelineno-19-28" href="#__codelineno-19-28"></a><span class="w">            </span><span class="s2">"no_progress"</span><span class="p">,</span>
+</span><span id="__span-19-29"><a id="__codelineno-19-29" name="__codelineno-19-29" href="#__codelineno-19-29"></a><span class="w">            </span><span class="s2">"wall_time"</span><span class="p">,</span>
+</span><span id="__span-19-30"><a id="__codelineno-19-30" name="__codelineno-19-30" href="#__codelineno-19-30"></a><span class="w">            </span><span class="s2">"assertions_passed"</span><span class="p">,</span>
+</span><span id="__span-19-31"><a id="__codelineno-19-31" name="__codelineno-19-31" href="#__codelineno-19-31"></a><span class="w">            </span><span class="s2">"memory_violation"</span><span class="p">,</span>
+</span><span id="__span-19-32"><a id="__codelineno-19-32" name="__codelineno-19-32" href="#__codelineno-19-32"></a><span class="w">            </span><span class="s2">"decode_error"</span><span class="p">,</span>
+</span><span id="__span-19-33"><a id="__codelineno-19-33" name="__codelineno-19-33" href="#__codelineno-19-33"></a><span class="w">            </span><span class="s2">"halt"</span><span class="p">,</span>
+</span><span id="__span-19-34"><a id="__codelineno-19-34" name="__codelineno-19-34" href="#__codelineno-19-34"></a><span class="w">            </span><span class="s2">"exception"</span>
+</span><span id="__span-19-35"><a id="__codelineno-19-35" name="__codelineno-19-35" href="#__codelineno-19-35"></a><span class="w">          </span><span class="p">]</span>
+</span><span id="__span-19-36"><a id="__codelineno-19-36" name="__codelineno-19-36" href="#__codelineno-19-36"></a><span class="w">        </span><span class="p">},</span>
+</span><span id="__span-19-37"><a id="__codelineno-19-37" name="__codelineno-19-37" href="#__codelineno-19-37"></a><span class="w">        </span><span class="nt">"stop_reason_details"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-38"><a id="__codelineno-19-38" name="__codelineno-19-38" href="#__codelineno-19-38"></a><span class="w">        </span><span class="nt">"limits"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-39"><a id="__codelineno-19-39" name="__codelineno-19-39" href="#__codelineno-19-39"></a><span class="w">        </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"string"</span><span class="p">,</span><span class="w"> </span><span class="s2">"null"</span><span class="p">]</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-40"><a id="__codelineno-19-40" name="__codelineno-19-40" href="#__codelineno-19-40"></a><span class="w">        </span><span class="nt">"assertions"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-41"><a id="__codelineno-19-41" name="__codelineno-19-41" href="#__codelineno-19-41"></a><span class="w">        </span><span class="nt">"fidelity"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-19-42"><a id="__codelineno-19-42" name="__codelineno-19-42" href="#__codelineno-19-42"></a><span class="w">      </span><span class="p">}</span>
+</span><span id="__span-19-43"><a id="__codelineno-19-43" name="__codelineno-19-43" href="#__codelineno-19-43"></a><span class="w">    </span><span class="p">},</span>
+</span><span id="__span-19-44"><a id="__codelineno-19-44" name="__codelineno-19-44" href="#__codelineno-19-44"></a><span class="w">    </span><span class="nt">"environment_node"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-19-45"><a id="__codelineno-19-45" name="__codelineno-19-45" href="#__codelineno-19-45"></a><span class="w">      </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span>
+</span><span id="__span-19-46"><a id="__codelineno-19-46" name="__codelineno-19-46" href="#__codelineno-19-46"></a><span class="w">      </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"id"</span><span class="p">,</span><span class="w"> </span><span class="s2">"system"</span><span class="p">,</span><span class="w"> </span><span class="s2">"firmware"</span><span class="p">,</span><span class="w"> </span><span class="s2">"system_hash"</span><span class="p">,</span><span class="w"> </span><span class="s2">"firmware_hash"</span><span class="p">],</span>
+</span><span id="__span-19-47"><a id="__codelineno-19-47" name="__codelineno-19-47" href="#__codelineno-19-47"></a><span class="w">      </span><span class="nt">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-19-48"><a id="__codelineno-19-48" name="__codelineno-19-48" href="#__codelineno-19-48"></a><span class="w">        </span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-49"><a id="__codelineno-19-49" name="__codelineno-19-49" href="#__codelineno-19-49"></a><span class="w">        </span><span class="nt">"system"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-50"><a id="__codelineno-19-50" name="__codelineno-19-50" href="#__codelineno-19-50"></a><span class="w">        </span><span class="nt">"firmware"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-51"><a id="__codelineno-19-51" name="__codelineno-19-51" href="#__codelineno-19-51"></a><span class="w">        </span><span class="nt">"system_hash"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-52"><a id="__codelineno-19-52" name="__codelineno-19-52" href="#__codelineno-19-52"></a><span class="w">        </span><span class="nt">"firmware_hash"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-19-53"><a id="__codelineno-19-53" name="__codelineno-19-53" href="#__codelineno-19-53"></a><span class="w">      </span><span class="p">}</span>
+</span><span id="__span-19-54"><a id="__codelineno-19-54" name="__codelineno-19-54" href="#__codelineno-19-54"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-19-55"><a id="__codelineno-19-55" name="__codelineno-19-55" href="#__codelineno-19-55"></a><span class="w">  </span><span class="p">},</span>
+</span><span id="__span-19-56"><a id="__codelineno-19-56" name="__codelineno-19-56" href="#__codelineno-19-56"></a><span class="w">  </span><span class="nt">"oneOf"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-19-57"><a id="__codelineno-19-57" name="__codelineno-19-57" href="#__codelineno-19-57"></a><span class="w">    </span><span class="p">{</span>
+</span><span id="__span-19-58"><a id="__codelineno-19-58" name="__codelineno-19-58" href="#__codelineno-19-58"></a><span class="w">      </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"single-machine result"</span><span class="p">,</span>
+</span><span id="__span-19-59"><a id="__codelineno-19-59" name="__codelineno-19-59" href="#__codelineno-19-59"></a><span class="w">      </span><span class="nt">"allOf"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-19-60"><a id="__codelineno-19-60" name="__codelineno-19-60" href="#__codelineno-19-60"></a><span class="w">        </span><span class="p">{</span><span class="w"> </span><span class="nt">"$ref"</span><span class="p">:</span><span class="w"> </span><span class="s2">"#/$defs/common"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-61"><a id="__codelineno-19-61" name="__codelineno-19-61" href="#__codelineno-19-61"></a><span class="w">        </span><span class="p">{</span>
+</span><span id="__span-19-62"><a id="__codelineno-19-62" name="__codelineno-19-62" href="#__codelineno-19-62"></a><span class="w">          </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span>
+</span><span id="__span-19-63"><a id="__codelineno-19-63" name="__codelineno-19-63" href="#__codelineno-19-63"></a><span class="w">          </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"result_schema_version"</span><span class="p">,</span><span class="w"> </span><span class="s2">"firmware_hash"</span><span class="p">,</span><span class="w"> </span><span class="s2">"config"</span><span class="p">],</span>
+</span><span id="__span-19-64"><a id="__codelineno-19-64" name="__codelineno-19-64" href="#__codelineno-19-64"></a><span class="w">          </span><span class="nt">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-19-65"><a id="__codelineno-19-65" name="__codelineno-19-65" href="#__codelineno-19-65"></a><span class="w">            </span><span class="nt">"result_schema_version"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"const"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1.0"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-66"><a id="__codelineno-19-66" name="__codelineno-19-66" href="#__codelineno-19-66"></a><span class="w">            </span><span class="nt">"firmware_hash"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-19-67"><a id="__codelineno-19-67" name="__codelineno-19-67" href="#__codelineno-19-67"></a><span class="w">              </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="p">,</span>
+</span><span id="__span-19-68"><a id="__codelineno-19-68" name="__codelineno-19-68" href="#__codelineno-19-68"></a><span class="w">              </span><span class="nt">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"SHA-256 of the firmware ELF bytes."</span>
+</span><span id="__span-19-69"><a id="__codelineno-19-69" name="__codelineno-19-69" href="#__codelineno-19-69"></a><span class="w">            </span><span class="p">},</span>
+</span><span id="__span-19-70"><a id="__codelineno-19-70" name="__codelineno-19-70" href="#__codelineno-19-70"></a><span class="w">            </span><span class="nt">"config"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-19-71"><a id="__codelineno-19-71" name="__codelineno-19-71" href="#__codelineno-19-71"></a><span class="w">              </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span>
+</span><span id="__span-19-72"><a id="__codelineno-19-72" name="__codelineno-19-72" href="#__codelineno-19-72"></a><span class="w">              </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"firmware"</span><span class="p">,</span><span class="w"> </span><span class="s2">"system"</span><span class="p">,</span><span class="w"> </span><span class="s2">"script"</span><span class="p">],</span>
+</span><span id="__span-19-73"><a id="__codelineno-19-73" name="__codelineno-19-73" href="#__codelineno-19-73"></a><span class="w">              </span><span class="nt">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-19-74"><a id="__codelineno-19-74" name="__codelineno-19-74" href="#__codelineno-19-74"></a><span class="w">                </span><span class="nt">"firmware"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-75"><a id="__codelineno-19-75" name="__codelineno-19-75" href="#__codelineno-19-75"></a><span class="w">                </span><span class="nt">"system"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"string"</span><span class="p">,</span><span class="w"> </span><span class="s2">"null"</span><span class="p">]</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-76"><a id="__codelineno-19-76" name="__codelineno-19-76" href="#__codelineno-19-76"></a><span class="w">                </span><span class="nt">"script"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-19-77"><a id="__codelineno-19-77" name="__codelineno-19-77" href="#__codelineno-19-77"></a><span class="w">              </span><span class="p">}</span>
+</span><span id="__span-19-78"><a id="__codelineno-19-78" name="__codelineno-19-78" href="#__codelineno-19-78"></a><span class="w">            </span><span class="p">}</span>
+</span><span id="__span-19-79"><a id="__codelineno-19-79" name="__codelineno-19-79" href="#__codelineno-19-79"></a><span class="w">          </span><span class="p">}</span>
+</span><span id="__span-19-80"><a id="__codelineno-19-80" name="__codelineno-19-80" href="#__codelineno-19-80"></a><span class="w">        </span><span class="p">}</span>
+</span><span id="__span-19-81"><a id="__codelineno-19-81" name="__codelineno-19-81" href="#__codelineno-19-81"></a><span class="w">      </span><span class="p">]</span>
+</span><span id="__span-19-82"><a id="__codelineno-19-82" name="__codelineno-19-82" href="#__codelineno-19-82"></a><span class="w">    </span><span class="p">},</span>
+</span><span id="__span-19-83"><a id="__codelineno-19-83" name="__codelineno-19-83" href="#__codelineno-19-83"></a><span class="w">    </span><span class="p">{</span>
+</span><span id="__span-19-84"><a id="__codelineno-19-84" name="__codelineno-19-84" href="#__codelineno-19-84"></a><span class="w">      </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"environment/world result"</span><span class="p">,</span>
+</span><span id="__span-19-85"><a id="__codelineno-19-85" name="__codelineno-19-85" href="#__codelineno-19-85"></a><span class="w">      </span><span class="nt">"allOf"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-19-86"><a id="__codelineno-19-86" name="__codelineno-19-86" href="#__codelineno-19-86"></a><span class="w">        </span><span class="p">{</span><span class="w"> </span><span class="nt">"$ref"</span><span class="p">:</span><span class="w"> </span><span class="s2">"#/$defs/common"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-87"><a id="__codelineno-19-87" name="__codelineno-19-87" href="#__codelineno-19-87"></a><span class="w">        </span><span class="p">{</span>
+</span><span id="__span-19-88"><a id="__codelineno-19-88" name="__codelineno-19-88" href="#__codelineno-19-88"></a><span class="w">          </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span>
+</span><span id="__span-19-89"><a id="__codelineno-19-89" name="__codelineno-19-89" href="#__codelineno-19-89"></a><span class="w">          </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"result_schema_version"</span><span class="p">,</span><span class="w"> </span><span class="s2">"run_type"</span><span class="p">,</span><span class="w"> </span><span class="s2">"config"</span><span class="p">],</span>
+</span><span id="__span-19-90"><a id="__codelineno-19-90" name="__codelineno-19-90" href="#__codelineno-19-90"></a><span class="w">          </span><span class="nt">"not"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"firmware_hash"</span><span class="p">]</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-91"><a id="__codelineno-19-91" name="__codelineno-19-91" href="#__codelineno-19-91"></a><span class="w">          </span><span class="nt">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-19-92"><a id="__codelineno-19-92" name="__codelineno-19-92" href="#__codelineno-19-92"></a><span class="w">            </span><span class="nt">"result_schema_version"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"const"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1.0-environment"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-93"><a id="__codelineno-19-93" name="__codelineno-19-93" href="#__codelineno-19-93"></a><span class="w">            </span><span class="nt">"run_type"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"const"</span><span class="p">:</span><span class="w"> </span><span class="s2">"environment"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-94"><a id="__codelineno-19-94" name="__codelineno-19-94" href="#__codelineno-19-94"></a><span class="w">            </span><span class="nt">"config"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-19-95"><a id="__codelineno-19-95" name="__codelineno-19-95" href="#__codelineno-19-95"></a><span class="w">              </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span>
+</span><span id="__span-19-96"><a id="__codelineno-19-96" name="__codelineno-19-96" href="#__codelineno-19-96"></a><span class="w">              </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"script"</span><span class="p">,</span><span class="w"> </span><span class="s2">"environment"</span><span class="p">,</span><span class="w"> </span><span class="s2">"world_firmware_hash"</span><span class="p">,</span><span class="w"> </span><span class="s2">"nodes"</span><span class="p">],</span>
+</span><span id="__span-19-97"><a id="__codelineno-19-97" name="__codelineno-19-97" href="#__codelineno-19-97"></a><span class="w">              </span><span class="nt">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-19-98"><a id="__codelineno-19-98" name="__codelineno-19-98" href="#__codelineno-19-98"></a><span class="w">                </span><span class="nt">"script"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-99"><a id="__codelineno-19-99" name="__codelineno-19-99" href="#__codelineno-19-99"></a><span class="w">                </span><span class="nt">"environment"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-100"><a id="__codelineno-19-100" name="__codelineno-19-100" href="#__codelineno-19-100"></a><span class="w">                </span><span class="nt">"world_firmware_hash"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-19-101"><a id="__codelineno-19-101" name="__codelineno-19-101" href="#__codelineno-19-101"></a><span class="w">                </span><span class="nt">"nodes"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-19-102"><a id="__codelineno-19-102" name="__codelineno-19-102" href="#__codelineno-19-102"></a><span class="w">                  </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span><span class="p">,</span>
+</span><span id="__span-19-103"><a id="__codelineno-19-103" name="__codelineno-19-103" href="#__codelineno-19-103"></a><span class="w">                  </span><span class="nt">"items"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"$ref"</span><span class="p">:</span><span class="w"> </span><span class="s2">"#/$defs/environment_node"</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-19-104"><a id="__codelineno-19-104" name="__codelineno-19-104" href="#__codelineno-19-104"></a><span class="w">                </span><span class="p">}</span>
+</span><span id="__span-19-105"><a id="__codelineno-19-105" name="__codelineno-19-105" href="#__codelineno-19-105"></a><span class="w">              </span><span class="p">}</span>
+</span><span id="__span-19-106"><a id="__codelineno-19-106" name="__codelineno-19-106" href="#__codelineno-19-106"></a><span class="w">            </span><span class="p">}</span>
+</span><span id="__span-19-107"><a id="__codelineno-19-107" name="__codelineno-19-107" href="#__codelineno-19-107"></a><span class="w">          </span><span class="p">}</span>
+</span><span id="__span-19-108"><a id="__codelineno-19-108" name="__codelineno-19-108" href="#__codelineno-19-108"></a><span class="w">        </span><span class="p">}</span>
+</span><span id="__span-19-109"><a id="__codelineno-19-109" name="__codelineno-19-109" href="#__codelineno-19-109"></a><span class="w">      </span><span class="p">]</span>
+</span><span id="__span-19-110"><a id="__codelineno-19-110" name="__codelineno-19-110" href="#__codelineno-19-110"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-19-111"><a id="__codelineno-19-111" name="__codelineno-19-111" href="#__codelineno-19-111"></a><span class="w">  </span><span class="p">]</span>
+</span><span id="__span-19-112"><a id="__codelineno-19-112" name="__codelineno-19-112" href="#__codelineno-19-112"></a><span class="p">}</span>
 </span></code></pre></div>
 <p>The single-machine arm has the top-level <code>firmware_hash</code> and a
 <code>config.firmware/system/script</code> provenance object. The environment arm has no
@@ -5878,12 +6301,12 @@ configuration; these produce <code>status: "error"</code> with <code>stop_reason
 <p>A single-machine run whose firmware printed anything over the UART capture
 also carries <code>uart_lines</code>: every line of <code>uart.log</code>, in order, stamped on the
 engine-cycle axis, so a check can ask what a pin did when a line printed.</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">"uart_lines"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">"lines"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">"text"</span><span class="p">:</span><span class="w"> </span><span class="s2">"READY"</span><span class="p">,</span><span class="w"> </span><span class="nt">"cycle_lo"</span><span class="p">:</span><span class="w"> </span><span class="mi">8158720</span><span class="p">,</span><span class="w"> </span><span class="nt">"cycle"</span><span class="p">:</span><span class="w"> </span><span class="mi">8178134</span><span class="p">,</span><span class="w"> </span><span class="nt">"end_cycle"</span><span class="p">:</span><span class="w"> </span><span class="mi">8179210</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span><span class="p">],</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span><span class="nt">"dropped_lines"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">"uart_lines"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span><span class="nt">"lines"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">"text"</span><span class="p">:</span><span class="w"> </span><span class="s2">"READY"</span><span class="p">,</span><span class="w"> </span><span class="nt">"cycle_lo"</span><span class="p">:</span><span class="w"> </span><span class="mi">8158720</span><span class="p">,</span><span class="w"> </span><span class="nt">"cycle"</span><span class="p">:</span><span class="w"> </span><span class="mi">8178134</span><span class="p">,</span><span class="w"> </span><span class="nt">"end_cycle"</span><span class="p">:</span><span class="w"> </span><span class="mi">8179210</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">  </span><span class="p">],</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">  </span><span class="nt">"dropped_lines"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="p">}</span>
 </span></code></pre></div>
 <p><code>text</code> is the line without its <code>\r\n</code>. Its first byte appeared after
 <code>cycle_lo</code> and by <code>cycle</code>; the window is the observation step the byte landed
@@ -5905,23 +6328,23 @@ three more must keep them stable under <code>--log-timestamps virtual</code>.</p
 <p>The CI recipe is a checksum pair. On the committed UART fixture, with a script
 whose inputs are absolute (the script lives outside the repo, so relative
 inputs would resolve against its own directory):</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># /tmp/ci-docs/script.yaml</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nt">schema_version</span><span class="p">:</span><span class="w"> </span><span class="s">"1.0"</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="nt">inputs</span><span class="p">:</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span><span class="nt">firmware</span><span class="p">:</span><span class="w"> </span><span class="s">"/path/to/repo/tests/fixtures/uart-ok-thumbv7m.elf"</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span><span class="nt">system</span><span class="p">:</span><span class="w"> </span><span class="s">"/path/to/repo/configs/systems/ci-fixture-uart1.yaml"</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="nt">limits</span><span class="p">:</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">  </span><span class="nt">max_steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="nt">assertions</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># /tmp/ci-docs/script.yaml</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="nt">schema_version</span><span class="p">:</span><span class="w"> </span><span class="s">"1.0"</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="nt">inputs</span><span class="p">:</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="w">  </span><span class="nt">firmware</span><span class="p">:</span><span class="w"> </span><span class="s">"/path/to/repo/tests/fixtures/uart-ok-thumbv7m.elf"</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="w">  </span><span class="nt">system</span><span class="p">:</span><span class="w"> </span><span class="s">"/path/to/repo/configs/systems/ci-fixture-uart1.yaml"</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="nt">limits</span><span class="p">:</span>
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="w">  </span><span class="nt">max_steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000</span>
+</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="nt">assertions</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>cargo<span class="w"> </span>build<span class="w"> </span>-p<span class="w"> </span>labwired-cli
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>./target/debug/labwired<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>/tmp/ci-docs/script.yaml<span class="w"> </span>--trace<span class="w"> </span>--output-dir<span class="w"> </span>/tmp/ci-docs/det-a
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>./target/debug/labwired<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>/tmp/ci-docs/script.yaml<span class="w"> </span>--trace<span class="w"> </span>--output-dir<span class="w"> </span>/tmp/ci-docs/det-b
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>sha256sum<span class="w"> </span>/tmp/ci-docs/det-a/trace.json<span class="w"> </span>/tmp/ci-docs/det-b/trace.json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>cargo<span class="w"> </span>build<span class="w"> </span>-p<span class="w"> </span>labwired-cli
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>./target/debug/labwired<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>/tmp/ci-docs/script.yaml<span class="w"> </span>--trace<span class="w"> </span>--output-dir<span class="w"> </span>/tmp/ci-docs/det-a
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>./target/debug/labwired<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>/tmp/ci-docs/script.yaml<span class="w"> </span>--trace<span class="w"> </span>--output-dir<span class="w"> </span>/tmp/ci-docs/det-b
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>sha256sum<span class="w"> </span>/tmp/ci-docs/det-a/trace.json<span class="w"> </span>/tmp/ci-docs/det-b/trace.json
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>40909dab280765cc06c7bb6d0edd12ae3bec1c2fe5882605d972ea5f9ea6b0dc  /tmp/ci-docs/det-a/trace.json
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>40909dab280765cc06c7bb6d0edd12ae3bec1c2fe5882605d972ea5f9ea6b0dc  /tmp/ci-docs/det-b/trace.json
+<div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>40909dab280765cc06c7bb6d0edd12ae3bec1c2fe5882605d972ea5f9ea6b0dc  /tmp/ci-docs/det-a/trace.json
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>40909dab280765cc06c7bb6d0edd12ae3bec1c2fe5882605d972ea5f9ea6b0dc  /tmp/ci-docs/det-b/trace.json
 </span></code></pre></div>
 <p>The same two runs hash stdout — the fixture's <code>OK</code> echo — to
 <code>a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87</code>. Judge
@@ -5936,32 +6359,32 @@ find the first instruction where behavior changed.</p>
 later on the virtual time axis, which turns an intermittent bench or field
 failure into a committed regression. The committed H563 UDS fixture
 (<code>examples/h563-can-replay/</code>) is the receipt:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>cargo<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </span>labwired-cli<span class="w"> </span>--<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span>--script<span class="w"> </span>examples/h563-can-replay/record.yaml<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span>--no-uart-stdout<span class="w"> </span>--output-dir<span class="w"> </span>/tmp/ci-docs/rec
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>cargo<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </span>labwired-cli<span class="w"> </span>--<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">  </span>--script<span class="w"> </span>examples/h563-can-replay/replay.yaml<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">  </span>--no-uart-stdout<span class="w"> </span>--output-dir<span class="w"> </span>/tmp/ci-docs/rep
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>cargo<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </span>labwired-cli<span class="w"> </span>--<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="w">  </span>--script<span class="w"> </span>examples/h563-can-replay/record.yaml<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">  </span>--no-uart-stdout<span class="w"> </span>--output-dir<span class="w"> </span>/tmp/ci-docs/rec
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>cargo<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </span>labwired-cli<span class="w"> </span>--<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="w">  </span>--script<span class="w"> </span>examples/h563-can-replay/replay.yaml<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="w">  </span>--no-uart-stdout<span class="w"> </span>--output-dir<span class="w"> </span>/tmp/ci-docs/rep
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>PASS  3/3 checks · record · 2000000 steps · 2.10s
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>PASS  2/2 checks · replay · 2000000 steps · 2.20s
+<div class="language-text highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>PASS  3/3 checks · record · 2000000 steps · 2.10s
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>PASS  2/2 checks · replay · 2000000 steps · 2.20s
 </span></code></pre></div>
 <p>The record run's bridge writes <code>can-bus.jsonl</code> (native replay format) and
 <code>can-bus.candump.log</code> into its <code>--output-dir</code>; the replay run injects the
 recorded tester requests at their recorded cycles and compares every answer the
 ECU transmits. Its verdict is in <code>result.json</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>jq<span class="w"> </span><span class="s1">'.can_bridges[0].replay'</span><span class="w"> </span>/tmp/ci-docs/rep/result.json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>jq<span class="w"> </span><span class="s1">'.can_bridges[0].replay'</span><span class="w"> </span>/tmp/ci-docs/rep/result.json
 </span></code></pre></div>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="p">{</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span><span class="nt">"expected_tx"</span><span class="p">:</span><span class="w"> </span><span class="mi">22</span><span class="p">,</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span><span class="nt">"matched_tx"</span><span class="p">:</span><span class="w"> </span><span class="mi">22</span><span class="p">,</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">  </span><span class="nt">"max_cycle_skew"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">  </span><span class="nt">"observed_tx"</span><span class="p">:</span><span class="w"> </span><span class="mi">22</span><span class="p">,</span>
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">  </span><span class="nt">"rx_injected"</span><span class="p">:</span><span class="w"> </span><span class="mi">14</span><span class="p">,</span>
-</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="w">  </span><span class="nt">"rx_rejected"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
-</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="w">  </span><span class="nt">"rx_total"</span><span class="p">:</span><span class="w"> </span><span class="mi">14</span><span class="p">,</span>
-</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="w">  </span><span class="nt">"verdict"</span><span class="p">:</span><span class="w"> </span><span class="s2">"match"</span>
-</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="p">{</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="w">  </span><span class="nt">"expected_tx"</span><span class="p">:</span><span class="w"> </span><span class="mi">22</span><span class="p">,</span>
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="w">  </span><span class="nt">"matched_tx"</span><span class="p">:</span><span class="w"> </span><span class="mi">22</span><span class="p">,</span>
+</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="w">  </span><span class="nt">"max_cycle_skew"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="w">  </span><span class="nt">"observed_tx"</span><span class="p">:</span><span class="w"> </span><span class="mi">22</span><span class="p">,</span>
+</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="w">  </span><span class="nt">"rx_injected"</span><span class="p">:</span><span class="w"> </span><span class="mi">14</span><span class="p">,</span>
+</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="w">  </span><span class="nt">"rx_rejected"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+</span><span id="__span-27-8"><a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a><span class="w">  </span><span class="nt">"rx_total"</span><span class="p">:</span><span class="w"> </span><span class="mi">14</span><span class="p">,</span>
+</span><span id="__span-27-9"><a id="__codelineno-27-9" name="__codelineno-27-9" href="#__codelineno-27-9"></a><span class="w">  </span><span class="nt">"verdict"</span><span class="p">:</span><span class="w"> </span><span class="s2">"match"</span>
+</span><span id="__span-27-10"><a id="__codelineno-27-10" name="__codelineno-27-10" href="#__codelineno-27-10"></a><span class="p">}</span>
 </span></code></pre></div>
 <p><code>max_cycle_skew: 0</code> means every answer landed on exactly the recorded cycle.
 Workflow: record on failure (or in a nightly job), commit the recording beside
@@ -5975,12 +6398,12 @@ so it is identical every run, and a <code>can_bridge</code> assertion can requir
 firmware can drown the runner's verdict, and raw control bytes can scramble
 annotations. <code>--no-uart-stdout</code> disables only the stdout echo — UART bytes are
 still captured for <code>uart_contains</code> assertions and still written to <code>uart.log</code>:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>$ ./target/debug/labwired test --script /tmp/ci-docs/script.yaml --no-uart-stdout \
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>    --output-dir /tmp/ci-docs/art &gt; /tmp/ci-docs/art.stdout 2&gt;/dev/null
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>$ wc -c &lt; /tmp/ci-docs/art.stdout
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>0
-</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>$ cat /tmp/ci-docs/art/uart.log
-</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>OK
+<div class="language-text highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>$ ./target/debug/labwired test --script /tmp/ci-docs/script.yaml --no-uart-stdout \
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>    --output-dir /tmp/ci-docs/art &gt; /tmp/ci-docs/art.stdout 2&gt;/dev/null
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>$ wc -c &lt; /tmp/ci-docs/art.stdout
+</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>0
+</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>$ cat /tmp/ci-docs/art/uart.log
+</span><span id="__span-28-6"><a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a>OK
 </span></code></pre></div>
 <p>(Without the flag the same run writes the fixture's <code>OK</code> to stdout — 3 bytes.)</p>
 <p><code>--output-dir</code> is the artifact root. The audited file set is in the
@@ -5999,18 +6422,18 @@ command described above and writes the same artifact contract.</p>
 <p>Use the public Core action and pin the Core CLI with its version input. Its
 only inputs are required <code>script</code>, optional <code>version</code> (default
 <code>v0.23.0</code>), <code>output-dir</code>, and <code>args</code>:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">labwired</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Run LabWired tests</span>
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="w">  </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">w1ne/labwired-core/.github/actions/labwired-test@64ed5d9723e2d9f5f4a851a81a3468025671d94e</span>
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="w">  </span><span class="nt">with</span><span class="p">:</span>
-</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v0.23.0</span>
-</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="w">    </span><span class="nt">script</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">examples/ci/dummy-max-steps.yaml</span>
-</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="w">    </span><span class="nt">output-dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out/artifacts</span>
-</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="w">    </span><span class="nt">args</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--no-uart-stdout</span>
-</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>
-</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Link the automatic LabWired artifact</span>
-</span><span id="__span-22-11"><a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a><span class="w">  </span><span class="nt">if</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">always()</span>
-</span><span id="__span-22-12"><a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a><span class="w">  </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echo "${{ steps.labwired.outputs.artifact-url }}" &gt;&gt; "$GITHUB_STEP_SUMMARY"</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">labwired</span>
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Run LabWired tests</span>
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="w">  </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">w1ne/labwired-core/.github/actions/labwired-test@64ed5d9723e2d9f5f4a851a81a3468025671d94e</span>
+</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">  </span><span class="nt">with</span><span class="p">:</span>
+</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v0.23.0</span>
+</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="w">    </span><span class="nt">script</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">examples/ci/dummy-max-steps.yaml</span>
+</span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="w">    </span><span class="nt">output-dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out/artifacts</span>
+</span><span id="__span-29-8"><a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a><span class="w">    </span><span class="nt">args</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--no-uart-stdout</span>
+</span><span id="__span-29-9"><a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a>
+</span><span id="__span-29-10"><a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Link the automatic LabWired artifact</span>
+</span><span id="__span-29-11"><a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a><span class="w">  </span><span class="nt">if</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">always()</span>
+</span><span id="__span-29-12"><a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a><span class="w">  </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echo "${{ steps.labwired.outputs.artifact-url }}" &gt;&gt; "$GITHUB_STEP_SUMMARY"</span>
 </span></code></pre></div>
 <p>The Core action is an immutable action-source pin to
 <code>64ed5d9723e2d9f5f4a851a81a3468025671d94e</code>; <code>version: v0.23.0</code> independently
@@ -6024,24 +6447,24 @@ the <code>labwired</code> step ID.</p>
 <p>The GHCR image has labwired as its entrypoint. For Docker, pass test directly
 after the pinned image name. Docker and the Action accept the same test YAML:
 use either a single-machine script or an <code>inputs.env</code> world script.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--user<span class="w"> </span><span class="s2">"</span><span class="k">$(</span>id<span class="w"> </span>-u<span class="k">)</span><span class="s2">:</span><span class="k">$(</span>id<span class="w"> </span>-g<span class="k">)</span><span class="s2">"</span><span class="w"> </span>-v<span class="w"> </span><span class="s2">"</span><span class="nv">$PWD</span><span class="s2">:/workspace"</span><span class="w"> </span>-w<span class="w"> </span>/workspace<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="w">  </span>ghcr.io/w1ne/labwired:v0.23.0<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="w">  </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>examples/ci/dummy-max-steps.yaml<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="w">       </span>--output-dir<span class="w"> </span>out/artifacts<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="w">       </span>--no-uart-stdout
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--user<span class="w"> </span><span class="s2">"</span><span class="k">$(</span>id<span class="w"> </span>-u<span class="k">)</span><span class="s2">:</span><span class="k">$(</span>id<span class="w"> </span>-g<span class="k">)</span><span class="s2">"</span><span class="w"> </span>-v<span class="w"> </span><span class="s2">"</span><span class="nv">$PWD</span><span class="s2">:/workspace"</span><span class="w"> </span>-w<span class="w"> </span>/workspace<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">  </span>ghcr.io/w1ne/labwired:v0.23.0<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">  </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>examples/ci/dummy-max-steps.yaml<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">       </span>--output-dir<span class="w"> </span>out/artifacts<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="w">       </span>--no-uart-stdout
 </span></code></pre></div>
 <p>GitLab should clear that entrypoint and invoke labwired from its job shell:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="nt">image</span><span class="p">:</span>
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/w1ne/labwired:v0.23.0</span>
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">  </span><span class="nt">entrypoint</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">""</span><span class="p p-Indicator">]</span>
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="nt">script</span><span class="p">:</span>
-</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">labwired test --script examples/ci/dummy-max-steps.yaml --output-dir out/artifacts --no-uart-stdout</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="nt">image</span><span class="p">:</span>
+</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/w1ne/labwired:v0.23.0</span>
+</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">  </span><span class="nt">entrypoint</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">""</span><span class="p p-Indicator">]</span>
+</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="nt">script</span><span class="p">:</span>
+</span><span id="__span-31-5"><a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">labwired test --script examples/ci/dummy-max-steps.yaml --output-dir out/artifacts --no-uart-stdout</span>
 </span></code></pre></div>
 <h3 id="advanced-source-build">Advanced source build</h3>
 <p>Build from source only when validating an unreleased LabWired commit. It is not
 the normal CI path:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>cargo<span class="w"> </span>build<span class="w"> </span>--release<span class="w"> </span>-p<span class="w"> </span>labwired-cli
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>./target/release/labwired<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>examples/ci/dummy-max-steps.yaml<span class="w"> </span>--output-dir<span class="w"> </span>out/artifacts<span class="w"> </span>--no-uart-stdout
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>cargo<span class="w"> </span>build<span class="w"> </span>--release<span class="w"> </span>-p<span class="w"> </span>labwired-cli
+</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>./target/release/labwired<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>examples/ci/dummy-max-steps.yaml<span class="w"> </span>--output-dir<span class="w"> </span>out/artifacts<span class="w"> </span>--no-uart-stdout
 </span></code></pre></div>
 
 
