@@ -926,6 +926,15 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: None,
     },
     ChipConf {
+        // NUCLEO-L031K6: the raw-register USART2 / LD3 smoke
+        // (examples/nucleo-l031k6) runs in the PR board lane, but no PR-run
+        // Rust survival gate or reset oracle exists for this exact part.
+        name: "stm32l031k6",
+        yaml: "configs/chips/stm32l031k6.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
         name: "stm32l476",
         yaml: "configs/chips/stm32l476.yaml",
         reset_oracle: None,
