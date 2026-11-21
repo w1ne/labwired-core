@@ -1991,6 +1991,7 @@ mod tests {
             device_type: None,
             i2c_address: None,
             channel: None,
+            emission: None,
         }
     }
 

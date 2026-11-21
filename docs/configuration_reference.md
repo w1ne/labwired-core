@@ -826,6 +826,7 @@ button a user can press, an ADC input. Entries are `BoardIoBinding`:
 | `i2c_address` | For `kind: i2c_device` bindings. |
 | `device_type` | The external-device `type` this binding surfaces, for the browser. |
 | `channel` | Stimulus channel this contact exposes when it is not a plain `pressed` button (`obstacle`, `field`, `vibration`, …); absent means `pressed`. |
+| `emission` | Optional visible light this output gives off: `{ color: "#rrggbb" }`. Any output binding may declare it. The engine then reports `emission` with the binding's state: the declared colour while the output is asserted, `#000000` while it is not. Only the on/off level is modelled; PWM brightness is not. |
 
 ```yaml
 # configs/systems/nucleo-l476rg.yaml (excerpt)

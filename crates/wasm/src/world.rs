@@ -228,7 +228,7 @@ impl WasmWorld {
             .map_err(|e| JsValue::from_str(&format!("get_board_io_config: {e}")))
     }
 
-    /// Node `node_id`'s `board_io` states, `[{ id, active }]`.
+    /// Node `node_id`'s `board_io` states, `[{ id, active, emission? }]`.
     pub fn get_board_io_states(&self, node_id: &str) -> Result<JsValue, JsValue> {
         let machine = self.machine(node_id)?;
         let bindings = self
@@ -262,7 +262,7 @@ impl WasmWorld {
                         }
                     }
                 };
-                serde_json::json!({ "id": b.id, "active": active })
+                b.state_json(active)
             })
             .collect();
         serde_wasm_bindgen::to_value(&states)
