@@ -495,14 +495,22 @@ impl Peripheral for Nrf52Rtc {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
+        self.tick_elapsed(1)
+    }
+
+    fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
         // Legacy / feature-off path. Scheduler mode skips the walk.
         if self.scheduler_mode() {
             return PeripheralTickResult::default();
         }
-        let (irq, fired_mask) = self.advance_and_eval(1);
+        let (irq, fired_mask) = self.advance_and_eval(cycles);
         PeripheralTickResult {
             irq,
-            cycles: 1,
+            // Concurrent with the CPU: do not charge Machine::total_cycles.
+            // Returning 1 per RTC instance used to inflate time by the number
+            // of RTC blocks (three on nRF52840), so COUNTER lagged LFCLK
+            // while the core sat in WFE and the cycle budget ran out early.
+            cycles: 0,
             fired_events: self.fired_mask_to_events(fired_mask),
             ..Default::default()
         }
@@ -526,14 +534,15 @@ impl Peripheral for Nrf52Rtc {
     /// `advance_to` cannot replay the cycles settled here. Never reached from
     /// production `Machine` execution: there the event chain
     /// (`take_scheduled_events` / `on_event`) stays the sole owner.
-    fn tick_elapsed_forced(&mut self, _cycles: u64) -> PeripheralTickResult {
+    fn tick_elapsed_forced(&mut self, cycles: u64) -> PeripheralTickResult {
+        let cycles = cycles.max(1);
         if self.scheduler_mode() {
-            self.anchor.set(self.anchor.get().wrapping_add(1));
+            self.anchor.set(self.anchor.get().wrapping_add(cycles));
         }
-        let (irq, fired_mask) = self.advance_and_eval(1);
+        let (irq, fired_mask) = self.advance_and_eval(cycles);
         PeripheralTickResult {
             irq,
-            cycles: 1,
+            cycles: 0,
             fired_events: self.fired_mask_to_events(fired_mask),
             ..Default::default()
         }
@@ -790,6 +799,41 @@ mod tests {
         }
         assert!(overflow_irq);
         assert_eq!(r.read_u32(OFF_EVENTS_OVRFLW).unwrap(), 1);
+    }
+
+    #[test]
+    fn elapsed_cpu_cycles_advance_counter_at_the_product_spec_rate() {
+        // PS RTC chapter: f_RTC = 32.768 kHz / (PRESCALER + 1).
+        // With PRESCALER=0, one COUNTER increment takes 64e6/32768 = 1953.125
+        // CPU cycles, modelled as 15625/8 LFCLK accum units.
+        let mut r = Nrf52Rtc::new();
+        r.write_u32(OFF_PRESCALER, 0).unwrap();
+        r.write_u32(OFF_TASKS_START, 1).unwrap();
+        r.tick_elapsed(1953);
+        assert_eq!(
+            r.read_u32(OFF_COUNTER).unwrap(),
+            0,
+            "1953 cycles is just short of one LFCLK edge"
+        );
+        r.tick_elapsed(2);
+        assert!(r.read_u32(OFF_COUNTER).unwrap() >= 1);
+        r.tick_elapsed(1953 * 4);
+        assert!(r.read_u32(OFF_COUNTER).unwrap() >= 4);
+    }
+
+    #[test]
+    fn compare_match_sets_event_and_irq_after_prescaled_elapsed_time() {
+        let mut r = Nrf52Rtc::new();
+        r.write_u32(OFF_PRESCALER, 31).unwrap(); // 32.768 kHz / 32 = 1024 Hz
+        r.write_u32(OFF_CC0, 2).unwrap();
+        r.write_u32(OFF_INTENSET, 1 << 16).unwrap();
+        r.write_u32(OFF_TASKS_START, 1).unwrap();
+        r.tick_elapsed(60_000); // short of two 1024 Hz increments
+        assert_eq!(r.read_u32(OFF_EVENTS_COMPARE0).unwrap(), 0);
+        let result = r.tick_elapsed(70_000);
+        assert!(r.read_u32(OFF_COUNTER).unwrap() >= 2);
+        assert_eq!(r.read_u32(OFF_EVENTS_COMPARE0).unwrap(), 1);
+        assert!(result.irq, "INTEN COMPARE0 must raise the RTC IRQ");
     }
 
     #[cfg(feature = "event-scheduler")]
