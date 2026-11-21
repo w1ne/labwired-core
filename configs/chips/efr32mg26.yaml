@@ -361,6 +361,12 @@ peripherals:
   #
   # Clocks: CMU_CLKEN0.TIMER0 bit 4, .TIMER1 bit 5.
   #
+  # IRQ lines: TIMERn_IRQn = 4 + n for all ten (header; Renode
+  # efr32xg26.repl `-> nvic@4..13`). TIMER2..9 were once inserted between
+  # TIMER1's `size` and `irq` lines, which moved line 5 onto TIMER9 and left
+  # TIMER1..8 with none. examples/brd2709a/timer-irq-smoke.yaml checks each
+  # instance pends only its own line.
+  #
   # ⚠️ `peripheral_hz` is NOT `cpu_hz`, and the difference is 4.1x. A TIMER
   # counts on the EM01 group A peripheral clock, which out of reset selects the
   # HFRCODPLL path at its startup band — 19 MHz (`HFRCODPLL_STARTUP_FREQ`,
@@ -394,55 +400,63 @@ peripherals:
     config: { counter_bits: 32, peripheral_hz: 19_000_000 }
     base_address: 0x4004C000
     size: "4KB"
+    irq: 5
   - id: "timer2"
     type: "efr32s2_timer"
     clock: { reg: "clken0", bit: 6 }
     config: { counter_bits: 16, peripheral_hz: 19_000_000 }
     base_address: 0x40050000
     size: "4KB"
+    irq: 6
   - id: "timer3"
     type: "efr32s2_timer"
     clock: { reg: "clken0", bit: 7 }
     config: { counter_bits: 16, peripheral_hz: 19_000_000 }
     base_address: 0x40054000
     size: "4KB"
+    irq: 7
   - id: "timer4"
     type: "efr32s2_timer"
     clock: { reg: "clken0", bit: 8 }
     config: { counter_bits: 16, peripheral_hz: 19_000_000 }
     base_address: 0x40058000
     size: "4KB"
+    irq: 8
   - id: "timer5"
     type: "efr32s2_timer"
     clock: { reg: "clken2", bit: 0 }
     config: { counter_bits: 16, peripheral_hz: 19_000_000 }
     base_address: 0x4005C000
     size: "4KB"
+    irq: 9
   - id: "timer6"
     type: "efr32s2_timer"
     clock: { reg: "clken2", bit: 1 }
     config: { counter_bits: 16, peripheral_hz: 19_000_000 }
     base_address: 0x40060000
     size: "4KB"
+    irq: 10
   - id: "timer7"
     type: "efr32s2_timer"
     clock: { reg: "clken2", bit: 2 }
     config: { counter_bits: 16, peripheral_hz: 19_000_000 }
     base_address: 0x40064000
     size: "4KB"
+    irq: 11
   - id: "timer8"
     type: "efr32s2_timer"
     clock: { reg: "clken2", bit: 3 }
     config: { counter_bits: 32, peripheral_hz: 19_000_000 }
     base_address: 0x40068000
     size: "4KB"
+    irq: 12
   - id: "timer9"
     type: "efr32s2_timer"
     clock: { reg: "clken2", bit: 4 }
     config: { counter_bits: 32, peripheral_hz: 19_000_000 }
     base_address: 0x4006C000
     size: "4KB"
-    irq: 5
+    irq: 13
 
   # ── USART0 as SPI ────────────────────────────────────────────────────────
   # ⚠️ Series 2 has NO separate SPI peripheral. SPI is a USART with
