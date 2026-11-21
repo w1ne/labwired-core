@@ -52,6 +52,8 @@ Negative controls (`/tmp` copies, not committed):
 
 `test-read-before-first-interval.yaml` passes because the model is wrong in a known way. When the catalog model gets the 5 s cadence, this script must fail, and its expected result changes to 1.
 
+Browser run: Chromium 156.0.8078.79 runs all four scripts at `fdeebf0714` with the same result text, logic, I2C and console records as the CLI. See [browser-flex-scripts.json](../browser-flex-scripts.json).
+
 ## Onboarding effort
 
 Measured once on 2026-11-21, from file times in one lane session: 10 min 5 s from the fetch of the pinned board files (06:27:03 UTC) to four passing scripts (06:37:08 UTC). This includes a 6 min 54 s debug CLI build and both fixture defects. The firmware and scripts reuse the SHT40 fixture as a template. No comparable time exists for a chip-specific model of this board, so these numbers support no speed claim.
