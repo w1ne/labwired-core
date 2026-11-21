@@ -31,6 +31,7 @@ mod g0_tiol112;
 mod g0_uart_pad;
 mod h563_conformance;
 mod modern_uart_timing;
+mod nucleo64_vcp_console;
 mod nucleo_u545re;
 mod nvic_masking_config_path;
 mod stm32_v2_timer_output_pad;

@@ -1,6 +1,8 @@
 # LabWired - NUCLEO-F401RE Example System Configuration
 name: "nucleo-f401re-example"
 chip: "../../configs/chips/stm32f401.yaml"
+# ST-LINK VCP = USART2 PA2/PA3 (UM1724 §6.8); the console taps it only.
+debug_uart: "uart2"
 external_devices: []
 board_io:
   - id: "led2_pa5"
