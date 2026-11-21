@@ -141,6 +141,10 @@ pub struct Esp32s3I2c {
     /// Attached slaves, address resolution and the RX FIFO — the part of this
     /// controller that is the same part on every Espressif I²C.
     core: EspI2cCore,
+    /// Optional physical (SCL, SDA) pads for each attached slave. A manifest
+    /// route must be satisfied by the live GPIO matrix before an address ACK.
+    /// Route-less fixtures retain their historical controller-level behavior.
+    slave_routes: Vec<Option<(u8, u8)>>,
     /// Set when a command-list run sets TRANS_COMPLETE & INT_ENA has it.
     /// Drained by `tick()` into the interrupt-matrix source aggregation.
     irq_pending: bool,
@@ -210,6 +214,7 @@ impl Esp32s3I2c {
             cmds: [0; NUM_CMDS],
             tx_fifo: std::collections::VecDeque::with_capacity(FIFO_CAPACITY),
             core: EspI2cCore::new(),
+            slave_routes: Vec::new(),
             irq_pending: false,
             intr_source_id: I2C0_INTR_SOURCE_ID,
             active_slave: None,
@@ -256,7 +261,19 @@ impl Esp32s3I2c {
     /// wraps first. Slaves are matched by address bits at transaction time;
     /// later additions take precedence on duplicate addresses.
     pub(crate) fn push_slave(&mut self, slave: Box<dyn I2cDevice>) {
+        self.push_slave_with_route(slave, None);
+    }
+
+    /// Attach a manifest device and retain its *actual* SCL/SDA pads. The
+    /// matrix is wired after external devices attach, so the decision must
+    /// happen at transaction time rather than at construction time.
+    pub(crate) fn push_slave_with_route(
+        &mut self,
+        slave: Box<dyn I2cDevice>,
+        route: Option<(u8, u8)>,
+    ) {
         self.core.push_slave(slave);
+        self.slave_routes.push(route);
     }
 
     /// The shared pad-line cell for this controller, created on first use.
@@ -340,20 +357,42 @@ impl Esp32s3I2c {
         (self.sr & SR_RESP_REC) | SR_STRETCH_CAUSE_RESET | (rx << 8) | (tx << 18)
     }
 
-    /// Resolve a slave from SLAVE_ADDR (7-bit or 8-bit shifted form).
-    ///
-    /// Every S3 slave is wired straight to this controller's pads, so the route
-    /// gate reaches all of them — unlike the C3, which resolves the same way
-    /// behind a live GPIO-matrix route.
-    fn find_slave_from_slave_addr_register(&mut self) -> Option<usize> {
-        self.core
-            .find_by_slave_addr_register(self.slave_addr, &RouteGate::All)
+    /// Resolve an I²C slave through the live S3 output matrix when a source
+    /// manifest supplied physical pads. Missing or wrongly routed SCL/SDA
+    /// must NACK; a fixture attached without a route remains reachable.
+    fn resolve_slave(&mut self, address: Option<u8>) -> Option<usize> {
+        let signals = match self.intr_source_id {
+            I2C0_INTR_SOURCE_ID => Some(I2CEXT0_SIGNALS),
+            I2C1_INTR_SOURCE_ID => Some(I2CEXT1_SIGNALS),
+            _ => None,
+        };
+        let routes = &self.slave_routes;
+        let matrix = &self.pad_matrix;
+        let reachable = |idx: usize| match routes.get(idx).copied().flatten() {
+            None => true,
+            Some((scl, sda)) => match (matrix.as_ref(), signals) {
+                (Some(matrix), Some((scl_signal, sda_signal))) => {
+                    matrix.out_signal(scl) == Some(scl_signal)
+                        && matrix.out_signal(sda) == Some(sda_signal)
+                }
+                _ => false,
+            },
+        };
+        let gate = RouteGate::Matrix(&reachable);
+        match address {
+            Some(address) => self.core.find_by_address(address, &gate),
+            None => self
+                .core
+                .find_by_slave_addr_register(self.slave_addr, &gate),
+        }
     }
 
-    /// Resolve the slave that answers to `address` and tell it which address
-    /// the master selected.
+    fn find_slave_from_slave_addr_register(&mut self) -> Option<usize> {
+        self.resolve_slave(None)
+    }
+
     fn find_slave_by_address(&mut self, address: u8) -> Option<usize> {
-        self.core.find_by_address(address, &RouteGate::All)
+        self.resolve_slave(Some(address))
     }
 }
 
@@ -536,6 +575,27 @@ const I2CEXT1_SIGNALS: (u32, u32) = (91, 92);
 impl crate::peripherals::device::I2cSlaveHost for Esp32s3I2c {
     fn attach_slave(&mut self, device: Box<dyn I2cDevice>) {
         self.push_slave(device);
+    }
+
+    fn attach_slave_with_route(
+        &mut self,
+        device: Box<dyn I2cDevice>,
+        route: Option<&std::collections::BTreeMap<String, String>>,
+    ) -> anyhow::Result<()> {
+        // Attachment precedes GPIO-matrix initialization. Retain the source
+        // pads for transaction-time ACK gating; reject incomplete routes now.
+        let pads = route
+            .filter(|route| !route.is_empty())
+            .map(|route| {
+                crate::peripherals::i2c_matrix::route_pads(route).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "ESP32-S3 I2C external device requires GPIO route.scl and route.sda"
+                    )
+                })
+            })
+            .transpose()?;
+        self.push_slave_with_route(device, pads);
+        Ok(())
     }
 
     fn matrix_reach(&self) -> Option<crate::peripherals::i2c_matrix::I2cMatrixReach> {
