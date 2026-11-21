@@ -661,6 +661,10 @@ impl<C: Cpu> Machine<C> {
                     .is_some_and(|deadline| deadline <= self.total_cycles);
             if scheduler_drain_needed {
                 self.drain_scheduler_events();
+            } else {
+                // Skipping delivery must not leave the scheduler's public
+                // clock dependent on window size or the last event deadline.
+                self.sched.advance_to(self.total_cycles);
             }
         }
 

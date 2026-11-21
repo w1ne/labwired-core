@@ -440,6 +440,9 @@ impl Peripheral for Nrf52Rtc {
         match offset {
             OFF_TASKS_START
                 if value & 1 != 0 => {
+                    // PS: START restarts the prescaler, including when the
+                    // counter is already running. Keep the LFCLK phase.
+                    self.prescaler_accum.set(0);
                     self.running = true;
                 }
             OFF_TASKS_STOP
@@ -457,6 +460,7 @@ impl Peripheral for Nrf52Rtc {
                 // 16 ticks later. Useful for test programs.
                 if value & 1 != 0 => {
                     self.counter.set(0x00FF_FFF0);
+                    self.prescaler_accum.set(0);
                 }
             // EVENTS_TICK/OVRFLW: hardware-generated; SW may only clear (write 0).
             OFF_EVENTS_TICK if value == 0 => self.events_tick.set(0),
@@ -621,6 +625,119 @@ impl Peripheral for Nrf52Rtc {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Nordic nRF52840 PS, "Resolution versus overflow and the PRESCALER":
+    // START, CLEAR and TRIGOVRFLW restart the divider. LFCLK itself is
+    // independent; these tests count LFCLK edges using the 1:1 test clock.
+    fn advance_test(r: &mut Nrf52Rtc, clock: &Option<CycleClock>, cycles: u64) {
+        if let Some(clock) = clock {
+            clock.publish(clock.now() + cycles);
+            r.sync_to(clock.now());
+        } else {
+            for _ in 0..cycles {
+                r.tick();
+            }
+        }
+    }
+
+    fn divider_fixture(scheduled: bool) -> (Nrf52Rtc, Option<CycleClock>) {
+        let mut r = Nrf52Rtc::new_fast();
+        let clock = scheduled.then(CycleClock::default);
+        if let Some(clock) = &clock {
+            r.attach_cycle_clock(clock.clone());
+        }
+        assert_eq!(r.uses_scheduler(), scheduled);
+        r.write_u32(OFF_PRESCALER, 3).unwrap(); // four LFCLK edges
+        r.write_u32(OFF_TASKS_START, 1).unwrap();
+        (r, clock)
+    }
+
+    fn start_restarts_partial_divider(scheduled: bool) {
+        for stop in [false, true] {
+            let (mut r, clock) = divider_fixture(scheduled);
+            advance_test(&mut r, &clock, 6); // COUNTER=1, half a divider left
+            assert_eq!(r.read_u32(OFF_COUNTER).unwrap(), 1);
+            if stop {
+                r.write_u32(OFF_TASKS_STOP, 1).unwrap();
+                advance_test(&mut r, &clock, 10);
+                assert_eq!(r.read_u32(OFF_COUNTER).unwrap(), 1);
+            }
+            r.write_u32(OFF_TASKS_START, 1).unwrap();
+            advance_test(&mut r, &clock, 3);
+            assert_eq!(r.read_u32(OFF_COUNTER).unwrap(), 1);
+            advance_test(&mut r, &clock, 1);
+            assert_eq!(r.read_u32(OFF_COUNTER).unwrap(), 2);
+        }
+    }
+
+    fn trigovrflw_restarts_partial_divider(scheduled: bool) {
+        let (mut r, clock) = divider_fixture(scheduled);
+        r.write_u32(OFF_EVTENSET, EN_OVRFLW).unwrap();
+        advance_test(&mut r, &clock, 2);
+        r.write_u32(OFF_TASKS_TRIGOVRFLW, 1).unwrap();
+        assert_eq!(r.read_u32(OFF_COUNTER).unwrap(), 0x00ff_fff0);
+        advance_test(&mut r, &clock, 63);
+        assert_eq!(r.read_u32(OFF_COUNTER).unwrap(), COUNTER_MASK);
+        assert_eq!(r.read_u32(OFF_EVENTS_OVRFLW).unwrap(), 0);
+        advance_test(&mut r, &clock, 1);
+        assert_eq!(r.read_u32(OFF_COUNTER).unwrap(), 0);
+        assert_eq!(r.read_u32(OFF_EVENTS_OVRFLW).unwrap(), 1);
+    }
+
+    #[test]
+    fn start_restarts_prescaler_on_legacy_path() {
+        start_restarts_partial_divider(false);
+    }
+
+    #[test]
+    fn trigovrflw_restarts_prescaler_on_legacy_path() {
+        trigovrflw_restarts_partial_divider(false);
+    }
+
+    #[test]
+    fn zero_task_writes_preserve_partial_divider() {
+        let (mut r, clock) = divider_fixture(false);
+        advance_test(&mut r, &clock, 2);
+        for task in [OFF_TASKS_START, OFF_TASKS_CLEAR, OFF_TASKS_TRIGOVRFLW] {
+            r.write_u32(task, 0).unwrap();
+        }
+        advance_test(&mut r, &clock, 2);
+        assert_eq!(r.read_u32(OFF_COUNTER).unwrap(), 1);
+    }
+
+    #[test]
+    fn start_and_trigovrflw_preserve_the_lfclk_fraction() {
+        for task in [OFF_TASKS_START, OFF_TASKS_TRIGOVRFLW] {
+            let (mut r, clock) = divider_fixture(false);
+            r.lfclk_period = 3;
+            advance_test(&mut r, &clock, 2); // partial LFCLK edge
+            r.write_u32(task, 1).unwrap();
+            let initial = r.read_u32(OFF_COUNTER).unwrap();
+            advance_test(&mut r, &clock, 9);
+            assert_eq!(r.read_u32(OFF_COUNTER).unwrap(), initial);
+            advance_test(&mut r, &clock, 1);
+            assert_eq!(r.read_u32(OFF_COUNTER).unwrap(), initial + 1);
+        }
+    }
+
+    #[test]
+    fn trigovrflw_does_not_start_a_stopped_counter() {
+        let mut r = Nrf52Rtc::new_fast();
+        r.write_u32(OFF_TASKS_TRIGOVRFLW, 1).unwrap();
+        for _ in 0..20 {
+            r.tick();
+        }
+        assert_eq!(r.read_u32(OFF_COUNTER).unwrap(), 0x00ff_fff0);
+    }
+
+    #[test]
+    fn tasks_restart_prescaler_on_available_drive_path() {
+        // Keep the regression active in both builds: the clock-driven path
+        // when available, and the legacy tick path when the feature is off.
+        let scheduled = crate::cycle_clock::event_scheduler_enabled();
+        start_restarts_partial_divider(scheduled);
+        trigovrflw_restarts_partial_divider(scheduled);
+    }
 
     #[test]
     fn prescaler_masks_to_12_bits() {

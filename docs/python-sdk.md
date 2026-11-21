@@ -111,7 +111,7 @@ relative to that manifest.
 
 Provide exactly one of `chip=` or `system=`. A custom board can be opened with `Sim("firmware.elf", system="board.yaml")`. `uart=` names the actual peripheral ID, not a pin or host serial device. It selects both console capture and receive routing. If omitted, the manifest's `debug_uart` is used; if neither is declared the existing board-wide console capture/RX behavior applies. Invalid UART names fail; unsupported receive routing raises `NotSupported`.
 
-`run_for(0.001)` and `run_for("1ms")` both request a millisecond of **virtual** time. Units are `s`, `ms`, `us`, and `ns`. Positive durations round up to a nanosecond, then to engine cycles; instructions can overshoot a cycle budget. Zero `run_for` is a no-op. Negative, non-finite, malformed, or excessive durations are errors. `expect` requires a positive timeout. Host execution time depends on firmware and machine speed.
+`run_for(0.001)` and `run_for("1ms")` both request a millisecond of **virtual** time. Units are `s`, `ms`, `us`, and `ns`. Positive durations round up exactly to a nanosecond, independently of the caller's Python Decimal context, then to engine cycles; instructions can overshoot a cycle budget. Zero `run_for` is a no-op. Negative, non-finite, malformed, or excessive durations are errors. `expect` requires a positive timeout. Host execution time depends on firmware and machine speed.
 
 `run_for` returns a `StopReason` with `kind` (`reached`, `halted`, `breakpoint`, or `error`) and optional breakpoint `pc`. Check that result if reaching the full duration matters. `sim.time` is elapsed virtual seconds and `sim.cycles` is the actual cycle count. No execution happens between calls.
 

@@ -3696,6 +3696,12 @@ impl Cpu for CortexM {
                             sysbus.current_cycle += live_step * u64::from(fast);
                         }
                         executed += fast;
+                        // A chunk can land exactly on a wake armed earlier in
+                        // this batch. Return for delivery before another
+                        // instruction retires, just like the ordinary arm.
+                        if sysbus.pending_wake_left() == Some(0) {
+                            break;
+                        }
                         // RAM chunks cannot store DHCSR. A halt or a step
                         // armed before the chunk still ends the batch here.
                         if self.debug_batch_break() {
@@ -3786,6 +3792,12 @@ impl Cpu for CortexM {
                 #[cfg(feature = "event-scheduler")]
                 bus.advance_cycle(live_step);
                 executed += 1;
+                // Custom bus implementations must yield on the same flash-op
+                // boundary as SystemBus so the machine can apply the operation
+                // before the next instruction fetch.
+                if bus.has_pending_flash_op() {
+                    break;
+                }
                 if bus.batch_stop_hit() {
                     break;
                 }

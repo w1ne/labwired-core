@@ -1,6 +1,6 @@
 """Synchronous firmware simulation in virtual time, backed by LabWired Session."""
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_CEILING
+from decimal import Decimal
 from pathlib import Path
 import json
 import re
@@ -73,14 +73,33 @@ def _nanoseconds(value):
         if not match:
             raise ValueError('duration must use s, ms, us, or ns')
         number, unit = match.groups()
-        seconds = Decimal(number) * {'s': Decimal(1), 'ms': Decimal('.001'), 'us': Decimal('.000001'), 'ns': Decimal('.000000001')}[unit]
+        amount = Decimal(number)
+        shift = {'s': 9, 'ms': 6, 'us': 3, 'ns': 0}[unit]
     elif isinstance(value, (int, float, Decimal)):
-        seconds = Decimal(str(value))
+        amount = Decimal(str(value))
+        shift = 9
     else:
         raise TypeError('duration must be numeric seconds or a duration string')
-    if not seconds.is_finite() or seconds < 0:
+    if not amount.is_finite() or amount < 0:
         raise ValueError('duration must be finite and nonnegative')
-    nanos = int((seconds * 1_000_000_000).to_integral_value(rounding=ROUND_CEILING))
+    # Decimal arithmetic uses the caller's context, which can round away a
+    # positive fraction or trap before we apply the nanosecond ceiling. Shift
+    # the exact coefficient instead; only the at-most-20 integer digits need
+    # conversion, even for very small or very large Decimal exponents.
+    _, digits, exponent = amount.as_tuple()
+    if not any(digits):
+        return 0
+    places = len(digits) + exponent + shift
+    if places > 20:
+        raise ValueError('duration exceeds the supported range')
+    if places <= 0:
+        return 1
+    nanos = 0
+    for digit in digits[:places]:
+        nanos = nanos * 10 + digit
+    nanos *= 10 ** max(0, places - len(digits))
+    if any(digits[places:]):
+        nanos += 1
     if nanos > 2**64 - 1:
         raise ValueError('duration exceeds the supported range')
     return nanos

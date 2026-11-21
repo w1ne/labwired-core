@@ -187,8 +187,11 @@ impl Nrf52Timer {
             remaining -= need;
             self.prescaler_accum = 0;
             self.counter = self.counter.wrapping_add(1) & mask;
+            // Every comparator observes the same increment. A CLEAR shortcut
+            // must not hide equal matches or manufacture a later CC=0 match.
+            let compare_counter = self.counter;
             for i in 0..self.num_cc {
-                if self.counter == (self.cc[i] & mask) {
+                if compare_counter == (self.cc[i] & mask) {
                     self.events_compare[i] = 1;
                     fired_events.push(OFF_EVENTS_COMPARE0 as u32 + 4 * i as u32);
                     if (self.inten >> (INTEN_COMPARE_SHIFT + i as u32)) & 1 != 0 {
@@ -729,5 +732,105 @@ mod tests {
         t.write_u32(OFF_TASKS_CLEAR, 1).unwrap();
         assert_eq!(t.counter, 0);
         assert_eq!(t.prescaler_accum, 0);
+    }
+
+    // TIMER compare is evaluated on the incremented counter, before any
+    // event's CLEAR shortcut changes it (nRF52840 PS, TIMER/Compare/SHORTS).
+    #[test]
+    fn clear_shortcut_preserves_simultaneous_matches_and_irq() {
+        for channels in [4, 6] {
+            for clear_channel in 0..channels {
+                let mut t = Nrf52Timer::new_with_cc(channels);
+                for channel in 0..channels {
+                    t.write_u32(OFF_CC0 + 4 * channel as u64, 3).unwrap();
+                }
+                t.write_u32(OFF_SHORTS, 1 << clear_channel).unwrap();
+                // Only the last channel can raise the IRQ.
+                t.write_u32(OFF_INTENSET, 1 << (16 + channels - 1)).unwrap();
+                t.write_u32(OFF_TASKS_START, 1).unwrap();
+                let result = t.advance_cycles(3);
+                assert!(result.irq, "channels={channels}, clear={clear_channel}");
+                assert_eq!(
+                    result.fired_events,
+                    (0..channels)
+                        .map(|i| OFF_EVENTS_COMPARE0 as u32 + 4 * i as u32)
+                        .collect::<Vec<_>>()
+                );
+                assert_eq!(&t.events_compare[..channels], vec![1; channels]);
+                assert_eq!(t.counter, 0);
+                assert!(t.running);
+            }
+        }
+    }
+
+    #[test]
+    fn clear_shortcut_does_not_manufacture_zero_compare_or_stop() {
+        let mut t = Nrf52Timer::new();
+        t.write_u32(OFF_CC0, 3).unwrap();
+        // CC1 defaults to zero; its STOP and IRQ must remain inactive.
+        t.write_u32(OFF_SHORTS, 1 | (1 << 9)).unwrap();
+        t.write_u32(OFF_INTENSET, 1 << 17).unwrap();
+        t.write_u32(OFF_TASKS_START, 1).unwrap();
+        let result = t.advance_cycles(3);
+        assert!(!result.irq);
+        assert_eq!(result.fired_events, vec![OFF_EVENTS_COMPARE0 as u32]);
+        assert_eq!(t.events_compare, [1, 0, 0, 0, 0, 0]);
+        assert_eq!(t.counter, 0);
+        assert!(t.running);
+        assert_eq!(t.cycles_until_next_compare(), Some(3));
+    }
+
+    #[test]
+    fn simultaneous_clear_and_stop_preserve_all_matches_and_batch_budget() {
+        for batched in [false, true] {
+            let mut t = Nrf52Timer::new();
+            t.write_u32(OFF_CC0, 3).unwrap();
+            t.write_u32(OFF_CC0 + 4, 3).unwrap();
+            t.write_u32(OFF_SHORTS, 1 | (1 << 9)).unwrap();
+            t.write_u32(OFF_INTENSET, 1 << 17).unwrap();
+            t.write_u32(OFF_TASKS_START, 1).unwrap();
+            let mut events = Vec::new();
+            let mut irq = false;
+            for _ in 0..if batched { 1 } else { 12 } {
+                let result = t.advance_cycles(if batched { 12 } else { 1 });
+                irq |= result.irq;
+                events.extend(result.fired_events);
+            }
+            assert!(irq);
+            assert_eq!(
+                events,
+                vec![OFF_EVENTS_COMPARE0 as u32, OFF_EVENTS_COMPARE0 as u32 + 4]
+            );
+            assert_eq!(t.counter, 0);
+            assert!(!t.running);
+            assert_eq!(t.cycles_until_next_compare(), None);
+        }
+    }
+    #[test]
+    fn scheduled_simultaneous_clear_stop_keeps_irq_and_events() {
+        let mut t = Nrf52Timer::new();
+        t.attach_cycle_clock(CycleClock::default());
+        t.write_u32(OFF_CC0, 3).unwrap();
+        t.write_u32(OFF_CC0 + 4, 3).unwrap();
+        t.write_u32(OFF_SHORTS, 1 | (1 << 9)).unwrap();
+        t.write_u32(OFF_INTENSET, 1 << 17).unwrap();
+        t.write_u32(OFF_TASKS_START, 1).unwrap();
+        let events = t.take_scheduled_events();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].0, 2);
+        let mut sched = crate::sched::EventScheduler::new();
+        sched.advance_to(3);
+        let mut bus = crate::bus::SystemBus::new();
+        let result = t.on_event(events[0].1, &mut sched, &mut bus);
+        assert!(result.raise_own_irq);
+        assert_eq!(
+            result.fired_events,
+            vec![OFF_EVENTS_COMPARE0 as u32, OFF_EVENTS_COMPARE0 as u32 + 4]
+        );
+        assert_eq!(result.reschedule_delay, None);
+        assert_eq!(t.events_compare, [1, 1, 0, 0, 0, 0]);
+        assert_eq!(t.counter, 0);
+        assert!(!t.running);
+        assert!(t.take_scheduled_events().is_empty());
     }
 }
