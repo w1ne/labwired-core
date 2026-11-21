@@ -64,3 +64,24 @@ The committed `tests/fixtures/ch32v003f4p6-uart-hello.elf` was built by
 These fixtures exercise the local simulator's RV32E/RV32EC, reset/flash
 loading, RCC, GPIO and USART1 paths. CH32V003 is not yet a hosted LabWired
 verifier target, so this is not a hosted `model_verified` result or hardware confirmation.
+
+## Stock WCH noneos-sdk firmware
+
+`tests/fixtures/ch32v003f4p6-noneos-sdk.elf` is built by PlatformIO
+(`platform = ch32v`, `board = ch32v003f4p6_evt_r0`, `framework = noneos-sdk`)
+from `tests/fixtures/ch32v003f4p6-noneos-sdk/`, with no change for the
+simulator. It runs the vendor startup and `SystemInit` (HSI PLL to 48 MHz),
+then prints over USART1 with `printf` between four `Delay_Ms(10)` calls:
+
+```sh
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v003f4p6/noneos-sdk-smoke.yaml \
+  --output-dir out/boards/ch32v003f4p6/noneos-sdk-smoke --no-uart-stdout
+```
+
+That path needs three QingKe V2 parts of the model: the `INTSYSCR` CSR
+(0x804, accepted and discarded), the WCH XW compressed byte/halfword loads
+and stores (`-march=rv32ecxw`), and the `STK` system timer (`qingke_stk`)
+that `Delay_Ms` polls. The PFIC is still not modelled, so firmware that
+needs a SysTick or USART interrupt (the Arduino core's `millis()`) does not
+run yet.
