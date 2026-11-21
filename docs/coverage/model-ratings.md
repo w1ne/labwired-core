@@ -119,7 +119,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | atmega2561 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega2561.md) |
 | atmega4809 | open | L1 | 21 | — | — | ≥1× (CI) | — |
 | atmega32u4 | open | L0 | 8 | 1020.0 | 7.7 | ≥1× (CI) | — |
-| mimxrt1062-teensy41 | open | L0 | 50 | — | — | ≥1× (CI) | — |
+| mimxrt1062-teensy41 | open | L0 | 49 | — | — | ≥1× (CI) | — |
 | atmega1281 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega1281.md) |
 | atsamd21 | open | L1 | 7 | 895.0 | 1.4 | ≥1× (CI) | — |
 | atsamd51 | open | L1 | 27 | 893.5 | 1.4 | ≥1× (CI) | — |

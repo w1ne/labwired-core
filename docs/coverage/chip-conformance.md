@@ -118,7 +118,7 @@ This page covers the public models. For every chip we model — public and priva
 | atmega2561 | **L1** | ✓ | 11 | — | — | avr_atmega2561::atmega2561_boots_and_prints |
 | atmega4809 | **L1** | ✓ | 21 | — | — | avr_nano_every_bme280::nano_every_wire_reads_compensated_bme280_values |
 | atmega32u4 | **L0** | ✓ | 8 | — | — | — |
-| mimxrt1062-teensy41 | **L0** | ✓ | 50 | — | — | — |
+| mimxrt1062-teensy41 | **L0** | ✓ | 49 | — | — | — |
 | atmega1281 | **L1** | ✓ | 11 | — | — | avr_atmega1281_firmware::atmega1281_compiled_firmware_prints_and_drives_pb5 |
 | atsamd21 | **L1** | ✓ | 7 | — | — | firmware_survival::test_atsamd21_nano33_smoke_survival |
 | atsamd51 | **L1** | ✓ | 27 | — | — | firmware_survival::test_atsamd51_metro_m4_smoke_survival |
