@@ -7221,6 +7221,10 @@ button a user can press, an ADC input. Entries are <code>BoardIoBinding</code>:<
 <td><code>channel</code></td>
 <td>Stimulus channel this contact exposes when it is not a plain <code>pressed</code> button (<code>obstacle</code>, <code>field</code>, <code>vibration</code>, …); absent means <code>pressed</code>.</td>
 </tr>
+<tr>
+<td><code>emission</code></td>
+<td>Optional visible light this output gives off: <code>{ color: "#rrggbb" }</code>. Any output binding may declare it. The engine then reports <code>emission</code> with the binding's state: the declared colour while the output is asserted, <code>#000000</code> while it is not. Only the on/off level is modelled; PWM brightness is not.</td>
+</tr>
 </tbody>
 </table>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># configs/systems/nucleo-l476rg.yaml (excerpt)</span>
