@@ -10,7 +10,10 @@
 //! the second reference: a linear deck with every element kind `.sens`
 //! reports, and a degenerated BJT stage read as a voltage and as a supply
 //! current. ngspice perturbs each value by a part in 10⁶ and uses CODATA
-//! 2014 `k` and `q`, so its tables hold to 1e-5.
+//! 2014 `k` and `q`, so its tables hold to 1e-5. The `<device>:<param>`
+//! model entries are held the same two ways: ngspice-42 for `D`, `Q` and `M`
+//! (it has no `J` sensitivity, and no `D` `rs` entry), and a central
+//! difference of the `.model` card itself.
 
 mod analog {
     use labwired_core::analog::{parse_netlist, Integration, Solver, TransferOutput};
@@ -193,8 +196,10 @@ mod analog {
 
     #[test]
     fn a_degenerated_bjt_stage_matches_ngspice() {
-        // ngspice-42 also prints the `q1:` model and `q1_` instance entries,
-        // which this engine does not report.
+        // ngspice-42 also prints the `q1_` instance entries and the `q1:`
+        // parameters the card leaves at their defaults, which this engine
+        // does not report. The `q1:` values are ngspice central differences
+        // of `.op` (see `MODEL_ORACLE`).
         assert_table(
             &format!("{BJT}.sens v(c)\n"),
             &[
@@ -203,6 +208,14 @@ mod analog {
                 ("rb", 3.462805920165e-05),
                 ("rc", -1.24224039213e-03),
                 ("re", 5.366483425667e-03),
+                ("q1:is", -1.110651226854e+13),
+                ("q1:bf", -2.543674740233e-03),
+                ("q1:vaf", 3.146687254096e-04),
+                ("q1:ise", 1.155393083430e+12),
+                ("q1:ikf", -2.285280099379e-01),
+                ("q1:rb", 3.462803501719e-05),
+                ("q1:rc", 7.480718400288e-06),
+                ("q1:re", 5.366519735261e-03),
             ],
             1e-5,
             0.0,
@@ -221,6 +234,14 @@ mod analog {
                 ("rb", 7.367672170563e-09),
                 ("rc", 1.591644187438e-09),
                 ("re", 1.141804984184e-06),
+                ("q1:is", -2.363087715090e+09),
+                ("q1:bf", -5.412073916698e-07),
+                ("q1:vaf", 6.695079312182e-08),
+                ("q1:ise", 2.458282991231e+08),
+                ("q1:ikf", -4.862297999127e-05),
+                ("q1:rb", 7.367667001663e-09),
+                ("q1:rc", 1.591642250398e-09),
+                ("q1:re", 1.141812701246e-06),
             ],
             2e-4,
             0.0,
@@ -240,6 +261,176 @@ mod analog {
                 assert_difference(BJT, &probe, name, line);
             }
         }
+    }
+
+    // MODEL_ORACLE: ngspice-42's `.sens` moves a model parameter by a
+    // one-sided part in 10⁶, which leaves `q1:vaf` 4e-5 and `q1:ise` 8e-4
+    // off its own central difference. The `<device>:<param>` tables are
+    // therefore ngspice central differences of `.op` (`set numdgt=15`,
+    // `reltol=1e-12 abstol=1e-18 vntol=1e-15` so that Newton noise does not
+    // swamp a weak parameter, the parameter moved by a part in 10⁴ each
+    // way), with each instance on its own copy of the card when two share
+    // one. The diode deck's `v1` and `r1` come the same way. `q1:rc` acts
+    // through the Early effect alone and moves the outputs by parts in
+    // 10¹⁰, below what even that ngspice difference resolves, so its two
+    // values use a 2 % step (1 % gives the same to 1e-6; `rc` is near
+    // linear there).
+
+    /// Move `param=` on the deck's `.model` line by `factor` and re-solve.
+    fn card_moved(deck: &str, card: &str, param: &str, factor: f64, probe: &TransferOutput) -> f64 {
+        assert_eq!(deck.matches(card).count(), 1, "`{card}` is not unique");
+        let prefix = format!("{param}=");
+        let moved: Vec<String> = card
+            .split(' ')
+            .map(|token| match token.strip_prefix(&prefix) {
+                Some(raw) => format!("{prefix}{:.17e}", raw.parse::<f64>().unwrap() * factor),
+                None => token.to_string(),
+            })
+            .collect();
+        output(&deck.replace(card, &moved.join(" ")), probe)
+    }
+
+    /// The central difference of the output with `param=` on `card` moved
+    /// for every instance of the card at once, per unit of the parameter.
+    fn card_slope(deck: &str, card: &str, param: &str, probe: &TransferOutput) -> f64 {
+        const STEP: f64 = 1e-4;
+        let value: f64 = card
+            .split(' ')
+            .find_map(|token| token.strip_prefix(&format!("{param}=")))
+            .unwrap()
+            .parse()
+            .unwrap();
+        (card_moved(deck, card, param, 1.0 + STEP, probe)
+            - card_moved(deck, card, param, 1.0 - STEP, probe))
+            / (2.0 * STEP * value)
+    }
+
+    fn model_entry(deck: &str, probe: &TransferOutput, name: &str) -> f64 {
+        let sens = build(deck)
+            .model_sensitivity_analysis(probe)
+            .unwrap_or_else(|error| panic!("{error}"));
+        sens.get(name)
+            .unwrap_or_else(|| panic!("no `{name}` in {:?}", sens.entries))
+    }
+
+    const MOS: &str = "* level-1 NMOS with a drain resistor\n\
+                       VDD d 0 DC 5\n\
+                       VG g 0 DC 2\n\
+                       RD d dr 10000\n\
+                       M1 dr g 0 0 nm w=10u l=2u\n\
+                       .model nm nmos level=1 vto=0.8 kp=50u lambda=0.02 gamma=0.4 phi=0.65\n";
+
+    #[test]
+    fn a_mosfet_stage_matches_ngspice() {
+        // The bulk is on the source, so `gamma` and `phi` do not move the
+        // threshold: ngspice prints 0, and so does this engine, exactly.
+        // `level` is a selector and is not reported.
+        assert_table(
+            &format!("{MOS}.sens v(dr)\n"),
+            &[
+                ("vdd", 9.652509558973e-01),
+                ("vg", -3.07464107387e+00),
+                ("rd", -1.84478282965e-04),
+                ("m1:vto", 3.074641073234e+00),
+                ("m1:kp", -3.689569288978e+04),
+                ("m1:lambda", -5.366646189331e+00),
+                ("m1:gamma", 0.0),
+                ("m1:phi", 0.0),
+            ],
+            1e-5,
+            0.0,
+        );
+    }
+
+    const DIODES: &str = "* two diodes on one card, areas 1 and 2\n\
+                          .options temp=26.85 tnom=26.85\n\
+                          V1 a 0 DC 5\n\
+                          R1 a k 1000\n\
+                          D1 k m dm\n\
+                          D2 m 0 dm 2\n\
+                          .model dm d is=1e-14 n=1.5 rs=2\n";
+
+    #[test]
+    fn each_instance_of_a_diode_card_matches_ngspice() {
+        // ngspice-42's own `.sens` has no `rs` entry (it does not move the
+        // series conductance); the `d1:`/`d2:` values here are ngspice
+        // central differences of `.op` with each instance on its own copy
+        // of the card (see `MODEL_ORACLE`). D2's series resistance is
+        // `rs/2`, so it carries half of D1's `∂v/∂rs`.
+        let sens = build(&format!("{DIODES}.sens v(k)\n"))
+            .sensitivity()
+            .unwrap();
+        for (name, expected) in [
+            ("v1", 2.829620023892e-02),
+            ("r1", -8.401697201510e-05),
+            ("d1:is", -3.768071696886e+12),
+            ("d1:n", 6.636008149474e-01),
+            ("d1:rs", 2.885179297696e-03),
+            ("d2:is", -3.768071699994e+12),
+            ("d2:n", 6.461886265274e-01),
+            ("d2:rs", 1.442589634415e-03),
+        ] {
+            assert_close(name, sens.get(name).unwrap(), expected, 1e-5);
+        }
+        let names: Vec<&str> = sens.entries.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["r1", "v1", "d1:is", "d1:n", "d1:rs", "d2:is", "d2:n", "d2:rs"]
+        );
+    }
+
+    #[test]
+    fn instance_entries_sum_to_the_card_move() {
+        // Moving the card moves both instances, so its slope is the sum of
+        // the two per-instance entries. The same current flows through
+        // `rs` and `rs/2`, so D2's `∂v/∂rs` is half of D1's.
+        let card = ".model dm d is=1e-14 n=1.5 rs=2";
+        let probe = v("k");
+        let deck = format!("{DIODES}.sens v(k)\n");
+        for param in ["is", "n", "rs"] {
+            let sum = model_entry(&deck, &probe, &format!("d1:{param}"))
+                + model_entry(&deck, &probe, &format!("d2:{param}"));
+            assert_close(param, sum, card_slope(DIODES, card, param, &probe), 1e-6);
+        }
+        let d1 = model_entry(&deck, &probe, "d1:rs");
+        assert_close("rs", model_entry(&deck, &probe, "d2:rs"), d1 / 2.0, 1e-6);
+    }
+
+    const JFET: &str = "* self-biased n-JFET\n\
+                        VDD d 0 DC 9\n\
+                        RD d dr 2000\n\
+                        RS s 0 500\n\
+                        J1 dr 0 s jn\n\
+                        .model jn njf vto=-2 beta=1e-3 lambda=0.01\n";
+
+    #[test]
+    fn every_jfet_parameter_matches_a_central_difference() {
+        // ngspice-42 has no JFET sensitivity at all, so the difference is
+        // the reference; a lone instance makes the card move the instance's.
+        let card = ".model jn njf vto=-2 beta=1e-3 lambda=0.01";
+        for probe in [v("dr"), v("s"), TransferOutput::Current("VDD".to_string())] {
+            let deck = format!("{JFET}.sens v(dr)\n");
+            for param in ["vto", "beta", "lambda"] {
+                let got = model_entry(&deck, &probe, &format!("j1:{param}"));
+                assert_close(param, got, card_slope(JFET, card, param, &probe), 1e-6);
+            }
+        }
+    }
+
+    #[test]
+    fn model_entries_need_the_deck_and_leave_the_solver_alone() {
+        let mut solver = build(BJT);
+        assert!(
+            solver.model_sensitivity_analysis(&v("c")).is_err(),
+            "a deck without `.sens` cannot be lowered again"
+        );
+        let mut solver = build(&format!("{BJT}.sens v(c)\n"));
+        let c = solver.circuit().node("c").unwrap();
+        let before = solver.node_voltage(c).to_bits();
+        solver.model_sensitivity_analysis(&v("c")).unwrap();
+        assert_eq!(solver.node_voltage(c).to_bits(), before);
+        solver.advance(1e-6).unwrap();
+        assert!(solver.model_sensitivity_analysis(&v("nowhere")).is_err());
     }
 
     #[test]

@@ -220,7 +220,10 @@ pub struct TransferResponse {
 pub struct SensitivityResponse {
     /// `(name, d output / d value)` in netlist element order. Names are
     /// ngspice's: the lower-case element name for an `R`, `V` or `I` (per
-    /// ohm, volt or ampere) and `<name>_gain` for an `E`, `F`, `G` or `H`.
+    /// ohm, volt or ampere), `<name>_gain` for an `E`, `F`, `G` or `H`, and
+    /// `<device>:<param>` for a model parameter of a `D`, `Q`, `J` or `M`
+    /// (per unit of the parameter; see
+    /// [`Solver::model_sensitivity_analysis`]).
     pub entries: Vec<(String, f64)>,
 }
 
@@ -2762,7 +2765,157 @@ impl Solver {
                 "the `.sens` card is the AC form; run `Solver::ac_sensitivity`".to_string(),
             ));
         }
-        self.sensitivity_analysis(&card.output)
+        let mut response = self.sensitivity_analysis(&card.output)?;
+        response
+            .entries
+            .extend(self.model_sensitivity_analysis(&card.output)?.entries);
+        Ok(response)
+    }
+
+    /// DC sensitivity to device model parameters, the `<device>:<param>`
+    /// entries ngspice's `.sens` prints: the derivative of the output at the
+    /// solver's present solution (the DC operating point on a fresh solver)
+    /// with respect to each numeric parameter the device's `.model` card
+    /// writes, for every `D`, `Q`, `J` and `M` in that order and netlist
+    /// order within each kind. The parameter moves for that one instance
+    /// alone, so two devices on one card get two entries. A parameter the
+    /// card leaves at its default, a zero one (it often switches a law off,
+    /// so it has no two-sided neighbourhood), a level or law selector, and a
+    /// device this engine added for a macromodel (a name holding `#`) are
+    /// not reported. Instance parameters (`AREA`, `M`, `W`, `L`, `TEMP`) are
+    /// not reported either.
+    ///
+    /// Each entry is `−wᵀ·∂F/∂p` with the same adjoint `w` as
+    /// [`Solver::sensitivity_analysis`]. `∂F/∂p` is a central difference of
+    /// the DC residual at the present solution: the deck is lowered again
+    /// with the parameter moved by a part in 10³ and by two parts in 10³
+    /// each way, the residual of each lowering is evaluated at the unchanged
+    /// unknowns, and the two differences are Richardson-extrapolated, which
+    /// leaves an `h⁴` error. Nothing is re-solved, so a weak parameter is not
+    /// lost in the Newton tolerance.
+    /// ngspice moves the parameter one way and re-loads the device, so the
+    /// two agree to about 1e-5. This needs a circuit parsed from a deck with
+    /// its `.sens` card, because the lowering is redone from the deck; a
+    /// value this solver changed after parsing is not seen.
+    ///
+    /// The transient state is left exactly as it was, as for
+    /// [`Solver::ac_analysis`].
+    pub fn model_sensitivity_analysis(
+        &mut self,
+        output: &TransferOutput,
+    ) -> Result<SensitivityResponse, AnalogError> {
+        const STEP: f64 = 1e-3;
+        let output_port = self.output_port(output, ".sens")?;
+        let circuit = &self.circuit;
+        let mut moves = Vec::new();
+        for (name, model) in circuit
+            .diodes
+            .iter()
+            .map(|d| (&d.name, &d.model_name))
+            .chain(circuit.bjts.iter().map(|q| (&q.name, &q.model_name)))
+            .chain(circuit.jfets.iter().map(|j| (&j.name, &j.model_name)))
+            .chain(circuit.mosfets.iter().map(|m| (&m.name, &m.model_name)))
+            .filter(|(name, _)| !name.contains('#'))
+        {
+            for (parameter, value) in circuit.model_parameters(model) {
+                if *value != 0.0 {
+                    moves.push((name.clone(), model.clone(), parameter.clone(), *value));
+                }
+            }
+        }
+        if moves.is_empty() {
+            return Ok(SensitivityResponse {
+                entries: Vec::new(),
+            });
+        }
+        let w = self.dc_adjoint(output_port)?;
+        let dim = self.dim();
+        let x: Vec<f64> = self.node_v.iter().chain(&self.branch_i).copied().collect();
+        let mut entries = Vec::new();
+        for (name, model, parameter, value) in moves {
+            let residual = |moved: f64| -> Result<Vec<f64>, AnalogError> {
+                let lowered = self
+                    .circuit
+                    .with_model_parameter(&name, &model, &parameter, moved)?;
+                let mut solver = Solver::new(lowered, self.integration)?;
+                if solver.dim() != dim {
+                    return Err(AnalogError::Config(format!(
+                        "moving `{name}:{parameter}` changed the circuit's unknowns"
+                    )));
+                }
+                solver.dc_residual(&x)
+            };
+            // Richardson's `(4·D(h) − D(2h))/3` of two central differences
+            // cancels the `h²` term, so the step can be large enough that
+            // the residual's rounding (cells shared with a terminal
+            // resistance hold O(1) siemens) stays far below the change.
+            let difference = |step: f64| -> Result<f64, AnalogError> {
+                let (up, down) = (residual(value + step)?, residual(value - step)?);
+                Ok(-(0..dim)
+                    .map(|row| w[row] * (up[row] - down[row]))
+                    .sum::<f64>()
+                    / (2.0 * step))
+            };
+            let step = STEP * value;
+            let slope = (4.0 * difference(step)? - difference(2.0 * step)?) / 3.0;
+            entries.push((format!("{}:{parameter}", name.to_ascii_lowercase()), slope));
+        }
+        Ok(SensitivityResponse { entries })
+    }
+
+    /// The `.sens` adjoint: `w` with `Gᵀ·w = e` for the `.tf` Jacobian `G`
+    /// at the present solution and the output port's unit excitation `e`.
+    fn dc_adjoint(&mut self, output_port: Port) -> Result<Vec<f64>, AnalogError> {
+        let dim = self.dim();
+        let g = self.linearised(Self::dc_jacobian)?;
+        let mut w = vec![0.0; dim];
+        output_port.excite(&mut w);
+        let mut transpose = vec![0.0; dim * dim];
+        for row in 0..dim {
+            for column in 0..dim {
+                transpose[column * dim + row] = g[row * dim + column];
+            }
+        }
+        solve_dense(&mut transpose, &mut w, dim).map_err(|row| AnalogError::Singular { row })?;
+        Ok(w)
+    }
+
+    /// The DC residual `A(x)·x − b(x)` of the operating-point system at the
+    /// unknowns `x`, with every device linearised exactly at `x`. The
+    /// limiters may refuse to jump there from a fresh solver's zero state at
+    /// once, so the linearisation is moved until they let it land.
+    fn dc_residual(&mut self, x: &[f64]) -> Result<Vec<f64>, AnalogError> {
+        let dim = self.dim();
+        self.solution[..dim].copy_from_slice(x);
+        if self.nonlinear {
+            let mut landed = false;
+            for _ in 0..MAX_NEWTON_ITERATIONS {
+                self.relinearise();
+                if !self.limiter_clamped {
+                    landed = true;
+                    break;
+                }
+            }
+            if !landed {
+                return Err(AnalogError::Config(
+                    "`.sens` could not linearise a moved device at the present solution"
+                        .to_string(),
+                ));
+            }
+        }
+        self.cached_stamp = None;
+        self.build(Stamp::OperatingPoint);
+        if let Some(error) = self.behavioural_error.take() {
+            return Err(error);
+        }
+        Ok((0..dim)
+            .map(|row| {
+                (0..dim)
+                    .map(|column| self.matrix[row * dim + column] * x[column])
+                    .sum::<f64>()
+                    - self.rhs[row]
+            })
+            .collect())
     }
 
     /// DC sensitivity, as ngspice's `.sens`: the derivative of the output at
@@ -2770,7 +2923,9 @@ impl Solver {
     /// solver) with respect to each element value — every `R` nominal
     /// resistance (an NTC or `tc1`/`tc2` law scales with it), `V` and `I`
     /// value, and `E`/`F`/`G`/`H` gain. Nonlinear devices enter through their
-    /// linearisation; their model parameters are not reported. Parts this
+    /// linearisation; their model parameters are
+    /// [`Solver::model_sensitivity_analysis`]'s, which [`Solver::sensitivity`]
+    /// adds after these. Parts this
     /// engine added for a macromodel (a name holding `#`) are left out.
     ///
     /// One adjoint solve `Gᵀ·w = e` of the `.tf` Jacobian gives every entry
@@ -2785,18 +2940,7 @@ impl Solver {
         output: &TransferOutput,
     ) -> Result<SensitivityResponse, AnalogError> {
         let output_port = self.output_port(output, ".sens")?;
-        let dim = self.dim();
-        let g = self.linearised(Self::dc_jacobian)?;
-        let mut w = vec![0.0; dim];
-        output_port.excite(&mut w);
-        let mut transpose = vec![0.0; dim * dim];
-        for row in 0..dim {
-            for column in 0..dim {
-                transpose[column * dim + row] = g[row * dim + column];
-            }
-        }
-        solve_dense(&mut transpose, &mut w, dim).map_err(|row| AnalogError::Singular { row })?;
-
+        let w = self.dc_adjoint(output_port)?;
         let x: Vec<f64> = self.node_v.iter().chain(&self.branch_i).copied().collect();
         let at = |values: &[f64], node: NodeRef| node.map_or(0.0, |n| values[n]);
         let entries = self

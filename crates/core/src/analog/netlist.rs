@@ -393,7 +393,10 @@
 //! `.sens v(<out>[,<ref>])|i(<element>)` is kept as [`Circuit::sensitivity`]
 //! and run by [`crate::analog::Solver::sensitivity_analysis`]: the DC
 //! sensitivity of the output to each `R` resistance, `V`/`I` value and
-//! `E`/`F`/`G`/`H` gain, linearised at the operating point.
+//! `E`/`F`/`G`/`H` gain, linearised at the operating point, and
+//! [`crate::analog::Solver::model_sensitivity_analysis`] adds one
+//! `<device>:<param>` entry per numeric parameter each `D`, `Q`, `J` and `M`
+//! device's `.model` card writes.
 //! `.sens v(<out>[,<ref>])|i(<element>) ac dec|oct|lin <points> <fstart>
 //! <fstop>` is the AC form, run by
 //! [`crate::analog::Solver::ac_sensitivity_analysis`]: the derivative of the
@@ -3574,9 +3577,16 @@ pub struct Circuit {
     /// temperature law, and of a switch, at this temperature.
     pub temperature_celsius: Option<f64>,
     /// The deck's lines after `.include` expansion, kept only when a `.dc`
-    /// card is present, so that a `TEMP` sweep can lower the deck again at
-    /// each temperature (see [`Circuit::at_temperature`]).
-    temperature_deck: Option<std::sync::Arc<Vec<LogicalLine>>>,
+    /// or `.sens` card is present, so that a `TEMP` sweep can lower the deck
+    /// again at each temperature (see [`Circuit::at_temperature`]) and
+    /// `.sens` can lower it again with one model parameter moved (see
+    /// [`Circuit::with_model_parameter`]).
+    source_deck: Option<std::sync::Arc<Vec<LogicalLine>>>,
+    /// Every numeric parameter a `D`, `NPN`, `PNP`, `NMOS`, `PMOS`, `NJF` or
+    /// `PJF` card writes, keyed by the lower-case model name, as
+    /// `(lower-case name as written, value)` in card order. A parameter
+    /// written twice keeps its first place and its last value.
+    model_parameters: BTreeMap<String, Vec<(String, f64)>>,
 }
 
 impl Circuit {
@@ -3585,12 +3595,53 @@ impl Circuit {
     /// `.dc TEMP` point. An instance or resistor with its own `temp=` keeps
     /// it. Only a parsed deck with a `.dc` card can do this.
     pub(crate) fn at_temperature(&self, celsius: f64) -> Result<Circuit, AnalogError> {
-        let deck = self.temperature_deck.as_ref().ok_or_else(|| {
+        let deck = self.source_deck.as_ref().ok_or_else(|| {
             AnalogError::Config(
                 "`.dc TEMP` needs a circuit parsed from a netlist with its `.dc` card".to_string(),
             )
         })?;
-        parse_lines_at(deck.as_ref().clone(), Some(celsius))
+        parse_lines_at(deck.as_ref().clone(), Some(celsius), None)
+    }
+
+    /// The numeric parameters the `.model` card named `model` writes, as
+    /// `(lower-case name as written, value)`; empty for a built-in model or a
+    /// card this engine does not lower as a device.
+    pub(crate) fn model_parameters(&self, model: &str) -> &[(String, f64)] {
+        self.model_parameters
+            .get(&model.to_ascii_lowercase())
+            .map_or(&[], Vec::as_slice)
+    }
+
+    /// The same deck lowered again with `parameter` of the model card of
+    /// device `instance` set to `value` for that one instance alone, as
+    /// ngspice moves one instance's model parameter for `.sens`. Every other
+    /// instance of the card keeps the written value. The temperature is this
+    /// circuit's. Only a parsed deck with a `.sens` or `.dc` card can do this.
+    pub(crate) fn with_model_parameter(
+        &self,
+        instance: &str,
+        model: &str,
+        parameter: &str,
+        value: f64,
+    ) -> Result<Circuit, AnalogError> {
+        let deck = self.source_deck.as_ref().ok_or_else(|| {
+            AnalogError::Config(
+                "model-parameter `.sens` needs a circuit parsed from a netlist with its `.sens` \
+                 card"
+                    .to_string(),
+            )
+        })?;
+        let perturbation = ModelPerturbation {
+            instance: instance.to_ascii_lowercase(),
+            model: model.to_ascii_lowercase(),
+            parameter: parameter.to_string(),
+            value,
+        };
+        parse_lines_at(
+            deck.as_ref().clone(),
+            self.temperature_celsius,
+            Some(&perturbation),
+        )
     }
 
     /// Number of non-ground nodes (the `N` of the MNA system).
@@ -5215,24 +5266,41 @@ pub fn parse_netlist_with_files(
 }
 
 fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
-    parse_lines_at(lines, None)
+    parse_lines_at(lines, None, None)
+}
+
+/// One model parameter of one device moved for `.sens`; see
+/// [`Circuit::with_model_parameter`]. Names are lower case.
+struct ModelPerturbation {
+    instance: String,
+    model: String,
+    parameter: String,
+    value: f64,
+}
+
+impl ModelPerturbation {
+    /// The private card the perturbed instance binds to. `#` cannot appear
+    /// in a model name a deck writes.
+    fn card_key(&self) -> String {
+        format!("{}#sens", self.model)
+    }
 }
 
 /// Parse `lines`, with `temperature` (°C) replacing the deck's own `.temp`
-/// when given.
+/// when given, and `perturbation` moving one instance's model parameter.
 fn parse_lines_at(
     lines: Vec<LogicalLine>,
     temperature: Option<f64>,
+    perturbation: Option<&ModelPerturbation>,
 ) -> Result<Circuit, AnalogError> {
     let mut circuit = Circuit::default();
-    let has_dc_card = lines.iter().any(|line| {
-        line.text
-            .split_whitespace()
-            .next()
-            .is_some_and(|head| head.eq_ignore_ascii_case(".dc"))
+    let keeps_deck = lines.iter().any(|line| {
+        line.text.split_whitespace().next().is_some_and(|head| {
+            head.eq_ignore_ascii_case(".dc") || head.eq_ignore_ascii_case(".sens")
+        })
     });
-    if has_dc_card {
-        circuit.temperature_deck = Some(std::sync::Arc::new(lines.clone()));
+    if keeps_deck {
+        circuit.source_deck = Some(std::sync::Arc::new(lines.clone()));
     }
     let mut ended = false;
     let mut models: BTreeMap<String, ModelCard> = BTreeMap::new();
@@ -5338,12 +5406,31 @@ fn parse_lines_at(
                     }
                     circuit.pole_zero = Some(parse_pole_zero(&ctx, &tokens[1..])?);
                 }
-                "model" => parse_model(
-                    &mut models,
-                    &ctx,
-                    &tokens[1..],
-                    temperatures.nominal_celsius(),
-                )?,
+                "model" => {
+                    let written = parse_model(
+                        &mut models,
+                        &ctx,
+                        &tokens[1..],
+                        temperatures.nominal_celsius(),
+                        None,
+                    )?;
+                    let key = tokens[1].to_ascii_lowercase();
+                    if let Some(perturbation) = perturbation.filter(|p| p.model == key) {
+                        let card_key = perturbation.card_key();
+                        let mut variant = tokens[1..].to_vec();
+                        variant[0] = &card_key;
+                        parse_model(
+                            &mut models,
+                            &ctx,
+                            &variant,
+                            temperatures.nominal_celsius(),
+                            Some((&perturbation.parameter, perturbation.value)),
+                        )?;
+                    }
+                    if !written.is_empty() {
+                        circuit.model_parameters.insert(key, written);
+                    }
+                }
                 "control" => in_control = true,
                 // Analysis and housekeeping cards. This engine's run length,
                 // step and outputs come from the manifest, so these say
@@ -6208,7 +6295,7 @@ fn parse_lines_at(
     }
 
     bind_mutual_inductors(&mut circuit, pending_mutuals)?;
-    bind_models(&mut circuit, &models, pending)?;
+    bind_models(&mut circuit, &models, pending, perturbation)?;
     bind_switches(&mut circuit, &models, pending_switches)?;
     bind_controls(&mut circuit, &controls)?;
     bind_behavioural(&mut circuit, &behavioural_lines)?;
@@ -6767,13 +6854,19 @@ fn bind_models(
     circuit: &mut Circuit,
     models: &BTreeMap<String, ModelCard>,
     pending: Vec<PendingDevice>,
+    perturbation: Option<&ModelPerturbation>,
 ) -> Result<(), AnalogError> {
     for device in pending {
         let ctx = LineCtx {
             number: device.line,
             text: &device.text,
         };
-        let key = device.model_name.to_ascii_lowercase();
+        let mut key = device.model_name.to_ascii_lowercase();
+        if let Some(perturbation) =
+            perturbation.filter(|p| p.model == key && device.name.eq_ignore_ascii_case(&p.instance))
+        {
+            key = perturbation.card_key();
+        }
         let resolved = models
             .get(&key)
             .copied()
@@ -8323,7 +8416,8 @@ fn parse_model(
     ctx: &LineCtx<'_>,
     tokens: &[&str],
     default_tnom_celsius: f64,
-) -> Result<(), AnalogError> {
+    replace: Option<(&str, f64)>,
+) -> Result<Vec<(String, f64)>, AnalogError> {
     if tokens.len() < 2 {
         return Err(ctx.parse_err("expected `.model <name> <type>(<param>=<value> ...)`"));
     }
@@ -8352,6 +8446,13 @@ fn parse_model(
             )
         }
     };
+    // A later `<param>=` wins over an earlier one, so the moved value is
+    // simply written last.
+    let body = match replace {
+        Some((param, value)) => format!("{body} {param}={value:e}"),
+        None => body,
+    };
+    let mut written: Vec<(String, f64)> = Vec::new();
 
     let mut card = match kind.to_ascii_uppercase().as_str() {
         "D" => ModelCard::Diode(DiodeModel::default()),
@@ -8811,7 +8912,20 @@ fn parse_model(
             (ModelCard::Mos(model), "AF") => model.af = value,
             (ModelCard::Jfet(model), "KF") => model.kf = value,
             (ModelCard::Jfet(model), "AF") => model.af = value,
-            _ => {}
+            _ => continue,
+        }
+        // A level or law selector is a choice, not a value `.sens` can move.
+        let selector = matches!(param.as_str(), "LEVEL" | "TLEV" | "TLEVC" | "QUASIMOD");
+        let device = matches!(
+            card,
+            ModelCard::Diode(_) | ModelCard::Bjt(_) | ModelCard::Mos(_) | ModelCard::Jfet(_)
+        );
+        if device && !selector {
+            let name = param.to_ascii_lowercase();
+            match written.iter_mut().find(|(seen, _)| *seen == name) {
+                Some(entry) => entry.1 = value,
+                None => written.push((name, value)),
+            }
         }
     }
 
@@ -8828,7 +8942,7 @@ fn parse_model(
         }
     }
     models.insert(key, card);
-    Ok(())
+    Ok(written)
 }
 
 // ---------------------------------------------------------------------------
