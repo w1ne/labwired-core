@@ -690,6 +690,27 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Register location of one pad. The default covers unbanked ports;
+    /// banked models override this rather than exposing a bit above 31.
+    fn gpio_pin_registers(&self, pin: u8) -> Option<crate::peripherals::gpio::GpioPinRegisters> {
+        if pin >= 32 {
+            return None;
+        }
+        let offsets = self.gpio_port_offsets()?;
+        Some(crate::peripherals::gpio::GpioPinRegisters {
+            output: offsets.output,
+            input: offsets.input,
+            bit: pin,
+        })
+    }
+
+    /// Physical pad represented by a resolved register bit. Existing unbanked
+    /// ports keep their identity mapping; banked models supply the inverse of
+    /// `gpio_pin_registers` for both input and output accesses.
+    fn gpio_register_pad(&self, _offset: u64, bit: u8) -> Option<u8> {
+        Some(bit)
+    }
+
     /// Pin capability: this peripheral's pads, through the one pad interface
     /// ([`pins::PinPort`]). `None` (the default) for a peripheral that owns
     /// no pads. Every GPIO model answers `Some(self)`; the GPIO methods

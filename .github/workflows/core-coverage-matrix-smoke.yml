@@ -425,6 +425,16 @@ jobs:
             profile_dir: release
             script: examples/pico2/io-smoke.yaml
             system: configs/systems/pico2.yaml
+          # Same M33 firmware source on the exact RP2354B B-package map.
+          # This is common-IP CLI survival, not native motor-bench acceptance.
+          - id: rp2354b-native
+            target: thumbv8m.main-none-eabi
+            crate: firmware-rp2350-demo
+            build_dir: crates/firmware-rp2350-demo
+            profile: release
+            profile_dir: release
+            script: examples/rp2354b-smoke/io-smoke.yaml
+            system: configs/systems/rp2354b.yaml
           # Pico 2 W + BME280: read the real sensor model's chip ID on I2C0
           # using the RP2350 map. Build from the crate directory so its
           # cortex-m-rt linker configuration is loaded.

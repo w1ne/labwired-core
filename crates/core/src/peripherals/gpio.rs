@@ -40,6 +40,15 @@ pub struct GpioPortOffsets {
     pub input: u64,
 }
 
+/// The register word and bit that represent one physical GPIO pad. Banked
+/// ports can use different words without confusing GPIO40 with GPIO8.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GpioPinRegisters {
+    pub output: u64,
+    pub input: u64,
+    pub bit: u8,
+}
+
 /// Routing metadata for one GPIO pad: its [`GpioMode`] plus, when the model can
 /// resolve it, the peripheral signal `func` name (`"I2CEXT0_SDA"`, `"AF4"`, …).
 /// `func` is `None` when the model cannot name the signal — null over a guess.

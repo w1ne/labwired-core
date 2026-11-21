@@ -14,7 +14,8 @@
 //! set / clear / xor registers at fixed offsets (`GPIO_OUT_SET` etc.), which
 //! this model implements directly.
 //!
-//! Modelled behaviour: a 30-bit `GPIO_OUT` output latch and a `GPIO_OE` output
+//! Modeled behavior: a 30-pad (RP2040/A) or 48-pad (RP2350B) `GPIO_OUT`
+//! output latch and a `GPIO_OE` output
 //! enable, each driven by direct / set / clear / xor registers, plus an
 //! externally driven input word (`ext_in`) the outside world holds through
 //! [`Peripheral::set_gpio_input`]. `GPIO_IN` reports the pad: a pin whose
@@ -63,7 +64,7 @@ const SPINLOCK0: u64 = 0x100;
 const SPINLOCK31: u64 = 0x17c;
 
 // The RP2040 exposes 30 GPIOs (0..29) on bank 0.
-const GPIO_MASK: u32 = 0x3fff_ffff;
+const GPIO_MASK: u64 = 0x3fff_ffff;
 
 /// Register map variant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -75,9 +76,11 @@ pub enum SioLayout {
     /// has a HI twin at +4, so OUT 0x10 / HI_OUT 0x14, OUT_SET 0x18,
     /// OUT_CLR 0x20, OUT_XOR 0x28, OE 0x30, OE_SET 0x38, OE_CLR 0x40,
     /// OE_XOR 0x48. Only the lo bank (GPIO 0..29, the RP2350A pads) is
-    /// modelled: HI registers read 0 and ignore writes, as `GPIO_HI_IN`
-    /// already does. The RP2040 divider window is left as it is.
+    /// modelled by this A-package profile. HI bank-0 registers read zero.
+    /// The B-package profile below exposes the additional 18 pads.
     Rp2350,
+    /// QFN-80 RP2350B / RP2354B: 48 bank-0 pads, including GPIO_HI bits 0..15.
+    Rp2350B,
 }
 /// Pads this model answers for, named so the register mask and the per-pin
 /// capability methods (`read_gpio_pad`, `read_gpio_input`, `set_gpio_input`)
@@ -90,18 +93,18 @@ const PAD_COUNT: u8 = 30;
 pub struct Rp2040Sio {
     /// Register map variant (RP2040 or RP2350 GPIO offsets).
     layout: SioLayout,
-    gpio_out: u32,
-    gpio_oe: u32,
+    gpio_out: u64,
+    gpio_oe: u64,
     /// Level the OUTSIDE WORLD holds on each pad — a `board_io` button wired to
     /// the pin, a sensor's output line — applied through
     /// [`Peripheral::set_gpio_input`]. Separate from `gpio_out` because it must
     /// survive the firmware driving the same pad in the other direction: a
     /// button holds its released level from boot, and the pin must return to it
     /// the moment the firmware releases the output driver.
-    ext_in: u32,
+    ext_in: u64,
     /// Pads the outside world holds ([`PinPort::set_external`]); the level on
     /// each is its `ext_in` bit.
-    ext_mask: u32,
+    ext_mask: u64,
     /// Pads bound to peripheral wires, resolved against IO_BANK0's live
     /// FUNCSEL. Empty until `SystemBus::wire_rp2040_pads` binds them.
     pad_routes: crate::peripherals::pad_routing::PadRoutes,
@@ -145,13 +148,37 @@ impl Rp2040Sio {
         self
     }
 
-    /// Map an offset onto the RP2040 constants below. `None` = an RP2350
-    /// HI-bank GPIO register (reads 0, writes ignored).
-    fn canonical(&self, offset: u64) -> Option<u64> {
-        if self.layout == SioLayout::Rp2040 {
-            return Some(offset);
+    /// Physical bank-0 pads for the selected package, not the register width.
+    pub fn pad_count(&self) -> u8 {
+        if self.layout == SioLayout::Rp2350B {
+            48
+        } else {
+            PAD_COUNT
         }
-        Some(match offset {
+    }
+
+    fn gpio_mask(&self) -> u64 {
+        if self.layout == SioLayout::Rp2350B {
+            (1u64 << 48) - 1
+        } else {
+            GPIO_MASK
+        }
+    }
+
+    /// Canonical operation and physical bank shift. RP2040's QSPI-only HI
+    /// register remains outside this bank-0 model; B exposes GPIO32..47.
+    fn canonical(&self, offset: u64) -> Option<(u64, u32)> {
+        if self.layout == SioLayout::Rp2040 {
+            return Some((offset, 0));
+        }
+        if offset == GPIO_HI_IN {
+            return (self.layout == SioLayout::Rp2350B).then_some((GPIO_IN, 32));
+        }
+        let high = (0x10..=0x4c).contains(&offset) && offset & 4 != 0;
+        if high && self.layout != SioLayout::Rp2350B {
+            return None;
+        }
+        let operation = match if high { offset - 4 } else { offset } {
             0x10 => GPIO_OUT,
             0x18 => GPIO_OUT_SET,
             0x20 => GPIO_OUT_CLR,
@@ -160,9 +187,9 @@ impl Rp2040Sio {
             0x38 => GPIO_OE_SET,
             0x40 => GPIO_OE_CLR,
             0x48 => GPIO_OE_XOR,
-            0x14..=0x4c if offset & 0x4 != 0 => return None,
             _ => offset,
-        })
+        };
+        Some((operation, if high { 32 } else { 0 }))
     }
 
     /// Level at the pads — what `GPIO_IN` reports.
@@ -176,7 +203,7 @@ impl Rp2040Sio {
     /// do not model that, and taking the driver is the case that matches a
     /// correctly wired board — the same rule the ESP32 model states at
     /// `pad_level_bank0`, so both families answer a button identically.
-    fn gpio_in(&self) -> u32 {
+    fn gpio_in(&self) -> u64 {
         (self.gpio_out & self.gpio_oe) | (self.ext_in & !self.gpio_oe)
     }
 
@@ -220,7 +247,7 @@ impl Rp2040Sio {
     /// does not model the PADS_BANK0 pulls, so it reports none.
     fn pad_driver(&self, pin: u8) -> Option<crate::pins::PadDriver> {
         use crate::pins::PadDriver;
-        if pin >= PAD_COUNT {
+        if pin >= self.pad_count() {
             return None;
         }
         match self.pad_function(pin) {
@@ -250,7 +277,8 @@ impl Rp2040Sio {
     /// pad is routed to, if any, and remember the edge for the bus to
     /// deliver (`Peripheral::take_wire_input_edges`).
     fn sync_wire_input(&mut self, pin: u8) {
-        if self.pad_routes.is_empty() || pin >= PAD_COUNT || self.ext_mask & (1 << pin) == 0 {
+        if self.pad_routes.is_empty() || pin >= self.pad_count() || self.ext_mask & (1 << pin) == 0
+        {
             return;
         }
         let level = self.ext_in & (1 << pin) != 0;
@@ -321,7 +349,7 @@ impl Rp2040Sio {
     }
 
     fn pad_level(&self, pin: u8) -> Option<bool> {
-        if pin >= PAD_COUNT {
+        if pin >= self.pad_count() {
             return None;
         }
         // A pad IO_BANK0 has handed to a peripheral is driven by that
@@ -331,14 +359,14 @@ impl Rp2040Sio {
             // A line the peripheral does not drive (an input) reads what is
             // outside the pad.
             if !cell.drives(line) {
-                return Some(self.gpio_in() & (1u32 << pin) != 0);
+                return Some(self.gpio_in() & (1u64 << pin) != 0);
             }
             return Some(cell.level(line));
         }
         // ONE definition of "pad level": whatever firmware reads on GPIO_IN is
         // what a probe clipped to the pad sees, so a host-driven input and a
         // firmware-driven output can never disagree between the two readers.
-        Some(self.gpio_in() & (1u32 << pin) != 0)
+        Some(self.gpio_in() & (1u64 << pin) != 0)
     }
 
     /// Re-register watched pads with the wires that drive them, so a pad that
@@ -451,10 +479,11 @@ impl Peripheral for Rp2040Sio {
     /// idle-ff from coalescing the TIMERAW poll that sits next to it.
     fn mmio_access_class(&self, offset: u64) -> MmioAccessClass {
         match self.canonical(offset) {
-            Some(
+            Some((
                 DIV_UDIVIDEND | DIV_UDIVISOR | DIV_SDIVIDEND | DIV_SDIVISOR | DIV_QUOTIENT
                 | DIV_REMAINDER | DIV_CSR,
-            ) => MmioAccessClass::SideEffectFree,
+                0,
+            )) => MmioAccessClass::SideEffectFree,
             _ => MmioAccessClass::SideEffecting,
         }
     }
@@ -467,15 +496,17 @@ impl Peripheral for Rp2040Sio {
         if Self::is_spinlock(offset) {
             return Ok(self.claim_spinlock(offset));
         }
-        let Some(offset) = self.canonical(offset) else {
+        let Some((offset, shift)) = self.canonical(offset) else {
             return Ok(0);
         };
         let val = match offset {
             CPUID => 0, // single core context: always core 0
-            GPIO_IN => self.gpio_in(),
+            GPIO_IN => (self.gpio_in() >> shift) as u32,
             GPIO_HI_IN => 0, // QSPI bank pins — not modelled
-            GPIO_OUT | GPIO_OUT_SET | GPIO_OUT_CLR | GPIO_OUT_XOR => self.gpio_out,
-            GPIO_OE | GPIO_OE_SET | GPIO_OE_CLR | GPIO_OE_XOR => self.gpio_oe,
+            GPIO_OUT | GPIO_OUT_SET | GPIO_OUT_CLR | GPIO_OUT_XOR => {
+                (self.gpio_out >> shift) as u32
+            }
+            GPIO_OE | GPIO_OE_SET | GPIO_OE_CLR | GPIO_OE_XOR => (self.gpio_oe >> shift) as u32,
             DIV_UDIVIDEND | DIV_SDIVIDEND => self.div_dividend,
             DIV_UDIVISOR | DIV_SDIVISOR => self.div_divisor,
             // Real hardware clears DIRTY when QUOTIENT is read; we leave it
@@ -505,7 +536,7 @@ impl Peripheral for Rp2040Sio {
             self.release_spinlock(offset);
             return Ok(());
         }
-        let Some(offset) = self.canonical(offset) else {
+        let Some((offset, shift)) = self.canonical(offset) else {
             return Ok(());
         };
         match offset {
@@ -547,7 +578,8 @@ impl Peripheral for Rp2040Sio {
                 crate::census_reg!("rp2040.sio:Rp2040Sio", offset, "write");
             }
         }
-        let v = value & GPIO_MASK;
+        let word_mask = (u64::from(u32::MAX) << shift) & self.gpio_mask();
+        let v = (u64::from(value) << shift) & word_mask;
         let mut_out = matches!(
             offset,
             GPIO_OUT
@@ -564,11 +596,11 @@ impl Peripheral for Rp2040Sio {
             return Ok(());
         }
         self.mutate_pads(|s| match offset {
-            GPIO_OUT => s.gpio_out = v,
+            GPIO_OUT => s.gpio_out = (s.gpio_out & !word_mask) | v,
             GPIO_OUT_SET => s.gpio_out |= v,
             GPIO_OUT_CLR => s.gpio_out &= !v,
             GPIO_OUT_XOR => s.gpio_out ^= v,
-            GPIO_OE => s.gpio_oe = v,
+            GPIO_OE => s.gpio_oe = (s.gpio_oe & !word_mask) | v,
             GPIO_OE_SET => s.gpio_oe |= v,
             GPIO_OE_CLR => s.gpio_oe &= !v,
             _ => s.gpio_oe ^= v, // GPIO_OE_XOR
@@ -590,8 +622,12 @@ impl Peripheral for Rp2040Sio {
         let shift = (offset & 0x3) * 8;
         let cur = match self.canonical(aligned) {
             None => 0,
-            Some(GPIO_OUT | GPIO_OUT_SET | GPIO_OUT_CLR | GPIO_OUT_XOR) => self.gpio_out,
-            Some(GPIO_OE | GPIO_OE_SET | GPIO_OE_CLR | GPIO_OE_XOR) => self.gpio_oe,
+            Some((GPIO_OUT | GPIO_OUT_SET | GPIO_OUT_CLR | GPIO_OUT_XOR, bank)) => {
+                (self.gpio_out >> bank) as u32
+            }
+            Some((GPIO_OE | GPIO_OE_SET | GPIO_OE_CLR | GPIO_OE_XOR, bank)) => {
+                (self.gpio_oe >> bank) as u32
+            }
             Some(_) => self.read_u32(aligned)?,
         };
         let new = (cur & !(0xFF << shift)) | ((value as u32) << shift);
@@ -607,21 +643,21 @@ impl Peripheral for Rp2040Sio {
     }
 
     fn read_gpio_input(&self, pin: u8) -> Option<bool> {
-        if pin >= PAD_COUNT {
+        if pin >= self.pad_count() {
             return None;
         }
         // The firmware-visible input level, which on this block IS `GPIO_IN` —
         // the pad. Answering from `ext_in` alone would report a level the
         // firmware cannot read back on a pin it is driving itself.
-        Some(self.gpio_in() & (1u32 << pin) != 0)
+        Some(self.gpio_in() & (1u64 << pin) != 0)
     }
 
     fn read_gpio_output(&self, pin: u8) -> Option<bool> {
-        if pin >= PAD_COUNT {
+        if pin >= self.pad_count() {
             return None;
         }
         // The `GPIO_OUT` latch, whether or not `OE` lets it reach the pad.
-        Some(self.gpio_out & (1u32 << pin) != 0)
+        Some(self.gpio_out & (1u64 << pin) != 0)
     }
 
     /// Direction from `OE` while IO_BANK0 hands the pad to SIO (or has not
@@ -629,7 +665,7 @@ impl Peripheral for Rp2040Sio {
     /// named when a wire is bound to it.
     fn gpio_routing(&self, pin: u8) -> Option<crate::peripherals::gpio::GpioRouting> {
         use crate::peripherals::gpio::{GpioMode, GpioRouting};
-        if pin >= PAD_COUNT {
+        if pin >= self.pad_count() {
             return None;
         }
         match self.pad_function(pin) {
@@ -673,6 +709,41 @@ impl Peripheral for Rp2040Sio {
         })
     }
 
+    fn gpio_pin_registers(&self, pin: u8) -> Option<crate::peripherals::gpio::GpioPinRegisters> {
+        if pin >= self.pad_count() {
+            return None;
+        }
+        let high = pin >= 32;
+        Some(crate::peripherals::gpio::GpioPinRegisters {
+            output: GPIO_OUT + if high { 4 } else { 0 },
+            input: GPIO_IN + if high { 4 } else { 0 },
+            bit: pin % 32,
+        })
+    }
+
+    fn gpio_register_pad(&self, offset: u64, bit: u8) -> Option<u8> {
+        if bit >= 32 {
+            return None;
+        }
+        let (operation, shift) = self.canonical(offset)?;
+        if !matches!(
+            operation,
+            GPIO_IN
+                | GPIO_OUT
+                | GPIO_OUT_SET
+                | GPIO_OUT_CLR
+                | GPIO_OUT_XOR
+                | GPIO_OE
+                | GPIO_OE_SET
+                | GPIO_OE_CLR
+                | GPIO_OE_XOR
+        ) {
+            return None;
+        }
+        let pin = bit + shift as u8;
+        (pin < self.pad_count()).then_some(pin)
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
@@ -684,7 +755,7 @@ impl Peripheral for Rp2040Sio {
 
 impl PinPort for Rp2040Sio {
     fn pin_count(&self) -> u8 {
-        PAD_COUNT
+        self.pad_count()
     }
 
     fn driver(&self, pin: u8) -> Option<crate::pins::PadDriver> {
@@ -692,7 +763,7 @@ impl PinPort for Rp2040Sio {
     }
 
     fn external(&self, pin: u8) -> External {
-        if pin < PAD_COUNT && self.ext_mask & (1 << pin) != 0 {
+        if pin < self.pad_count() && self.ext_mask & (1 << pin) != 0 {
             External::Level(self.ext_in & (1 << pin) != 0)
         } else {
             External::Released
@@ -705,10 +776,10 @@ impl PinPort for Rp2040Sio {
     /// it the moment the firmware releases the output driver. Releasing lets
     /// an undriven pad float to 0, as this model has always read one.
     fn set_external(&mut self, pin: u8, ext: External) -> Option<InputChange> {
-        if pin >= PAD_COUNT {
+        if pin >= self.pad_count() {
             return None;
         }
-        let bit = 1u32 << pin;
+        let bit = 1u64 << pin;
         let before = self.gpio_in() & bit != 0;
         self.mutate_pads(|s| match ext {
             External::Level(level) => {

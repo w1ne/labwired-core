@@ -1,0 +1,12 @@
+# Same committed Cortex-M33 smoke source, executed on the exact B-package map.
+# This checks startup/UART0 only. Native high-bank GPIO and the motor bench
+# have separate behavioral oracles; no physical/full-device result is claimed.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-rp2350-demo"
+  system: "../../configs/systems/rp2354b.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "RP2350_SMOKE_OK"
+  - expected_stop_reason: max_steps

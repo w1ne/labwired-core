@@ -1,0 +1,7 @@
+# Bare RP2354B firmware smoke. The reusable Cortex-M33 demo exercises
+# shared UART0/startup only; it is not the native motor-bench acceptance.
+name: "rp2354b"
+chip: "../chips/rp2354b.yaml"
+cpu_hz: 150000000
+debug_uart: "uart0"
+external_devices: []

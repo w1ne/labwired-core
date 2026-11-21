@@ -2108,6 +2108,19 @@ DONE\r\n",
         valid_pc_ranges: &[],
         expected_uart_output: b"RP2350_SMOKE_OK",
     },
+    // The same Cortex-M33 executable is valid on the B package. This proves
+    // shared startup/UART only; native B-bank and motor-wire tests are separate.
+    SurvivalCase {
+        name: "rp2354b_demo",
+        core: "cortex-m33",
+        family: CpuFamily::Session,
+        hal: Hal::Bare,
+        chip: "rp2354b",
+        system: "rp2354b",
+        fixture: "rp2350-demo.elf",
+        valid_pc_ranges: &[],
+        expected_uart_output: b"RP2350_SMOKE_OK",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -3342,6 +3355,7 @@ fn test_nucleo_l476rg_arduino_serial_survival() {
 survival_gate!(test_stm32f401cdu6_demo_survival, "stm32f401cdu6_demo");
 
 survival_gate!(test_rp2350_demo_survival, "rp2350_demo");
+survival_gate!(test_rp2354b_demo_survival, "rp2354b_demo");
 
 survival_gate!(test_esp32_tier1_survival, "esp32_tier1");
 
