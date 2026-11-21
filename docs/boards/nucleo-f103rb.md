@@ -13,6 +13,7 @@ ST-LINK virtual COM port.
 | Board wiring | Declared from ST UM1724 |
 | GPIO + USART2 smoke | Simulator-verified: UART `OK`, 10 PA5 edges, 200,000 steps |
 | BME280 sensor path | Simulator smoke reads `CHIP_ID = 0x60` over I2C1 on PB8/PB9 and pulses LD2 |
+| Stock Arduino core | Simulator-verified: stm32duino 2.12.0 `nucleo_f103rb` passes Arduino matrix L0–L8 (9/9: Serial, blink, INA219 on Wire, MAX31855 on SPI, ADC 511 at 1650 mV, TIM2 PWM on PA0, micros, bxCAN loopback); evidence in `validation/arduino-matrix/evidence/nucleo-f103rb/` |
 | Hardware comparison | Not recorded |
 | External devices | BME280 on the separate narrow I2C1 profile; base board system remains bare |
 
