@@ -51,6 +51,7 @@ pub mod power;
 pub mod profile;
 pub mod reset_input;
 pub mod runtime_snapshot;
+pub mod s140_disabled;
 pub mod sched;
 pub mod sd_hle;
 pub mod session;
@@ -523,6 +524,9 @@ pub struct Machine<C: Cpu> {
     /// image is an application built for one. `None` on every other board:
     /// the advance boundary then pays one `Option` test.
     pub sd_hle: Option<Box<sd_hle::SdHleSlot>>,
+    /// nRF52840 application linked at the S140 base, with the SoftDevice
+    /// present in the link but never enabled. `None` on every other image.
+    pub s140_disabled: Option<Box<s140_disabled::S140DisabledSlot>>,
     /// SCB.VTOR as `load_firmware` left it (0, or the flash base / relocated
     /// table it retargets to). A SYSRESETREQ restores this value: VTOR is
     /// reset by a system reset, so a table the firmware moved to SRAM must not
@@ -1328,6 +1332,7 @@ impl<C: Cpu> Machine<C> {
             nvmc_index,
             reset_request_indices,
             sd_hle: None,
+            s140_disabled: None,
             boot_vtor: None,
             scheduler_bootstrapped: false,
             tick_irq_scratch: Vec::new(),
