@@ -366,7 +366,8 @@
 //!
 //! ## Directives and comments
 //!
-//! Plus `*` comments, `;`/`$` trailing comments, `.end`, `.ic V(node)=<v>` and
+//! Plus `*` comments, `;`/`$` trailing comments, `.end`, `.ic V(node)=<v>`,
+//! `.nodeset V(node)=<v>` (kept as [`Circuit::node_nodeset`]) and
 //! `.options`/`.print`/`.tran`/`.save`/`.control`…`.endc`, which are accepted
 //! and ignored so that one deck can be handed to both this engine and ngspice.
 //! `.ac dec|oct|lin <points> <fstart> <fstop>` is kept as
@@ -3560,6 +3561,10 @@ pub struct Circuit {
     pub slew_limited_vccs: Vec<SlewLimitedVccs>,
     /// `.ic V(node)=value` entries, in netlist order.
     pub node_ic: Vec<(usize, f64)>,
+    /// `.nodeset V(node)=value` entries, in netlist order: where the
+    /// operating point's first Newton phase holds each node before it is
+    /// released (see [`crate::analog::Solver::solve_operating_point`]).
+    pub node_nodeset: Vec<(usize, f64)>,
     /// `.tran ... uic`: start the transient from the initial conditions
     /// instead of from a solved operating point (see
     /// [`crate::analog::Solver::solve_operating_point`]).
@@ -3828,6 +3833,12 @@ impl Circuit {
             || !self.slew_limited_vccs.is_empty()
             || !self.behavioural_voltages.is_empty()
             || !self.behavioural_currents.is_empty()
+    }
+
+    /// True when the operating point starts with a held phase (ngspice's
+    /// `MODEINITFIX`): an `off` device or a `.nodeset` node.
+    pub fn has_held_phase(&self) -> bool {
+        self.has_off_devices() || !self.node_nodeset.is_empty()
     }
 
     /// Whether any semiconductor carries SPICE's `off` flag.
@@ -5450,7 +5461,14 @@ fn parse_lines_at(
         if let Some(directive) = head.strip_prefix('.') {
             match directive.to_ascii_lowercase().as_str() {
                 "end" => ended = true,
-                "ic" => parse_ic(&mut circuit, &ctx, &tokens[1..])?,
+                "ic" => {
+                    let values = parse_node_values(&mut circuit, &ctx, &tokens[1..], ".ic")?;
+                    circuit.node_ic.extend(values);
+                }
+                "nodeset" => {
+                    let values = parse_node_values(&mut circuit, &ctx, &tokens[1..], ".nodeset")?;
+                    circuit.node_nodeset.extend(values);
+                }
                 // The run length and step still come from the manifest; only
                 // the `uic` flag changes how the run starts.
                 "tran" => {
@@ -5527,7 +5545,7 @@ fn parse_lines_at(
                 // cannot be shared with ngspice, which is the whole point of
                 // spelling the subset in SPICE.
                 "options" | "option" | "op" | "print" | "plot" | "save" | "probe" | "width"
-                | "nodeset" | "title" | "endc" => {}
+                | "title" | "endc" => {}
                 // Read up front by `circuit_temperatures`, like the
                 // `temp`/`tnom` of `.options`.
                 "temp" => {}
@@ -9871,16 +9889,24 @@ fn two_nodes_value_ic<'a>(
     }
 }
 
-fn parse_ic(circuit: &mut Circuit, ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<(), AnalogError> {
-    // `.ic V(a)=5 V(b)=1.25`, tolerating spaces around `=`.
+/// The `V(node)=<value>` list of a `.ic` or `.nodeset` card, tolerating
+/// spaces around `=`.
+fn parse_node_values(
+    circuit: &mut Circuit,
+    ctx: &LineCtx<'_>,
+    tokens: &[&str],
+    card: &str,
+) -> Result<Vec<(usize, f64)>, AnalogError> {
+    let shape = format!("expected `{card} V(node)=<value>`");
     let joined = tokens.join(" ").replace(" =", "=").replace("= ", "=");
     if joined.trim().is_empty() {
-        return Err(ctx.parse_err("expected `.ic V(node)=<value>`"));
+        return Err(ctx.parse_err(shape));
     }
+    let mut values = Vec::new();
     for item in joined.split_whitespace() {
         let (lhs, rhs) = item
             .split_once('=')
-            .ok_or_else(|| ctx.parse_err("expected `.ic V(node)=<value>`"))?;
+            .ok_or_else(|| ctx.parse_err(shape.clone()))?;
         let lhs = lhs.trim();
         let node_name = lhs
             .strip_prefix('V')
@@ -9892,12 +9918,18 @@ fn parse_ic(circuit: &mut Circuit, ctx: &LineCtx<'_>, tokens: &[&str]) -> Result
                     "`{lhs}` is not a node reference; expected `V(node)`"
                 ))
             })?;
-        let value = ctx.value(rhs, "initial condition")?;
-        let node = circuit.intern(node_name);
-        match node {
-            Some(index) => circuit.node_ic.push((index, value)),
-            None => return Err(ctx.parse_err("`.ic` cannot set the ground node")),
+        let value = ctx.value(
+            rhs,
+            if card == ".ic" {
+                "initial condition"
+            } else {
+                "nodeset"
+            },
+        )?;
+        match circuit.intern(node_name) {
+            Some(index) => values.push((index, value)),
+            None => return Err(ctx.parse_err(format!("`{card}` cannot set the ground node"))),
         }
     }
-    Ok(())
+    Ok(values)
 }

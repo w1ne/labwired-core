@@ -1128,8 +1128,9 @@ pub struct Solver {
     restart: bool,
 
     /// The operating point is in its first phase, where every `off` device is
-    /// held cut off (ngspice's `MODEINITFIX`).
-    holding_off: bool,
+    /// held cut off and every `.nodeset` node is held at its value (ngspice's
+    /// `MODEINITFIX`).
+    holding: bool,
 }
 
 impl Solver {
@@ -1276,7 +1277,7 @@ impl Solver {
             cached_stamp: None,
             settled: false,
             restart: true,
-            holding_off: false,
+            holding: false,
         };
         solver.solve_operating_point()?;
         Ok(solver)
@@ -2524,6 +2525,10 @@ impl Solver {
             for &inner_value in &inner {
                 set(&mut work, inner_source, inner_value)?;
                 work.solve_operating_point()?;
+                // ngspice holds the nodesets only at the first point
+                // (`MODEINITJCT`); every later point continues from the one
+                // before, so a bistable sweep keeps its hysteresis.
+                work.circuit.node_nodeset.clear();
                 values.extend_from_slice(&work.node_v);
                 values.extend_from_slice(&work.branch_i);
             }
@@ -4155,6 +4160,29 @@ impl Solver {
                 self.matrix[node * dim + node] += self.node_shunt;
             }
         }
+        if self.holding {
+            self.stamp_nodesets();
+        }
+    }
+
+    /// Replace each `.nodeset` node's row with `v(node) = value`, as ngspice's
+    /// `CKTload` does in `MODEINITJCT`/`MODEINITFIX`: every node column of the
+    /// row is zeroed (`ZeroNoncurRow`). A branch current left in the row —
+    /// a voltage source or inductor on the node — would pull the node off its
+    /// value, so then the diagonal is 1e10 instead of 1 to outweigh it.
+    fn stamp_nodesets(&mut self) {
+        let dim = self.dim();
+        for &(node, value) in &self.circuit.node_nodeset {
+            let row = &mut self.matrix[node * dim..(node + 1) * dim];
+            row[..self.nodes].fill(0.0);
+            let scale = if row[self.nodes..].iter().any(|cell| *cell != 0.0) {
+                1e10
+            } else {
+                1.0
+            };
+            row[node] = scale;
+            self.rhs[node] = scale * value;
+        }
     }
 
     /// SPICE's gmin stepping, the operating point's fallback when plain Newton
@@ -4169,16 +4197,16 @@ impl Solver {
     /// the states. Only reached after plain Newton failed, so an operating
     /// point that converged before converges exactly as before.
     fn gmin_stepping(&mut self) -> Result<(), AnalogError> {
-        let off = self.circuit.has_off_devices();
-        if off {
+        let held = self.circuit.has_held_phase();
+        if held {
             self.hold_off_devices();
         }
         let mut shunt = 1.0;
         while shunt >= 1e-12 {
             self.node_shunt = shunt;
-            self.holding_off = off;
+            self.holding = held;
             let stage = self.newton(Stamp::OperatingPoint, None, self.time);
-            self.holding_off = false;
+            self.holding = false;
             if stage.is_err() {
                 self.node_shunt = 0.0;
                 return stage;
@@ -4189,19 +4217,20 @@ impl Solver {
         self.newton(Stamp::OperatingPoint, None, self.time)
     }
 
-    /// The operating-point Newton solve. With an `off` device it runs twice,
-    /// as ngspice's `MODEINITFIX` then `MODEINITFLOAT`: first with every
-    /// `off` device held cut off until the rest of the circuit converges,
-    /// then with it released, starting from that solution. A circuit with one
-    /// operating point reaches it either way; a bistable one keeps the state
-    /// the held device chose. Without an `off` device this is one plain solve,
-    /// so every other netlist's trajectory is unchanged.
+    /// The operating-point Newton solve. With an `off` device or a
+    /// `.nodeset` it runs twice, as ngspice's `MODEINITFIX` then
+    /// `MODEINITFLOAT`: first with every `off` device held cut off and every
+    /// nodeset node held at its value until the rest of the circuit
+    /// converges, then with both released, starting from that solution. A
+    /// circuit with one operating point reaches it either way; a bistable one
+    /// keeps the state the hold chose. Without either this is one plain
+    /// solve, so every other netlist's trajectory is unchanged.
     fn operating_point_newton(&mut self) -> Result<(), AnalogError> {
-        if self.circuit.has_off_devices() {
+        if self.circuit.has_held_phase() {
             self.hold_off_devices();
-            self.holding_off = true;
+            self.holding = true;
             let held = self.newton(Stamp::OperatingPoint, None, self.time);
-            self.holding_off = false;
+            self.holding = false;
             held?;
         }
         self.newton(Stamp::OperatingPoint, None, self.time)
@@ -4538,7 +4567,7 @@ impl Solver {
 
         for index in 0..self.circuit.diodes.len() {
             let diode = &self.circuit.diodes[index];
-            if self.holding_off && diode.off {
+            if self.holding && diode.off {
                 continue;
             }
             let raw = node_diff(
@@ -4583,7 +4612,7 @@ impl Solver {
 
         for index in 0..self.circuit.bjts.len() {
             let bjt = &self.circuit.bjts[index];
-            if self.holding_off && bjt.off {
+            if self.holding && bjt.off {
                 continue;
             }
             let sign = bjt.model.polarity.sign();
@@ -4621,7 +4650,7 @@ impl Solver {
 
         for index in 0..self.circuit.mosfets.len() {
             let mosfet = &self.circuit.mosfets[index];
-            if self.holding_off && mosfet.off {
+            if self.holding && mosfet.off {
                 continue;
             }
             let sign = mosfet.operating_model.polarity.sign();
@@ -4681,7 +4710,7 @@ impl Solver {
 
         for index in 0..self.circuit.jfets.len() {
             let jfet = &self.circuit.jfets[index];
-            if self.holding_off && jfet.off {
+            if self.holding && jfet.off {
                 continue;
             }
             let sign = jfet.model.polarity.sign();
