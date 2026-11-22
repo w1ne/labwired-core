@@ -2117,3 +2117,89 @@ fn rv32_plic_meip_takes_the_external_interrupt() {
     assert_eq!(machine.cpu.mepc, 4);
     assert_eq!(machine.cpu.pc, 0x100);
 }
+
+fn addi(rd: u32, rs1: u32, imm: u32) -> u32 {
+    (imm << 20) | (rs1 << 15) | (rd << 7) | 0x13
+}
+
+/// QingKe V2 program: `a5 = 0x55` at 0x0, NOP at 0x4; the mode-3 vector table
+/// at 0x100 sends SysTick (12) to 0x200, which sets `a5 = 0x77` and `mret`s.
+fn qingke_pfic_machine(intsyscr: u32) -> Machine<RiscV> {
+    let mut flash = vec![0u8; 0x210];
+    let mut put = |at: usize, word: u32| flash[at..at + 4].copy_from_slice(&word.to_le_bytes());
+    put(0x000, addi(15, 0, 0x55));
+    put(0x004, addi(0, 0, 0));
+    put(0x100 + 4 * 12, 0x200);
+    put(0x200, addi(15, 0, 0x77));
+    put(0x204, 0x3020_0073); // mret
+    let mut bus = SystemBus::new();
+    bus.flash.data = flash;
+    let mut cpu = RiscV::new_for(RiscVCoreProfile::Rv32e);
+    cpu.attach_pfic();
+    cpu.mtvec = 0x100 | 3;
+    cpu.mstatus = 1 << 3;
+    assert!(cpu.write_csr(0x804, intsyscr));
+    // NVIC_EnableIRQ(SysTicK_IRQn), then the STK match pends line 12.
+    cpu.store(&mut bus, 0xE000_E100, 4, 1 << 12).unwrap();
+    cpu.set_exception_pending(12);
+    Machine::new(cpu, bus)
+}
+
+#[test]
+fn qingke_pfic_vectors_through_absolute_table_and_hpe_restores_on_mret() {
+    let mut m = qingke_pfic_machine(0x3);
+    assert_eq!(m.cpu.read_csr(0x804), Some(0x3), "INTSYSCR is stored");
+    m.step().unwrap();
+    assert_eq!(m.cpu.pc, 0x200, "entry is the address in vector slot 12");
+    assert_eq!((m.cpu.mepc, m.cpu.mcause), (0x4, 0x8000_000C));
+    assert_eq!(
+        m.cpu.load(&mut m.bus, 0xE000_E300, 4).unwrap(),
+        1 << 12,
+        "IACTR"
+    );
+    assert_eq!(
+        m.cpu.load(&mut m.bus, 0xE000_E020, 4).unwrap(),
+        0,
+        "IPR cleared"
+    );
+    m.step().unwrap();
+    assert_eq!(m.cpu.read_reg(15), 0x77);
+    m.step().unwrap();
+    assert_eq!(m.cpu.pc, 0x4);
+    assert_eq!(m.cpu.read_reg(15), 0x55, "HPE restores the caller-saved a5");
+    assert_eq!(
+        m.cpu.load(&mut m.bus, 0xE000_E300, 4).unwrap(),
+        0,
+        "IACTR clears"
+    );
+    assert_ne!(m.cpu.mstatus & (1 << 3), 0, "MIE back on");
+}
+
+#[test]
+fn qingke_pfic_without_hwstken_leaves_handler_registers() {
+    let mut m = qingke_pfic_machine(0x0);
+    for _ in 0..3 {
+        m.step().unwrap();
+    }
+    assert_eq!(m.cpu.pc, 0x4);
+    assert_eq!(
+        m.cpu.read_reg(15),
+        0x77,
+        "no hardware prologue without HWSTKEN"
+    );
+}
+
+#[test]
+fn qingke_pfic_ignores_a_disabled_line_and_is_resolved_for_ch32v00x_only() {
+    let mut m = qingke_pfic_machine(0x3);
+    m.cpu.store(&mut m.bus, 0xE000_E180, 4, 1 << 12).unwrap(); // IRER
+    m.step().unwrap();
+    assert_eq!(m.cpu.pc, 0x4, "a disabled line is not taken");
+    let mut chip: labwired_config::ChipDescriptor = serde_yaml::from_str(
+        "name: ch32v003f4p6\narch: riscv\ncore: rv32ec\ncpu_hz: 48000000\nflash: { base: 0x08000000, size: 16KiB }\nram: { base: 0x20000000, size: 2KiB }\nperipherals: []\n",
+    )
+    .unwrap();
+    assert!(crate::cpu::qingke_pfic::QingKePfic::for_chip(&chip));
+    chip.name = "ch32v203c8t6".into();
+    assert!(!crate::cpu::qingke_pfic::QingKePfic::for_chip(&chip));
+}

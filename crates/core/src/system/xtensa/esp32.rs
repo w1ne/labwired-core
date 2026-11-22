@@ -1067,6 +1067,7 @@ mod board_io_tests {
                 i2c_address: None,
                 device_type: None,
                 channel: None,
+                emission: None,
             }],
             ..Default::default()
         }

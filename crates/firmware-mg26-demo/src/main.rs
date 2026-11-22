@@ -63,6 +63,29 @@ const GPIOC_DIN: *const u32 = 0x4003_C0A4 as *const u32;
 const MODE_PUSHPULL: u32 = 0x4;
 const LED_MASK: u32 = (1 << 8) | (1 << 9); // PC08 | PC09
 
+// TIMER0..9 (efr32mg26b510f3200im48.h): TIMERn_S_BASE = 0x40048000 + n*0x4000,
+// TIMERn_IRQn = 4 + n. Clocks: TIMER0..4 = CMU_CLKEN0 bits 4..8, TIMER5..9 =
+// CMU_CLKEN2 bits 0..4. TIMER_TypeDef: IF @0x14, IEN @0x18, EN @0x30; the
+// +0x1000 alias sets bits, +0x2000 clears them. IF.OF = bit 0.
+const TIMER0_BASE: usize = 0x4004_8000;
+const TIMER_STRIDE: usize = 0x4000;
+const TIMER_COUNT: usize = 10;
+const TIMER0_IRQN: u32 = 4;
+const T_IF: usize = 0x14;
+const T_IEN: usize = 0x18;
+const T_EN: usize = 0x30;
+const ALIAS_SET: usize = 0x1000;
+const ALIAS_CLR: usize = 0x2000;
+const IF_OF: u32 = 1 << 0;
+const CMU_CLKEN0_TIMER0_4: u32 = 0x1F << 4;
+const CMU_CLKEN2_TIMER5_9: u32 = 0x1F;
+
+const NVIC_ICER0: *mut u32 = 0xE000_E180 as *mut u32;
+const NVIC_ISPR0: *const u32 = 0xE000_E200 as *const u32;
+const NVIC_ICPR0: *mut u32 = 0xE000_E280 as *mut u32;
+// NVIC lines 4..13: the ten TIMER vectors.
+const TIMER_NVIC_MASK: u32 = 0x3FF << TIMER0_IRQN;
+
 #[no_mangle]
 pub extern "C" fn Reset() -> ! {
     main()
@@ -87,6 +110,45 @@ fn puts(s: &str) {
     for &b in s.as_bytes() {
         putc(b);
     }
+}
+
+fn puthex16(v: u32) {
+    for shift in [12u32, 8, 4, 0] {
+        let d = ((v >> shift) & 0xF) as u8;
+        putc(if d < 10 { b'0' + d } else { b'A' + d - 10 });
+    }
+}
+
+fn timer_reg(n: usize, offset: usize) -> *mut u32 {
+    (TIMER0_BASE + n * TIMER_STRIDE + offset) as *mut u32
+}
+
+/// Each TIMER's `IF & IEN` level must pend its own NVIC line (4 + n) and no
+/// other line in the TIMER window. The lines stay disabled in ISER, so the
+/// pending bit is the observation and no handler runs. Clearing IEN and IF,
+/// then ICPR, must release the line.
+fn timer_irq_check() {
+    write_u32(NVIC_ICER0, TIMER_NVIC_MASK);
+    write_u32(NVIC_ICPR0, TIMER_NVIC_MASK);
+    puts("MG26-TIMER-IRQ");
+    let mut ok = true;
+    for n in 0..TIMER_COUNT {
+        write_u32(timer_reg(n, T_EN), 1);
+        write_u32(timer_reg(n, T_IEN), 0);
+        write_u32(timer_reg(n, ALIAS_CLR + T_IF), 0xFFFF_FFFF);
+        write_u32(timer_reg(n, ALIAS_SET + T_IF), IF_OF);
+        write_u32(timer_reg(n, T_IEN), IF_OF);
+        let pend = read_u32(NVIC_ISPR0) & TIMER_NVIC_MASK;
+        write_u32(timer_reg(n, T_IEN), 0);
+        write_u32(timer_reg(n, ALIAS_CLR + T_IF), IF_OF);
+        write_u32(NVIC_ICPR0, TIMER_NVIC_MASK);
+        let rel = read_u32(NVIC_ISPR0) & TIMER_NVIC_MASK;
+        write_u32(timer_reg(n, T_EN), 0);
+        puts(" ");
+        puthex16(pend);
+        ok &= pend == 1 << (TIMER0_IRQN + n as u32) && rel == 0;
+    }
+    puts(if ok { " ok\n" } else { " FAIL\n" });
 }
 
 fn putbit(v: u32) {
@@ -141,6 +203,11 @@ fn main() -> ! {
 
     write_u32(GPIOC_DOUT, LED_MASK); // final state: both LEDs on
     puts("MG26-IO DONE\n");
+
+    // ── TIMER0..9 NVIC lines ──────────────────────────────────────────────
+    write_u32(CMU_CLKEN0, CMU_CLKEN0_GPIO | CMU_CLKEN0_TIMER0_4);
+    write_u32(CMU_CLKEN2, CMU_CLKEN2_USART1 | CMU_CLKEN2_TIMER5_9);
+    timer_irq_check();
 
     loop {}
 }

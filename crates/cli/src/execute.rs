@@ -308,6 +308,12 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     //   * `--breakpoint` / `--detect-stuck` re-read the PC between calls, and
     //     a WFI spin is exactly a stuck PC,
     //   * `--capture-app-entry` watches for the app-entry PC between calls,
+    //     but only until it has captured. That half is per-iteration (the
+    //     `app_entry_capture.is_none()` check below), not standing: the cold
+    //     rom-boot run the builder makes on every snapshot-cache miss used to
+    //     keep the fuel at one cycle for the WHOLE run, long after the capture
+    //     was written, and ran 7-11x slower in wall clock than the identical
+    //     run without the flag (same steps, same cycles, same UART).
     //   * poll-mode logic capture and ShutdownLatency assertions need
     //     cycle-accurate attribution of events inside the window.
     // Time-triggered stimuli, UART injections and `max_cycles` are NOT in that
@@ -339,7 +345,6 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         && ctx.machine.config.idle_fast_forward_enabled
         && ctx.args.breakpoint.is_empty()
         && detect_stuck.is_none()
-        && ctx.args.capture_app_entry.is_none()
         && !ctx.machine.logic_poll_active()
         && !requires_fine_grained_observation(ctx.assertions);
 
@@ -889,6 +894,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
             let chunk = remaining.min(JIT_RUN_CHUNK);
             (u64::from(chunk), chunk)
         } else if idle_ff_wide_observation
+            && app_entry_capture.is_none()
             && !ctx.counter_metrics
             && assertions_first_passed_at.is_none()
             && ctx
@@ -952,7 +958,6 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         // back, so the firmware's next instruction sees the model's answer to
         // the levels it had just driven. Without models this is the plain
         // `Machine::advance` the loop always issued.
-        let poll_skipped_before = ctx.machine.poll_loop_cycles_skipped;
         let advanced = match cosim.as_mut() {
             Some(session) => session.advance(ctx.machine, request),
             None => ctx
@@ -987,25 +992,23 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         };
 
         // On the counter-metrics path a step is a machine cycle, retired or
-        // skipped (one instruction is one cycle on that core). Fuel counts
+        // skipped (one instruction is one cycle on that core): fuel counts
         // both, so every call ends on the same cycle as a run without any
-        // skip, and so do the checks between calls: assertions, settling,
-        // `max_steps`. The wide-fuel arm above is off there for that reason.
-        // A skipped poll-loop iteration is instructions the core would have
-        // retired, so it counts as steps and `max_steps` stops where it does
-        // without the skip. (Cortex-M retires one per cycle; on the
-        // counter-metrics path idle cycles, poll skips included, already
-        // count.)
-        let poll_skipped = ctx
-            .machine
-            .poll_loop_cycles_skipped
-            .saturating_sub(poll_skipped_before);
-        step += report.primary_steps
-            + if ctx.counter_metrics {
-                report.idle_cycles
-            } else {
-                poll_skipped
-            };
+        // skip, and so do the checks between calls (assertions, settling,
+        // `max_steps`). The wide-fuel arm above is off there for that reason.
+        //
+        // Otherwise a step is a retired instruction. A skipped poll-loop
+        // iteration is instructions the core would have retired, and
+        // `primary_steps` already carries them (`Machine::advance` adds the
+        // skip's instruction count), so `max_steps` stops where it does
+        // without the skip. Adding `poll_loop_cycles_skipped` on top counted
+        // every skipped poll-loop instruction twice and halved the device
+        // time a `max_steps` budget buys on a `delay()` sketch.
+        step += if ctx.counter_metrics {
+            report.fuel_consumed
+        } else {
+            report.primary_steps
+        };
         steps_executed = step;
         // Statistical PC sampling: one histogram hit every
         // PC_SAMPLE_EVERY retired primary steps, using the post-batch

@@ -559,6 +559,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "mpfs_i2c",
     // PolarFire SoC MSS SPI0/1 (CoreSPI-family master).
     "mpfs_spi",
+    // WCH QingKe V2 system timer (CH32V003/V005/V006 STK at 0xE000F000).
+    "qingke_stk",
     // SAM4S (the older PIO/PMC blocks; not the SAM D21 PORT/PM pair).
     "sam4s_pio",
     "sam4s_pmc",
@@ -1429,28 +1431,32 @@ pub fn try_build(
                         ))
                     }
                 };
-                // `capture_compare_irq: N` — a separate CC vector (AT32F421
-                // TMR1: overflow/trigger/hall IRQ13, channel IRQ14).
-                let capture_compare_irq = p_cfg
-                    .config
-                    .get("capture_compare_irq")
-                    .map(|value| {
-                        value
-                            .as_u64()
-                            .and_then(|v| u32::try_from(v).ok())
-                            .ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "timer '{}': capture_compare_irq must be a u32",
-                                    p_cfg.id
-                                )
-                            })
-                    })
-                    .transpose()?;
+                // Separate vectors of a split timer interrupt:
+                // `capture_compare_irq: N` for CC1..4IF (AT32F421 TMR1:
+                // overflow/trigger/hall IRQ13, channel IRQ14),
+                // `trigger_com_irq: N` for TIF/COMIF and `break_irq: N` for
+                // BIF (STM32F1/F4 TIM1_TRG_COM / TIM1_BRK).
+                let split_irq = |key: &str| {
+                    p_cfg
+                        .config
+                        .get(key)
+                        .map(|value| {
+                            value
+                                .as_u64()
+                                .and_then(|v| u32::try_from(v).ok())
+                                .ok_or_else(|| {
+                                    anyhow::anyhow!("timer '{}': {key} must be a u32", p_cfg.id)
+                                })
+                        })
+                        .transpose()
+                };
                 Box::new(
                     crate::peripherals::timer::Timer::new_with_layout(width, advanced)
                         .basic(basic)
                         .ccer_np(ccer_np)
-                        .capture_compare_irq(capture_compare_irq)
+                        .capture_compare_irq(split_irq("capture_compare_irq")?)
+                        .trigger_com_irq(split_irq("trigger_com_irq")?)
+                        .break_irq(split_irq("break_irq")?)
                         .pad_map(pad_map),
                 )
             }
@@ -1846,7 +1852,18 @@ pub fn try_build(
                 // Absent/anything else: the RP2040 map.
                 _ => crate::peripherals::rp2040::sio::SioLayout::Rp2040,
             };
-            Box::new(crate::peripherals::rp2040::sio::Rp2040Sio::new().with_layout(layout))
+            let mut sio = crate::peripherals::rp2040::sio::Rp2040Sio::new().with_layout(layout);
+            // The PADS_BANK0 block holding the pads' PUE/PDE pulls.
+            if let Some(block) = p_cfg.config.get("pad_control") {
+                let block = block.as_str().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "SIO peripheral '{}': `pad_control` must name a peripheral id",
+                        p_cfg.id
+                    )
+                })?;
+                sio = sio.with_pad_control(block);
+            }
+            Box::new(sio)
         }
         "rp2040_spi" => Box::new(crate::peripherals::rp2040::spi::Rp2040Spi::new()),
         "rp2040_i2c" => Box::new(crate::peripherals::rp2040::i2c::Rp2040I2c::new()),
@@ -2244,8 +2261,35 @@ pub fn try_build(
             // SQRx families, so it is its own model.
             use crate::peripherals::stm32f0_adc::{Stm32F0Adc, Stm32F0AdcFamily};
             match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
-                Some("stm32f0") => Box::new(Stm32F0Adc::new(Stm32F0AdcFamily::F0)),
-                Some("stm32l0") => Box::new(Stm32F0Adc::new(Stm32F0AdcFamily::L0)),
+                Some(profile @ ("stm32f0" | "stm32l0")) => {
+                    let family = if profile == "stm32f0" {
+                        Stm32F0AdcFamily::F0
+                    } else {
+                        Stm32F0AdcFamily::L0
+                    };
+                    let mut adc = Stm32F0Adc::new(family);
+                    // Same board-level `input_mv: { <ch>: <mV> }` as the SQRx
+                    // families below; a system that holds a pad (the Arduino
+                    // matrix L5 potentiometer) must reach this model too.
+                    if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
+                        for (k, v) in map {
+                            match (k.as_u64(), v.as_u64()) {
+                                (Some(ch), Some(mv))
+                                    if ch < 256
+                                        && u16::try_from(mv).is_ok()
+                                        && Peripheral::set_adc_channel_input(
+                                            &mut adc, ch as u8, mv as u16,
+                                        ) => {}
+                                _ => anyhow::bail!(
+                                    "adc '{}': input_mv wants {{ <channel 0..{}>: <mV> }}",
+                                    p_cfg.id,
+                                    Peripheral::adc_channel_count(&adc).unwrap_or(1) - 1
+                                ),
+                            }
+                        }
+                    }
+                    Box::new(adc)
+                }
                 _ => {
                     let layout: crate::peripherals::adc::AdcRegisterLayout =
                         SystemBus::parse_profile_or_default(p_cfg, "ADC")?;
@@ -2328,6 +2372,11 @@ pub fn try_build(
         // MEMRMP.SWP_FB (RM0410 §7).
         "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32f76x") => {
             Box::new(crate::peripherals::syscfg::Stm32F4Syscfg::new_f76x())
+        }
+        // L4 has the same EXTICR offsets, with three-bit port fields. Only
+        // that mux is modeled; do not inherit the F4 compensation-cell fields.
+        "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32l4") => {
+            Box::new(crate::peripherals::syscfg::Stm32L4Syscfg::default())
         }
         // SYSCFG on STM32L0 (`profile: stm32l0`): the same EXTICR line-source
         // mux, among the L0's own configuration words (RM0367 §10).
@@ -3276,6 +3325,7 @@ pub fn try_build(
         // PolarFire SoC MSS SPI0/1: master mode; devices attach through
         // `external_devices:` and follow SLAVE_SELECT.
         "mpfs_spi" => Box::new(crate::peripherals::mpfs_spi::MpfsSpi::new()),
+        "qingke_stk" => Box::new(crate::peripherals::qingke_stk::QingKeStk::new()),
         "sam4s_pio" => Box::new(crate::peripherals::sam4s::Sam4sPio::new()),
         "sam4s_pmc" => Box::new(crate::peripherals::sam4s::Sam4sPmc::new()),
         "sam4s_wdt" => Box::new(crate::peripherals::sam::sysc4s::Sam4sWdt::new()),

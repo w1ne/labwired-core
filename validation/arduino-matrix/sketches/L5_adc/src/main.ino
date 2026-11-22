@@ -112,11 +112,18 @@ static bool samples_ok(int v0, int v1) {
   return v0 == 512 && v1 == 512;
 
 #elif defined(ARDUINO_NUCLEO_L476RG) || defined(ARDUINO_NUCLEO_G474RE) || \
-    defined(ARDUINO_P_NUCLEO_WB55RG)
+    defined(ARDUINO_NUCLEO_G431RB) || defined(ARDUINO_P_NUCLEO_WB55RG)
   // adc profile stm32l4: the matrix system holds A0 at 1651 mV (L476 PA0 =
-  // ADC1_IN5; G474 PA0 = ADC1_IN1; WB55 PC0 = ADC1_IN1), and SQR1.SQ1
+  // ADC1_IN5; G474/G431 PA0 = ADC1_IN1; WB55 PC0 = ADC1_IN1), and SQR1.SQ1
   // selects it. 12-bit against 3.3 V is 2048; stm32duino returns 10 bits:
   // 512. Exact; the unheld fixed source (3.0 V) reads 930, no conversion 0.
+  return v0 == 512 && v1 == 512;
+
+#elif defined(ARDUINO_NUCLEO_H723ZG) || defined(ARDUINO_NUCLEO_H753ZI)
+  // adc profile h7 (16-bit ADC1/2): the matrix system holds A0 (PA3 =
+  // ADC12_INP15) at 1651 mV and PCSEL/SQR1 select it. stm32duino converts at
+  // 10 bits (CFGR.RES = 011): 512. Exact; a 0 here means no conversion (the
+  // HAL's ADSTART write cleared ADEN before the rs-bit fix).
   return v0 == 512 && v1 == 512;
 
 #elif defined(ARDUINO_ESP32S2_DEV)

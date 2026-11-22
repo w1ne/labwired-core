@@ -159,7 +159,7 @@ _No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test r
 
 ### `ch32v003f4p6`
 
-_No tier-1 fixture or hosted model-verification gate. The WCH-CH32V003EVT board profile maps its P4 LED1 through a configured jumper to PC0; committed RV32E/ILP32E bare-metal C firmware executes from flash and the PR-gated board smoke requires two GPIO edges. A second RV32EC (compressed) fixture clocks USART1 and prints a line through polled TX on PD5; the board smoke asserts the exact string. A negative control asserts silence when the USART1 clock gate is not set. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
+_No tier-1 fixture or hosted model-verification gate. The WCH-CH32V003EVT board profile maps its P4 LED1 through a configured jumper to PC0; committed RV32E/ILP32E bare-metal C firmware executes from flash and the PR-gated board smoke requires two GPIO edges. A second RV32EC (compressed) fixture clocks USART1 and prints a line through polled TX on PD5; the board smoke asserts the exact string. A negative control asserts silence when the USART1 clock gate is not set. A third, stock WCH noneos-sdk ELF (PlatformIO ch32v, -march=rv32ecxw, unmodified) runs the vendor startup and SystemInit to 48 MHz, polls the STK SysTick through four Delay_Ms(10) calls and prints exact printf lines on USART1; a negative control without the STK block stops after the boot line. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
 
 ### `ch32v005f6p6`
 
@@ -296,7 +296,11 @@ _Package variant of the esp32c6 die for the Seeed XIAO ESP32-C6: the yaml copies
 
 ### `stm32h723zg`
 
-_Two firmware paths drive this die. The NUCLEO-H723ZG Rust smoke (core-onboarding-smoke) drives RCC enables, GPIOB (LD1 on PB0), GPIOD AF7 and USART3 TX. The stock stm32duino NUCLEO_H723ZG row in the Arduino matrix (core-arduino-matrix-smoke, nightly + push to main; evidence validation/arduino-matrix/evidence/nucleo-h723zg) drives PWR supply/VOS bring-up, the PLL clock tree, CRS (HAL_RCCEx_CRSConfig), USART3, GPIO, I2C1 (INA219 exact registers), SPI1 (MAX31855 exact frame), ADC1 plus the ADC12 common CCR (analogRead), TIM2 PWM on PA0 (1.000 kHz, 50.2 % duty on the pad) and SysTick (micros). FDCAN1/2, CRC, RNG, IWDG, WWDG, DBGMCU, USART1/2/6, UART4, LPUART1, I2C2/3, SPI2/3, TIM1/3/4/8 and ADC2 are declared with the H735 instance list but no H723 firmware drives them; the FDCAN message RAM is not mapped, so the L8 CAN cell is a declared skip._
+_Two firmware paths drive this die. The NUCLEO-H723ZG Rust smoke (core-onboarding-smoke) drives RCC enables, GPIOB (LD1 on PB0), GPIOD AF7 and USART3 TX. The stock stm32duino NUCLEO_H723ZG row in the Arduino matrix (core-arduino-matrix-smoke, nightly + push to main; evidence validation/arduino-matrix/evidence/nucleo-h723zg) drives PWR supply/VOS bring-up, the PLL clock tree, CRS (HAL_RCCEx_CRSConfig), USART3, GPIO, I2C1 (INA219 exact registers), SPI1 (MAX31855 exact frame), ADC1 plus the ADC12 common CCR (analogRead of A0 = PA3 held at 1651 mV reads exactly 512), TIM2 PWM on PA0 (1.000 kHz, 50.2 % duty on the pad) and SysTick (micros). FDCAN1/2, CRC, RNG, IWDG, WWDG, DBGMCU, USART1/2/6, UART4, LPUART1, I2C2/3, SPI2/3, TIM1/3/4/8 and ADC2 are declared with the H735 instance list but no H723 firmware drives them; the FDCAN message RAM is not mapped, so the L8 CAN cell is a declared skip._
+
+### `stm32h753zi`
+
+_The stock stm32duino NUCLEO_H753ZI row in the Arduino matrix (core-arduino-matrix-smoke, nightly + push to main; evidence validation/arduino-matrix/evidence/nucleo-h753zi) drives PWR LDO supply and VOS0 bring-up, the PLL clock tree (480 MHz), CRS (HAL_RCCEx_CRSConfig), USART3, GPIO, I2C1 (INA219 exact registers), SPI1 (MAX31855 exact frame), ADC1 plus the ADC12 common CCR (analogRead of A0 = PA3 held at 1651 mV reads exactly 512), TIM2 PWM on PA0 (1.000 kHz, 50.2 % duty on the pad) and SysTick (micros). FDCAN1/2, CRC, RNG, IWDG, WWDG, DBGMCU, USART1/2/6, UART4, LPUART1, I2C2/3, SPI2/3, TIM1/3/4/8 and ADC2 are declared but no H753 firmware drives them. CRYP, HASH, Ethernet, USB OTG, QUADSPI, FMC, ADC3 and DMA are not modelled; the FDCAN message RAM is not mapped, so the L8 CAN cell is a declared skip._
 
 ### `esp32s3-zero`
 
@@ -593,6 +597,10 @@ _SIM-DERIVED first Cortex-M7 part. Its committed tier-1 fixture is PR-gated (`fi
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `SYSCFG` (configs/chips/stm32h735.yaml:450 (type: syscfg; crates/core/src/peripherals/generic_factory.rs:739; docs/coverage/silent-path-census.md:404)) — CLOSABLE: hardcoded StubPeripheral with one canned value — CCCSR (0x20) reads READY=1 so the H7 HAL's rcc.freeze() compensation-cell poll exits (examples/stm32h735-hal-demo/src/main.rs:43); writes are dropped, so the enable never latches and EXTI source-select is not modelled. The census records it as the telematics lab's only live stub.
 - `WWDG` (configs/chips/stm32h735.yaml:487 (type: wwdg; crates/core/src/peripherals/wwdg.rs:63)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; no behavioural test and no gated firmware drives it.
+
+### `stm32l031k6`
+
+_NUCLEO-L031K6. PR-gated raw-register smoke (examples/nucleo-l031k6/io-smoke.yaml): reset/stack, RCC IOPENR/APB1ENR, GPIOA/GPIOB, USART2 banner STM32L031K6_OK and PB3 LED edges. No Arduino matrix row and no physical silicon run exist, so nothing is recorded as functional here. USB, LCD, DAC and LPTIM are absent on this die and are not declared. SYSCFG is the real STM32L0 model; PWR, FLASH, ADC, DMA, SPI and I2C are also modelled. This smoke does not drive those blocks._
 
 ### `stm32l073`
 

@@ -5,6 +5,17 @@ core: "cortex-m4"
 # scale their datasheet microseconds by it; a slower board overrides it.
 # nRF52840 runs its Cortex-M4F at a fixed 64 MHz.
 cpu_hz: 64_000_000
+# GPIO pad output resistance, ohms: a driven pad is VDD (or 0 V) behind it.
+# nRF52840 Product Specification v1.11 (4413_417), section 6.9.3.1 "GPIO
+# Electrical Specification", standard drive (PIN_CNF[n].DRIVE reset value
+# S0S1), VDD >= 1.7 V: IOH,SD = 1 / 2 / 4 mA (min / typ / max) at VDD - 0.4 V,
+# and IOL,SD the same at VSS + 0.4 V. Typical: 0.4 V / 2 mA = 200 ohm (the
+# minimum current bounds it at 0.4 V / 1 mA = 400 ohm).
+# Read by the diagram compiler, which places it as the pad driver's
+# on-resistance in the analog netlist.
+gpio_output_ohms: 200
+# gpio_abs_max_ma is not stated: section 9, Table 101 "Absolute maximum
+# ratings" gives no GPIO pin current (only the NFC antenna pins, 80 mA).
 
 flash:
   base: 0x00000000
@@ -38,6 +49,27 @@ peripherals:
     type: "systick"
     base_address: 0xE000E010
     size: "16B"
+
+  # Architectural Cortex-M4F FPU register window in the System Control Space.
+  # nRF52840 Product Specification v1.11, CPU chapter
+  # (https://docs.nordicsemi.com/r/bundle/ps_nrf52840/page/cpu.html):
+  # the core is an Arm Cortex-M4 processor with a single-precision FPU, and
+  # the "CPU and support module configuration" table lists FPU as implemented.
+  # That chapter points at the Cortex-M4 Devices Generic User Guide for the
+  # FPU registers; the addresses (FPCCR at 0xE000EF34, and the 28-byte window
+  # starting at 0xE000EF30) and the FPv4-SP feature-register reset values are
+  # Arm Cortex-M4 TRM DDI 0439B, Table 7-4. This is not the Nordic FPU
+  # interrupt block in the SVD (0x40026000, IRQ 38). The id is
+  # `cortex_m_fpu` so this window is not matched to that SVD instance.
+  - id: "cortex_m_fpu"
+    type: "cortex_m_fpu"
+    base_address: 0xE000EF30
+    size: "28B"
+    config:
+      mvfr0: 0x10110021
+      mvfr1: 0x11000011
+      # MVFR2 is not implemented on Cortex-M4F (DDI 0439B).
+      mvfr2: 0x00000000
 
   - id: "uart0"
     type: "nrf52840_uart"

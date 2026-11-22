@@ -430,6 +430,7 @@ canonical `type:`; the table below is rendered from that file by
 | `ens160` | I²C | ScioSense ENS160 MOx multi-gas sensor (TVOC, eCO2, AQI-UBA) over I²C |
 | `ft5x06` | I²C | Single-contact FT5x06 I2C touch report model |
 | `fxos8700` | I²C | NXP FXOS8700 6-axis accelerometer + magnetometer over I2C |
+| `hd44780_pcf8574` | I²C | 16x2 character LCD: HD44780 controller in 4-bit mode behind a PCF8574 I2C backpack |
 | `ht16k33` | I²C | 16×8 LED matrix / 7-segment I²C controller (display RAM, setup commands) |
 | `icm20948` | I²C | TDK InvenSense ICM-20948 motion sensor (accel + gyro + temperature; magnetometer not modelled) over I²C |
 | `icm42688` | I²C | TDK InvenSense ICM-42688-P 6-axis IMU (accel + gyro + temperature) over I²C |
@@ -520,6 +521,7 @@ canonical `type:`; the table below is rendered from that file by
 | `dfplayer_mini` | GPIO | MP3 player module: serial commands in, BUSY low while playing |
 | `dht11` | GPIO | One-wire temperature + humidity sensor |
 | `dht22` | GPIO | One-wire temperature + humidity sensor |
+| `ds18b20` | GPIO | Maxim DS18B20 digital thermometer on a 1-Wire bus (9-12 bit, -55 to +125 °C) |
 | `hc-sr04` | GPIO | Ultrasonic distance sensor (trigger / echo) |
 | `hx711` | GPIO | 24-bit load-cell amplifier (DT/SCK bit-bang) |
 | `ili9341-16bit` | GPIO | 240×320 RGB565 TFT over Intel 8080 16-bit GPIO bit-bang |
@@ -538,6 +540,7 @@ canonical `type:`; the table below is rendered from that file by
 | `servo` | GPIO | RC hobby servo driven by a single PWM control pin (GPIO edges and/or LEDC duty) |
 | `seven-segment` | GPIO | Bare single-digit 7-segment LED display driven straight from nine GPIO pins |
 | `sk6812` | GPIO | Addressable RGBW LED strip on one data pin (32-bit edge-timed frames) |
+| `tcs3200` | GPIO | Programmable RGB light-to-frequency converter (S0/S1 scale, S2/S3 filter, OE) |
 | `tm1637-7seg` | GPIO | 4-digit 7-segment LED display with the TM1637 2-wire (CLK/DIO) driver |
 | `tm1638` | GPIO | 8-digit 7-segment + 8 LED display with the TM1638 3-wire (STB/CLK/DIO) driver |
 | `uln2003` | GPIO | Four-phase unipolar stepper twin (IN1..IN4) |
@@ -547,6 +550,8 @@ canonical `type:`; the table below is rendered from that file by
 | `joystick` | Analog | Two ratiometric potentiometer axes and a push contact |
 | `ldr` | Analog | CdS photoresistor + voltage divider on an ADC channel |
 | `lipo_charger` | Analog | Single-cell LiPo pack + TP4056-class analog charger on an ADC channel |
+| `mcp9700` | Analog | Analog temperature sensor, 10 mV/°C with 500 mV at 0 °C |
+| `mcp9701` | Analog | Analog temperature sensor, 19.5 mV/°C with 400 mV at 0 °C |
 | `mq-6` | Analog | Hanwei MQ-6 LPG/propane semiconductor gas sensor module (AOUT on ADC) |
 | `ntc-thermistor` | Analog | 10 kΩ NTC + voltage divider on an ADC channel |
 | `potentiometer` | Analog | 3-pin linear potentiometer on an ADC channel (rotary or slide) |
@@ -821,6 +826,7 @@ button a user can press, an ADC input. Entries are `BoardIoBinding`:
 | `i2c_address` | For `kind: i2c_device` bindings. |
 | `device_type` | The external-device `type` this binding surfaces, for the browser. |
 | `channel` | Stimulus channel this contact exposes when it is not a plain `pressed` button (`obstacle`, `field`, `vibration`, …); absent means `pressed`. |
+| `emission` | Optional visible light this output gives off: `{ color: "#rrggbb" }`. Any output binding may declare it. The engine then reports `emission` with the binding's state: the declared colour while the output is asserted, `#000000` while it is not. Only the on/off level is modelled; PWM brightness is not. |
 
 ```yaml
 # configs/systems/nucleo-l476rg.yaml (excerpt)

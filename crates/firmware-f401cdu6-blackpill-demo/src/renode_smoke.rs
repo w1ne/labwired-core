@@ -28,6 +28,8 @@
 //!          and release, and recovery
 //!   SPI1   MAX31855 reset frame plus TXEIE/RXNEIE level IRQ assertions
 //!   ADC1   single software-triggered F4 conversion of the externally driven IN1
+//!   TIM1/9/10/11 update and TIM1 CC1 events pend only their own NVIC line
+//!          among 24..27 and release it
 //!   USART1 TXEIE, TCIE and RXNEIE assert and release their NVIC line;
 //!   USART2 keeps injected bytes hidden until UE and RE are set, then drains
 //!   two bytes in order and gates RXNE IRQ 38
@@ -453,14 +455,81 @@ fn main() -> ! {
     send(if adc_ok { b" ok\r\n" } else { b" FAIL\r\n" });
     passed |= (adc_ok as u32) << 16;
 
+    let tim_irq_ok = smoke_tim1_9_10_11_irq_lines();
+    passed |= (tim_irq_ok as u32) << 17;
+
     wr(RESULT, 0xB1AC_0000 | passed);
-    send(if passed == 0x1_FFFF {
+    send(if passed == 0x3_FFFF {
         b"BLACKPILL PASS\r\n"
     } else {
         b"BLACKPILL FAIL\r\n"
     });
 
     loop {}
+}
+
+/// TIM1, TIM9, TIM10 and TIM11 share NVIC lines 24..27 (RM0368 table 38;
+/// Renode `stm32f4.repl`): TIM1 update -> 25, TIM1 capture/compare -> 27,
+/// TIM9 -> 24 (TIM1_BRK_TIM9), TIM10 -> 25 (TIM1_UP_TIM10), TIM11 -> 26
+/// (TIM1_TRG_COM_TIM11). With the lines disabled and cleared, each source
+/// must pend only its own line in ISPR0[27:24], and clearing DIER/SR plus
+/// ICPR must release it. The window is printed one nibble per source.
+fn smoke_tim1_9_10_11_irq_lines() -> bool {
+    const TIM1: u32 = 0x4001_0000;
+    const TIM9: u32 = 0x4001_4000;
+    const TIM10: u32 = 0x4001_4400;
+    const TIM11: u32 = 0x4001_4800;
+    const DIER: u32 = 0x0C;
+    const SR: u32 = 0x10;
+    const EGR: u32 = 0x14;
+    const LINES: u32 = 0xF << 24;
+    const NVIC_ICER0: u32 = 0xE000_E180;
+    // (timer, DIER enable, EGR event, expected ISPR0[27:24])
+    const CASES: [(u32, u32, u32, u32); 5] = [
+        (TIM1, 1 << 0, 1 << 0, 0x2),  // UIE + UG   -> 25
+        (TIM1, 1 << 1, 1 << 1, 0x8),  // CC1IE + CC1G -> 27
+        (TIM9, 1 << 0, 1 << 0, 0x1),  // UIE + UG   -> 24
+        (TIM10, 1 << 0, 1 << 0, 0x2), // UIE + UG   -> 25
+        (TIM11, 1 << 0, 1 << 0, 0x4), // UIE + UG   -> 26
+    ];
+
+    // TIM1EN (bit 0), TIM9EN/TIM10EN/TIM11EN (bits 16..18), RM0368 §6.3.12.
+    wr(RCC_APB2ENR, rd(RCC_APB2ENR) | 1 | (0x7 << 16));
+    wr(NVIC_ICER0, LINES);
+    wr(NVIC_ICPR0, LINES);
+
+    let mut window = 0u32;
+    let mut ok = true;
+    for (i, &(tim, enable, event, expected)) in CASES.iter().enumerate() {
+        wr(tim + DIER, 0);
+        wr(tim + SR, 0);
+        wr(NVIC_ICPR0, LINES);
+        let idle = rd(NVIC_ISPR0) & LINES == 0;
+        wr(tim + DIER, enable);
+        wr(tim + EGR, event);
+        let mut seen = 0;
+        for _ in 0..64 {
+            seen = (rd(NVIC_ISPR0) & LINES) >> 24;
+            if seen != 0 {
+                break;
+            }
+        }
+        wr(tim + DIER, 0);
+        wr(tim + SR, 0);
+        wr(NVIC_ICPR0, LINES);
+        let mut released = false;
+        for _ in 0..64 {
+            if rd(NVIC_ISPR0) & LINES == 0 {
+                released = true;
+                break;
+            }
+        }
+        window |= seen << (4 * (4 - i as u32));
+        ok &= idle && seen == expected && released;
+    }
+
+    line(b"tim1/9/10/11 irq ispr24=", window, ok);
+    ok
 }
 
 /// Exercise one F4 ADC1 software conversion from the imported 25% IN1 source.

@@ -1,0 +1,19 @@
+id: nucleo-h753zi
+chip: stm32h753zi
+system: systems/nucleo-h753zi.yaml
+# Pinned like the other STM32 rows (ststm32 20.0.0 makes SPI.begin() a no-op).
+pio: { platform: ststm32@19.7.1, board: nucleo_h753zi, framework: arduino }
+max_steps: 20000000
+budget_reason: "NUCLEO-H753ZI 480 MHz; L3 Wire.begin runs i2c_computeTiming (multi-M steps, as on H563)"
+# LD1 = PB0 (UM2407).
+led_watch: "gpiob:0"
+led_min_edges: 2
+# L6 drives TIM2_CH1 on PA0 (AF1): LD1/PB0's PinMap_TIM entry is TIM1_CH2N,
+# a complementary output the twin does not generate.
+pwm_watch: "gpioa:0"
+pwm_min_edges: 20
+family: stm32
+notes: "Stock stm32duino NUCLEO_H753ZI (LDO, VOS0, HSE bypass 8 MHz PLL 480 MHz, HSI48 CRS)"
+sketches_skip: [L8_can]
+sketches_skip_reason:
+  L8_can: "H7 FDCAN message RAM is shared and placed by SIDFC/RXF0C/TXBC; the shared fdcan model uses the fixed H5/G4 SRAMCAN layout, so a loopback here would not be faithful"

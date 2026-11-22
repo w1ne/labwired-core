@@ -198,6 +198,12 @@ boards:
     kind: sim-validate
     path: examples/nucleo-l432kc
     gate: true
+  # STM32L031K6: committed real-register Cortex-M0+ smoke ELF, USART2
+  # banner and PB3 (LD3) edges. No extra toolchain; gate the exact descriptor.
+  - id: nucleo-l031k6
+    kind: sim-validate
+    path: examples/nucleo-l031k6
+    gate: true
   # Two Nordic nRF54L application-core siblings in one cheap PR-gated
   # simulation lane; committed exact ELFs (no Nordic SDK/toolchain dependency).
   - id: nrf54l05-l10-smoke

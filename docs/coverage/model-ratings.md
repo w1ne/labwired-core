@@ -57,9 +57,9 @@ same fields but never their source, chip YAML, binary or build paths.
 | nrf51822 | open | L1 | 22 | 965.1 | 2.0 | ≥1× (CI) | — |
 | nrf52832 | open | L1 | 17 | 835.5 | 1.4 | ≥1× (CI) | [doc](docs/boards/nrf52832.md) |
 | nrf52833 | open | L1 | 48 | 995.9 | 2.1 | ≥1× (CI) | — |
-| nrf52840 | open | L1 | 52 | 995.9 | 2.1 | ≥1× (CI) | [doc](docs/boards/nrf52840.md) |
+| nrf52840 | open | L1 | 53 | 995.9 | 2.1 | ≥1× (CI) | [doc](docs/boards/nrf52840.md) |
 | nrf5340 | open | L1 | 22 | 819.6 | 1.4 | ≥1× (CI) | [doc](docs/boards/nrf5340.md) |
-| rp2040 | open | L1 | 24 | 905.9 | 1.6 | ≥1× (CI) | [doc](docs/boards/rp2040.md) |
+| rp2040 | open | L1 | 27 | 905.9 | 1.6 | ≥1× (CI) | [doc](docs/boards/rp2040.md) |
 | stm32f103 | open | L1 | 31 | 835.3 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f103.md) |
 | stm32f103rb | open | L0 | 32 | 835.3 | 1.6 | ≥1× (CI) | — |
 | stm32f103rb-nucleo-bme280-smoke | open | L0 | 7 | 828.5 | 1.5 | ≥1× (CI) | — |
@@ -87,7 +87,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32f401ve | open | L0 | 24 | 834.6 | 1.5 | ≥1× (CI) | — |
 | stm32f405 | open | L1 | 22 | 834.1 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32f405.md) |
 | stm32f767 | open | L1 | 37 | 834.4 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f767.md) |
-| rp2350 | open | L1 | 27 | 906.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/rp2350.md) |
+| rp2350 | open | L1 | 28 | 906.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/rp2350.md) |
 | stm32f407 | open | L1 | 34 | 834.5 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f407.md) |
 | stm32f407ie | open | L0 | 34 | 834.5 | 1.6 | ≥1× (CI) | — |
 | stm32f407ig | open | L0 | 34 | 834.5 | 1.6 | ≥1× (CI) | — |
@@ -97,7 +97,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32f407zg | open | L0 | 34 | 834.5 | 1.6 | ≥1× (CI) | — |
 | stm32g0b1re | open | L0 | 21 | 842.2 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32g0b1re.md) |
 | stm32g474re | open | L1 | 23 | 834.1 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32g474re.md) |
-| stm32g431rb | open | L0 | 22 | 834.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32g431rb.md) |
+| stm32g431rb | open | L0 | 23 | 834.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32g431rb.md) |
 | stm32h563 | open | L1 | 37 | 839.1 | 1.8 | ≥1× (CI) | [doc](docs/boards/stm32h563.md) |
 | stm32h533re | open | L1 | 5 | 809.2 | 1.2 | ≥1× (CI) | — |
 | stm32u575 | open | L1 | 43 | 839.6 | 1.8 | ≥1× (CI) | [doc](docs/boards/stm32u575.md) |
@@ -107,6 +107,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32c031c6 | open | L0 | 29 | 835.5 | 1.6 | ≥1× (CI) | — |
 | stm32l073 | open | L2 | 42 | 838.2 | 1.6 | ≥1× (CI) | — |
 | stm32l432kc | open | L0 | 42 | 835.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32l432kc.md) |
+| stm32l031k6 | open | L0 | 18 | 863.2 | 1.3 | ≥1× (CI) | — |
 | stm32l476 | open | L1 | 59 | 835.6 | 1.6 | ≥1× (CI) | — |
 | stm32wb55 | open | L1 | 22 | 835.0 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32wb55.md) |
 | stm32wba52 | open | L1 | 21 | 834.4 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32wba52.md) |
@@ -118,7 +119,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | atmega2561 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega2561.md) |
 | atmega4809 | open | L1 | 21 | — | — | ≥1× (CI) | — |
 | atmega32u4 | open | L0 | 8 | 1020.0 | 7.7 | ≥1× (CI) | — |
-| mimxrt1062-teensy41 | open | L0 | 50 | — | — | ≥1× (CI) | — |
+| mimxrt1062-teensy41 | open | L0 | 49 | — | — | ≥1× (CI) | — |
 | atmega1281 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega1281.md) |
 | atsamd21 | open | L1 | 7 | 895.0 | 1.4 | ≥1× (CI) | — |
 | atsamd51 | open | L1 | 27 | 893.5 | 1.4 | ≥1× (CI) | — |
@@ -139,16 +140,16 @@ same fields but never their source, chip YAML, binary or build paths.
 | pic24f08ka102 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | pic24f16ka101 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | pic24f16ka102 | open | L1 | 3 | — | — | ≥1× (CI) | — |
-| ch32v003f4p6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
+| ch32v003f4p6 | open | L1 | 8 | — | — | ≥1× (CI) | — |
 | ch32l103c8t6 | open | L1 | 7 | — | — | ≥1× (CI) | — |
 | ch32v005f6p6 | open | L1 | 6 | — | — | ≥1× (CI) | — |
 | ch32x035c8t6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
 | ch32v006k8u6 | open | L1 | 6 | — | — | ≥1× (CI) | — |
 | ch32v203c8t6 | open | L1 | 7 | — | — | ≥1× (CI) | — |
-| ch32v003f4u6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
-| ch32v003a4m6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
+| ch32v003f4u6 | open | L1 | 8 | — | — | ≥1× (CI) | — |
+| ch32v003a4m6 | open | L1 | 8 | — | — | ≥1× (CI) | — |
 | at32f421g8u7 | open | L1 | 22 | 863.5 | 1.5 | ≥1× (CI) | [doc](docs/boards/at32f421g8u7.md) |
-| ch32v003j4m6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
+| ch32v003j4m6 | open | L1 | 8 | — | — | ≥1× (CI) | — |
 | esp32h2 | open | L0 | 3 | — | 2.4 | ≥1× (CI) | — |
 | esp32c5 | open | L0 | 4 | — | 2.2 | ≥1× (CI) | — |
 | esp32c61 | open | L0 | 5 | — | 2.2 | ≥1× (CI) | — |
@@ -157,9 +158,10 @@ same fields but never their source, chip YAML, binary or build paths.
 | esp32p4 | open | L0 | 4 | — | — | ≥1× (CI) | — |
 | esp32s2 | open | L0 | 2 | — | — | ≥1× (CI) | — |
 | esp32s2-arduino | open | L1 | 32 | — | — | ≥1× (CI) | — |
-| rp2040-feather | open | L0 | 24 | 906.8 | 1.6 | ≥1× (CI) | — |
-| rp2350-feather | open | L0 | 27 | 906.8 | 1.7 | ≥1× (CI) | — |
+| rp2040-feather | open | L0 | 27 | 906.8 | 1.6 | ≥1× (CI) | — |
+| rp2350-feather | open | L0 | 28 | 906.8 | 1.7 | ≥1× (CI) | — |
 | stm32h723zg | open | L0 | 43 | 808.5 | 1.5 | ≥1× (CI) | — |
+| stm32h753zi | open | L0 | 43 | 860.6 | 1.3 | ≥1× (CI) | — |
 | esp32c6fh4 | open | L0 | 69 | — | 3.8 | ≥1× (CI) | — |
 | k32w041z (closed) | closed | L2 | 9 | 987.8 | 1.6 | 6.50× | [doc](docs/boards/k32w041amdk6.md) |
 

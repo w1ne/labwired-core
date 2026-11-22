@@ -6,8 +6,9 @@ LabWired provides a CI-friendly runner mode driven by a YAML test script:
 labwired test --script test.yaml
 ```
 
-Every v1.0 script selects exactly one run shape: a single machine or an
-environment world. The two `inputs` forms are mutually exclusive.
+Every v1.0 script selects exactly one run shape: a single machine, an
+environment world, or a portable Flex project. The `inputs` forms are mutually
+exclusive.
 
 ### Single-machine script
 
@@ -138,6 +139,329 @@ regression restarts that window. A runtime failure or a same-round
 allowed world round reports `assertions_passed`; otherwise the result has
 `stop_reason: assertions_passed`. The three fields are respectively a boolean
 and non-negative integers; explicit YAML `null` is rejected.
+
+### Portable Flex script
+
+Use `inputs.flex` to run portable firmware against a Flex manifest. The
+firmware is a WebAssembly module that imports `labwired.read(i32) -> f64`,
+`labwired.write(i32, f64)` and `labwired.advance_ns(i32)`,
+`labwired.i2c_transfer` if the manifest has an I2C bus, and
+`labwired.console_write` if the manifest has a console. The runner calls one
+export once (`entry`), or runs a `sequence` of calls and test-bench stimuli on
+one firmware instance. This path does not emulate a target CPU, and it never falls back
+to one. A script that needs target instructions, MMIO or interrupts names
+`inputs.system` or `inputs.chip` instead; a script that names both is rejected.
+
+```yaml
+# test-bright.yaml
+schema_version: "1.0"
+inputs:
+  flex: system.yaml        # Flex manifest (ports, models, assumptions)
+  firmware: firmware.wasm  # portable firmware module
+entry:
+  export: run              # default: run
+  args:                    # in the export's parameter order
+    - { port: lux }        # the id of a named manifest port (i32)
+    - { port: sensor_v }
+    - { port: user_led_drive }
+    - { port: user_led_state }
+    - { number: 100 }      # a plain number, exact in the parameter's type
+limits:
+  max_steps: 100000        # WebAssembly fuel for the firmware call
+  max_time_ns: 10000000    # virtual-time ceiling
+assertions:
+  - entry_result: { equals: 2974 }                        # the export's i32 result
+  - port_value: { port: sensor_v, min: 2.396, max: 2.398 } # final read-port value
+  - digital_edges: { port: user_led_state, count: 2 }     # exact captured edges
+  - digital_edges: { port: user_led_state, times_ns: [4001000, 4002000] }
+  - digital_edges: { port: user_led_state, count: 1, from_ns: 4001500, to_ns: 4002000 }
+  - analog_sample: { port: sensor_v, at_ns: 350000, min: 2.033, max: 2.034 }
+  - analog_window: { port: sensor_v, from_ns: 2000000, min: 2.395, max: 2.398 }
+  - analog_crossings: { port: sensor_v, level: 2.001, direction: rising, times_ns: [350000] }
+  - final_time_ns: { equals: 4002000 }
+```
+
+| Assertion | Reads | Passes when |
+|---|---|---|
+| `entry_result` | The i32 result of a firmware call | It equals `equals`. |
+| `port_value` | A read port after the last step | It is `equals`, or inside `min`..`max`. |
+| `digital_edges` | One logic-analyzer channel: `port` (a Boolean port) or `signal` (a traced model signal with no port). `from_ns` and `to_ns` limit it to the edges with `from_ns <= time <= to_ns`; the default is the whole run. | The edge `count` matches, every edge time matches `times_ns` in order, or both. |
+| `analog_sample` | One oscilloscope channel: `port` (a numeric read port) or `channel` (a channel name with no port) | The last sample at or before `at_ns` is `equals`, or inside `min`..`max`, in the channel's unit. |
+| `analog_window` | Every value of one oscilloscope channel with `from_ns <= time <= to_ns`, and the value the channel holds at `from_ns`. The default is the whole run. | The lowest value is at or above `min` and the highest is at or below `max`. |
+| `analog_crossings` | The times one oscilloscope channel crosses `level` in one `direction`: `rising` (from below to at or above) or `falling` (from above to at or below). `from_ns` and `to_ns` limit it as for `digital_edges`. | The crossing `count` matches, every crossing time matches `times_ns` in order, or both. |
+| `final_time_ns` | The virtual time at the end of the run | It is `equals`, or inside `min`..`max`. |
+| `console_contains` | The text the firmware wrote to the manifest `console` in the whole run | The text contains the string. `observed` is the byte offset of the first match. |
+| `device_state` | One key of what a device holds at the end of the run: the `meta` of its artifact, as in `result.json`'s `devices` (a display's `text`, a strip's `lit_pixels` or `frame_history`, a 1-Wire part's `registers`). `device` is a sink, bus device or model id. | The value is `equals`; or a string contains `contains`, or a list holds it as an element or inside one string element; or a number is inside `min`..`max`. `observed_value` is the value read. |
+| `i2c_transfers` | The number of `labwired.i2c_transfer` calls on one `bus` in the whole run. `address` limits it to one 7-bit address. `ack: true` counts the transfers a device acknowledged, `ack: false` those no device answered. | The count is `equals`, or inside `min`..`max`. |
+
+A port or channel that the instrument does not have is a `config_error`
+before the firmware runs. An `at_ns` or a `to_ns` after the end of the run was
+not observed: the assertion fails with `observed: null`. `result.json` gives
+each `digital_edges` assertion its edge times, each `analog_crossings`
+assertion its crossing times, and each `analog_sample` assertion the time of
+the sample it read, in `observed_times_ns`. For an `analog_window`, `observed`
+is the lowest value, `observed_max` is the highest, and `observed_times_ns`
+holds the times of the two. A value held from before the window has the time
+`from_ns`.
+
+A crossing has the time of the first sample at or past the level. The runner
+does not interpolate between samples, so the time is a multiple of the model
+`step_ns`. A channel that starts at or past the level has not crossed it.
+
+The runner counts the edges of each `digital_edges` assertion when the logic
+analyzer records them. The count and the `times_ns` comparison are exact for a
+run of any length. The capture itself keeps the newest 65,536 edges of all
+channels: after a longer run, `flex-trace.json` and `--vcd` hold those edges,
+and `traces.digital_dropped` in `result.json` is the number of older edges
+they do not hold. `observed_times_ns` lists at most the first 4,096 edge times
+of a window, or one more than `times_ns` expects if that is larger;
+`observed_times_truncated: true` marks a shortened list.
+
+The analog assertions use the same method. The runner reads each sample when
+the oscilloscope records it, so `analog_sample`, `analog_window` and
+`analog_crossings` are exact for a run of any length. The oscilloscope capture
+keeps the newest 20,000 samples (or the model's `trace_samples`);
+`traces.analog_dropped` is the number of older samples that `flex-trace.json`
+and `--analog-trace` do not hold. `flex-trace.json` also holds `analog_series`,
+the run-long change-point series of every channel that the detailed path
+writes to `result.json`: a point is written when a value leaves the series
+deadband (the larger of 0.5 % of the held value and 0.001 in the channel
+unit; 1e-5 for `A`, 1 for `rpm`), up to 65,536 points per
+channel. When the capture dropped samples, `traces.analog_series_points` and
+`traces.analog_series_dropped` tell whether that series still holds the whole
+run. The browser runtime gives the same series from `analog_series()`.
+
+A `sequence` replaces `entry` when the firmware has more than one entry
+point, for example `setup` and `loop`, or when the environment changes during
+the run. The firmware keeps its memory between steps. The limits apply to the
+whole sequence.
+
+```yaml
+# test-heat-cycle.yaml
+sequence:
+  - call: { export: setup, args: [{ port: temperature_mv }, { port: fan_drive }] }
+  - call: { export: loop, repeat: 2 }          # two calls in a row
+  - set: { port: temperature_c, value: 50 }    # the test bench writes a write port
+  - call: { export: loop, repeat: 2 }
+assertions:
+  - entry_result: { equals: 0, step: 1 }       # last result of sequence step 1
+  - entry_result: { equals: 1 }                # default: the last call step
+```
+
+Each step is resolved against the firmware and the manifest before step 0
+runs: an unknown export, a wrong argument count, or a `set` on a read port is
+a `config_error`. A `set` does not advance time; the models see the value at
+the next firmware `advance_ns`. `result.json` lists each step with the number
+of completed calls, the last result, and the virtual time at its end
+(`time_ns: null` for a step the run did not reach). A call step that a limit
+or an error interrupted has no result for `entry_result`.
+
+| Stop reason | Status | Exit code | Meaning |
+|---|---|---:|---|
+| `completed` | `pass` or `fail` | `0` or `1` | Every call returned. The assertions decide. |
+| `max_steps` | `fail` | `1` | The firmware used all its fuel. |
+| `max_time_ns` | `fail` | `1` | The firmware asked to advance past the ceiling. |
+| `model_error` | `error` | `3` | A port or model rejected a host call, for example an input outside a modeled range. |
+| `firmware_trap` | `error` | `3` | The firmware module trapped. |
+| `config_error` | `error` | `2` | The script, manifest or module was rejected before the firmware ran. |
+
+`--output-dir` receives `result.json`, `junit.xml` and `flex-trace.json`, and
+`console.log` when the manifest has a console.
+`result.json` carries the final value of each read port, each assertion with
+its observed value, and `run_report`: the execution path
+(`flex_portable_wasm`), `target_cpu_emulated: false`, the manifest SHA-256, the
+named ports, the model configuration, and the manifest's `assumptions` and
+`unsupported_checks`. `config.firmware_sha256` pins the firmware bytes.
+`flex-trace.json` holds the logic-analyzer edges and oscilloscope samples in
+nanoseconds with their port names. `--vcd` writes the digital edges and
+`--analog-trace` writes the analog samples (`.csv` or `.vcd`), both in
+nanoseconds. Options that need a target machine, such as `--system`,
+`--breakpoint`, `--max-cycles` and `--trace`, are rejected with a
+configuration error.
+
+A pass shows that this firmware module satisfied the assertions against the
+declared model. It is not evidence for original target firmware, MCU
+instruction or peripheral fidelity, full-board coverage, or chip parity.
+
+#### I2C devices from the catalog
+
+A Flex manifest can declare I2C buses. Each device is a catalog I2C device
+model, the same model that `external_devices` attaches to an MCU's I2C
+controller on the detailed path. The firmware is the only controller of the
+bus.
+
+```yaml
+# system.yaml
+ports:
+  - { name: ambient_c, signal: environment.temperature, access: write, kind: number, unit: "°C", initial: 25 }
+i2c_buses:
+  - name: sensor_i2c
+    frequency_hz: 100000
+    devices:
+      - id: source-u4-bme280
+        type: bme280                      # catalog device type
+        config: { i2c_address: 0x76 }     # the device's external_devices config
+        inputs:                           # device input channel -> signal
+          temperature: environment.temperature
+```
+
+The firmware imports one more function:
+
+```
+labwired.i2c_transfer(bus: i32, address: i32,
+                      write_ptr: i32, write_len: i32,
+                      read_ptr: i32, read_len: i32) -> i32
+```
+
+- The call writes `write_len` bytes to the 7-bit `address`, reads `read_len`
+  bytes after a repeated START, and sends a STOP. Either length can be 0. Both
+  lengths 0 is an address probe.
+- The result is 0 when a device acknowledged the address and 1 when no device
+  answered. A refused address is a result, not an error.
+- The byte ranges are in the firmware's exported `memory`. Each range is at
+  most 4,096 bytes.
+- The call takes virtual time: one SCL period for each bit, for START and for
+  STOP, at the bus `frequency_hz`. This time counts against `max_time_ns`, and
+  an `until_ns` can suspend the firmware inside a transfer.
+- A script passes the bus to the firmware with a `{ bus: sensor_i2c }` call
+  argument. The value is the bus id (i32).
+
+A device input channel takes its value from a signal: a write port, or a model
+output. The signal must have the unit that the channel declares (`°C` for the
+BME280 `temperature` channel); there is no unit conversion. A `set` on that
+port changes the device at once. A value outside the channel's range stops the
+run with `model_error`.
+
+`result.json` gives the number of transfers in `traces.i2c_transfers`, and
+`run_report.i2c_buses` lists each bus with its devices, their addresses, and
+`not_modeled`. `flex-trace.json` gets an `i2c` record: each transfer with its
+start time, duration, address, `ack`, and the bytes written and read. The
+record keeps the newest 4,096 transfers; the `i2c_transfers` counts are exact
+for a run of any length.
+
+This path exchanges whole bytes with the device model. It does not model the
+SCL and SDA waveforms, pull-ups, bus capacitance, clock stretching, a second
+controller, or device pin outputs such as an interrupt line. An unknown bus
+name, an unknown device type, an unknown input channel, a unit mismatch, or
+two devices with one address on a bus is a `config_error`.
+
+#### Console output
+
+A Flex manifest can declare one console: the place where target firmware
+prints, for example a UART or a USB serial port.
+
+```yaml
+# system.yaml
+console:
+  name: usb_serial
+```
+
+The firmware imports one more function:
+
+```
+labwired.console_write(ptr: i32, len: i32)
+```
+
+- The call appends `len` bytes of the firmware's exported `memory` to the
+  console. A write is at most 1 MiB.
+- The call takes no virtual time. Each write keeps the virtual time of the
+  call.
+- A `console_write` with no `console` in the manifest stops the run with
+  `model_error`. A `console_contains` assertion with no console is a
+  `config_error`.
+
+`result.json` and `flex-trace.json` get a `console` record: `text` (the bytes
+as UTF-8), `bytes`, `dropped_bytes`, and `writes`, each with its `time_ns`,
+`offset` and `len` in the text. `--output-dir` also receives `console.log`,
+the text alone. The console keeps the first 1 MiB of a run; later bytes count
+in `dropped_bytes`, and `console_contains` does not see them.
+`run_report.console` gives the name and `not_modeled`: the baud rate and
+transfer time, UART framing and the TX pin, USB enumeration and host polling,
+and input to the firmware.
+
+#### Part packs and listen-only devices
+
+A Flex manifest carries `parts:`, the same `labwired.part/v1` documents a
+system manifest carries ([part packs](part-packs.md)). A bus device `type`, a
+co-simulation model's `config.device_type` or a sink `type` that names a pack
+is modelled from the pack, before the catalog; replacing a catalog part needs
+`overrides:`. A generated part model (an `i2c_device`, `spi_device`,
+`display`, `analog_source`, `gpio_device`, `onewire_device` or `led_strip`
+pack) runs with no engine code. Packs are inline: a Flex manifest has no
+`path:` entries.
+
+```yaml
+# system.yaml
+parts:
+  - schema: labwired.part/v1
+    type: "gen:relay-module"
+    behavior:
+      primitive: gpio_device
+      pins: { IN: in_pin }
+      outputs: [COIL]
+      rules:
+        - on: { pins: [IN] }
+          do: [{ pin: COIL, level: "!pin(IN)" }]
+cosim_models:
+  - id: relay
+    adapter: behavior
+    step_ns: 1000
+    inputs: { IN: mcu.d5 }
+    outputs: { COIL: relay.coil }
+    config: { device_type: "gen:relay-module" }
+sinks:
+  - { id: ring, type: neopixel, config: { num_pixels: 8 }, pins: { DIN: mcu.d6 } }
+  - { id: display, type: tm1637-7seg, pins: { CLK: mcu.d2, DIO: mcu.d3 } }
+```
+
+`sinks:` are parts that only receive pin levels: a single-wire `led_strip`
+(WS2812) or a `gpio_device` that drives nothing (TM1637). Every pin of the part
+is bound to a Boolean signal. A sink takes each edge at the exact virtual time
+the signal changed, so an NRZ bit stream timed in nanoseconds decodes without a
+model step per nanosecond. It publishes no signal; what it holds is its device
+state. A strip sink keeps every changed frame in `frame_history` (`cycle` is
+the nanosecond it completed; at most 1024 frames, the oldest dropped and
+counted in `frame_history_dropped`).
+
+`result.json` lists `devices`: each sink, bus device and model that publishes
+state, with its `id`, `kind` and `state`. `run_report` lists `sinks` and the
+`part_packs` types. A `device_state` assertion naming a device or key that does
+not exist is a `config_error`.
+
+#### The same script in the browser
+
+The browser package (`labwired-wasm`) runs a Flex script with the runner that
+`labwired test` uses. The page gives the three texts the script names; there
+are no paths in the browser.
+
+```js
+const run = WasmFlexTestRun.run('test-heat-cycle.yaml', scriptYaml, manifestYaml, firmwareBytes);
+const result = JSON.parse(run.result_json());   // the content of result.json
+const runtime = run.take_runtime();              // a WasmFlexRuntime
+const edges = runtime.digital_trace_snapshot(0); // logic analyzer
+const samples = runtime.analog_trace_snapshot(0); // oscilloscope
+const transfers = runtime.i2c_trace_snapshot(0);  // I2C transfer record
+const console = runtime.console_capture();        // console text, or undefined
+```
+
+- `result_json()` is the text of `result.json`. It differs from the CLI file
+  only in `config.script`, `config.flex` and `config.firmware`: the browser
+  keeps the names as the script writes them.
+- `take_runtime()` gives the runtime of the run to the existing instrument
+  methods. It is an error after a `config_error`, because no runtime exists.
+- A script that does not parse or validate throws. Every later failure is a
+  result with a `stop_reason`, as in the table above.
+- `sequence`, `until_ns`, `resume`, all assertions and both limits work as in
+  the CLI. The firmware module runs in the `wasmi` interpreter on both hosts,
+  so `steps_executed` is the same number.
+- The call returns when the script ends. Call it from a worker if the script
+  is long.
+
+`scripts/test_browser_flex_scripts.mjs` runs each `test-*.yaml` of the Flex
+fixtures in Chromium and in the CLI and compares the result text and both
+instrument captures. `crates/wasm/tests/fixtures/browser-flex-scripts.json` is
+the receipt of that run; a unit test of `labwired-wasm` fails when a script is
+missing from it or when the runner gives a different result text.
 
 ## Exit Codes
 

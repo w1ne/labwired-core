@@ -58,6 +58,19 @@ gpio_pin_count: 51
 adc_channels: 16
 variant: "x6"
 orderable_suffixes: ["T6", "T6TR", "T6A", "T6ATR", "T7", "T7TR", "T7A", "T7ATR"]
+# GPIO pad output resistance, ohms: a driven pad is VDD (or 0 V) behind it.
+# DocID15060 Rev 7 (STM32F103x4/x6), section 5.3.13, Table 36 "Output voltage
+# characteristics", CMOS port, 2.7 V < VDD < 3.6 V: VOH min VDD - 0.4 V and VOL
+# max 0.4 V at IIO = 8 mA (8 pins at once). (VDD - VOH) / IIO = 0.4 V / 8 mA =
+# 50 ohm, both sides. Guaranteed limits, so a typical pad is stiffer. Read by
+# the diagram compiler, which places it as the pad driver's on-resistance in
+# the analog netlist.
+gpio_output_ohms: 50
+# Absolute maximum current sunk or sourced by any I/O and control pin, mA.
+# DocID15060 Rev 7, Table 7 "Current characteristics": IIO 25 (sunk) and -25
+# (sourced). A run reports a pad whose simulated current went past it; the
+# simulation does not stop or clamp it.
+gpio_abs_max_ma: 25
 
 flash:
   base: 0x08000000
@@ -323,10 +336,15 @@ peripherals:
     type: "timer"
     base_address: 0x40012C00
     size: "1KB"
+    # TIM1_UP_IRQn = 25, TIM1_CC_IRQn = 27 (stm32f103xb.h).
+    # BRK (24) and TRG/COM (26) route BIF and TIF/COMIF.
     irq: 25
     # RCC_APB2ENR.TIM1EN (bit 11), RM0008 §7.3.7. Unclocked out of reset.
     clock: { reg: "apb2enr", bit: 11 }
     config:
+      capture_compare_irq: 27
+      trigger_com_irq: 26
+      break_irq: 24
       debug_schema: "../peripherals/stm32f103/tim1.yaml"
       advanced: true
   - id: "tim2"
@@ -363,6 +381,8 @@ peripherals:
     type: "adc"
     base_address: 0x40012800
     size: "1KB"
+    # ADC1_2_IRQn = 18 (stm32f103xb.h), shared with ADC1.
+    irq: 18
     # RCC_APB2ENR.ADC2EN (bit 10), RM0008 §7.3.7. Unclocked out of reset.
     clock: { reg: "apb2enr", bit: 10 }
     config:

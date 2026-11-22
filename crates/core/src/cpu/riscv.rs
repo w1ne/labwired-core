@@ -4,8 +4,9 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+use super::qingke_pfic::{PficFrame, QingKePfic, HPE_REGS, INTSYSCR_HWSTKEN};
 use super::riscv64_plic::{Plic, PlicParams};
-use crate::decoder::riscv::{decode_rv32, Instruction};
+use crate::decoder::riscv::{decode_qingke_xw, decode_rv32, Instruction};
 use crate::{Bus, Cpu, SimResult, SimulationObserver};
 use std::sync::Arc;
 
@@ -305,6 +306,13 @@ pub struct RiscV {
     /// ([`Rv32Clint::plic_for_chip`]). It drives `mip.MEIP`; peripheral IRQs
     /// pend its sources through [`Cpu::set_exception_pending`].
     pub plic: Option<Plic>,
+    /// WCH QingKe V2 PFIC of a CH32V00x part ([`QingKePfic::for_chip`]).
+    /// Peripheral IRQs pend its lines through [`Cpu::set_exception_pending`];
+    /// the core takes them itself, through the mtvec vector table.
+    pub pfic: Option<QingKePfic>,
+    /// QingKe INTSYSCR (CSR 0x804). Stored only while a PFIC is attached;
+    /// `HWSTKEN` enables the hardware prologue/epilogue (HPE).
+    pub intsyscr: u32,
 
     /// Active LR/SC reservation address. `None` means no outstanding
     /// reservation; the next SC.W to any address will fail. On a single
@@ -397,6 +405,8 @@ impl RiscV {
             mtimecmp: 0,
             clint: None,
             plic: None,
+            pfic: None,
+            intsyscr: 0,
             reservation: None,
             triggers: trigger::TriggerModule::default(),
             waiting_for_interrupt: false,
@@ -611,6 +621,36 @@ impl RiscV {
         self.refresh_meip();
     }
 
+    /// Map a QingKe V2 PFIC at 0xE000E000. Every line resets disabled.
+    pub fn attach_pfic(&mut self) {
+        self.pfic = Some(QingKePfic::new());
+    }
+
+    /// Take PFIC interrupt `irq`, with `mepc = next_pc`. QingKe mtvec bit 0
+    /// selects the vector table; bit 1 makes each entry an absolute handler
+    /// address (vendor startup: `_start | 3`) instead of a jump instruction.
+    fn enter_pfic_interrupt(&mut self, bus: &mut dyn Bus, irq: u32, next_pc: u32) -> SimResult<()> {
+        if let Some(pfic) = self.pfic.as_mut() {
+            pfic.take(irq);
+        }
+        self.handle_trap(0x8000_0000 | irq, next_pc);
+        if self.mtvec & 1 != 0 {
+            let slot = (self.mtvec & !3).wrapping_add(irq.wrapping_mul(4));
+            self.pc = if self.mtvec & 2 != 0 {
+                bus.read_u32(u64::from(slot))? & !1
+            } else {
+                slot
+            };
+        }
+        Ok(())
+    }
+
+    /// True when the attached PFIC has an interrupt the core would take.
+    #[inline]
+    fn pfic_ready(&self) -> bool {
+        self.pfic.as_ref().is_some_and(QingKePfic::has_ready)
+    }
+
     /// Drive `mip.MEIP` from the PLIC's notification to this hart's context.
     fn refresh_meip(&mut self) {
         if let Some(plic) = &self.plic {
@@ -626,7 +666,7 @@ impl RiscV {
     /// PLIC), so bus-only fast paths would miss its accesses.
     #[inline]
     fn decodes_core_mmio(&self) -> bool {
-        self.clint.is_some() || self.plic.is_some()
+        self.clint.is_some() || self.plic.is_some() || self.pfic.is_some()
     }
 
     #[inline]
@@ -771,6 +811,11 @@ impl RiscV {
         if let Some(off) = self.plic_offset(addr) {
             return Ok(self.plic_read(off, size));
         }
+        if let Some(pfic) = self.pfic.as_ref() {
+            if let Some(off) = QingKePfic::offset(addr) {
+                return Ok(pfic.read(off, size));
+            }
+        }
         Ok(match size {
             1 => u32::from(bus.read_u8(u64::from(addr))?),
             2 => u32::from(bus.read_u16(u64::from(addr))?),
@@ -789,6 +834,12 @@ impl RiscV {
         if let Some(off) = self.plic_offset(addr) {
             self.plic_write(off, size, value);
             return Ok(());
+        }
+        if let Some(pfic) = self.pfic.as_mut() {
+            if let Some(off) = QingKePfic::offset(addr) {
+                pfic.write(off, size, value);
+                return Ok(());
+            }
         }
         match size {
             1 => bus.write_u8(u64::from(addr), value as u8),
@@ -1138,6 +1189,12 @@ impl RiscV {
             // ROM. The observed writes discard the old values; any silicon
             // side effects are not modeled.
             0x800 | 0x801 if self.core_profile == RiscVCoreProfile::Esp32C3 => 0,
+            // WCH QingKe V2 INTSYSCR (CH32V003/V005/V006 are the RV32E chips):
+            // the vendor startup writes HWSTKEN|INESTEN before `mret` to main.
+            // With a PFIC attached, HWSTKEN drives the hardware prologue and
+            // INESTEN is stored only. Without one it reads as zero.
+            0x804 if self.pfic.is_some() => self.intsyscr,
+            0x804 if self.core_profile == RiscVCoreProfile::Rv32e => 0,
             // This emulator exposes one hart, whose architectural ID is zero.
             0xF14 => 0,
             // Debug trigger module (hardware breakpoints / watchpoints).
@@ -1204,6 +1261,9 @@ impl RiscV {
             0x000 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             // See read_csr: accept the ROM-init writes and discard their values.
             0x800 | 0x801 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
+            // See read_csr: QingKe V2 INTSYSCR (HWSTKEN, INESTEN).
+            0x804 if self.pfic.is_some() => self.intsyscr = val & 0x3,
+            0x804 if self.core_profile == RiscVCoreProfile::Rv32e => {}
             0x7A0..=0x7A5 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
                 return self.triggers.write_csr(csr, val)
             }
@@ -1260,6 +1320,15 @@ impl RiscV {
                     self.mtvec, self.x[1], self.x[2], self.x[10]
                 );
             }
+        }
+        if let Some(pfic) = self.pfic.as_mut() {
+            // QingKe HPE: with HWSTKEN the hardware saves the caller-saved
+            // registers on entry and `mret` restores them, so vendor
+            // `WCH-Interrupt-fast` handlers save nothing themselves.
+            let saved =
+                (self.intsyscr & INTSYSCR_HWSTKEN != 0).then(|| HPE_REGS.map(|r| self.x[r]));
+            let irq = (cause & 0x8000_0000 != 0).then_some(cause & 0x7FFF_FFFF);
+            pfic.frames.push(PficFrame { irq, saved });
         }
         self.mepc = epc;
         self.mcause = cause;
@@ -1406,7 +1475,7 @@ impl RiscV {
         }
         // Something is already pending (or an external line is asserted): the
         // interpreter would trap within one instruction. Do not batch past it.
-        if (self.mip & self.mie) != 0 || bus.external_irq_lines() != 0 {
+        if (self.mip & self.mie) != 0 || bus.external_irq_lines() != 0 || self.pfic_ready() {
             return true;
         }
         // Internal timer edge inside the block's mtime span.
@@ -1598,8 +1667,18 @@ impl Cpu for RiscV {
         let (instruction, inst_len) = if let Some(entry) = cached {
             (entry.instruction, entry.inst_len as u32)
         } else {
-            let instruction = decode_rv32(opcode);
+            let mut instruction = decode_rv32(opcode);
             let inst_len = if (opcode & 0x3) == 0x3 { 4 } else { 2 };
+            // QingKe V2 (the RV32E chips) also runs WCH's XW compressed
+            // byte/halfword loads and stores; see `decode_qingke_xw`.
+            if inst_len == 2
+                && self.core_profile == RiscVCoreProfile::Rv32e
+                && matches!(instruction, Instruction::Unknown(_))
+            {
+                if let Some(xw) = decode_qingke_xw(opcode as u16) {
+                    instruction = xw;
+                }
+            }
             if _config.decode_cache_enabled {
                 self.decode_cache[cache_idx] = Some(RiscVDecodeCacheEntry {
                     tag: self.pc,
@@ -1859,6 +1938,13 @@ impl Cpu for RiscV {
                 // Return from trap. Per the privileged spec:
                 //   MIE <- MPIE, MPIE <- 1 (privilege <- MPP, but we stay M-mode).
                 self.pc = self.mepc;
+                if let Some(frame) = self.pfic.as_mut().and_then(QingKePfic::complete) {
+                    if let Some(saved) = frame.saved {
+                        for (r, v) in HPE_REGS.into_iter().zip(saved) {
+                            self.x[r] = v;
+                        }
+                    }
+                }
                 let mpie = (self.mstatus >> 7) & 1;
                 self.mstatus &= !(1 << 3); // clear MIE
                 self.mstatus |= mpie << 3; // MIE <- MPIE
@@ -2197,6 +2283,19 @@ impl Cpu for RiscV {
         // asserted sources through the interrupt matrix. OR them into the local
         // mip view so a line stays asserted only while its source does.
         if (self.mstatus & (1 << 3)) != 0 {
+            if let Some(irq) = self.pfic.as_ref().and_then(QingKePfic::next_irq) {
+                if !observers.is_empty() {
+                    crate::emit_trace_event(
+                        observers,
+                        labwired_hw_trace::TraceEvent::InstructionRetired {
+                            pc: retired_pc,
+                            opcode,
+                        },
+                    );
+                }
+                // As below: mepc is the next instruction.
+                return self.enter_pfic_interrupt(bus, irq, next_pc);
+            }
             // Standard machine sources are masked by `mie`; ESP32-C3 external
             // lines arrive already gated (enable + priority/threshold) by the
             // bus, so they bypass `mie` (which the C3 firmware leaves at 0).
@@ -2421,9 +2520,12 @@ impl Cpu for RiscV {
     }
     fn set_exception_pending(&mut self, exception_num: u32) {
         // Without an NVIC the bus forwards a peripheral's raw IRQ number,
-        // which on a chip with a PLIC is its source ID. Without a PLIC the
+        // which on a chip with a PFIC is its interrupt number and on a chip
+        // with a PLIC is its source ID. Without either the
         // line pends a generic, sticky machine external interrupt.
-        if let Some(plic) = self.plic.as_mut() {
+        if let Some(pfic) = self.pfic.as_mut() {
+            pfic.raise(exception_num);
+        } else if let Some(plic) = self.plic.as_mut() {
             plic.raise(exception_num);
             self.refresh_meip();
         } else {
@@ -2435,7 +2537,7 @@ impl Cpu for RiscV {
         if !self.waiting_for_interrupt {
             return None;
         }
-        if ((self.mip & self.mie) | bus.external_irq_lines()) != 0 {
+        if ((self.mip & self.mie) | bus.external_irq_lines()) != 0 || self.pfic_ready() {
             return None;
         }
         match self.cycles_until_mtip()? {

@@ -839,6 +839,12 @@ fn every_shipped_descriptor_is_ratcheted() {
         // board and has no silicon oracle or executing-fidelity differential.
         // Same bar as stm32f446re above.
         "stm32l432kc",
+        // NUCLEO-L031K6 (STM32L031K6, RM0377 L0x1). Runs a PR-gated raw-register
+        // USART2 / LD3 smoke (examples/nucleo-l031k6) on the dedicated L031
+        // models, but it is not a bundled-configs.ts catalog board and has no
+        // silicon oracle or executing-fidelity differential. Same bar as
+        // stm32l432kc above.
+        "stm32l031k6",
         "stm32g474re", // G4 peripheral models in progress, not shipped
         "stm32wb55",   // BLE not modelled, not shipped
         "stm32wba52",  // WBA early onboarding, not shipped
@@ -1010,6 +1016,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // LD1 + USART3 smoke runs in core-onboarding-smoke. No catalog board,
         // no silicon oracle, no differential. Promote when all three exist.
         "stm32h723zg",
+        // NUCLEO-H753ZI slice of the STM32H753ZI (Cortex-M7, RM0433). Its
+        // stock stm32duino row runs in core-arduino-matrix-smoke. No catalog
+        // board, no silicon oracle, no differential. Promote when all three
+        // exist.
+        "stm32h753zi",
         // Seeed XIAO ESP32-C6 package variant (ESP32-C6FH4, 4 MB flash). The
         // yaml copies esp32c6.yaml and changes only the flash size; its
         // GPIO15 LED smoke runs in core-onboarding-smoke. No catalog board,

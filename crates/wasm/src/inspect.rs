@@ -76,6 +76,12 @@ pub(crate) fn motor_states_json(
                 ),
                 ("faults".to_owned(), serde_json::json!(snapshot.faults)),
             ]);
+            if let Some(coefficient) = snapshot.quadratic_drag_nm_per_rad_s2 {
+                state.insert(
+                    "quadratic_drag_nm_per_rad_s2".to_owned(),
+                    serde_json::json!(coefficient),
+                );
+            }
             if let Some(coupling) = snapshot.coupling {
                 state.insert("coupling".to_owned(), serde_json::json!(coupling));
             }
@@ -334,7 +340,8 @@ impl WasmSimulator {
     }
 
     /// Returns the current state of all board_io bindings as a JSON array.
-    /// Each entry: { id, active }
+    /// Each entry: { id, active, emission? } — `emission` is the emitted
+    /// `#rrggbb` colour for a binding that declares one (black while off).
     /// Uses peripheral snapshot() to read ODR regardless of register layout.
     #[wasm_bindgen]
     pub fn get_board_io_states(&self) -> JsValue {
@@ -350,10 +357,7 @@ impl WasmSimulator {
 
         for binding in &self.board_io {
             let active = self.read_board_io_state(machine, binding);
-            states.push(serde_json::json!({
-                "id": binding.id,
-                "active": active,
-            }));
+            states.push(binding.state_json(active));
         }
 
         serde_wasm_bindgen::to_value(&states).unwrap_or(JsValue::NULL)
@@ -1454,6 +1458,7 @@ mod motor_state_tests {
                 bus_voltage_v: Some(12.0),
                 commutation_sector: None,
                 control_state: "forward".into(),
+                quadratic_drag_nm_per_rad_s2: Some(9e-7),
                 coupling: None,
                 faults: vec!["stalled".into()],
             },
@@ -1471,6 +1476,7 @@ mod motor_state_tests {
                 bus_voltage_v: Some(24.0),
                 commutation_sector: Some(4),
                 control_state: "sector:4".into(),
+                quadratic_drag_nm_per_rad_s2: Some(9e-7),
                 coupling: None,
                 faults: vec!["open-phase-a".into()],
             },
@@ -1487,6 +1493,8 @@ mod motor_state_tests {
             serde_json::json!([1.0, -0.25, -0.75])
         );
         assert_eq!(states[1]["commutation_sector"], 4);
+        assert_eq!(states[0]["quadratic_drag_nm_per_rad_s2"], 9e-7);
+        assert_eq!(states[1]["quadratic_drag_nm_per_rad_s2"], 9e-7);
         assert_eq!(states[1]["faults"], serde_json::json!(["open-phase-a"]));
     }
     #[test]
@@ -1505,6 +1513,7 @@ mod motor_state_tests {
             bus_voltage_v: None,
             commutation_sector: Some(0),
             control_state: "circuit".into(),
+            quadratic_drag_nm_per_rad_s2: Some(9e-7),
             coupling: Some(labwired_core::bus::MotorCoupling {
                 mode: "interval-start-zero-order-hold",
                 step_ns: Some(100),

@@ -1,0 +1,43 @@
+# Held-out portable workload for the registered Sharp GP2Y0A21 source curve.
+schema_version: 1
+name: Sharp GP2Y0A21 distance-to-voltage check
+assumptions:
+  - "Source: Sharp GP2Y0A21YK0F datasheet, Fig. 2 (typical white-paper output at 5 V and 90% reflectance): https://global.sharp/products/device/lineup/data/pdf/datasheet/gp2y0a21yk_e.pdf. The catalog curve is a rounded graph read-off."
+  - Portable firmware samples the catalog output at 1 us model boundaries and applies a 1500 mV threshold.
+  - The model uses the datasheet's typical 0.4 V at 80 cm and 1.9 V typical 10-to-80 cm differential as endpoint anchors.
+unsupported_checks:
+  - Reflector color, angle, optical geometry, ambient light, unit-to-unit tolerance, noise, and ADC calibration are not modeled.
+  - The approximately 38 ms measurement interval and up-to-5 ms output delay are not modeled; output is available at each declared model boundary.
+  - Below-range and beyond-range clamping are model assumptions, not claims about physical behavior outside the 10–80 cm measuring range.
+  - Original target firmware, MCU instruction execution, ADC peripheral fidelity, and physical measurement are not modeled.
+ports:
+  - { name: distance_mm, signal: environment.distance_mm, access: write, kind: number, unit: mm, initial: 100 }
+  - { name: distance_mv, signal: sensor.output_mv, access: read, kind: number, unit: mV }
+  - { name: near_drive, signal: indicator.drive, access: write, kind: bool, initial: 0 }
+  - { name: near_led, signal: indicator.state, access: read, kind: bool }
+cosim_models:
+  - id: gp2y0a21-sensor
+    adapter: behavior
+    step_ns: 1000
+    inputs: { distance: environment.distance_mm }
+    outputs: { voltage_mv: sensor.output_mv }
+    config:
+      device_type: gp2y0a21
+  - id: near-indicator
+    adapter: behavior
+    step_ns: 1000
+    inputs: { drive: indicator.drive }
+    outputs: { state: indicator.state }
+    config:
+      behavior:
+        primitive: gpio_device
+        states: [off, on]
+        outputs: [state]
+        pin_defaults: { state: false }
+        rules:
+          - on: { input: drive }
+            when: 'input(drive) != 0'
+            do: [{ goto: on }, { pin: state, level: 1 }]
+          - on: { input: drive }
+            when: 'input(drive) == 0'
+            do: [{ goto: off }, { pin: state, level: 0 }]

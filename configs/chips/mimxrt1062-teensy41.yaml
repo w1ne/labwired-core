@@ -283,17 +283,11 @@ peripherals:
     type: "stub"
     base_address: 0x403E8000
     size: "16KB"
-  # CoreDebug (DHCSR/DCRSR/DCRDR/DEMCR, ARMv7-M C1.6). The engine maps the
-  # real block only when an SWD probe attaches (`attach_swd_dp`, which
-  # replaces this window by name). Teensyduino's ResetHandler2 writes
-  # DEMCR.TRCENA before enabling DWT CYCCNT for micros(); with the window
-  # unmapped that store is a precise BusFault. TRCENA does not gate the DWT
-  # model, so dropping the write changes nothing the firmware can observe
-  # except DEMCR reading 0.
-  - id: "scs_debug"
-    type: "stub"
-    base_address: 0xE000EDF0
-    size: "16B"
+  # CoreDebug: Teensyduino's ResetHandler2 writes DEMCR.TRCENA before enabling
+  # DWT CYCCNT for micros(). `configure_cortex_m` maps the real DEMCR
+  # (0xE000EDFC, inactive debug state) on every Cortex-M machine and replaces
+  # any `scs_debug` window by name, so this descriptor declares none; an SWD
+  # attachment (`attach_swd_dp`) still maps the full block.
   # Cortex-M7 L1 cache geometry + maintenance window (32 KB I + 32 KB D,
   # IMXRT1060 datasheet §1). No cache contents: simulated memory is coherent,
   # so ICIALLU / DCCIMVAC & co. are accepted as no-ops.

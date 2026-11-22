@@ -275,6 +275,33 @@ impl BrushedDcMotor {
         self.faults = faults;
     }
 
+    /// Continuous passive shaft drag evaluated by the native shaft integrator.
+    pub fn set_quadratic_drag_nm_per_rad_s2(&mut self, value: f64) -> Result<(), ModelError> {
+        self.shaft.set_quadratic_drag_nm_per_rad_s2(value)
+    }
+
+    pub fn quadratic_drag_nm_per_rad_s2(&self) -> f64 {
+        self.shaft.quadratic_drag_nm_per_rad_s2()
+    }
+
+    /// Retain the caller's existing step cap at zero load, and also bound the
+    /// local quadratic damping rate to a 2.5% first-order accuracy budget.
+    /// Circuit-driven callers retain their own electrical/coupling step cap.
+    pub fn service_timestep_s(&self, maximum_s: f64) -> Result<f64, ModelError> {
+        validate_positive("dt_s", maximum_s)?;
+        let rate = 2.0
+            * self.shaft.quadratic_drag_nm_per_rad_s2()
+            * self.shaft.angular_velocity_rad_s().abs()
+            / self.params.shaft.inertia_kg_m2;
+        let step_s = if rate > 0.0 {
+            maximum_s.min(0.025 / rate)
+        } else {
+            maximum_s
+        };
+        validate_positive("dt_s", step_s)?;
+        Ok(step_s)
+    }
+
     /// Atomically updates signed shaft load torque.
     pub fn set_load_torque_nm(&mut self, load_torque_nm: f64) -> Result<(), ModelError> {
         let mut candidate = self.clone();
@@ -521,6 +548,44 @@ mod tests {
                 coulomb_friction_nm: 0.0,
                 load_torque_nm: 0.0,
             },
+        }
+    }
+
+    #[test]
+    fn quadratic_load_step_cap_preserves_zero_and_converges_for_both_signs() {
+        let mut params = motor_params();
+        params.shaft.inertia_kg_m2 = 1e-7;
+        params.shaft.viscous_friction_nm_per_rad_s = 0.0;
+        let coefficient = 9e-7;
+        let duration = 0.001;
+        let maximum = 0.25 * params.inductance_h / params.resistance_ohm;
+        for sign in [-1.0, 1.0] {
+            let mut motor = BrushedDcMotor::new_circuit_driven(params).unwrap();
+            motor.step_with_winding_current(sign * 0.001, 1.0).unwrap();
+            let initial = motor.snapshot().angular_velocity_rad_s;
+            assert!((initial - sign * 200.0).abs() < 1e-12);
+            assert_eq!(motor.service_timestep_s(maximum).unwrap(), maximum);
+            assert_eq!(motor.service_timestep_s(1e-6).unwrap(), 1e-6);
+            motor.set_quadratic_drag_nm_per_rad_s2(coefficient).unwrap();
+            let cap = motor.service_timestep_s(maximum).unwrap();
+            assert!(cap < maximum);
+            let expected = initial
+                / (1.0 + coefficient * initial.abs() * duration / params.shaft.inertia_kg_m2);
+            let mut errors = Vec::new();
+            for refinement in [1.0, 0.5] {
+                let mut coast = motor.clone();
+                let count = (duration / (cap * refinement)).ceil() as usize;
+                for _ in 0..count {
+                    coast
+                        .step_with_winding_current(0.0, duration / count as f64)
+                        .unwrap();
+                }
+                let final_velocity = coast.snapshot().angular_velocity_rad_s;
+                assert_eq!(final_velocity.signum(), initial.signum());
+                errors.push((final_velocity - expected).abs());
+            }
+            assert!(errors[0] < expected.abs() * 0.01);
+            assert!(errors[1] < errors[0] * 0.51);
         }
     }
 

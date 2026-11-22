@@ -1807,6 +1807,11 @@
           "name": "disable_delay_ns",
           "ty": "int",
           "doc": "Timed EN release scenario, default4000ns TYPICAL, not a guaranteed maximum."
+        },
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
         }
       ],
       "labs": [],
@@ -1883,6 +1888,58 @@
           "label": "Temperature",
           "unit": "°C",
           "min": -40.0,
+          "max": 125.0,
+          "default": 25.0
+        }
+      ]
+    },
+    {
+      "device_type": "mcp9700",
+      "label": "MCP9700 Temperature Sensor",
+      "summary": "Analog temperature sensor, 10 mV/°C with 500 mV at 0 °C.",
+      "detail": "Microchip MCP9700 Linear Active Thermistor IC (data sheet DS20001942L). Drive the `temperature` channel (°C) at runtime and the ADC channel follows V_out = 500 mV + 10 mV/°C over the extended range -40..125 °C. Starts at 25 °C (750 mV).",
+      "transport": "analog",
+      "category": "analog",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "int",
+          "doc": "ADC channel index (0..N). Defaults to 0."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 125.0,
+          "default": 25.0
+        }
+      ]
+    },
+    {
+      "device_type": "mcp9701",
+      "label": "MCP9701 Temperature Sensor",
+      "summary": "Analog temperature sensor, 19.5 mV/°C with 400 mV at 0 °C.",
+      "detail": "Microchip MCP9701/9701A linear active thermistor. Drive the `temperature` channel (°C) at runtime and the ADC channel follows V_out = 400 mV + 19.5 mV/°C, independent of the supply. Starts at 25 °C (887 mV).",
+      "transport": "analog",
+      "category": "analog",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "int",
+          "doc": "ADC channel index (0..N). Defaults to 0."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -10.0,
           "max": 125.0,
           "default": 25.0
         }
@@ -2121,7 +2178,7 @@
       "device_type": "gp2y0a21",
       "label": "Sharp GP2Y0A21 IR Distance Sensor",
       "summary": "Sharp GP2Y0A21YK0F analogue infrared distance sensor, 10–80 cm (Vo on ADC).",
-      "detail": "Triangulation IR ranger: Vo falls with distance over the specified 10–80 cm band, following the datasheet typical-output curve (3.1 V at 10 cm down to 0.5 V at 80 cm). Drive the `distance` channel (mm) at runtime and the ADC channel follows. Beyond 80 cm the output holds a ~0.4 V floor (far is NOT zero); below 10 cm the real part's output falls again (mirror region) and this model clamps to the 10 cm value instead.",
+      "detail": "Triangulation IR ranger: Vo follows a rounded read-off of Sharp's typical white-paper graph over 10–80 cm (about 2.3 V at 10 cm and 0.4 V at 80 cm). Drive `distance` in mm and the ADC channel follows. The model holds 0.4 V beyond 80 cm and clamps below 10 cm to the 10 cm endpoint; neither rule claims the physical out-of-range response. The roughly 38 ms measurement cadence, up-to-5 ms output delay, reflectance/angle variation, noise, and target-MCU ADC behavior are not modeled.",
       "transport": "analog",
       "category": "analog",
       "config_keys": [
@@ -2137,9 +2194,9 @@
           "key": "distance",
           "label": "Distance",
           "unit": "mm",
-          "min": 0.0,
+          "min": 100.0,
           "max": 800.0,
-          "default": 0.0
+          "default": 100.0
         }
       ]
     },
@@ -3663,6 +3720,11 @@
           "name": "limit_active_high",
           "ty": "bool",
           "doc": "Limit output polarity; false is active-low (default)."
+        },
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
         }
       ],
       "labs": [],
@@ -3710,6 +3772,11 @@
           "name": "r_en_pin",
           "ty": "str",
           "doc": "IBT-2 R_EN enable; synonym REN."
+        },
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
         }
       ],
       "labs": [],
@@ -3746,6 +3813,78 @@
       ],
       "labs": [],
       "inputs": []
+    },
+    {
+      "device_type": "tcs3200",
+      "label": "TCS3200 color sensor",
+      "summary": "Programmable RGB light-to-frequency converter (S0/S1 scale, S2/S3 filter, OE).",
+      "detail": "ams-OSRAM TCS3200 (DS000107): OUT is a 50 % duty square wave. S0/S1 select power-down / 2 % / 20 % / 100 % scaling; S2/S3 select red / blue / clear / green photodiodes; OE is an active-low output enable. Host channels red, green and blue (0–255) set the target colour; (0, 0, 0) is no object. Datasheet: https://look.ams-osram.com/m/664723bdb31f55db/original/TCS3200-DS000107.pdf",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "s0_pin",
+          "ty": "str",
+          "doc": "MCU output wired to S0 (output frequency scaling)."
+        },
+        {
+          "name": "s1_pin",
+          "ty": "str",
+          "doc": "MCU output wired to S1 (output frequency scaling)."
+        },
+        {
+          "name": "s2_pin",
+          "ty": "str",
+          "doc": "MCU output wired to S2 (photodiode / filter select)."
+        },
+        {
+          "name": "s3_pin",
+          "ty": "str",
+          "doc": "MCU output wired to S3 (photodiode / filter select)."
+        },
+        {
+          "name": "out_pin",
+          "ty": "str",
+          "doc": "MCU input wired to OUT (50 % duty light-to-frequency square wave)."
+        },
+        {
+          "name": "oe_pin",
+          "ty": "str",
+          "doc": "Optional MCU output wired to OE (active low). Omit when OE is tied to GND."
+        },
+        {
+          "name": "cpu_hz",
+          "ty": "int",
+          "doc": "Simulated CPU clock in Hz, used to convert fo into cycle periods."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "red",
+          "label": "Red",
+          "unit": "level",
+          "min": 0.0,
+          "max": 255.0,
+          "default": 0.0
+        },
+        {
+          "key": "green",
+          "label": "Green",
+          "unit": "level",
+          "min": 0.0,
+          "max": 255.0,
+          "default": 0.0
+        },
+        {
+          "key": "blue",
+          "label": "Blue",
+          "unit": "level",
+          "min": 0.0,
+          "max": 255.0,
+          "default": 0.0
+        }
+      ]
     },
     {
       "device_type": "can-diagnostic-tester",
@@ -4325,6 +4464,59 @@
           "min": 0.0,
           "max": 1.0,
           "default": 0.0
+        }
+      ]
+    },
+    {
+      "device_type": "hd44780_pcf8574",
+      "label": "LCD1602 I2C (HD44780 + PCF8574)",
+      "summary": "16x2 character LCD: HD44780 controller in 4-bit mode behind a PCF8574 I2C backpack.",
+      "detail": "Every I2C byte is the PCF8574 port; the HD44780 latches a nibble on each falling edge of E (P2), RS on P0, RW on P1, D4..D7 on P4..P7, two nibbles per byte. DDRAM is published as text: line 1 from address 0x00, line 2 from 0x40, 16 visible columns each. Default address 0x27 (0x3F on PCF8574A backpacks). Not modelled: CGRAM, entry-mode direction and shift, busy flag and reads, timing, backlight.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit address of the PCF8574 backpack. Default 0x27; PCF8574A backpacks use 0x3F."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "ds18b20",
+      "label": "DS18B20 1-Wire thermometer",
+      "summary": "Maxim DS18B20 digital thermometer on a 1-Wire bus (9-12 bit, -55 to +125 °C).",
+      "detail": "One open-drain DQ line. Reset/presence, write and read slots and the ROM commands (READ, MATCH, SKIP, SEARCH ROM) are modelled; CONVERT T takes the datasheet conversion time for the configured resolution and only then updates the scratchpad, READ SCRATCHPAD returns nine bytes with the CRC-8, WRITE/COPY SCRATCHPAD and RECALL E2 move TH, TL and the configuration. Externally powered. Not modelled: parasite power, alarm search, self-heating and accuracy error.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "dq_pin",
+          "ty": "str",
+          "doc": "DQ data line pad (needs a pull-up on the real board)."
+        },
+        {
+          "name": "serial_number",
+          "ty": "int",
+          "doc": "48-bit ROM serial number. Default 1."
+        },
+        {
+          "name": "temperature_c",
+          "ty": "float",
+          "doc": "Initial temperature in °C. Default 25."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -55.0,
+          "max": 125.0,
+          "default": 25.0
         }
       ]
     },

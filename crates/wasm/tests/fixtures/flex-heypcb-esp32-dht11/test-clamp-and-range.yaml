@@ -1,0 +1,32 @@
+# `labwired test --script test-clamp-and-range.yaml`. The DHT11 model sends a
+# temperature in 0..50 °C: 60 °C reads 50 and -10 °C reads 0. Humidity 0 and
+# 100 %RH are the ends of the catalog input range. Expected values were
+# calculated from the model frame before the first run.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: dht_drive }, { port: dht_line }, { port: user_led_drive }, { number: 18000 }] }
+  - set: { port: ambient_c, value: 60 }
+  - set: { port: humidity_pct, value: 0 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: -10 }
+  - set: { port: humidity_pct, value: 100 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 24 }
+  - set: { port: humidity_pct, value: 55 }
+  - call: { export: loop }
+limits:
+  max_steps: 20000000
+  max_time_ns: 10000000000
+assertions:
+  - entry_result: { equals: 1055024 }
+  - entry_result: { equals: 1000050, step: 3 }
+  - entry_result: { equals: 1100000, step: 6 }
+  - digital_edges: { port: dht_line, count: 258 }
+  # On at 100 %RH; 55 %RH is below the 65 %RH release level.
+  - digital_edges: { port: user_led_drive, times_ns: [1043058000, 2064845000] }
+  - final_time_ns: { equals: 3064845000 }
+  - console_contains: "T=50 C RH=0 %\nT=0 C RH=100 %\nT=24 C RH=55 %\n"

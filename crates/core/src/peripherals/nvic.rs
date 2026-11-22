@@ -154,13 +154,25 @@ impl Peripheral for Nvic {
         let reg_idx = (offset / 4) as usize;
         let byte_offset = (offset % 4) as usize;
 
+        // ISER and ICER share a read view, as do ISPR and ICPR: a read of the
+        // clear-enable / clear-pending register returns the current enable /
+        // pending mask (ARMv7-M ARM DDI 0403E, B3.4.3). Firmware that saves
+        // the enable state from ICER, writes a mask, then restores through
+        // ISER (FreeRTOS tickless idle) depends on this. A read-as-zero ICER
+        // made that save 0, so the restore never re-enabled IRQ 17.
         let val = if offset < 0x20 {
             // ISER0-7
             self.state.iser[reg_idx].load(Ordering::SeqCst)
+        } else if (0x80..0xA0).contains(&offset) {
+            // ICER0-7: same read value as ISER
+            self.state.iser[((offset - 0x80) / 4) as usize].load(Ordering::SeqCst)
         } else if (0x100..0x120).contains(&offset) {
             // ISPR0-7
             let real_idx = (offset - 0x100) / 4;
             self.state.ispr[real_idx as usize].load(Ordering::SeqCst)
+        } else if (0x180..0x1A0).contains(&offset) {
+            // ICPR0-7: same read value as ISPR
+            self.state.ispr[((offset - 0x180) / 4) as usize].load(Ordering::SeqCst)
         } else if (0x200..0x220).contains(&offset) {
             // IABR0-7
             let real_idx = (offset - 0x200) / 4;
@@ -300,5 +312,58 @@ mod tests {
 
         assert_eq!(state.ispr[0].load(Ordering::SeqCst) & mask, 0);
         assert_eq!(state.level_pended[0].load(Ordering::SeqCst) & mask, 0);
+    }
+
+    #[test]
+    fn writing_iser_sets_irq_17_and_icer_reads_the_same_mask() {
+        let state = Arc::new(NvicState::default());
+        let mut nvic = Nvic::new(Arc::clone(&state));
+        let irq17 = 1u32 << 17;
+        nvic.write_u32(0, irq17).unwrap();
+        assert_eq!(nvic.read_u32(0).unwrap(), irq17);
+        assert_eq!(
+            nvic.read_u32(0x80).unwrap(),
+            irq17,
+            "ICER must read back the enable state, not zero"
+        );
+    }
+
+    #[test]
+    fn icer_write_clears_irq_17_after_a_save_of_its_read_value() {
+        // The FreeRTOS tickless-idle sequence: load ICER, AND with a mask,
+        // store the mask to ICER (disabling those bits), then later restore
+        // the saved bits through ISER.
+        let state = Arc::new(NvicState::default());
+        let mut nvic = Nvic::new(Arc::clone(&state));
+        let irq17 = 1u32 << 17;
+        let irq0 = 1u32;
+        nvic.write_u32(0, irq17 | irq0).unwrap();
+        let mask = 0xBDFF_06FC;
+        let saved = nvic.read_u32(0x80).unwrap() & mask;
+        assert_eq!(saved, irq17, "IRQ 17 is in the mask and must be saved");
+        nvic.write_u32(0x80, mask).unwrap();
+        assert_eq!(
+            nvic.read_u32(0).unwrap() & irq17,
+            0,
+            "ICER write must clear IRQ 17"
+        );
+        assert_eq!(
+            nvic.read_u32(0).unwrap() & irq0,
+            irq0,
+            "IRQ 0 is outside the mask"
+        );
+        nvic.write_u32(0, saved).unwrap();
+        assert_eq!(nvic.read_u32(0).unwrap() & irq17, irq17);
+        assert_eq!(nvic.read_u32(0).unwrap() & irq0, irq0);
+    }
+
+    #[test]
+    fn icpr_reads_back_the_pending_mask() {
+        let state = Arc::new(NvicState::default());
+        let nvic = Nvic::new(Arc::clone(&state));
+        let irq17 = 1u32 << 17;
+        state.pend(0, irq17);
+        assert_eq!(nvic.read_u32(0x100).unwrap(), irq17);
+        assert_eq!(nvic.read_u32(0x180).unwrap(), irq17);
     }
 }

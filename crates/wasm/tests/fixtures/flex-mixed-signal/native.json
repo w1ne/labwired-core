@@ -6,11 +6,15 @@
           {
             "id": 0,
             "initial": false,
+            "port_names": [
+              "command"
+            ],
             "signal": "control.enable"
           },
           {
             "id": 1,
             "initial": false,
+            "port_names": [],
             "signal": "device.ready"
           }
         ],
@@ -218,11 +222,15 @@
           {
             "id": 0,
             "initial": false,
+            "port_names": [
+              "command"
+            ],
             "signal": "control.enable"
           },
           {
             "id": 1,
             "initial": false,
+            "port_names": [],
             "signal": "device.ready"
           }
         ],

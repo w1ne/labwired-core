@@ -175,6 +175,14 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         include_str!("../../../configs/devices/pcf8574.yaml"),
     ),
     (
+        &["hd44780_pcf8574"],
+        include_str!("../../../configs/devices/hd44780_pcf8574.yaml"),
+    ),
+    (
+        &["ds18b20"],
+        include_str!("../../../configs/devices/ds18b20.yaml"),
+    ),
+    (
         &["vl53l0x"],
         include_str!("../../../configs/devices/vl53l0x.yaml"),
     ),
@@ -329,6 +337,14 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
     (
         &["tmp36"],
         include_str!("../../../configs/devices/tmp36.yaml"),
+    ),
+    (
+        &["mcp9700"],
+        include_str!("../../../configs/devices/mcp9700.yaml"),
+    ),
+    (
+        &["mcp9701"],
+        include_str!("../../../configs/devices/mcp9701.yaml"),
     ),
     (&["mq-6"], include_str!("../../../configs/devices/mq6.yaml")),
     (

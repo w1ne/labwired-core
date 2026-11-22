@@ -1,0 +1,61 @@
+# A prompt-sized aquarium controller, every part without per-part engine code:
+# a generated relay-module model carried inline as a part pack, the catalog
+# LCD1602 (HD44780 behind a PCF8574) and DS18B20 descriptors, and two
+# listen-only sinks, a WS2812 strip and a TM1637 display.
+schema_version: 1
+name: flex-generated-parts
+assumptions:
+  - Firmware is a portable WebAssembly behavior program; no MCU or pad is emulated.
+  - The relay module is a generated logic-level model (active-low input), not a coil.
+  - The DS18B20 is externally powered and alone on its 1-Wire line; the line is the wired-AND of the host and the part with an ideal pull-up.
+  - The LCD1602 backpack is the PCF8574T wiring LiquidCrystal_I2C assumes, at 0x27, on a 100 kHz bus.
+  - The WS2812 strip and the TM1637 take every edge of their pins at the exact time the firmware wrote it.
+unsupported_checks:
+  - Pull-up values, line capacitance and slew on the 1-Wire, I2C and TM1637 lines.
+  - DS18B20 parasite power, alarm search, accuracy and self-heating.
+  - HD44780 CGRAM, entry-mode shift, busy flag and execution times.
+  - WS2812 supply current, colour accuracy and data-out propagation.
+  - Relay coil current, contact bounce and the pump motor.
+ports:
+  - { name: dq_drive, signal: mcu.gpio4, access: write, kind: bool, initial: 1 }
+  - { name: dq, signal: bus.dq, access: read, kind: bool }
+  - { name: water_c, signal: env.water, access: write, kind: number, unit: "°C", initial: 18.5 }
+  - { name: heater_drive, signal: mcu.gpio5, access: write, kind: bool, initial: 1 }
+  - { name: heater_on, signal: relay.contact, access: read, kind: bool }
+  - { name: led_data, signal: mcu.gpio6, access: write, kind: bool, initial: 0 }
+  - { name: tm_clk, signal: mcu.gpio7, access: write, kind: bool, initial: 1 }
+  - { name: tm_dio, signal: mcu.gpio8, access: write, kind: bool, initial: 1 }
+console: { name: serial }
+parts:
+  - schema: labwired.part/v1
+    type: "gen:relay-module-active-low"
+    source: generated from catalog facts (behaviour text "active-low input")
+    behavior:
+      primitive: gpio_device
+      pins: { IN: in_pin }
+      outputs: [CONTACT]
+      pin_defaults: { CONTACT: false }
+      rules:
+        - on: { pins: [IN] }
+          do: [{ pin: CONTACT, level: "!pin(IN)" }]
+cosim_models:
+  - id: probe
+    adapter: behavior
+    step_ns: 1000
+    inputs: { DQ: mcu.gpio4, temperature: env.water }
+    outputs: { DQ: bus.dq }
+    config: { device_type: ds18b20 }
+  - id: heater
+    adapter: behavior
+    step_ns: 1000
+    inputs: { IN: mcu.gpio5 }
+    outputs: { CONTACT: relay.contact }
+    config: { device_type: "gen:relay-module-active-low" }
+i2c_buses:
+  - name: i2c0
+    frequency_hz: 100000
+    devices:
+      - { id: lcd, type: hd44780_pcf8574, config: { i2c_address: 0x27 } }
+sinks:
+  - { id: ring, type: neopixel, config: { num_pixels: 3 }, pins: { DIN: mcu.gpio6 } }
+  - { id: display, type: tm1637-7seg, pins: { CLK: mcu.gpio7, DIO: mcu.gpio8 } }
