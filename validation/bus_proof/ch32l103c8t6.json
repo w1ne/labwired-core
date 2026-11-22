@@ -3,10 +3,10 @@
   "in_boards": false,
   "uart": {
     "state": "proven",
-    "file": "crates/core/tests/vendor/ch32l103_compiled_firmware.rs",
-    "test": "ch32l103_compiled_rv32imac_firmware_prints_on_usart1",
+    "file": "crates/core/tests/vendor/ch32_compiled_firmware.rs",
+    "test": "every_ch32_compiled_uart_hello_prints_on_usart1",
     "signal": "the committed RV32IMAC fixture ELF (examples/ch32l103c8t6/uart_hello.c) clocks USART1 from PB2PCENR bit 14, maps TX to PA9 through GPIOA_CFGHR, checks a MUL/DIVU/AMOADD.W result and writes 'Hello from CH32L103\\r\\n' through DATAR (0x40013804); the test asserts the console sink receives exactly that string, and a negative control with the clock gate moved to an unset bit asserts the sink stays empty. Polled TX only: no PFIC, so USART1_IRQn is not wired",
-    "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test vendor ch32l103_compiled_firmware::"
+    "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test vendor ch32_compiled_firmware::"
   },
   "spi": {
     "state": "none",

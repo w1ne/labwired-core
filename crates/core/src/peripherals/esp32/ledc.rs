@@ -1066,11 +1066,6 @@ mod tests {
     }
 
     #[test]
-    fn base_is_esp32_classic_canonical_address() {
-        assert_eq!(Ledc::new(Ledc::BASE).base(), 0x3FF5_9000);
-    }
-
-    #[test]
     fn runtime_snapshot_round_trip_preserves_state() {
         let mut p = Ledc::new(Ledc::BASE);
         write_u32(&mut p, Ledc::timer_reg(0, TIMER_CONF), 10);

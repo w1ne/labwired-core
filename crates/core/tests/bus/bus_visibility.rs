@@ -215,48 +215,48 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
     ),
     // CH32L103C8T6: the bring-up has no UART drive for the WCH L103 family.
     // USART1 bytes are proven by
-    // ch32l103_compiled_firmware::ch32l103_compiled_rv32imac_firmware_prints_on_usart1.
+    // ch32_compiled_firmware::every_ch32_compiled_uart_hello_prints_on_usart1.
     (
         "ch32l103c8t6",
         BusKind::Uart,
         "no UART bring-up for the WCH L103 family in this harness yet; USART1 \
-         bytes are proven by ch32l103_compiled_firmware",
+         bytes are proven by ch32_compiled_firmware",
     ),
     // CH32V005F6P6: same pad-gated USART1 (TX=PD5) as the CH32V003. USART1
     // bytes are proven by
-    // ch32v005_compiled_firmware::ch32v005_compiled_rv32ec_zmmul_firmware_prints_on_usart1.
+    // ch32_compiled_firmware::every_ch32_compiled_uart_hello_prints_on_usart1.
     (
         "ch32v005f6p6",
         BusKind::Uart,
         "pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this \
-         harness yet; bytes are proven by ch32v005_compiled_firmware",
+         harness yet; bytes are proven by ch32_compiled_firmware",
     ),
     // CH32X035C8T6: no UART bring-up for the WCH X035 family in this harness.
     // USART1 bytes are proven by
-    // ch32x035_compiled_firmware::ch32x035_compiled_rv32imac_firmware_prints_on_usart1.
+    // ch32_compiled_firmware::every_ch32_compiled_uart_hello_prints_on_usart1.
     (
         "ch32x035c8t6",
         BusKind::Uart,
         "no UART bring-up for the WCH X035 family in this harness yet; USART1 \
-         bytes are proven by ch32x035_compiled_firmware",
+         bytes are proven by ch32_compiled_firmware",
     ),
     // CH32V006K8U6: same pad-gated USART1 (TX=PD5) as the CH32V003. USART1
     // bytes are proven by
-    // ch32v006_compiled_firmware::ch32v006_compiled_rv32ec_zmmul_firmware_prints_on_usart1.
+    // ch32_compiled_firmware::every_ch32_compiled_uart_hello_prints_on_usart1.
     (
         "ch32v006k8u6",
         BusKind::Uart,
         "pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this \
-         harness yet; bytes are proven by ch32v006_compiled_firmware",
+         harness yet; bytes are proven by ch32_compiled_firmware",
     ),
     // CH32V203C8T6: the bring-up has no UART drive for the WCH V20x family.
     // USART1 bytes are proven by
-    // ch32v203_compiled_firmware::ch32v203_compiled_rv32imac_firmware_prints_on_usart1.
+    // ch32_compiled_firmware::every_ch32_compiled_uart_hello_prints_on_usart1.
     (
         "ch32v203c8t6",
         BusKind::Uart,
         "no UART bring-up for the WCH V20x family in this harness yet; USART1 \
-         bytes are proven by ch32v203_compiled_firmware",
+         bytes are proven by ch32_compiled_firmware",
     ),
     // F4U6 (QFN20), A4M6 (SOP16) and J4M6 (SOP8) are package variants of the
     // F4P6 die with the same pad-gated USART1 on PD5. Bytes are proven by

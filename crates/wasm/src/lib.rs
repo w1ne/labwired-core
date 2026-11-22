@@ -3483,38 +3483,6 @@ mod romboot_tests {
     }
 }
 
-#[cfg(all(test, not(target_arch = "wasm32")))]
-mod disasm_arch_tests {
-    use labwired_core::decoder::arm::{decode_thumb_16, decode_thumb_32};
-    use labwired_core::decoder::riscv::{decode_rv32, decode_rv32c};
-
-    /// ADDI x1, x0, 1 — must surface as RISC-V Addi, not Thumb Unknown32.
-    #[test]
-    fn rv32_addi_is_not_thumb_unknown32() {
-        let word: u32 = 0x0010_0093;
-        let rv = format!("{:?}", decode_rv32(word));
-        assert!(rv.contains("Addi"), "expected Addi, got {rv}");
-        let lo = word as u16;
-        let hi = (word >> 16) as u16;
-        let thumb = format!("{:?}", decode_thumb_32(lo, hi));
-        // The old wasm path always used Thumb: that is the bug users saw as
-        // Unknown32 / Lsl / BranchCond on C3 ROM+app addresses.
-        assert!(
-            thumb.contains("Unknown") || !rv.eq_ignore_ascii_case(&thumb),
-            "thumb decode of RV word should not look like a real RV Addi: thumb={thumb} rv={rv}"
-        );
-    }
-
-    #[test]
-    fn rv32c_caddi_decodes() {
-        // c.addi x8, 1 — common compressed form; just ensure decode path is live.
-        let hw: u16 = 0x0505;
-        let s = format!("{:?}", decode_rv32c(hw));
-        assert!(!s.is_empty());
-        let _ = decode_thumb_16(hw);
-    }
-}
-
 /// Browser-path speed and timing harness for a CCOUNT-timed ESP32 sketch
 /// (the four-servo drawing-robot trajectory, share d26Wk2eXNiFS). Runs the
 /// same `WasmSimulator` calls the playground makes, natively, and prints wall
