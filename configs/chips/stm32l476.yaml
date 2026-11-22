@@ -488,12 +488,13 @@ peripherals:
       debug_schema: "../peripherals/stm32l476/exti.yaml"
       profile: "stm32l4"
 
-  # SYSCFG — system config (mostly EXTI line source selection); modeled as stub.
+  # SYSCFG — EXTICR port-selection mux only; other configuration functions are unmodeled.
   - id: "syscfg"
-    type: "stub"
+    type: "syscfg"
     base_address: 0x40010000
     size: "1KB"
     config:
+      profile: "stm32l4"
       debug_schema: "../peripherals/stm32l476/syscfg.yaml"
 
   # Low-power timers.

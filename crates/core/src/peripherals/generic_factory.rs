@@ -2373,6 +2373,11 @@ pub fn try_build(
         "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32f76x") => {
             Box::new(crate::peripherals::syscfg::Stm32F4Syscfg::new_f76x())
         }
+        // L4 has the same EXTICR offsets, with three-bit port fields. Only
+        // that mux is modeled; do not inherit the F4 compensation-cell fields.
+        "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32l4") => {
+            Box::new(crate::peripherals::syscfg::Stm32L4Syscfg::default())
+        }
         // SYSCFG on STM32L0 (`profile: stm32l0`): the same EXTICR line-source
         // mux, among the L0's own configuration words (RM0367 §10).
         // SCFG on AT32F421 (`profile: at32f421`): CFG1 and the EXINTC

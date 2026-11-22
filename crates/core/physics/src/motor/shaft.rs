@@ -67,6 +67,7 @@ pub struct Shaft {
     position_rad: f64,
     angular_velocity_rad_s: f64,
     net_torque_nm: f64,
+    quadratic_drag_nm_per_rad_s2: f64,
 }
 
 impl Shaft {
@@ -105,6 +106,7 @@ impl Shaft {
             position_rad: 0.0,
             angular_velocity_rad_s: 0.0,
             net_torque_nm: 0.0,
+            quadratic_drag_nm_per_rad_s2: 0.0,
         })
     }
 
@@ -170,6 +172,24 @@ impl Shaft {
         Ok(())
     }
 
+    /// Continuous passive shaft drag, N m/(rad/s)^2. Zero preserves the
+    /// original motor model; this is independent of a held external load.
+    pub fn quadratic_drag_nm_per_rad_s2(&self) -> f64 {
+        self.quadratic_drag_nm_per_rad_s2
+    }
+
+    pub fn set_quadratic_drag_nm_per_rad_s2(&mut self, value: f64) -> Result<(), ModelError> {
+        validate_finite("quadratic_drag_nm_per_rad_s2", value)?;
+        if value < 0.0 {
+            return Err(ModelError::new(
+                "quadratic_drag_nm_per_rad_s2",
+                "must be non-negative",
+            ));
+        }
+        self.quadratic_drag_nm_per_rad_s2 = value;
+        Ok(())
+    }
+
     /// Holds the current position while clearing dynamic shaft state.
     pub(crate) fn hold_still(&mut self) {
         self.angular_velocity_rad_s = 0.0;
@@ -200,7 +220,7 @@ impl Shaft {
         let applied_nm = drive_torque_nm
             - self.params.load_torque_nm
             - self.params.viscous_friction_nm_per_rad_s * velocity;
-        let (net_torque_nm, angular_acceleration_rad_s2, angular_velocity_rad_s) =
+        let (mut net_torque_nm, mut angular_acceleration_rad_s2, mut angular_velocity_rad_s) =
             if coulomb > 0.0 && velocity == 0.0 && applied_nm.abs() <= coulomb {
                 // Stiction: at rest, dry friction balances anything up to it.
                 (0.0, 0.0, 0.0)
@@ -222,6 +242,19 @@ impl Shaft {
                 };
                 (net, acceleration, next)
             };
+        if self.quadratic_drag_nm_per_rad_s2 > 0.0 && angular_velocity_rad_s != 0.0 {
+            // Backward-Euler drag: w + a*w*abs(w) = w_without_drag.
+            // The positive root is passive for either rotation sign and cannot
+            // reverse a coasting shaft, including across a large host interval.
+            // Native electrical/mechanical substeps still set the accuracy.
+            let a = self.quadratic_drag_nm_per_rad_s2 * dt_s / self.params.inertia_kg_m2;
+            let magnitude = angular_velocity_rad_s.abs();
+            let discriminant = 1.0 + 4.0 * a * magnitude;
+            validate_finite("quadratic_drag_step", discriminant)?;
+            angular_velocity_rad_s *= 2.0 / (1.0 + discriminant.sqrt());
+            angular_acceleration_rad_s2 = (angular_velocity_rad_s - velocity) / dt_s;
+            net_torque_nm = angular_acceleration_rad_s2 * self.params.inertia_kg_m2;
+        }
         let position_rad = self.position_rad + angular_velocity_rad_s * dt_s;
 
         if !net_torque_nm.is_finite()
@@ -543,5 +576,99 @@ mod tests {
             "invalid model field `dt_s`: must be greater than zero"
         );
         assert!(format!("{error:?}").contains("dt_s"));
+    }
+}
+
+#[cfg(test)]
+mod quadratic_drag_tests {
+    use super::*;
+
+    fn shaft(velocity: f64) -> Shaft {
+        let mut shaft = Shaft::new(ShaftParams {
+            inertia_kg_m2: 1e-7,
+            viscous_friction_nm_per_rad_s: 0.0,
+            coulomb_friction_nm: 0.0,
+            load_torque_nm: 0.0,
+        })
+        .unwrap();
+        shaft.angular_velocity_rad_s = velocity;
+        shaft
+    }
+
+    #[test]
+    fn zero_default_preserves_the_existing_update_exactly() {
+        let mut original = shaft(17.0);
+        let mut explicit_zero = original.clone();
+        explicit_zero.set_quadratic_drag_nm_per_rad_s2(0.0).unwrap();
+        for torque in [0.0001, -0.00005, 0.0] {
+            original.step(torque, 1e-6).unwrap();
+            explicit_zero.step(torque, 1e-6).unwrap();
+            assert_eq!(original.snapshot(), explicit_zero.snapshot());
+        }
+        assert_eq!(original.quadratic_drag_nm_per_rad_s2(), 0.0);
+    }
+
+    #[test]
+    fn quadratic_drag_is_passive_for_both_signs_and_does_not_reverse_a_shaft() {
+        for initial in [-209.43951023931956, 0.0, 209.43951023931956] {
+            let mut shaft = shaft(initial);
+            shaft
+                .set_quadratic_drag_nm_per_rad_s2(1e-8 * (60.0 / TAU).powi(2))
+                .unwrap();
+            for _ in 0..20 {
+                let before = shaft.angular_velocity_rad_s();
+                shaft.step(0.0, 0.016).unwrap();
+                let after = shaft.angular_velocity_rad_s();
+                assert!(after.abs() <= before.abs());
+                assert!(after == 0.0 || after.signum() == before.signum());
+                assert!(shaft.net_torque_nm() * before <= 0.0);
+            }
+        }
+    }
+
+    #[test]
+    fn quadratic_drag_preserves_a_constant_torque_equilibrium() {
+        let coefficient = 9e-7;
+        for velocity in [-200.0, 200.0] {
+            let mut shaft = shaft(velocity);
+            shaft.set_quadratic_drag_nm_per_rad_s2(coefficient).unwrap();
+            let torque = coefficient * velocity * velocity.abs();
+            for _ in 0..100 {
+                shaft.step(torque, 5e-6).unwrap();
+                assert!((shaft.angular_velocity_rad_s() - velocity).abs() < 1e-10);
+            }
+        }
+    }
+
+    #[test]
+    fn quadratic_coast_converges_to_the_analytic_solution() {
+        let initial = 200.0;
+        let coefficient = 9e-7;
+        let mut shaft = shaft(initial);
+        shaft.set_quadratic_drag_nm_per_rad_s2(coefficient).unwrap();
+        for _ in 0..1000 {
+            shaft.step(0.0, 1e-6).unwrap();
+        }
+        let expected = initial / (1.0 + coefficient * initial * 0.001 / 1e-7);
+        assert!((shaft.angular_velocity_rad_s() - expected).abs() < expected * 0.002);
+    }
+
+    #[test]
+    fn rejected_coefficients_are_atomic_and_cloned_state_keeps_the_drag_law() {
+        let mut shaft = shaft(100.0);
+        shaft.set_quadratic_drag_nm_per_rad_s2(1e-6).unwrap();
+        let before = shaft.snapshot();
+        for invalid in [-1.0, f64::NAN, f64::INFINITY] {
+            assert!(shaft.set_quadratic_drag_nm_per_rad_s2(invalid).is_err());
+            assert_eq!(shaft.snapshot(), before);
+            assert_eq!(shaft.quadratic_drag_nm_per_rad_s2(), 1e-6);
+        }
+        let mut restored = shaft.clone();
+        for _ in 0..100 {
+            shaft.step(0.001, 1e-6).unwrap();
+            restored.step(0.001, 1e-6).unwrap();
+            assert_eq!(shaft.snapshot(), restored.snapshot());
+        }
+        assert_eq!(restored.quadratic_drag_nm_per_rad_s2(), 1e-6);
     }
 }

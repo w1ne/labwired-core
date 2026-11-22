@@ -465,7 +465,11 @@ impl BldcMotor {
     /// motor; merely staying stable also leaves large first-order errors.
     pub fn service_timestep_s(&self) -> Result<f64, ModelError> {
         let [electrical_rate, mechanical_rate, coupling_rate] = integration_rates(self.params);
-        let step_s = 0.025 / (electrical_rate + mechanical_rate + coupling_rate);
+        let quadratic_rate = 2.0
+            * self.shaft.quadratic_drag_nm_per_rad_s2()
+            * self.shaft.angular_velocity_rad_s().abs()
+            / self.params.shaft.inertia_kg_m2;
+        let step_s = 0.025 / (electrical_rate + mechanical_rate + coupling_rate + quadratic_rate);
         validate_positive("dt_s", step_s)?;
         validate_timestep(self.params, step_s)?;
         Ok(step_s)
@@ -534,6 +538,15 @@ impl BldcMotor {
         candidate.refresh_derived_state()?;
         *self = candidate;
         Ok(())
+    }
+
+    /// Continuous passive shaft drag evaluated by the native shaft integrator.
+    pub fn set_quadratic_drag_nm_per_rad_s2(&mut self, value: f64) -> Result<(), ModelError> {
+        self.shaft.set_quadratic_drag_nm_per_rad_s2(value)
+    }
+
+    pub fn quadratic_drag_nm_per_rad_s2(&self) -> f64 {
+        self.shaft.quadratic_drag_nm_per_rad_s2()
     }
 
     /// Atomically updates signed shaft load torque.

@@ -257,9 +257,20 @@ impl SystemBus {
                 crate::bus::motors::MotorRuntime::Dc { id, .. }
                 | crate::bus::motors::MotorRuntime::Bldc { id, .. } => id,
             };
-            let mut channels = vec![(id.clone(), crate::bus::motors::MOTOR_STALL_INPUT)];
+            let mut channels = vec![
+                (id.clone(), crate::bus::motors::MOTOR_STALL_INPUT),
+                (id.clone(), crate::bus::motors::MOTOR_QUADRATIC_DRAG_INPUT),
+            ];
             if matches!(motor, crate::bus::motors::MotorRuntime::Bldc { .. }) {
                 channels.push((id.clone(), crate::bus::motors::MOTOR_INVERTER_FAULT_INPUT));
+                channels.push((
+                    id.clone(),
+                    crate::bus::motors::MOTOR_OVERCURRENT_FAULT_INPUT,
+                ));
+                channels.push((
+                    id.clone(),
+                    crate::bus::motors::MOTOR_UNDERVOLTAGE_FAULT_INPUT,
+                ));
             }
             channels
         }));
@@ -445,6 +456,13 @@ impl SystemBus {
         sets: &[(Option<&str>, &str, f64)],
     ) -> Result<(), crate::sim_input::SimInputError> {
         use crate::sim_input::SimInputError;
+        // A one-element transaction uses the complete single-input resolver,
+        // including virtual motor inputs that are not SimInput devices. There
+        // is no partial-update risk for one set. Multi-input transactions keep
+        // their existing device validation pass below.
+        if let [(component, channel, value)] = sets {
+            return self.set_input(*component, channel, *value);
+        }
         // Validate pass: unique resolution + range for every set.
         for &(component, channel, value) in sets {
             let mut matches = 0usize;
