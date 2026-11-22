@@ -1,0 +1,370 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 600000,
+  "cycles": 600000,
+  "instructions": 600000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 600000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 600000
+    }
+  },
+  "limits": {
+    "max_steps": 600000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "PL011 IRQ7 status=00000002 rx=00000052 cleared=00000000"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "SPT ms=00000007"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "EOS S3 Cortex-M4F PL011 smoke"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "EOS S3 checks PPPPPPPPPPPP DONE"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 537394944,
+          "expected_value": 3763539967,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpio:4",
+          "min_edges": 6
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      16384,
+      1073762564,
+      80,
+      47650,
+      2047,
+      80,
+      80,
+      537394824,
+      2702856193,
+      537133056,
+      3758153752,
+      80,
+      1073807360,
+      537394824,
+      4294967289,
+      5070
+    ],
+    "pc": 5070,
+    "xpsr": 1627392000,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": true
+  },
+  "firmware_hash": "af5bed156746e9b8ad97554e81eda2eab3afc6000acae6946cc33d2d3718bbab",
+  "config": {
+    "firmware": "/home/andrii/worktrees/labwired-core/renode/target/thumbv7em-none-eabi/release/firmware-eos-s3-smoke",
+    "system": "/tmp/rn679/neg-nospt/system.yaml",
+    "script": "/tmp/rn679/neg-nospt/smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "intr_ctrl",
+        "kind": "native",
+        "base": 1073760256,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio",
+        "kind": "native",
+        "base": 1073762560,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x40005c00",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "write"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "fault_verdict": {
+    "summary": "HardFault escalated from a precise BusFault: data access at 0x4000_5C00 (BFAR valid), at PC 0x0000_08DA in `core::ptr::write_volatile` (mod.rs:2178).",
+    "kind": "hard_fault",
+    "escalated": true,
+    "origin": "bus_fault",
+    "causes": [
+      {
+        "register": "HFSR",
+        "flag": "FORCED",
+        "meaning": "a configurable fault escalated to HardFault"
+      },
+      {
+        "register": "BFSR",
+        "flag": "PRECISERR",
+        "meaning": "data access"
+      }
+    ],
+    "precise": true,
+    "fault_address": "0x40005C00",
+    "fault_address_source": "BFAR",
+    "pc": "0x000008DA",
+    "lr": "0x00000050",
+    "exc_return": {
+      "value": "0xFFFFFFF9",
+      "return_to": "thread",
+      "stack": "msp",
+      "fp_frame": false
+    },
+    "frame": {
+      "sp": "0x2007FE90",
+      "r0": "0x00004000",
+      "r1": "0x40005104",
+      "r2": "0x00000050",
+      "r3": "0x0000BA22",
+      "r12": "0x40010000",
+      "lr": "0x00000050",
+      "pc": "0x000008DA",
+      "xpsr": "0x61000000"
+    },
+    "location": {
+      "function": "core::ptr::write_volatile",
+      "file": "/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ptr/mod.rs",
+      "line": 2178
+    },
+    "registers": {
+      "hfsr": "0x40000000",
+      "cfsr": "0x00008200",
+      "mmfsr": "0x00",
+      "bfsr": "0x82",
+      "ufsr": "0x0000",
+      "mmfar": "0x00000000",
+      "bfar": "0x40005C00"
+    }
+  },
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 600000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpio",
+        "pin": 4,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 141,
+            "value": 1
+          },
+          {
+            "cycle": 144,
+            "value": 0
+          },
+          {
+            "cycle": 157,
+            "value": 1
+          },
+          {
+            "cycle": 161,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "0",
+        "states": [
+          {
+            "cycle": 141,
+            "state": "1"
+          },
+          {
+            "cycle": 144,
+            "state": "0"
+          },
+          {
+            "cycle": 157,
+            "state": "1"
+          },
+          {
+            "cycle": 161,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 4
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpio",
+      "number": 4,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 5212,
+    "data_bytes": 0,
+    "bss_bytes": 44,
+    "flash_used_bytes": 5212,
+    "ram_static_bytes": 44,
+    "flash_total_bytes": 0,
+    "ram_total_bytes": 524288,
+    "flash_used_pct": 0.0,
+    "ram_static_pct": 0.01,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 261844,
+    "main_stack_high_water_bytes": 16,
+    "main_stack_free_min_bytes": 261760,
+    "main_stack_base": 537133100,
+    "main_stack_top": 537394944,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 261844,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 261760,
+    "heap_base": 537133100,
+    "heap_top": 537394944
+  },
+  "metrics": {
+    "cycles": 600000,
+    "instructions": 600000,
+    "steps_executed": 600000,
+    "memory_reads": 3048,
+    "memory_writes": 92,
+    "peripheral_accesses": 42,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 5070,
+        "count": 2304,
+        "symbol": "HardFault_"
+      },
+      {
+        "pc": 2028,
+        "count": 39,
+        "symbol": "core::sync::atomic::atomic_load"
+      }
+    ]
+  }
+}

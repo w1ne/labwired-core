@@ -1,0 +1,9 @@
+SAM4S XPLAINED RENODE SMOKE
+pmc pcsr0=1f802100 ok
+tc0 up_rc imr=10 pends=3 released=3 cv<=rc=1 ok
+tc1 up adv=1 covfs=1 cleared=1 ok
+tc2 cpcstop cpcs=1 held=1 clksta=1 ok
+tc3 cpcdis running=1 cpcs=1 clksta=0 ok
+tc4 tc5 idle=1 sync=1 ra=0000 ok
+tc5 pmc gated=1 held=0 tc4_runs=1 FAIL
+SAM4S FAIL

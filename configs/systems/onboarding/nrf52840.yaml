@@ -6,3 +6,24 @@
 
 name: nrf52840
 chip: ../../chips/onboarding/nrf52840.yaml
+external_devices:
+  # A mid-position potentiometer drives physical SAADC input AIN3 (P0.05).
+  - id: pot_saadc_ain3
+    type: potentiometer
+    connection: saadc
+    config:
+      channel: 3
+  # Bare-platform smoke fixture: a TMP102 at 0x48 on TWIM0. It is external
+  # test equipment, not a component of Renode's nrf52840 platform.
+  - id: tmp102_twi0
+    type: tmp102
+    connection: twi0
+    config:
+      i2c_address: 0x48
+  # Bare-platform smoke fixture: a MAX31855 on SPIM3 whose chip select is the
+  # pad SPIM3 drives through PSEL.CSN (P0.20). No GPIO write selects it.
+  - id: max31855_spi3
+    type: max31855
+    connection: spi3
+    config:
+      cs_pin: P0.20

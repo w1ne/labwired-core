@@ -7,7 +7,19 @@
 # clock (16-MHz HF-RC, SYS_DIV 001), derives IBRD/FBRD for 115200 8N1 from it,
 # then walks LED2-LED4 (PC1-PC3, active high) with single address-masked
 # GPIO_DATA stores and prints the pin and the whole LED nibble it read back.
-# LED1 (PC0) shares the USB D+ pull-up and is never driven.
+# It reads the IOC registers back (written routing, PD7_OVER reset 0x4, a
+# masked IOC_GPT3OCP2 write) and the CCTEST/ANA_REGS registers (reset
+# values, field masks), converts VDD/3, the temperature sensor and GND
+# on SOC_ADC (IRQ 14 pend), seeds/clocks the RNG LFSR, runs a CRC16 through
+# RNDH and reads the comparator.
+# LED1 (PC0) shares the USB D+ pull-up and is never driven. SSI0 then runs an
+# internal-loopback self-test: TX-FIFO queueing while disabled, 8- and 16-bit
+# frames, and the RX overrun flag with its ICR clear. GPTimer0 then
+# times out three times as a 32-bit periodic timer (pending IRQ 19) and
+# GPTimer1B runs one ÷16 one-shot up-count with a match (pending IRQ 22),
+# timed against GPTimer0. This board system has no attached I2C device, so the
+# firmware reports an address NACK; the imported onboarding system injects a
+# TMP102 fixture and asserts the I2C register read.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-cc2538dk-smoke"
@@ -27,6 +39,15 @@ assertions:
       - "led=orange on pin=1 leds=08"
       - "led=orange off pin=0 leds=00"
       - "keys select=1 left=1 right=1 up=1 down=1"
+      - "ioc pa1_sel=00 pa1_over=08 pa0_over=00 rx0=00 pd7_over=04 gpt3ocp2=1f restored=00"
+      - "cctest io=00/01 obssel3=00/ff tr0=00/07 usbctrl=00/01 ivctrl=13/3f restored=13"
+      - "adc con1=33 vdd3=6b80 temp=58e0 gnd=0000 eoc=0 irq14=1"
+      - "rng reset=ffff seed=1234 clock=8d94 rctrl=0 crc=fee8"
+      - "cmp off=01 on=02"
+      - "ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c"
+      - "ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08"
+      - "gpt0 to=3 nvic19=1 held=1"
+      - "gpt1b ris=0900 ctl=0000 nvic22=1 span=ok"
       - "hb=0 yellow=1 green=0 orange=0"
       - "hb=1 yellow=1 green=0 orange=0"
   - expected_stop_reason: max_steps

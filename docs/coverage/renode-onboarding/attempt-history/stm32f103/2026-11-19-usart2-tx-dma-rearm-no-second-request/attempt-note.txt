@@ -1,0 +1,1 @@
+Failed Round 739 attempt: first channel-7 transfer completed; after the channel was cleared and re-enabled, CNDTR stayed at 2 and the later firmware assertions did not run. UART and JUnit/result artifacts preserve the failure.

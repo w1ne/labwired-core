@@ -1,0 +1,27 @@
+# `labwired test --script test-read-too-early.yaml`. Negative control for the
+# measurement duration. The firmware reads 1 ms after the high-precision
+# command; the SHT4x datasheet gives 8.3 ms maximum. The model answers 0xFF
+# bytes, the CRC check rejects them, there is no sample, and the indicator
+# stays off at 72 %RH.
+# Deviation: the part NACKs this read header; the model acknowledges it.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ bus: sensor_i2c }, { port: user_led_drive }, { number: 0x44 }, { number: 1000 }] }
+  - set: { port: humidity_rh, value: 72 }
+  - call: { export: loop, repeat: 2 }
+limits:
+  max_steps: 1000000
+  max_time_ns: 100000000
+assertions:
+  - entry_result: { equals: 0 }
+  - entry_result: { equals: 0, step: 0 }
+  - i2c_transfers: { bus: sensor_i2c, address: 0x44, ack: true, equals: 7 }
+  - digital_edges: { port: user_led_drive, count: 0 }
+  - digital_edges: { port: user_led_state, count: 0 }
+  # 3.05 ms `setup`; each `loop` 200 µs command, 1 ms wait, 650 µs read, 1 ms period.
+  - final_time_ns: { equals: 8750000 }
+  - console_contains: "SHT40 serial 0x0f4e2a71 at 0x44\nSHT40 CRC error\nSHT40 CRC error\n"

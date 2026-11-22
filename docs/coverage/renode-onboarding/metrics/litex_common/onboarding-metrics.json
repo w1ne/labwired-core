@@ -1,0 +1,33 @@
+{
+  "target_id": "litex_common",
+  "status": "not_run",
+  "measurement_mode": "inventory_only",
+  "run_attempted": false,
+  "booted": null,
+  "boot_evidence": null,
+  "smoke_passed": null,
+  "crate": null,
+  "target_triple": null,
+  "script": "",
+  "system": "configs/systems/onboarding/litex_common.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T17:54:54Z",
+  "finished_at_utc": "2026-11-06T17:54:54Z",
+  "elapsed_seconds": 0,
+  "elapsed_ms": 0,
+  "failure_stage": "not_configured",
+  "first_error_signature": "Shared LiteX include with no CPU of its own; it is not a runnable platform.",
+  "failure_hint": "Measure the concrete LiteX platforms that include it instead.",
+  "threshold_seconds": 3600,
+  "threshold_met": false,
+  "stages_seconds": {
+    "build_cli": null,
+    "build_firmware": null,
+    "run_smoke": null
+  },
+  "stages_ms": {
+    "build_cli": null,
+    "build_firmware": null,
+    "run_smoke": null
+  }
+}

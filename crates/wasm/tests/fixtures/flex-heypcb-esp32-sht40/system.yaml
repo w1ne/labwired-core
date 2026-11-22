@@ -1,0 +1,59 @@
+# Source-grounded functional slice of HeyPCB's ESP32-S3 SHT40 board.
+# Portable firmware reaches U4 through a Flex I2C bus; the ESP32 CPU and its
+# I2C controller are not emulated.
+schema_version: 1
+name: heypcb-esp32-s3-sht40
+assumptions:
+  - Firmware is a newly authored portable WebAssembly behavior program, not firmware from the pinned board source.
+  - U4 is the catalog `sht40` device model at address 0x44, the address of the SHT40-AD1B-R2 order code in the pinned BOM.
+  - The bus runs at 100 kHz. The pinned source contains no firmware and states no bus speed.
+  - A transfer takes one SCL period for each bit, START and STOP. Firmware instructions take no virtual time.
+  - A measurement answers after the datasheet maximum duration (8.3 ms at high precision), with the stimulus value at the time of the command.
+  - The IO48 user LED is represented by digital logic state only.
+  - The console stands for the ESP32-S3 native USB serial port on J1, as the source README states for flashing. A write arrives whole at the time of the call and takes no virtual time.
+unsupported_checks:
+  - Original ESP32-S3 firmware execution and target instruction or I2C controller fidelity; the pinned source contains no board firmware.
+  - The SCL and SDA waveforms on IO9 and IO8, the R6 and R7 pull-ups, bus capacitance, and clock stretching.
+  - The NACK of a read header before a measurement is complete; the model acknowledges and answers 0xFF bytes.
+  - SHT40 heater effect, repeatability noise, response time, and the soft reset and power-up times.
+  - USB enumeration, CDC transfer timing and host polling of the console; text the host sends to the firmware.
+  - Full-board power, USB, boot/reset, RF, MCU integration, and assembled hardware behavior.
+  - Sensor accuracy, self-heating, and production spread of a physical SHT40.
+ports:
+  - { name: ambient_c, signal: environment.temperature, access: write, kind: number, unit: "°C", initial: 25 }
+  - { name: humidity_rh, signal: environment.humidity, access: write, kind: number, unit: "%", initial: 50 }
+  - { name: user_led_drive, signal: source.U3.GPIO48, access: write, kind: bool, initial: 0 }
+  - { name: user_led_state, signal: source.D1.logic_state, access: read, kind: bool }
+cosim_models:
+  - id: source-d1-user-led
+    adapter: behavior
+    step_ns: 1000
+    inputs: { drive: source.U3.GPIO48 }
+    outputs: { led: source.D1.logic_state }
+    config:
+      behavior:
+        primitive: gpio_device
+        states: [off, on]
+        outputs: [led]
+        pin_defaults: { led: false }
+        rules:
+          - on: { input: drive }
+            when: 'input(drive) != 0'
+            do: [{ goto: on }, { pin: led, level: 1 }]
+          - on: { input: drive }
+            when: 'input(drive) == 0'
+            do: [{ goto: off }, { pin: led, level: 0 }]
+i2c_buses:
+  # Source nets I2C_SCL (U3 pin 17, IO9) and I2C_SDA (U3 pin 12, IO8).
+  - name: sensor_i2c
+    frequency_hz: 100000
+    devices:
+      - id: source-u4-sht40
+        type: sht40
+        config: { i2c_address: 0x44 }
+        inputs:
+          temperature: environment.temperature
+          humidity: environment.humidity
+console:
+  # The source README: "USB-C, native USB on the ESP32-S3 (no bridge chip)".
+  name: usb_serial

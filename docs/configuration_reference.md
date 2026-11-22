@@ -344,8 +344,8 @@ This is the complete `SystemManifest` surface (`crates/config/src/manifest.rs`).
 | `chip` | A **bare word** (`stm32f103`) is a built-in/plugin chip name; anything containing `/`, `\`, or ending `.yaml`/`.yml`/`.json` is a path resolved relative to THIS manifest, so a manifest is relocatable with the files it names. | `chip: "stm32f103"` |
 | `cpu_hz` | Board-level override of the chip's declared clock, in Hz. Absent ⇒ the chip's default. | `cpu_hz: 4_000_000` (`configs/systems/nucleo-l476rg.yaml`) |
 | `max_peripheral_tick_interval` | Optional positive integer cap, in CPU cycles, on the peripheral service grid. Both native and custom-runner advances clamp larger host requests before execution. Omit to preserve existing defaults. Zero, negative, fractional, and out-of-range values are invalid. | `max_peripheral_tick_interval: 32` (`examples/nokia5110-invaders-lab/system.yaml`) |
-| `memory_overrides` | Parsed but **not consulted by the engine today** — region sizes come from the chip descriptor. The field exists so manifests may carry it; do not rely on it. | `memory_overrides: {flash: "512KB"}` |
-| `peripherals` | Chip-peripheral patches/additions. An entry whose `id` matches a chip peripheral merges its `config` keys and overrides `base_address` (when nonzero; `0` keeps the chip's), `irq` and `size`; an unmatched `id` adds a new peripheral. `id`, `type` and `base_address` are required on every entry. | `peripherals: [{id: "usart1", type: "uart", base_address: 0, config: {profile: "stm32f1"}}]` |
+| `memory_overrides` | One key is read: `reset_vector_offset`, the offset from the flash base of the vector table that reset enters. It replaces the chip descriptor's value, for a board whose resident bootloader hands over to an application image (0x10000 on the Arduino Nano 33 BLE). A value that is not a number fails the load. Every other key is ignored with a warning — region sizes come from the chip descriptor. | `memory_overrides: {reset_vector_offset: "0x10000"}` | `memory_overrides: {flash: "512KB"}` |
+| `peripherals` | Chip-peripheral patches/additions. An entry whose `id` matches a chip peripheral merges its `config` keys and overrides `base_address` (when nonzero; `0` keeps the chip's), `irq` and `size`; a `type` that differs from the chip's replaces the model and drops the chip's `config` and `irq` (a SAM SERCOM as the SPI or I2C controller a board uses it as); an unmatched `id` adds a new peripheral. `id`, `type` and `base_address` are required on every entry. | `peripherals: [{id: "usart1", type: "uart", base_address: 0, config: {profile: "stm32f1"}}]` |
 | `external_devices` | The parts on the board's buses — see [External devices](#external-devices). | see below |
 | `parts` | Manifest-carried part packs (private/vendor catalogs). The `labwired.part/v1` contract lives in [Part packs](part-packs.md); `- path:` is a CLI convenience that `SystemManifest::from_file` inlines, so a manifest handed straight to the browser/engine must carry the pack inline. | `parts: [{path: "./acme.yaml"}]` |
 | `cosim_models` | Scalar signal-level co-simulation plants — see [Co-simulation and motor models](#co-simulation-and-motor-models). | see below |
@@ -430,6 +430,7 @@ canonical `type:`; the table below is rendered from that file by
 | `ens160` | I²C | ScioSense ENS160 MOx multi-gas sensor (TVOC, eCO2, AQI-UBA) over I²C |
 | `ft5x06` | I²C | Single-contact FT5x06 I2C touch report model |
 | `fxos8700` | I²C | NXP FXOS8700 6-axis accelerometer + magnetometer over I2C |
+| `hd44780_pcf8574` | I²C | 16x2 character LCD: HD44780 controller in 4-bit mode behind a PCF8574 I2C backpack |
 | `ht16k33` | I²C | 16×8 LED matrix / 7-segment I²C controller (display RAM, setup commands) |
 | `icm20948` | I²C | TDK InvenSense ICM-20948 motion sensor (accel + gyro + temperature; magnetometer not modelled) over I²C |
 | `icm42688` | I²C | TDK InvenSense ICM-42688-P 6-axis IMU (accel + gyro + temperature) over I²C |
@@ -520,6 +521,7 @@ canonical `type:`; the table below is rendered from that file by
 | `dfplayer_mini` | GPIO | MP3 player module: serial commands in, BUSY low while playing |
 | `dht11` | GPIO | One-wire temperature + humidity sensor |
 | `dht22` | GPIO | One-wire temperature + humidity sensor |
+| `ds18b20` | GPIO | Maxim DS18B20 digital thermometer on a 1-Wire bus (9-12 bit, -55 to +125 °C) |
 | `hc-sr04` | GPIO | Ultrasonic distance sensor (trigger / echo) |
 | `hx711` | GPIO | 24-bit load-cell amplifier (DT/SCK bit-bang) |
 | `ili9341-16bit` | GPIO | 240×320 RGB565 TFT over Intel 8080 16-bit GPIO bit-bang |
@@ -538,6 +540,7 @@ canonical `type:`; the table below is rendered from that file by
 | `servo` | GPIO | RC hobby servo driven by a single PWM control pin (GPIO edges and/or LEDC duty) |
 | `seven-segment` | GPIO | Bare single-digit 7-segment LED display driven straight from nine GPIO pins |
 | `sk6812` | GPIO | Addressable RGBW LED strip on one data pin (32-bit edge-timed frames) |
+| `tcs3200` | GPIO | Programmable RGB light-to-frequency converter (S0/S1 scale, S2/S3 filter, OE) |
 | `tm1637-7seg` | GPIO | 4-digit 7-segment LED display with the TM1637 2-wire (CLK/DIO) driver |
 | `tm1638` | GPIO | 8-digit 7-segment + 8 LED display with the TM1638 3-wire (STB/CLK/DIO) driver |
 | `uln2003` | GPIO | Four-phase unipolar stepper twin (IN1..IN4) |
@@ -547,6 +550,8 @@ canonical `type:`; the table below is rendered from that file by
 | `joystick` | Analog | Two ratiometric potentiometer axes and a push contact |
 | `ldr` | Analog | CdS photoresistor + voltage divider on an ADC channel |
 | `lipo_charger` | Analog | Single-cell LiPo pack + TP4056-class analog charger on an ADC channel |
+| `mcp9700` | Analog | Analog temperature sensor, 10 mV/°C with 500 mV at 0 °C |
+| `mcp9701` | Analog | Analog temperature sensor, 19.5 mV/°C with 400 mV at 0 °C |
 | `mq-6` | Analog | Hanwei MQ-6 LPG/propane semiconductor gas sensor module (AOUT on ADC) |
 | `ntc-thermistor` | Analog | 10 kΩ NTC + voltage divider on an ADC channel |
 | `potentiometer` | Analog | 3-pin linear potentiometer on an ADC channel (rotary or slide) |
@@ -821,6 +826,7 @@ button a user can press, an ADC input. Entries are `BoardIoBinding`:
 | `i2c_address` | For `kind: i2c_device` bindings. |
 | `device_type` | The external-device `type` this binding surfaces, for the browser. |
 | `channel` | Stimulus channel this contact exposes when it is not a plain `pressed` button (`obstacle`, `field`, `vibration`, …); absent means `pressed`. |
+| `emission` | Optional visible light this output gives off: `{ color: "#rrggbb" }`. Any output binding may declare it. The engine then reports `emission` with the binding's state: the declared colour while the output is asserted, `#000000` while it is not. Only the on/off level is modelled; PWM brightness is not. |
 
 ```yaml
 # configs/systems/nucleo-l476rg.yaml (excerpt)

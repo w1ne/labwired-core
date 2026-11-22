@@ -1,0 +1,15 @@
+# Value control: the same board and sketch, with the BME280 model placed in a
+# different environment. The printed readings must follow these inputs.
+name: arduino-nano-every-bme280-warm-room
+chip: ../../../configs/chips/atmega4809.yaml
+cpu_hz: 16000000
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "twi0"
+    config:
+      i2c_address: 0x77
+      temperature: 31.5
+      humidity: 40.0
+      pressure: 990.0
+board_io: []

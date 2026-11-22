@@ -83,6 +83,7 @@ impl SystemBus {
             {
                 let odr_off = gpio.odr_offset();
                 let bit = Self::ra_port_odr_bit(gpio, *bit)?;
+                let (odr_off, bit) = gpio.data_word_of(odr_off, bit);
                 return Some((base + odr_off, bit));
             }
             // Generic GPIO blocks publish their latch offsets through the
@@ -103,6 +104,7 @@ impl SystemBus {
                 {
                     let odr_off = gpio.odr_offset();
                     if let Some(bit) = Self::ra_port_odr_bit(gpio, bit) {
+                        let (odr_off, bit) = gpio.data_word_of(odr_off, bit);
                         return Some((base + odr_off, bit));
                     }
                 }
@@ -260,12 +262,12 @@ impl SystemBus {
                 let idx = bus.find_peripheral_index_by_name(gpio_name)?;
                 let base = bus.peripherals[idx].base;
                 let dev = bus.peripherals[idx].dev.as_ref();
-                if let Some(idr_off) = dev
+                if let Some((idr_off, bit)) = dev
                     .as_any()
                     .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
-                    .map(|g| g.idr_offset())
+                    .map(|g| g.data_word_of(g.idr_offset(), *bit))
                 {
-                    return Some((base + idr_off, *bit));
+                    return Some((base + idr_off, bit));
                 }
                 let offsets = dev.gpio_port_offsets()?;
                 return Some((base + offsets.input, *bit));
@@ -275,11 +277,11 @@ impl SystemBus {
         if let Some((port_name, bit)) = Self::parse_stm32_pin(pin) {
             if let Some(idx) = bus.find_peripheral_index_by_name(&port_name) {
                 let base = bus.peripherals[idx].base;
-                if let Some(idr_off) = bus.peripherals[idx]
+                if let Some((idr_off, bit)) = bus.peripherals[idx]
                     .dev
                     .as_any()
                     .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
-                    .map(|g| g.idr_offset())
+                    .map(|g| g.data_word_of(g.idr_offset(), bit))
                 {
                     return Some((base + idr_off, bit));
                 }
@@ -361,6 +363,12 @@ impl SystemBus {
             .iter()
             .enumerate()
             .filter_map(|(index, p)| p.dev.uses_scheduler().then_some(index))
+            .collect();
+        self.irq_input_receiver_indices = self
+            .peripherals
+            .iter()
+            .enumerate()
+            .filter_map(|(index, p)| p.dev.accepts_irq_inputs().then_some(index))
             .collect();
         self.exti_line_driver_indices = self
             .peripherals
@@ -457,7 +465,7 @@ impl SystemBus {
             if h5_gate_idx.is_none() && flash.h5_error_flags_enabled() {
                 h5_gate_idx = Some(index);
             }
-            if u5_gate_idx.is_none() && flash.u5_error_flags_enabled() {
+            if u5_gate_idx.is_none() && flash.program_gate_enabled() {
                 u5_gate_idx = Some(index);
             }
         }
@@ -629,23 +637,31 @@ impl SystemBus {
                 }
             }
         } else {
-            // C3 layout: the one `interrupt_core0` bank holds the controls
-            // (enable 0x104, pri 0x114+n*4, thresh 0x194) and the four
-            // `FROM_CPU_INTR_n` doorbells live in the SYSTEM bank (0x28+n*4).
+            // Single-bank layout (C3, C2): the one `interrupt_core0` bank holds
+            // the controls after the MAPs (C3: enable 0x104, pri 0x114+n*4,
+            // thresh 0x194; C2: 0xB8, 0xC8, 0x148), read from the chip's
+            // register descriptor. The four `FROM_CPU_INTR_n` doorbells live
+            // in the SYSTEM bank (0x28+n*4) on both.
+            let ctrl = self.peripherals[int_idx]
+                .dev
+                .peripheral_descriptor()
+                .map(|d| crate::bus::MatrixCtrlOffsets::from_descriptor(&d))
+                .unwrap_or_default();
+            cache.ctrl = ctrl;
             cache.int_enable = self
-                .read_cached_declarative_u32(int_idx, 0x104)
+                .read_cached_declarative_u32(int_idx, ctrl.enable)
                 .unwrap_or(0);
             cache.int_thresh = (self
-                .read_cached_declarative_u32(int_idx, 0x194)
+                .read_cached_declarative_u32(int_idx, ctrl.thresh)
                 .unwrap_or(0)
                 & 0xF) as u8;
             for line in 0..cache.line_pri.len() {
                 cache.line_pri[line] = (self
-                    .read_cached_declarative_u32(int_idx, 0x114 + (line as u64) * 4)
+                    .read_cached_declarative_u32(int_idx, ctrl.pri0 + (line as u64) * 4)
                     .unwrap_or(0)
                     & 0xF) as u8;
             }
-            cache.from_cpu_source_base = 50;
+            cache.from_cpu_source_base = ctrl.from_cpu_source;
             if let Some(system_idx) = self.irq_fabric.esp32c3.system_idx {
                 for n in 0..4 {
                     let offset = 0x28 + (n as u64) * 4;
@@ -714,24 +730,25 @@ impl SystemBus {
         if Some(idx) == self.irq_fabric.esp32c3.interrupt_core0_idx {
             if let Some(cache) = &mut self.irq_fabric.esp32c3.intc {
                 if self.irq_fabric.esp32c3.intpri_idx.is_none() {
-                    // C3 layout: MAPs and controls share the one bank.
+                    // Single-bank layout (C3, C2): MAPs and controls share the
+                    // one bank. The MAP span ends at the first non-MAP
+                    // register, so a control write is never taken as a MAP.
                     inputs_changed = true;
-                    match aligned {
-                        0x104 => cache.int_enable = value,
-                        0x194 => cache.int_thresh = (value & 0xF) as u8,
-                        0x114..=0x190 if (aligned - 0x114) % 4 == 0 => {
-                            let line = ((aligned - 0x114) / 4) as usize;
-                            if let Some(pri) = cache.line_pri.get_mut(line) {
-                                *pri = (value & 0xF) as u8;
-                            }
+                    let ctrl = cache.ctrl;
+                    let map_end = ctrl.status0.min(ctrl.enable);
+                    if aligned == ctrl.enable {
+                        cache.int_enable = value;
+                    } else if aligned == ctrl.thresh {
+                        cache.int_thresh = (value & 0xF) as u8;
+                    } else if let Some(line) = ctrl.pri_line(aligned) {
+                        if let Some(pri) = cache.line_pri.get_mut(line) {
+                            *pri = (value & 0xF) as u8;
                         }
-                        off if off % 4 == 0 => {
-                            let src = (off / 4) as usize;
-                            if let Some(line) = cache.source_line.get_mut(src) {
-                                *line = (value & 0x1F) as u8;
-                            }
+                    } else if aligned % 4 == 0 && aligned < map_end {
+                        let src = (aligned / 4) as usize;
+                        if let Some(line) = cache.source_line.get_mut(src) {
+                            *line = (value & 0x1F) as u8;
                         }
-                        _ => {}
                     }
                 } else {
                     // C6 layout: this bank is the MAP table (plus INTR_STATUS /

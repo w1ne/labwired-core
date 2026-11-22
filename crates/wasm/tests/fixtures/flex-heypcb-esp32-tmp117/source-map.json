@@ -1,0 +1,50 @@
+{
+  "source": {
+    "repository": "HeyPCB/esp32-sensors-1",
+    "revision": "57a2122a19ac1aa9c092e43fb5b123c461508752",
+    "asset": "boards/tmp117/kicad/esp32_tmp117",
+    "title": "HeyPCB ESP32-S3 TMP117 - TI TMP117 0.1 C precision temperature sensor",
+    "board_revision": "A",
+    "license_spdx": "CERN-OHL-S-2.0",
+    "files": {
+      "schematic": { "path": "boards/tmp117/kicad/esp32_tmp117.kicad_sch", "git_blob": "4a3c903a19e940df58f81253df2fe96bd73250d4" },
+      "pcb": { "path": "boards/tmp117/kicad/esp32_tmp117.kicad_pcb", "git_blob": "ffd4706cdf7db4f466c3ea83a00e7021da2d88c1" },
+      "bom": { "path": "boards/tmp117/fab/esp32_tmp117_bom.csv", "git_blob": "2962f30a6dce298cd2e8059fc77175eb8a8c68ce" },
+      "board_json": { "path": "boards/tmp117/board.json", "git_blob": "04921f145c57cadfbbd9808e40fc16aa39c7c868" },
+      "board_readme": { "path": "boards/tmp117/README.md", "git_blob": "a9f3c2662d17ee61af2f760e65f141943e8bb18b" },
+      "license": { "path": "LICENSE", "git_blob": "0f1092207caa645ff426e0cc40b7eaad69caecb1" }
+    },
+    "fabrication_status": "source README says not fabricated, assembled, or powered",
+    "original_board_firmware": "none found for this board in the pinned source"
+  },
+  "sensor_bus": {
+    "evidence": "pad nets read from the pinned PCB blob; MPNs from the pinned BOM blob; the address from the ADD0 pad net and the README sensor notes",
+    "elements": [
+      { "source_ref": "U4", "source_part": "TMP117AIDRVR", "lcsc": "C699536", "pads": { "1": "I2C_SCL", "2": "GND", "3": "SNS_INT", "4": "GND", "5": "3V3", "6": "I2C_SDA" }, "straps": { "pad 4 (ADD0) on GND": "address 0x48" }, "modeled_as": "catalog I2C device model `tmp117` at 0x48" },
+      { "source_ref": "R6", "source_part": "0603WAF1002T5E", "lcsc": "C25804", "pads": { "1": "3V3", "2": "SNS_INT" }, "value": "10k", "modeled_as": "not modeled" },
+      { "source_ref": "R7", "source_part": "0603WAF4701T5E", "lcsc": "C23162", "pads": { "1": "3V3", "2": "I2C_SDA" }, "value": "4.7k", "modeled_as": "not modeled" },
+      { "source_ref": "R8", "source_part": "0603WAF4701T5E", "lcsc": "C23162", "pads": { "1": "3V3", "2": "I2C_SCL" }, "value": "4.7k", "modeled_as": "not modeled" }
+    ],
+    "controller": {
+      "source_ref": "U3",
+      "source_part": "ESP32-S3-WROOM-1-N16R8",
+      "endpoints": { "I2C_SDA": "U3 pad 12 (IO8)", "I2C_SCL": "U3 pad 17 (IO9)", "SNS_INT": "U3 pad 7 (IO7)" },
+      "evidence": "board.json maps U?.12 to I2C_SDA, U?.17 to I2C_SCL and U?.7 to SNS_INT; README says I2C_SCL on IO9, I2C_SDA on IO8, SNS_INT on IO7",
+      "modeled_as": "the portable firmware is the bus controller; no ESP32-S3 I2C peripheral is emulated"
+    },
+    "alert": { "source_net": "SNS_INT", "endpoints": ["U4 pad 3 (ALERT)", "U3 pad 7 (IO7)", "R6.2"], "modeled_as": "not modeled; the catalog tmp117 model has no alert comparator, see unsupported_checks" },
+    "user_led": { "source_net": "IO48", "endpoints": ["U3 pad 25 (IO48)", "R4.1"], "indicator": "D1", "modeled_as": "digital logic state only" }
+  },
+  "runtime_bindings": {
+    "manifest": "system.yaml",
+    "bus": { "name": "sensor_i2c", "source_nets": ["I2C_SCL", "I2C_SDA"], "frequency_hz": 100000, "frequency_source": "assumption; the pinned source states no bus speed" },
+    "device": { "id": "source-u4-tmp117", "source_ref": "U4", "type": "tmp117", "address": "0x48" },
+    "ports": {
+      "ambient_c": "environment.temperature -> U4 input temperature",
+      "user_led_drive": "source.U3.GPIO48",
+      "user_led_state": "source.D1.logic_state"
+    }
+  },
+  "library_asset_id": "heypcb:HeyPCB/esp32-sensors-1:boards/tmp117/kicad/esp32_tmp117",
+  "detailed_target_alternative": "No detailed-path run of this asset is recorded. The Flex run proves nothing about ESP32-S3 firmware on the detailed path."
+}

@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32f103",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 50000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-f103-i2c-demo",
+  "target_triple": "thumbv7m-none-eabi",
+  "script": "examples/renode-onboarding/stm32f103-i2c-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32f103.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T17:52:24Z",
+  "finished_at_utc": "2026-11-11T17:53:50Z",
+  "elapsed_seconds": 87,
+  "elapsed_ms": 86457,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-11T17:53:50.741545Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: \"NVIC M3 TAILCHAIN IRQ54=1 IRQ55=1 FRAME=REUSED R0=LIVE ok\" }) (captured len=3725)",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 84.505,
+    "build_firmware": 0.793,
+    "run_smoke": 1.116
+  },
+  "stages_ms": {
+    "build_cli": 84505,
+    "build_firmware": 793,
+    "run_smoke": 1116
+  }
+}

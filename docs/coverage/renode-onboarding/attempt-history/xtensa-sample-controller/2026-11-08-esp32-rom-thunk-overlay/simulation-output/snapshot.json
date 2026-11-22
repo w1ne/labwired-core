@@ -1,0 +1,61 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "xtensa_lx7",
+    "registers": [
+      1342177382,
+      1073872896,
+      1073741824,
+      0,
+      1515978803,
+      5050,
+      0,
+      1515978752,
+      211885776,
+      1489043438,
+      4294967295,
+      1,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1342177546,
+    "ps": 31,
+    "window_base": 0,
+    "window_start": 1,
+    "vecbase": 1073741824
+  },
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "bea35a2ea78043c974900415f2f1a7674a34672e46af9e5df649923845fe677f",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/xtensa-sample-controller-cpu-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/xtensa-sample-controller.yaml",
+    "script": "examples/renode-onboarding/xtensa-sample-controller-cpu-smoke.yaml"
+  }
+}

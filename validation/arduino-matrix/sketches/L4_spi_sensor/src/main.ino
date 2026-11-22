@@ -20,6 +20,9 @@
 #    define LW_SPI_CS 5
 #  elif defined(ARDUINO_ARCH_RP2040)
 #    define LW_SPI_CS 17
+#  elif defined(ARDUINO_ARDUINO_NANO33BLE)
+// Arduino Nano 33 BLE: the variant's SS = D10 = P1.02. Pin 22 is the red LED.
+#    define LW_SPI_CS SS
 #  elif defined(ARDUINO_ARCH_NRF52) || defined(ARDUINO_ARCH_NRF52840)
 #    define LW_SPI_CS 22
 #  else
@@ -30,6 +33,8 @@
 static void logBegin() {
   Serial.begin(115200);
 #if (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)) || defined(__AVR_ATmega32U4__) || \
+    defined(ARDUINO_SAMD_NANO_33_IOT) || \
+    defined(ARDUINO_ARDUINO_NANO33BLE) || \
     ((defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)) && \
      defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE)
   // arduino-pico (Pico 2) and the ATmega32U4 (Leonardo): Serial is native USB
@@ -37,6 +42,10 @@ static void logBegin() {
   // on the twin alike.
   // ESP32-S2/S3 with ARDUINO_USB_MODE=0 (Arduino Nano ESP32): Serial is
   // TinyUSB CDC on USB-OTG, which drops writes until DTR the same way.
+  // ArduinoCore-samd on the Nano 33 IoT: Serial is SerialUSB, native USB CDC,
+  // and operator bool() is false until the host raises DTR.
+  // ArduinoCore-mbed on the Nano 33 BLE: Serial is USB CDC on the nRF52840
+  // USBD and drops writes until the host raises DTR.
   while (!Serial) delay(1);
 #endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)

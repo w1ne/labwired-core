@@ -6,3 +6,10 @@
 
 name: simavr-at90usb162
 chip: ../../chips/onboarding/simavr-at90usb162.yaml
+board_io:
+  - id: status_led
+    kind: led
+    peripheral: portb
+    pin: 0
+    signal: output
+    active_high: true

@@ -5,7 +5,9 @@
 # See the LICENSE file in the project root for full license information.
 
 name: up_squared_x86_64
-arch: arm
+# Renode models this as an x86-64 (Intel Atom) platform. The engine has no core for it,
+# so the chip is refused rather than run as a Cortex-M.
+arch: unknown
 flash:
   base: 134217728
   size: 2147483648B

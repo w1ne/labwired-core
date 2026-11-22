@@ -1,0 +1,559 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "F4-DISCO SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "USART2 RX GATE re_off=1 ue_off=1 data=00005253 released=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "SPI1 MAX31855=01901600 TXEIRQ=1 REARM=0 RXNEIRQ=1 RELEASED=1"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "SPI1 CHECKS=1"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "ADC1 IN1=000003FF EOC=1 OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "SysTick PendSV tailchain frame=1 r0=1 pending=1 ipsr=14 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "SysTick PendSV PSP tailchain frame=1 r0=1 pending=1 ipsr=14 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "hb=0 ld4=on odr=00001000",
+          "hb=1 ld4=off odr=00000000",
+          "hb=2 ld3=on odr=00002000",
+          "hb=3 ld3=off odr=00000000"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      13,
+      537001958,
+      0,
+      3221225472,
+      128640,
+      1073759232,
+      1073875988,
+      537001968,
+      429496730,
+      13,
+      134236927,
+      57,
+      111,
+      537001848,
+      19,
+      134235726
+    ],
+    "pc": 134235726,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": true
+  },
+  "firmware_hash": "bfceb134422493e685bcfaa2e9d87208d3c5684acfb4fef9700ea864ce0055ba",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f4-discovery-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f4.yaml",
+    "script": "examples/renode-onboarding/stm32f4-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073759232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi1",
+        "kind": "native",
+        "base": 1073819648,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortA",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortD",
+        "kind": "native",
+        "base": 1073875968,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073887232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc1",
+        "kind": "native",
+        "base": 1073815552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "tc_spi1",
+        "device_type": "max31855",
+        "declared": true,
+        "attachment": {
+          "transport": "spi",
+          "bus": "spi1",
+          "cs_pin": "PA4"
+        },
+        "artifacts": []
+      },
+      {
+        "id": "pot_adc1_in1",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "adc",
+          "channel": 1
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "F4-DISCO SMOKE",
+        "cycle_lo": 0,
+        "cycle": 1000,
+        "end_cycle": 1000
+      },
+      {
+        "text": "USART2 RX GATE re_off=1 ue_off=1 data=00005253 released=1 ok",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
+      },
+      {
+        "text": "SPI1 MAX31855=01901600 TXEIRQ=1 REARM=0 RXNEIRQ=1 RELEASED=1",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
+      },
+      {
+        "text": "SPI1 CHECKS=1",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
+      },
+      {
+        "text": "SysTick PendSV tailchain frame=1 r0=1 pending=1 ipsr=14 ok",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
+      },
+      {
+        "text": "SysTick PendSV PSP tailchain frame=1 r0=1 pending=1 ipsr=14 ok",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
+      },
+      {
+        "text": "ADC1 IN1=000003FF EOC=1 OK",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
+      },
+      {
+        "text": "hb=0 ld4=on odr=00001000",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
+      },
+      {
+        "text": "hb=1 ld4=off odr=00000000",
+        "cycle_lo": 201000,
+        "cycle": 211000,
+        "end_cycle": 211000
+      },
+      {
+        "text": "hb=2 ld3=on odr=00002000",
+        "cycle_lo": 411000,
+        "cycle": 421000,
+        "end_cycle": 421000
+      },
+      {
+        "text": "hb=3 ld3=off odr=00000000",
+        "cycle_lo": 621000,
+        "cycle": 631000,
+        "end_cycle": 631000
+      },
+      {
+        "text": "hb=4 ld5=on odr=00004000",
+        "cycle_lo": 821000,
+        "cycle": 831000,
+        "end_cycle": 831000
+      },
+      {
+        "text": "hb=5 ld5=off odr=00000000",
+        "cycle_lo": 1031000,
+        "cycle": 1041000,
+        "end_cycle": 1041000
+      },
+      {
+        "text": "hb=6 ld6=on odr=00008000",
+        "cycle_lo": 1241000,
+        "cycle": 1251000,
+        "end_cycle": 1251000
+      },
+      {
+        "text": "hb=7 ld6=off odr=00000000",
+        "cycle_lo": 1441000,
+        "cycle": 1451000,
+        "end_cycle": 1451000
+      },
+      {
+        "text": "hb=8 ld4=on odr=00001000",
+        "cycle_lo": 1651000,
+        "cycle": 1661000,
+        "end_cycle": 1661000
+      },
+      {
+        "text": "hb=9 ld4=off odr=00000000",
+        "cycle_lo": 1861000,
+        "cycle": 1871000,
+        "end_cycle": 1871000
+      },
+      {
+        "text": "hb=10 ld3=on odr=00002000",
+        "cycle_lo": 2061000,
+        "cycle": 2071000,
+        "end_cycle": 2071000
+      },
+      {
+        "text": "hb=11 ld3=off odr=00000000",
+        "cycle_lo": 2271000,
+        "cycle": 2281000,
+        "end_cycle": 2281000
+      },
+      {
+        "text": "hb=12 ld5=on odr=00004000",
+        "cycle_lo": 2481000,
+        "cycle": 2491000,
+        "end_cycle": 2491000
+      },
+      {
+        "text": "hb=13 ld5=off odr=00000000",
+        "cycle_lo": 2681000,
+        "cycle": 2691000,
+        "end_cycle": 2691000
+      },
+      {
+        "text": "hb=14 ld6=on odr=00008000",
+        "cycle_lo": 2891000,
+        "cycle": 2901000,
+        "end_cycle": 2901000
+      },
+      {
+        "text": "hb=15 ld6=off odr=00000000",
+        "cycle_lo": 3091000,
+        "cycle": 3101000,
+        "end_cycle": 3101000
+      },
+      {
+        "text": "hb=16 ld4=on odr=00001000",
+        "cycle_lo": 3301000,
+        "cycle": 3311000,
+        "end_cycle": 3311000
+      },
+      {
+        "text": "hb=17 ld4=off odr=00000000",
+        "cycle_lo": 3511000,
+        "cycle": 3521000,
+        "end_cycle": 3521000
+      },
+      {
+        "text": "hb=18 ld3=on odr=00002000",
+        "cycle_lo": 3711000,
+        "cycle": 3721000,
+        "end_cycle": 3721000
+      },
+      {
+        "text": "hb=19 ld3=off odr=00000000",
+        "cycle_lo": 3921000,
+        "cycle": 3931000,
+        "end_cycle": 3931000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "stimuli": [
+    {
+      "channel": "position",
+      "component": "pot_adc1_in1",
+      "value": 25.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 1000
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 19216,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 19216,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 1048576,
+    "ram_total_bytes": 131072,
+    "flash_used_pct": 1.83,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 131072,
+    "main_stack_high_water_bytes": 168,
+    "main_stack_free_min_bytes": 130692,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537001984,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 131072,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 130692,
+    "heap_base": 536870912,
+    "heap_top": 537001984
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 4059,
+    "memory_writes": 277,
+    "peripheral_accesses": 3873420,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134235790,
+        "count": 353,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134235772,
+        "count": 351,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134235808,
+        "count": 351,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134235840,
+        "count": 351,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134235726,
+        "count": 348,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134235826,
+        "count": 313,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134235740,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134235744,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134235776,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134235780,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134235804,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134235844,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134235848,
+        "count": 312,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134235722,
+        "count": 275,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134235822,
+        "count": 275,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134235734,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      }
+    ],
+    "stalled_poll": {
+      "peripheral": "gpioPortD",
+      "offset": 20,
+      "accesses": 71299
+    }
+  }
+}

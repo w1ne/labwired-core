@@ -1,0 +1,23 @@
+2026-11-16T11:23:00.236812Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nuvoton_npcx9.yaml
+2026-11-16T11:23:00.239163Z  INFO labwired_loader: ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-16T11:23:00.241982Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'cr_uart2'
+2026-11-16T11:23:00.242006Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'cr_uart3'
+2026-11-16T11:23:00.242017Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'cr_uart4'
+2026-11-16T11:23:00.246747Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "NPCX9 UART1 smoke" }) (captured len=0)
+2026-11-16T11:23:00.246832Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok" }) (captured len=0)
+2026-11-16T11:23:00.246845Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok" }) (captured len=0)
+2026-11-16T11:23:00.246856Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "uarts tbe=3 rx=3 isolated=1 ok" }) (captured len=0)
+2026-11-16T11:23:00.246865Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok" }) (captured len=0)
+2026-11-16T11:23:00.246875Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "mtc ttc=1 pt=1 irq=3 steps=1 ms1=1000 ms2=1000 ok" }) (captured len=0)
+2026-11-16T11:23:00.246884Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "twd regs=1 t0=1 irq=3 ms1=1000 ms2=1000 tc=1 lock=1 unlock=1 run=1 touch=1 dec=1 stop=1 ok" }) (captured len=0)
+2026-11-16T11:23:00.246894Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok" }) (captured len=0)
+2026-11-16T11:23:00.246904Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "cr_uart2 tx" }) (captured len=0)
+2026-11-16T11:23:00.246913Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "cr_uart3 tx" }) (captured len=0)
+2026-11-16T11:23:00.246922Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "cr_uart4 tx" }) (captured len=0)
+2026-11-16T11:23:00.246931Z ERROR labwired_cli::execute: Assertion failed: ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxCycles }) (captured len=0)
+FAIL  0/12 checks · nuvoton_npcx9-smoke · 2000000 steps · 0.00s
+FAULT  HardFault escalated from a precise BusFault: data access at 0x400D_8006 (BFAR valid), at PC 0x0000_10A6 in `core::ptr::read_volatile` (mod.rs:2091), called from `main`.
+       HFSR=0x40000000 CFSR=0x00008200 [FORCED PRECISERR] BFAR=0x400D8006
+rc=1

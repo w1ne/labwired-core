@@ -1,6 +1,8 @@
 # Local copy of configs/systems/nucleo-f103rb.yaml for this runnable example.
 name: "nucleo-f103rb"
 chip: "../../configs/chips/stm32f103rb.yaml"
+# ST-LINK VCP = USART2 PA2/PA3 (UM1724 §6.8); the console taps it only.
+debug_uart: "uart2"
 external_devices: []
 board_io:
   - id: "led_ld2"

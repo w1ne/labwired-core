@@ -1,0 +1,25 @@
+{
+  "id": "esp32s2-arduino",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/esp/esp32s2_arduino_boot.rs",
+    "test": "stock_arduino_l0_prints_over_uart0",
+    "signal": "stock Arduino-ESP32 L0 (tests/fixtures/esp32s2-arduino-l0.elf) runs the genuine S2 mask ROM, ESP-IDF startup and FreeRTOS, and Serial.println writes 'LW_L0_OK' through UART_FIFO_AHB_REG (0x6000_0000, the PeriBus2 view of UART0 at 0x3F40_0000); the test asserts the console sink receives it, and a negative control with an erased partition table asserts it never does",
+    "lane": "core-ci / pr-workspace-tests: cargo test -p labwired-core --test esp esp32s2_arduino_boot::"
+  },
+  "spi": {
+    "state": "proven",
+    "file": "crates/core/tests/esp/esp32s2_arduino_spi.rs",
+    "test": "spi_reads_the_max31855_frame",
+    "signal": "stock Arduino-ESP32 L4 (tests/fixtures/esp32s2-arduino-l4.elf) clocks four bytes through GP-SPI2 (FSPI, 0x3F42_4000) with SPI.transfer and prints 'LW_L4_OK' only for the attached MAX31855's frame 0x01901600; the negative control without the device asserts MISO idles high (frame 0xffffffff) and no LW_L4_OK",
+    "lane": "core-ci / pr-workspace-tests: cargo test -p labwired-core --test esp esp32s2_arduino_spi::"
+  },
+  "i2c": {
+    "state": "proven",
+    "file": "crates/core/tests/esp/esp32s2_arduino_i2c.rs",
+    "test": "wire_reads_ina219_config_and_bus_registers",
+    "signal": "stock Arduino-ESP32 L3 (tests/fixtures/esp32s2-arduino-l3.elf) drives the I2C0 command list (0x3F41_3000): Wire writes the INA219 register pointer and requestFrom reads CONFIG 0x399F and BUS 0x19CA back; the test rejects an ACK-only pass, and the negative control without the device asserts the address is NACKed",
+    "lane": "core-ci / pr-workspace-tests: cargo test -p labwired-core --test esp esp32s2_arduino_i2c::"
+  }
+}

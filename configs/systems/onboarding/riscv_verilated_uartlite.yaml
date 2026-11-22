@@ -6,3 +6,4 @@
 
 name: riscv_verilated_uartlite
 chip: ../../chips/onboarding/riscv_verilated_uartlite.yaml
+debug_uart: uart

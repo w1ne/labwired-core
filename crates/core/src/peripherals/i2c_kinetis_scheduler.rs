@@ -26,6 +26,8 @@ fn ramp_slave() -> Box<dyn I2cDevice> {
     })
 }
 
+const F1_ER_IRQ: u32 = 32;
+
 fn kinetis(scheduler: bool) -> I2c {
     let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Kinetis);
     i2c.push_slave(ramp_slave());
@@ -38,6 +40,8 @@ fn kinetis(scheduler: bool) -> I2c {
 fn f1(scheduler: bool) -> I2c {
     let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32F1);
     i2c.push_slave(ramp_slave());
+    // The ER line (`irq_error`), so its pends are compared too.
+    i2c.set_error_irq(F1_ER_IRQ);
     if scheduler {
         i2c.attach_cycle_clock(CycleClock::default());
     }
@@ -82,6 +86,8 @@ struct SchedHarness {
     events: Vec<(u64, u32)>,
     now: u64,
     pends: Vec<u64>,
+    /// `(cycle, line)` for every explicit (ER) line an event pended.
+    explicit: Vec<(u64, u32)>,
 }
 
 impl SchedHarness {
@@ -95,6 +101,7 @@ impl SchedHarness {
             events: Vec::new(),
             now: 0,
             pends: Vec::new(),
+            explicit: Vec::new(),
         }
     }
 
@@ -130,6 +137,9 @@ impl SchedHarness {
             if res.raise_own_irq {
                 self.pends.push(self.now);
             }
+            for line in res.explicit_irqs {
+                self.explicit.push((self.now, line));
+            }
             if let Some(delay) = res.reschedule_delay {
                 self.events.push((self.now + delay, token));
             }
@@ -137,9 +147,10 @@ impl SchedHarness {
     }
 }
 
-/// Legacy per-tick oracle.
-fn walk_tick(i2c: &mut I2c) -> bool {
-    i2c.tick().irq
+/// Legacy per-tick oracle: the own-line verdict and the explicit lines.
+fn walk_tick(i2c: &mut I2c) -> (bool, Vec<u32>) {
+    let res = i2c.tick();
+    (res.irq, res.explicit_irqs.unwrap_or_default())
 }
 
 /// The heart of the gate: replay the SAME op script against (a) the legacy
@@ -156,6 +167,7 @@ fn assert_walk_identical_with(
     let mut walk = build(false);
     let mut sched = SchedHarness::new(build);
     let mut walk_pends: Vec<u64> = Vec::new();
+    let mut walk_explicit: Vec<(u64, u32)> = Vec::new();
 
     for c in 1..=cycles {
         for (sc, op) in script {
@@ -175,9 +187,11 @@ fn assert_walk_identical_with(
                 }
             }
         }
-        if walk_tick(&mut walk) {
+        let (irq, explicit) = walk_tick(&mut walk);
+        if irq {
             walk_pends.push(c);
         }
+        walk_explicit.extend(explicit.into_iter().map(|line| (c, line)));
         sched.now = c - 1;
         sched.step();
         assert_eq!(
@@ -187,6 +201,10 @@ fn assert_walk_identical_with(
         );
     }
     assert_eq!(walk_pends, sched.pends, "{what}: NVIC pend cycles diverged");
+    assert_eq!(
+        walk_explicit, sched.explicit,
+        "{what}: explicit (ER) line pends diverged"
+    );
 }
 
 /// Kinetis-variant convenience wrapper.
@@ -286,6 +304,22 @@ fn f1_address_nack_walk_identity() {
         (32, Op::Write(0x01, 0x02)),   // STOP releases the bus
     ];
     assert_walk_identical_with(&f1, &script, 40, "f1 address NACK");
+    // Not vacuous: the NACK does pend the ER line on the event path.
+    let mut sched = SchedHarness::new(&f1);
+    for c in 1..=40u64 {
+        for (sc, op) in &script {
+            if let (true, Op::Write(off, val)) = (*sc == c, *op) {
+                sched.now = c - 1;
+                sched.write(off, val);
+            }
+        }
+        sched.now = c - 1;
+        sched.step();
+    }
+    assert!(
+        sched.explicit.iter().any(|&(_, line)| line == F1_ER_IRQ),
+        "AF under ITERREN pends the ER line"
+    );
 }
 
 // ── STM32 L4 transaction-engine walk-vs-scheduler byte identity ───────────

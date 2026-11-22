@@ -719,6 +719,26 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// subsequent [`Self::drive_pad_output`] edge is timestamped. Default is
     /// a no-op.
     fn sync_observer_cycle(&mut self, _now: u64) {}
+    /// Espressif GPIO-matrix output peripheral: the wire cell its outputs are
+    /// published on, and the matrix signal of line 0 (line n is signal
+    /// `first + n`). The bus hands it to the GPIO matrix through
+    /// [`Self::bind_matrix_output_lines`]. Default: publishes no wire.
+    fn matrix_output_lines(
+        &mut self,
+    ) -> Option<(u32, std::sync::Arc<crate::peripherals::pad_lines::PadLines>)> {
+        None
+    }
+    /// Espressif GPIO matrix: carry `lines` (line n = output signal
+    /// `first_signal + n`) on whichever pad `FUNCn_OUT_SEL` routes it to, so
+    /// pad reads and the logic analyzer see the peripheral's waveform.
+    /// `false`: this port does not route peripheral wires.
+    fn bind_matrix_output_lines(
+        &mut self,
+        _first_signal: u32,
+        _lines: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+    ) -> bool {
+        false
+    }
 
     /// GPIO capability: the pad level a logic probe clipped to `pin` would
     /// see. Shim over [`pins::PinPort::level`] (kept because many callers
@@ -808,9 +828,10 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// Pin-select capability: `true` for a peripheral that names the pads it
     /// drives in its own registers (nRF `PSEL.*`), so a register write can
     /// move a pad between its GPIO latch and one of this peripheral's lines.
-    /// On a bus with a world `gpio_net` the bus brackets such writes so the
-    /// pin ports report what moved and hand the net's levels to newly routed
-    /// lines. Default: no.
+    /// On a bus with a world `gpio_net` or a logic-analyzer pad watch the bus
+    /// brackets such writes so the pin ports report what moved, re-register
+    /// watched pads with the line that now drives them and hand the net's
+    /// levels to newly routed lines. Default: no.
     fn claims_pads(&self) -> bool {
         false
     }
@@ -1205,6 +1226,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// with an injection queue (or one still found by that function's
     /// older downcasts).
     fn uart_rx_source(&self) -> Option<Arc<std::sync::Mutex<std::collections::VecDeque<u8>>>> {
+        None
+    }
+
+    /// Deliver bytes from this UART's external peer through the model's own
+    /// RX path (an STM32 USART holds them on the wire until UE and RE are
+    /// set). Default `None` = no such path; the bus falls back to
+    /// [`Self::uart_rx_source`].
+    fn inject_uart_rx(&mut self, _bytes: &[u8]) -> Option<Result<usize, String>> {
         None
     }
 
@@ -1771,6 +1800,19 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// The GPIO chip-select labels this SPI controller routes edges for, or
+    /// empty when it routes none. A non-empty answer makes the bus watch the
+    /// ports owning those pins and call [`Self::sync_gpio_chip_selects`]
+    /// after each write to one (see `bus/spi_cs.rs`).
+    fn gpio_chip_select_pins(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Re-read the chip-select GPIOs named by [`Self::gpio_chip_select_pins`]
+    /// and deliver the CS edges that moved. Not a tick: it must not advance
+    /// time or move bytes.
+    fn sync_gpio_chip_selects(&mut self, _bus: &dyn Bus) {}
+
     /// Hand this peripheral the bus's shared [`CycleClock`] so `&self` reads
     /// can lazily sync `Cell`-held counter state to the published "now"
     /// (batch-boundary freshness — exact at batch boundaries, < one
@@ -1784,6 +1826,13 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// its legacy walk path (`uses_scheduler() == false`), so hand-built
     /// buses that bypass `add_peripheral` keep the old exact semantics.
     fn attach_cycle_clock(&mut self, _clock: CycleClock) {}
+
+    /// Hand this peripheral the interrupt request lines it shares with the
+    /// MSP430 core ([`peripherals::msp430::Msp430Irq`]): the module IFG/IE
+    /// bits of an MSP430 are the request lines themselves. Called once per
+    /// peripheral when an MSP430 machine is built. Default: not an MSP430
+    /// module.
+    fn attach_msp430_irq(&mut self, _irq: &Arc<peripherals::msp430::Msp430Irq>) {}
 
     /// Tell the peripheral which NVIC/matrix line it was registered with (the
     /// `irq` of its `PeripheralEntry`), or `None` when the descriptor wired
@@ -1801,6 +1850,27 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// IRQ *is* wired and keep its legacy wakeup cadence, so hand-built buses
     /// that bypass the choke points keep the old exact semantics.
     fn attach_irq_line(&mut self, _irq: Option<u32>) {}
+
+    /// Whether this peripheral accepts IRQ levels from other peripherals.
+    /// The bus caches this at peripheral attach so ordinary IRQ delivery does
+    /// not scan every device on every level transition.
+    fn accepts_irq_inputs(&self) -> bool {
+        false
+    }
+
+    /// Accept a level from another peripheral's configured IRQ output.
+    ///
+    /// A peripheral that acts as an interrupt concentrator can consume a
+    /// source line and expose its own output through [`Self::irq_line_levels`]
+    /// instead of letting the bus pend the source line directly. `source` is
+    /// the source peripheral's configured IRQ number. Return `None` when this
+    /// device does not accept that input; return `Some(changed)` when it does,
+    /// where `changed` reports whether the input level changed.
+    ///
+    /// Default: no inputs accepted.
+    fn set_irq_input_level(&self, _source: u32, _level: bool) -> Option<bool> {
+        None
+    }
 
     /// The CURRENT state of this peripheral's interrupt line, for level
     /// reconciliation. `Some(level)` marks the model as a LEVEL source —
@@ -1821,6 +1891,19 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn irq_line_level(&self) -> Option<bool> {
         None
     }
+
+    /// ARM application-core IRQ/FIQ output pair driven by an interrupt
+    /// controller peripheral. Most peripherals do not own CPU interrupt pins;
+    /// ARM7's LPC2294 PL190 does and is sampled by `Bus::arm_irq_fiq_levels`.
+    fn arm_irq_fiq_levels(&self) -> Option<(bool, bool)> {
+        None
+    }
+
+    /// Drive one external input of an ARM interrupt controller as a level.
+    /// The bus calls this on the controller that answers
+    /// [`Self::arm_irq_fiq_levels`], before it samples IRQ/FIQ. Peripherals
+    /// that own no controller inputs ignore it.
+    fn set_arm_irq_input_level(&self, _source: usize, _level: bool) {}
 
     /// Multi-line twin of [`Self::irq_line_level`], for a LEVEL source that
     /// drives SEVERAL NVIC lines from one model (the STM32 EXTI: EXTI0..4,

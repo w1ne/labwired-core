@@ -1,4 +1,12 @@
 id: stm32f103
+# 2026-11-09 (feat/stm32f103-rtc-runs-2026-11-09): rtc_f1.rs was a static
+# register bank: CNT never counted and RSF never set again after the HAL
+# cleared it (HAL_RTC_WaitForSynchro timed out). CNT/DIV/SECF/ALRF/OWF are
+# now derived lazily from the bus cycle clock (32.768 kHz LSE / PRL+1 at
+# 72 MHz), RSF re-sets one RTCCLK after a clear, and CNT/PRL/ALR writes
+# need CRL.CNF. Pinned values unchanged: CRH=0, CNTH=CNTL=0 at reset, CRL
+# still 0x0020 at reset (CRL stays unpinned). ACK, NOT A SILICON CAPTURE;
+# live re-capture remains pending.
 # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
 # channel completion/circular/IRQ semantics are opt-in (profile: stm32g0);
 # existing constructors retain their legacy profile. The bus completion
@@ -543,6 +551,8 @@ models:
   - crates/core/src/peripherals/adc.rs
   - crates/core/src/peripherals/bxcan.rs
   - crates/core/src/peripherals/rtc_f1.rs
+  - crates/core/src/peripherals/bkp_f1.rs
+  - crates/core/src/peripherals/pwr.rs
   - crates/core/src/peripherals/iwdg.rs
   - crates/core/src/peripherals/wwdg.rs
   - configs/chips/stm32f103.yaml
@@ -1123,6 +1133,20 @@ models:
 # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
 # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
 # SILICON CAPTURE; live re-capture remains pending.
+# 2026-11-09 (feat/f1-flash-program-round374): flash.rs adds the opt-in F1
+# program gate (`error_flags: true`, now set on this board's chip yaml):
+# PG half-word programming, PER page erase (AR) and MER mass erase reach
+# the flash backing store; locked CR ignores writes; LOCK relocks the key
+# sequence. bus/accessors.rs routes flash stores and the CR word write to
+# it. Reset values and the register map are unchanged. Evidence: flash lib
+# tests, src/tests/stm32f103_flash.rs, stock EEPROM.h put/get on C8 (page
+# 0x0800FC00) and NUCLEO-F103RB. ACK, NOT A SILICON CAPTURE; no bench flash
+# program/erase capture exists yet.
+# 2026-11-09 (L4/G4/WB ADC, feat/stm32-l4-l0-adc): changes the shared
+# adc.rs digest. The `stm32l4` layout keeps its conversion path; the
+# stm32g0/c0 CHSELR layout and the f0/l0 block are separate models. F1/F4/H7/
+# U5 layouts are unchanged. This is a reviewed model-drift acknowledgment,
+# NOT a new silicon capture; no capture or ack date moves.
 drift_ack: 2026-11-09
 # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
 # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
@@ -1131,7 +1155,7 @@ drift_ack: 2026-11-09
 # immediate range still Halt, same as before. Shared interpreter
 # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
 # re-capture remains pending.
-drift_ack_digest: 11ccb9e80e02ed99d39d7182ceffc87a835d7295705db9bb4e8c7edc21d98250
+drift_ack_digest: 72589c4a4ab35756ce7f59e0cbd21c087cc4d26f054e676846b7a257a11eb113
 # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
 # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
 # layouts. STM32 UART register maps, byte paths and IRQ timing are

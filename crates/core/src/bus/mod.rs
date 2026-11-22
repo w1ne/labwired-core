@@ -53,20 +53,22 @@ mod resident_device;
 mod routing;
 mod samd51_storage;
 pub mod sim_inputs;
-mod tick;
+mod spi_cs;
+pub(crate) mod tick;
 mod timed_can;
 mod timer_kernel_clock;
-pub(crate) use tick::reconcile_nvic_level;
 
 pub use can_devices::*;
 pub use observed_device::ObservedDevice;
-pub use resident_device::{BusResidentDevice, DevicePinPad, DevicePins};
+pub use resident_device::{
+    BusResidentDevice, DeviceOutputObserverBinding, DevicePinPad, DevicePins,
+};
 
 pub use bus_trace::{new_log, BusPayload, BusTraceEvent, BusTraceLog, I2cSym};
 pub(crate) use ina219_circuit::CircuitIna219Lookup;
 pub use interrupt_fabric::{
     Esp32c3Fabric, Esp32c3IntcCache, Esp32s3Fabric, Esp32s3IrqAudit, Esp32s3IrqDivergence,
-    InterruptFabric,
+    InterruptFabric, MatrixCtrlOffsets,
 };
 pub use memory_policy::{CpuWritePolicy, MemoryPolicyReport, RegionPolicyStats, RegionViolation};
 pub(crate) use motors::CircuitMotorLookup;
@@ -495,10 +497,30 @@ pub struct SystemBus {
     /// browser, debugger, tests — therefore gets the chip's own profile
     /// instead of a hardcoded one.
     pub riscv_profile: crate::cpu::RiscVCoreProfile,
+    /// Memory-mapped CLINT of the chip's RV32 core complex, resolved at
+    /// config-build ([`crate::cpu::riscv::Rv32Clint::for_chip`]) and attached
+    /// by [`crate::system::riscv::configure_riscv`]. `None` keeps the core's
+    /// internal, unmapped timer.
+    pub riscv_clint: Option<crate::cpu::riscv::Rv32Clint>,
+    /// PLIC geometry of an RV32 chip whose core complex carries one.
+    pub riscv_plic: Option<crate::cpu::riscv64_plic::PlicParams>,
+    /// True when the chip's RV32 core complex carries a WCH QingKe V2 PFIC
+    /// ([`crate::cpu::qingke_pfic::QingKePfic::for_chip`]).
+    pub riscv_pfic: bool,
+    /// Stable allocation-unique identity for native instruction translators
+    /// that execute directly against this bus without an ARMv7 fabric.
+    pub(crate) native_code_identity: u64,
     /// Enable Cortex-M peripheral/SRAM bit-band alias translation.
     /// False for architectures (e.g. RISC-V) whose memory maps collide with
     /// the bit-band alias ranges 0x42000000–0x44000000 / 0x22000000–0x24000000.
     pub bit_band_enabled: bool,
+    /// The chip's core is ARMv6-M (Cortex-M0/M0+/M1): the SCB has no
+    /// CFSR/HFSR/MMFAR/BFAR and SHCSR holds only SVCALLPENDED, so every fault
+    /// is a HardFault. `configure_cortex_m` hands this to the SCB fault state.
+    pub armv6m: bool,
+    /// The chip's core is ARMv8-M Baseline (Cortex-M23), where AIRCR.PRIGROUP
+    /// is reserved and all implemented priority bits are group priority.
+    pub armv8m_baseline: bool,
     /// Offset (bytes) from the flash base to the application vector table when
     /// a second-stage bootloader precedes it (RP2040 boot2 = `0x100`). `0`
     /// means the vector table sits at the flash base. Carried from the chip
@@ -562,6 +584,10 @@ pub struct SystemBus {
     /// `rebuild_peripheral_ranges` so IRQ-level re-derivation on MMIO write
     /// can poll only those models (not the full bus).
     scheduler_driver_indices: Vec<usize>,
+    /// Indices of interrupt concentrators that consume peripheral IRQ levels.
+    /// Filled in `rebuild_peripheral_ranges` so ordinary IRQ delivery does not
+    /// scan every peripheral on the execution path.
+    irq_input_receiver_indices: Vec<usize>,
     /// Indices of peripherals that drive internal EXTI lines
     /// ([`crate::Peripheral::drives_exti_lines`]). Empty on most chips, which
     /// keeps the per-write delivery check to one length test.
@@ -738,6 +764,11 @@ pub struct SystemBus {
     /// four timer-only accesses (more than one `time_us_64`) so a one-shot
     /// timestamp cannot skip. See [`Self::take_timer_poll_coalesce_eligible`].
     timer_poll_carry: std::cell::Cell<u32>,
+    /// Sites (opaque CPU positions, most recent last) at which a split
+    /// timer-only access was seen since the last side-effecting MMIO. A
+    /// polling loop comes back to a site; straight-line code does not. See
+    /// [`Self::take_timer_poll_coalesce_eligible`].
+    timer_poll_sites: std::cell::Cell<[Option<u64>; 8]>,
     /// Batch-local count of [`MmioAccessClass::SideEffecting`] accesses.
     /// Any non-zero value disqualifies timer-poll coalesce for that batch.
     side_effecting_mmio: std::cell::Cell<u32>,
@@ -810,6 +841,11 @@ pub struct SystemBus {
     ///
     /// [`service_device_pin_drives`]: Self::service_device_pin_drives
     pub(crate) device_pin_pads: Vec<DevicePinPad>,
+    /// Direct external-device output links. These are used when one off-chip
+    /// part drives another without traversing an MCU pad (for example PCF8574
+    /// P0 -> TB6612 AIN1). Empty by default; serviced by the same queued-output
+    /// pass as [`device_pin_pads`](Self::device_pin_pads).
+    pub(crate) device_output_observers: Vec<DeviceOutputObserverBinding>,
     /// Explicitly opted-in pulled-up device-output nets.
     pub(crate) device_open_drain_nets: open_drain::OpenDrainNets,
     /// Off-chip models the bus holds ONLY so something can read them back — the
@@ -844,6 +880,10 @@ pub struct SystemBus {
     /// that host their select pads (see `bus/analog_mux.rs`). Empty by
     /// default -> zero cost.
     pub analog_muxes: Vec<crate::peripherals::components::declarative_analog_mux::AnalogMux>,
+    /// STM32 SPI controllers whose devices name a GPIO `cs_pin`. A write to a
+    /// port owning one of those pins delivers the CS edges (see
+    /// `bus/spi_cs.rs`). Empty by default -> zero cost.
+    pub(crate) spi_cs_watches: Vec<spi_cs::SpiCsWatch>,
     /// Reusable CAN diagnostic clients declared as external devices. They
     /// inject configured CAN frames into a named FDCAN peripheral once it is
     /// running, so ECU examples can be driven by a virtual off-board tester
@@ -909,6 +949,11 @@ pub struct SystemBus {
     /// from then on the post-write and external-input hooks hand outside pad
     /// levels to the peripheral lines they are routed to. False elsewhere.
     pub(crate) wire_inputs_live: bool,
+    /// Set while the logic analyzer watches at least one pad
+    /// ([`crate::Machine::logic_watch`]). A pad-claim write must then be
+    /// bracketed even without a `gpio_net`, or a port never re-registers a
+    /// watched pad with the peripheral line that just claimed it.
+    pub(crate) pad_watch_live: bool,
     /// Test/diagnostic override: force conservative resident execution
     /// even under the `event-scheduler` feature. Deadline semantics remain
     /// identical; only CPU batching changes for differential tests.
@@ -1094,6 +1139,10 @@ pub struct ExternalDeviceDecl {
     pub address: Option<u8>,
     /// `config.cs_pin`, when declared.
     pub cs_pin: Option<String>,
+    /// `(source device id, output role)` for every `device-output://` link
+    /// this device's config names. The SOURCE device reads these when it
+    /// attaches, so a role wired only to another device is still delivered.
+    pub device_output_links: Vec<(String, String)>,
 }
 
 impl ExternalDeviceDecl {
@@ -1118,6 +1167,12 @@ impl ExternalDeviceDecl {
             channel: ext.channel,
             address: addr,
             cs_pin: cs,
+            device_output_links: ext
+                .config
+                .values()
+                .filter_map(|v| v.as_str())
+                .filter_map(crate::peripherals::components::h_bridge_motor::parse_device_output_ref)
+                .collect(),
         }
     }
 }

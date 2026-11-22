@@ -340,7 +340,8 @@ impl WasmSimulator {
     }
 
     /// Returns the current state of all board_io bindings as a JSON array.
-    /// Each entry: { id, active }
+    /// Each entry: { id, active, emission? } — `emission` is the emitted
+    /// `#rrggbb` colour for a binding that declares one (black while off).
     /// Uses peripheral snapshot() to read ODR regardless of register layout.
     #[wasm_bindgen]
     pub fn get_board_io_states(&self) -> JsValue {
@@ -356,10 +357,7 @@ impl WasmSimulator {
 
         for binding in &self.board_io {
             let active = self.read_board_io_state(machine, binding);
-            states.push(serde_json::json!({
-                "id": binding.id,
-                "active": active,
-            }));
+            states.push(binding.state_json(active));
         }
 
         serde_wasm_bindgen::to_value(&states).unwrap_or(JsValue::NULL)

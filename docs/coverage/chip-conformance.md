@@ -8,20 +8,20 @@ This page covers the public models. For every chip we model — public and priva
 
 | Chip | Level | Estate | Peripherals | Reg match (verifiable) | Excluded | Behavior gate |
 |------|-------|--------|-------------|------------------------|----------|---------------|
-| esp32c2 | **L0** | ✓ | 2 | — | — | — |
 | esp32c3 | **L2** | ✓ | 40 | 380/402 (94%) | 190 | firmware_survival::test_esp32c3_demo_survival |
+| esp32c2 | **L1** | ✓ | 22 | — | — | esp32c2_compiled_firmware::esp32c2_compiled_rv32imc_firmware_prints_on_uart0_and_toggles_gpio10 |
 | esp32c6 | **L1** | ✓ | 69 | — | — | firmware_survival::test_esp32c6_demo_survival |
 | litex-vexriscv | **L1** | ✓ | 5 | — | — | firmware_survival::test_litex_vexriscv_smoke_survival |
 | arty-litex-vexriscv | **L1** | ✓ | 6 | — | — | firmware_survival::test_arty_litex_smoke_survival |
 | vegaboard-ri5cy | **L1** | ✓ | 9 | — | — | firmware_survival::test_vegaboard_ri5cy_smoke_survival |
 | stm32l552 | **L1** | ✓ | 50 | — | — | firmware_survival::test_nucleo_l552ze_q_smoke_survival |
-| cc2538sf53 | **L1** | ✓ | 28 | — | — | firmware_survival::test_cc2538dk_smoke_survival |
-| mpfs095t | **L1** | ✓ | 14 | — | — | firmware_survival::test_mpfs_disco_kit_zephyr_survival |
+| cc2538sf53 | **L1** | ✓ | 24 | — | — | firmware_survival::test_cc2538dk_smoke_survival |
+| mpfs095t | **L1** | ✓ | 13 | — | — | firmware_survival::test_mpfs_disco_kit_zephyr_survival |
 | am6234 | **L1** | ✓ | 9 | — | — | firmware_survival::test_sk_am62_zephyr_survival |
 | r5f52618bgfp | **L1** | ✓ | 10 | — | — | firmware_survival::test_ek_rx261_zephyr_survival |
 | pic32mz2048efm144 | **L1** | ✓ | 10 | — | — | firmware_survival::test_curiosity_pic32mz_nuttx_survival |
-| r7fa6m5bh | **L1** | ✓ | 48 | — | — | firmware_survival::test_ek_ra6m5_smoke_survival |
-| r7fa8m1ah | **L1** | ✓ | 44 | — | — | firmware_survival::test_ek_ra8m1_smoke_survival |
+| r7fa6m5bh | **L1** | ✓ | 49 | — | — | firmware_survival::test_ek_ra6m5_smoke_survival |
+| r7fa8m1ah | **L1** | ✓ | 45 | — | — | firmware_survival::test_ek_ra8m1_smoke_survival |
 | amap42kp | **L1** | ✓ | 46 | — | — | firmware_survival::test_apollo4p_evb_smoke_survival |
 | mk64f12 | **L1** | ✓ | 25 | — | — | firmware_survival::test_frdm_k64f_smoke_survival |
 | same70q21b | **L1** | ✓ | 24 | — | — | firmware_survival::test_sam_e70_xplained_smoke_survival |
@@ -56,9 +56,9 @@ This page covers the public models. For every chip we model — public and priva
 | nrf51822 | **L1** | ✓ | 22 | — | — | firmware_survival::test_nrf51822_microbit_v1_smoke_survival |
 | nrf52832 | **L1** | ✓ | 17 | — | — | firmware_survival::test_nrf52832_demo_survival |
 | nrf52833 | **L1** | ✓ | 48 | — | — | firmware_survival::test_nrf52833_microbit_v2_smoke_survival |
-| nrf52840 | **L1** | ✓ | 51 | — | — | firmware_survival::test_nrf52840_demo_survival |
+| nrf52840 | **L1** | ✓ | 53 | — | — | firmware_survival::test_nrf52840_demo_survival |
 | nrf5340 | **L1** | ✓ | 22 | — | — | firmware_survival::test_nrf5340_zephyr_survival |
-| rp2040 | **L1** | ✓ | 24 | — | — | firmware_survival::test_rp2040_demo_survival |
+| rp2040 | **L1** | ✓ | 27 | — | — | firmware_survival::test_rp2040_demo_survival |
 | stm32f103 | **L1** | ✓ | 31 | — | — | stm32f1_exec_oracle |
 | stm32f103rb | **L0** | ✓ | 32 | — | — | — |
 | stm32f103rb-nucleo-bme280-smoke | **L0** | ✓ | 7 | — | — | — |
@@ -86,7 +86,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32f401ve | **L0** | ✓ | 24 | — | — | — |
 | stm32f405 | **L1** | ✓ | 22 | — | — | firmware_survival::test_stm32f405_tier1_survival |
 | stm32f767 | **L1** | ✓ | 37 | — | — | firmware_survival::test_stm32f767_tier1_survival |
-| rp2350 | **L1** | ✓ | 27 | — | — | firmware_survival::test_rp2350_demo_survival |
+| rp2350 | **L1** | ✓ | 28 | — | — | firmware_survival::test_rp2350_demo_survival |
 | stm32f407 | **L1** | ✓ | 34 | — | — | firmware_survival::test_nucleo_f407_smoke_survival |
 | stm32f407ie | **L0** | ✓ | 34 | — | — | — |
 | stm32f407ig | **L0** | ✓ | 34 | — | — | — |
@@ -96,7 +96,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32f407zg | **L0** | ✓ | 34 | — | — | — |
 | stm32g0b1re | **L0** | ✓ | 21 | — | — | — |
 | stm32g474re | **L1** | ✓ | 23 | — | — | firmware_survival::test_stm32g474_zephyr_survival |
-| stm32g431rb | **L0** | ✓ | 22 | — | — | — |
+| stm32g431rb | **L0** | ✓ | 23 | — | — | — |
 | stm32h563 | **L1** | ✓ | 37 | — | — | firmware_survival::test_stm32h563_demo_survival |
 | stm32h533re | **L1** | ✓ | 5 | — | — | stm32h563_walk_differential::stm32h533re_boot_walk_vs_scheduler_is_byte_identical |
 | stm32u575 | **L1** | ✓ | 43 | — | — | firmware_survival::test_stm32u575_zephyr_survival |
@@ -106,6 +106,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32c031c6 | **L0** | ✓ | 29 | — | — | — |
 | stm32l073 | **L2** | ✓ | 42 | 54/54 (100%) | 6 | firmware_survival::test_nucleo_l073rz_smoke_survival |
 | stm32l432kc | **L0** | ✓ | 42 | — | — | — |
+| stm32l031k6 | **L0** | ✓ | 18 | — | — | — |
 | stm32l476 | **L1** | ✓ | 59 | — | — | firmware_survival::test_nucleo_l476rg_demo_survival |
 | stm32wb55 | **L1** | ✓ | 22 | — | — | firmware_survival::test_stm32wb55_zephyr_survival |
 | stm32wba52 | **L1** | ✓ | 21 | — | — | firmware_survival::test_stm32wba52_zephyr_survival |
@@ -115,9 +116,9 @@ This page covers the public models. For every chip we model — public and priva
 | atmega328pb | **L1** | ✓ | 8 | — | — | avr_atmega328pb_usart1::atmega328pb_firmware_uses_usart1_and_drives_pb5 |
 | atmega2560 | **L1** | ✓ | 18 | — | — | avr_mega2560_io::each_led_lands_on_its_mega_port_pin |
 | atmega2561 | **L1** | ✓ | 11 | — | — | avr_atmega2561::atmega2561_boots_and_prints |
-| atmega4809 | **L0** | ✓ | 19 | — | — | — |
+| atmega4809 | **L1** | ✓ | 21 | — | — | avr_nano_every_bme280::nano_every_wire_reads_compensated_bme280_values |
 | atmega32u4 | **L0** | ✓ | 8 | — | — | — |
-| mimxrt1062-teensy41 | **L0** | ✓ | 50 | — | — | — |
+| mimxrt1062-teensy41 | **L0** | ✓ | 49 | — | — | — |
 | atmega1281 | **L1** | ✓ | 11 | — | — | avr_atmega1281_firmware::atmega1281_compiled_firmware_prints_and_drives_pb5 |
 | atsamd21 | **L1** | ✓ | 7 | — | — | firmware_survival::test_atsamd21_nano33_smoke_survival |
 | atsamd51 | **L1** | ✓ | 27 | — | — | firmware_survival::test_atsamd51_metro_m4_smoke_survival |
@@ -138,16 +139,16 @@ This page covers the public models. For every chip we model — public and priva
 | pic24f08ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f08ka102_uart_smoke |
 | pic24f16ka101 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka101_uart_smoke |
 | pic24f16ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka102_uart_smoke |
-| ch32v003f4p6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0 |
+| ch32v003f4p6 | **L1** | ✓ | 8 | — | — | ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0 |
 | ch32l103c8t6 | **L1** | ✓ | 7 | — | — | ch32l103_compiled_firmware::ch32l103_compiled_rv32imac_firmware_toggles_pc13 |
 | ch32v005f6p6 | **L1** | ✓ | 6 | — | — | ch32v005_compiled_firmware::ch32v005_compiled_rv32e_firmware_toggles_pc0 |
 | ch32x035c8t6 | **L1** | ✓ | 5 | — | — | ch32x035_compiled_firmware::ch32x035_compiled_rv32imac_firmware_toggles_pb12 |
 | ch32v006k8u6 | **L1** | ✓ | 6 | — | — | ch32v006_compiled_firmware::ch32v006_compiled_rv32e_firmware_toggles_pb0 |
 | ch32v203c8t6 | **L1** | ✓ | 7 | — | — | ch32v203_compiled_firmware::ch32v203_compiled_rv32imac_firmware_toggles_pc13 |
-| ch32v003f4u6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
-| ch32v003a4m6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
+| ch32v003f4u6 | **L1** | ✓ | 8 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
+| ch32v003a4m6 | **L1** | ✓ | 8 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
 | at32f421g8u7 | **L1** | ✓ | 22 | — | — | at32f421_contract::vendor_sdk_smoke_runs_flash_dma_and_timer_irq_paths |
-| ch32v003j4m6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
+| ch32v003j4m6 | **L1** | ✓ | 8 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
 | esp32h2 | **L0** | ✓ | 3 | — | — | — |
 | esp32c5 | **L0** | ✓ | 4 | — | — | — |
 | esp32c61 | **L0** | ✓ | 5 | — | — | — |
@@ -155,9 +156,11 @@ This page covers the public models. For every chip we model — public and priva
 | nrf54l10 | **L0** | ✓ | 6 | — | — | — |
 | esp32p4 | **L0** | ✓ | 4 | — | — | — |
 | esp32s2 | **L0** | ✓ | 2 | — | — | — |
-| rp2040-feather | **L0** | ✓ | 24 | — | — | — |
-| rp2350-feather | **L0** | ✓ | 27 | — | — | — |
-| stm32h723zg | **L0** | ✓ | 9 | — | — | — |
+| esp32s2-arduino | **L1** | ✓ | 32 | — | — | esp32s2_arduino_boot::stock_arduino_l0_prints_over_uart0 |
+| rp2040-feather | **L0** | ✓ | 27 | — | — | — |
+| rp2350-feather | **L0** | ✓ | 28 | — | — | — |
+| stm32h723zg | **L0** | ✓ | 43 | — | — | — |
+| stm32h753zi | **L0** | ✓ | 43 | — | — | — |
 | esp32c6fh4 | **L0** | ✓ | 69 | — | — | — |
 
 ## Declared platforms without a model

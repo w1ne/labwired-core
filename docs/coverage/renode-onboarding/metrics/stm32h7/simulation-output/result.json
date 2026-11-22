@@ -1,0 +1,696 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "STM32H7 register smoke"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "tim2 gated=1 arr_reset=1 w32=1 ug=1 uif_clr=1 run=1 masked=1 irq=3 stray=0 stop=1 opm=1 opm_irq=2 rel=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "adc1 inp16=03FF gated=1 clock=1 pin=1 ldo=1 cal=1 ready=1 eoc=1 eos=1 start_clr=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioPortB:0",
+          "min_edges": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1073760284,
+      1476527124,
+      13,
+      111,
+      105,
+      0,
+      103,
+      537001968,
+      10,
+      98,
+      48,
+      61,
+      140864,
+      537001924,
+      104,
+      134229486
+    ],
+    "pc": 134229486,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": true
+  },
+  "firmware_hash": "6c6772521fa3dfdfe7e32c9a2a878332f5b75d271a7aba8d142a4cd9d2b4d381",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32h743-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32h7.yaml",
+    "script": "examples/renode-onboarding/stm32h7-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1476543488,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortA",
+        "kind": "native",
+        "base": 1476526080,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortB",
+        "kind": "native",
+        "base": 1476527104,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortD",
+        "kind": "native",
+        "base": 1476529152,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart3",
+        "kind": "native",
+        "base": 1073760256,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim2",
+        "kind": "native",
+        "base": 1073741824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc1",
+        "kind": "native",
+        "base": 1073881088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "pot_adc1_inp16",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "adc",
+          "channel": 16
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 4000000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioPortB",
+        "pin": 0,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 19107,
+            "value": 1
+          },
+          {
+            "cycle": 225418,
+            "value": 0
+          },
+          {
+            "cycle": 431727,
+            "value": 1
+          },
+          {
+            "cycle": 638038,
+            "value": 0
+          },
+          {
+            "cycle": 844347,
+            "value": 1
+          },
+          {
+            "cycle": 1050658,
+            "value": 0
+          },
+          {
+            "cycle": 1256967,
+            "value": 1
+          },
+          {
+            "cycle": 1463278,
+            "value": 0
+          },
+          {
+            "cycle": 1669587,
+            "value": 1
+          },
+          {
+            "cycle": 1875898,
+            "value": 0
+          },
+          {
+            "cycle": 2082207,
+            "value": 1
+          },
+          {
+            "cycle": 2288518,
+            "value": 0
+          },
+          {
+            "cycle": 2494827,
+            "value": 1
+          },
+          {
+            "cycle": 2701138,
+            "value": 0
+          },
+          {
+            "cycle": 2907447,
+            "value": 1
+          },
+          {
+            "cycle": 3113758,
+            "value": 0
+          },
+          {
+            "cycle": 3320067,
+            "value": 1
+          },
+          {
+            "cycle": 3526378,
+            "value": 0
+          },
+          {
+            "cycle": 3732687,
+            "value": 1
+          },
+          {
+            "cycle": 3938998,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 53,
+            "state": "0"
+          },
+          {
+            "cycle": 19107,
+            "state": "1"
+          },
+          {
+            "cycle": 225418,
+            "state": "0"
+          },
+          {
+            "cycle": 431727,
+            "state": "1"
+          },
+          {
+            "cycle": 638038,
+            "state": "0"
+          },
+          {
+            "cycle": 844347,
+            "state": "1"
+          },
+          {
+            "cycle": 1050658,
+            "state": "0"
+          },
+          {
+            "cycle": 1256967,
+            "state": "1"
+          },
+          {
+            "cycle": 1463278,
+            "state": "0"
+          },
+          {
+            "cycle": 1669587,
+            "state": "1"
+          },
+          {
+            "cycle": 1875898,
+            "state": "0"
+          },
+          {
+            "cycle": 2082207,
+            "state": "1"
+          },
+          {
+            "cycle": 2288518,
+            "state": "0"
+          },
+          {
+            "cycle": 2494827,
+            "state": "1"
+          },
+          {
+            "cycle": 2701138,
+            "state": "0"
+          },
+          {
+            "cycle": 2907447,
+            "state": "1"
+          },
+          {
+            "cycle": 3113758,
+            "state": "0"
+          },
+          {
+            "cycle": 3320067,
+            "state": "1"
+          },
+          {
+            "cycle": 3526378,
+            "state": "0"
+          },
+          {
+            "cycle": 3732687,
+            "state": "1"
+          },
+          {
+            "cycle": 3938998,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 20
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioPortB",
+      "number": 0,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "STM32H7 register smoke",
+        "cycle_lo": 0,
+        "cycle": 1000,
+        "end_cycle": 1000
+      },
+      {
+        "text": "tim2 gated=1 arr_reset=1 w32=1 ug=1 uif_clr=1 run=1 masked=1 irq=3 stray=0 stop=1 opm=1 opm_irq=2 rel=1 ok",
+        "cycle_lo": 11000,
+        "cycle": 21000,
+        "end_cycle": 21000
+      },
+      {
+        "text": "adc1 inp16=03FF gated=1 clock=1 pin=1 ldo=1 cal=1 ready=1 eoc=1 eos=1 start_clr=1 ok",
+        "cycle_lo": 11000,
+        "cycle": 21000,
+        "end_cycle": 21000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 11000,
+        "cycle": 21000,
+        "end_cycle": 21000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 221000,
+        "cycle": 231000,
+        "end_cycle": 231000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 431000,
+        "cycle": 441000,
+        "end_cycle": 441000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 631000,
+        "cycle": 641000,
+        "end_cycle": 641000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 841000,
+        "cycle": 851000,
+        "end_cycle": 851000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 1041000,
+        "cycle": 1051000,
+        "end_cycle": 1051000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 1251000,
+        "cycle": 1261000,
+        "end_cycle": 1261000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 1461000,
+        "cycle": 1471000,
+        "end_cycle": 1471000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 1661000,
+        "cycle": 1671000,
+        "end_cycle": 1671000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 1871000,
+        "cycle": 1881000,
+        "end_cycle": 1881000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 2081000,
+        "cycle": 2091000,
+        "end_cycle": 2091000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 2281000,
+        "cycle": 2291000,
+        "end_cycle": 2291000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 2491000,
+        "cycle": 2501000,
+        "end_cycle": 2501000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 2701000,
+        "cycle": 2711000,
+        "end_cycle": 2711000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 2901000,
+        "cycle": 2911000,
+        "end_cycle": 2911000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 3111000,
+        "cycle": 3121000,
+        "end_cycle": 3121000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 3311000,
+        "cycle": 3321000,
+        "end_cycle": 3321000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 3521000,
+        "cycle": 3531000,
+        "end_cycle": 3531000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 3731000,
+        "cycle": 3741000,
+        "end_cycle": 3741000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 3931000,
+        "cycle": 3941000,
+        "end_cycle": 3941000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "stimuli": [
+    {
+      "channel": "position",
+      "component": "pot_adc1_inp16",
+      "value": 25.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 1000
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 11844,
+    "data_bytes": 0,
+    "bss_bytes": 8,
+    "flash_used_bytes": 11844,
+    "ram_static_bytes": 8,
+    "flash_total_bytes": 1048576,
+    "ram_total_bytes": 131072,
+    "flash_used_pct": 1.13,
+    "ram_static_pct": 0.01,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 131064,
+    "main_stack_high_water_bytes": 104,
+    "main_stack_free_min_bytes": 130960,
+    "main_stack_base": 536870920,
+    "main_stack_top": 537001984,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 131064,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 130960,
+    "heap_base": 536870920,
+    "heap_top": 537001984
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 3264,
+    "memory_writes": 88,
+    "peripheral_accesses": 3872571,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134229434,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134229464,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134229476,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134229500,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134229536,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134229544,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134229422,
+        "count": 273,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134229472,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134229474,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134229494,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134229530,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134229540,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134229486,
+        "count": 270,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134229426,
+        "count": 235,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134229436,
+        "count": 235,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134229438,
+        "count": 235,
+        "symbol": "core::ptr::read_volatile"
+      }
+    ],
+    "stalled_poll": {
+      "peripheral": "gpioPortB",
+      "offset": 20,
+      "accesses": 59102
+    }
+  }
+}

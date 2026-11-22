@@ -1,0 +1,628 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 800000,
+  "cycles": 800000,
+  "instructions": 800000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 800000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 800000
+    }
+  },
+  "limits": {
+    "max_steps": 800000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "STM32F4 shared profile smoke"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "STM32F429 PSP tailchain PASS"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "adc1 in1=000003FF gated=1 clock=1 eoc=1 irq=1 clear=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "adc1 scan=000003FF,000007FF irq=1 pending=1 end=1 released=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "adc1 scan_cont_groups=000007FF,000007FF,000007FF groups=3 irq=1 ovr=0 stop=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioPortD:12",
+          "min_edges": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      4096,
+      268435456,
+      27392,
+      0,
+      1073875988,
+      1073759232,
+      2047,
+      537001968,
+      0,
+      2047,
+      0,
+      1,
+      1,
+      537001840,
+      1,
+      134234484
+    ],
+    "pc": 134234484,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": true
+  },
+  "firmware_hash": "3eee9490e21991696056200cb90c2c8f5b39f15aefc7e40709d3fd7089e72a5b",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32f429-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f412.yaml",
+    "script": "examples/renode-onboarding/stm32f412-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073759232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortA",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortD",
+        "kind": "native",
+        "base": 1073875968,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073887232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc1",
+        "kind": "native",
+        "base": 1073815552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "pot_adc1_in1",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "adc",
+          "channel": 1
+        },
+        "artifacts": []
+      },
+      {
+        "id": "pot_adc1_in2",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "adc",
+          "channel": 2
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 800000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioPortD",
+        "pin": 12,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 3223,
+            "value": 1
+          },
+          {
+            "cycle": 44475,
+            "value": 0
+          },
+          {
+            "cycle": 85728,
+            "value": 1
+          },
+          {
+            "cycle": 126980,
+            "value": 0
+          },
+          {
+            "cycle": 168233,
+            "value": 1
+          },
+          {
+            "cycle": 209485,
+            "value": 0
+          },
+          {
+            "cycle": 250738,
+            "value": 1
+          },
+          {
+            "cycle": 291990,
+            "value": 0
+          },
+          {
+            "cycle": 333243,
+            "value": 1
+          },
+          {
+            "cycle": 374495,
+            "value": 0
+          },
+          {
+            "cycle": 415748,
+            "value": 1
+          },
+          {
+            "cycle": 457000,
+            "value": 0
+          },
+          {
+            "cycle": 498253,
+            "value": 1
+          },
+          {
+            "cycle": 539505,
+            "value": 0
+          },
+          {
+            "cycle": 580758,
+            "value": 1
+          },
+          {
+            "cycle": 622010,
+            "value": 0
+          },
+          {
+            "cycle": 663263,
+            "value": 1
+          },
+          {
+            "cycle": 704515,
+            "value": 0
+          },
+          {
+            "cycle": 745768,
+            "value": 1
+          },
+          {
+            "cycle": 787020,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 53,
+            "state": "0"
+          },
+          {
+            "cycle": 3223,
+            "state": "1"
+          },
+          {
+            "cycle": 44475,
+            "state": "0"
+          },
+          {
+            "cycle": 85728,
+            "state": "1"
+          },
+          {
+            "cycle": 126980,
+            "state": "0"
+          },
+          {
+            "cycle": 168233,
+            "state": "1"
+          },
+          {
+            "cycle": 209485,
+            "state": "0"
+          },
+          {
+            "cycle": 250738,
+            "state": "1"
+          },
+          {
+            "cycle": 291990,
+            "state": "0"
+          },
+          {
+            "cycle": 333243,
+            "state": "1"
+          },
+          {
+            "cycle": 374495,
+            "state": "0"
+          },
+          {
+            "cycle": 415748,
+            "state": "1"
+          },
+          {
+            "cycle": 457000,
+            "state": "0"
+          },
+          {
+            "cycle": 498253,
+            "state": "1"
+          },
+          {
+            "cycle": 539505,
+            "state": "0"
+          },
+          {
+            "cycle": 580758,
+            "state": "1"
+          },
+          {
+            "cycle": 622010,
+            "state": "0"
+          },
+          {
+            "cycle": 663263,
+            "state": "1"
+          },
+          {
+            "cycle": 704515,
+            "state": "0"
+          },
+          {
+            "cycle": 745768,
+            "state": "1"
+          },
+          {
+            "cycle": 787020,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 20
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioPortD",
+      "number": 12,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "STM32F4 shared profile smoke",
+        "cycle_lo": 0,
+        "cycle": 1000,
+        "end_cycle": 1000
+      },
+      {
+        "text": "systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok",
+        "cycle_lo": 0,
+        "cycle": 1000,
+        "end_cycle": 11000
+      },
+      {
+        "text": "STM32F429 PSP tailchain PASS",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
+      },
+      {
+        "text": "adc1 in1=000003FF gated=1 clock=1 eoc=1 irq=1 clear=1 ok",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
+      },
+      {
+        "text": "adc1 scan=000003FF,000007FF irq=1 pending=1 end=1 released=1 ok",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
+      },
+      {
+        "text": "adc1 scan_cont_groups=000007FF,000007FF,000007FF groups=3 irq=1 ovr=0 stop=1 ok",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "stimuli": [
+    {
+      "channel": "position",
+      "component": "pot_adc1_in1",
+      "value": 25.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 1000
+    },
+    {
+      "channel": "position",
+      "component": "pot_adc1_in2",
+      "value": 50.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 1000
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 17212,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 17212,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 1048576,
+    "ram_total_bytes": 131072,
+    "flash_used_pct": 1.64,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 131072,
+    "main_stack_high_water_bytes": 140,
+    "main_stack_free_min_bytes": 130736,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537001984,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 131072,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 130736,
+    "heap_base": 536870912,
+    "heap_top": 537001984
+  },
+  "metrics": {
+    "cycles": 800000,
+    "instructions": 800000,
+    "steps_executed": 800000,
+    "memory_reads": 3466,
+    "memory_writes": 144,
+    "peripheral_accesses": 773537,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134234304,
+        "count": 40,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234316,
+        "count": 40,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234328,
+        "count": 40,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234340,
+        "count": 40,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234496,
+        "count": 40,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234258,
+        "count": 39,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134234262,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234264,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234268,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234270,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234274,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234276,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234280,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234282,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234286,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234288,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      }
+    ],
+    "stalled_poll": {
+      "peripheral": "gpioPortD",
+      "offset": 20,
+      "accesses": 12587
+    }
+  }
+}

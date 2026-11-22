@@ -6,3 +6,27 @@
 
 name: sam4s_xplained
 chip: ../../chips/onboarding/sam4s_xplained.yaml
+# SAM4S Xplained board IO (ASF sam/boards/sam4s_xplained/sam4s_xplained.h;
+# Renode sam4s_xplained.repl wires only D9 and BP2): LED D9 on PC10 and LED
+# D10 on PC17, both LEDx_ACTIVE_LEVEL 0 (lit when driven low); user button
+# BP2 on PA5, which pulls the pad to GND when pressed (active low; the
+# firmware enables the PIO pull-up, as ASF does).
+board_io:
+  - id: "d9"
+    kind: "led"
+    peripheral: "pioC"
+    pin: 10
+    signal: "output"
+    active_high: false
+  - id: "d10"
+    kind: "led"
+    peripheral: "pioC"
+    pin: 17
+    signal: "output"
+    active_high: false
+  - id: "bp2"
+    kind: "button"
+    peripheral: "pioA"
+    pin: 5
+    signal: "input"
+    active_high: false

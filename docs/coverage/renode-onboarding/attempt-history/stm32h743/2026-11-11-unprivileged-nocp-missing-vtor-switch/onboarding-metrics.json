@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32h743",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 4000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-stm32h743-smoke",
+  "target_triple": "thumbv7em-none-eabihf",
+  "script": "examples/renode-onboarding/stm32h743-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32h743.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T00:52:39Z",
+  "finished_at_utc": "2026-11-11T00:52:42Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2775,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-11T00:52:42.255676Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: \"cortex-m7 cpacr nocp fault=1 ipsr=00000006 cfsr=00080000 extended=1\" }) (captured len=975)",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.577,
+    "build_firmware": 1.462,
+    "run_smoke": 0.671
+  },
+  "stages_ms": {
+    "build_cli": 577,
+    "build_firmware": 1462,
+    "run_smoke": 671
+  }
+}

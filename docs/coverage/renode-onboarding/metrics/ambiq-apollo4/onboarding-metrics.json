@@ -1,0 +1,37 @@
+{
+  "target_id": "ambiq-apollo4",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 4000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-apollo4p-evb-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/ambiq-apollo4-smoke.yaml",
+  "system": "configs/systems/onboarding/ambiq-apollo4.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-19T17:36:48Z",
+  "finished_at_utc": "2026-11-19T17:36:50Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1828,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.523,
+    "build_firmware": 0.581,
+    "run_smoke": 0.674
+  },
+  "stages_ms": {
+    "build_cli": 523,
+    "build_firmware": 581,
+    "run_smoke": 674
+  }
+}

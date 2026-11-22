@@ -8,6 +8,8 @@
 static void logBegin() {
   Serial.begin(115200);
 #if (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)) || defined(__AVR_ATmega32U4__) || \
+    defined(ARDUINO_SAMD_NANO_33_IOT) || \
+    defined(ARDUINO_ARDUINO_NANO33BLE) || \
     ((defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)) && \
      defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE)
   // arduino-pico (Pico 2) and the ATmega32U4 (Leonardo): Serial is native USB
@@ -15,6 +17,10 @@ static void logBegin() {
   // on the twin alike.
   // ESP32-S2/S3 with ARDUINO_USB_MODE=0 (Arduino Nano ESP32): Serial is
   // TinyUSB CDC on USB-OTG, which drops writes until DTR the same way.
+  // ArduinoCore-samd on the Nano 33 IoT: Serial is SerialUSB, native USB CDC,
+  // and operator bool() is false until the host raises DTR.
+  // ArduinoCore-mbed on the Nano 33 BLE: Serial is USB CDC on the nRF52840
+  // USBD and drops writes until the host raises DTR.
   while (!Serial) delay(1);
 #endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)
@@ -201,8 +207,9 @@ static bool lw_can_probe() {
 }
 #define LW_HAS_CAN 1
 
-#elif defined(ARDUINO_NUCLEO_G474RE) || defined(STM32G474xx)
-// G474 FDCAN1 — the H5 enter_loopback sequence again. Registers at
+#elif defined(ARDUINO_NUCLEO_G474RE) || defined(STM32G474xx) || \
+    defined(ARDUINO_NUCLEO_G431RB) || defined(STM32G431xx)
+// G474/G431 FDCAN1 (G431 SRAMCAN_BASE is the same 0x4000A400) — the H5 enter_loopback sequence again. Registers at
 // 0x40006400, SRAMCAN a separate block at 0x4000A400 (stm32g474xx.h
 // FDCAN1_BASE / SRAMCAN_BASE). RCC APB1ENR1 @ 0x40021000 + 0x58, FDCANEN bit 25
 // (RCC_APB1ENR1_FDCANEN_Pos).
@@ -333,6 +340,32 @@ static bool lw_can_probe() {
   const uint32_t pcr = 0x60096000u;
   mmio_w(pcr + 0x5C, (mmio_r(pcr + 0x5C) | 1u) & ~(1u << 1));
   const uint32_t twai = 0x6000B000u;
+  mmio_w(twai + 0x00, 0x0); // leave reset mode
+  mmio_w(twai + 0x40, 0x01u); // DLC=1
+  mmio_w(twai + 0x44, 0x24u); // ID[10:3] of 0x123
+  mmio_w(twai + 0x48, 0x60u); // ID[2:0]<<5
+  mmio_w(twai + 0x4C, 0xA5u);
+  mmio_w(twai + 0x04, 1u << 4); // CMD.self_rx_req
+  if ((mmio_r(twai + 0x08) & 1u) == 0) {
+    return false;
+  }
+  if ((mmio_r(twai + 0x74) & 0x7Fu) != 1u) {
+    return false;
+  }
+  uint8_t fi = (uint8_t)(mmio_r(twai + 0x40) & 0xFFu);
+  uint8_t id_hi = (uint8_t)(mmio_r(twai + 0x44) & 0xFFu);
+  uint8_t id_lo = (uint8_t)(mmio_r(twai + 0x48) & 0xFFu);
+  uint8_t data0 = (uint8_t)(mmio_r(twai + 0x4C) & 0xFFu);
+  uint16_t sid = ((uint16_t)id_hi << 3) | ((uint16_t)id_lo >> 5);
+  return fi == 0x01u && sid == 0x123u && data0 == 0xA5u;
+}
+#define LW_HAS_CAN 1
+
+#elif defined(ARDUINO_ESP32S2_DEV) || defined(CONFIG_IDF_TARGET_ESP32S2)
+// ESP32-S2 TWAI @ 0x3F42B000 (esp32s2.peripherals.ld) — the S3 twai_dev_t
+// map, so the same self-RX + RX_MSG_CNT + std ID 0x123 / data 0xA5 check.
+static bool lw_can_probe() {
+  const uint32_t twai = 0x3F42B000u;
   mmio_w(twai + 0x00, 0x0); // leave reset mode
   mmio_w(twai + 0x40, 0x01u); // DLC=1
   mmio_w(twai + 0x44, 0x24u); // ID[10:3] of 0x123

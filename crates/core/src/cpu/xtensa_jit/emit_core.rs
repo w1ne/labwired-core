@@ -1357,6 +1357,30 @@ mod tests {
         assert!(ops.is_none(), "must refuse unsupported opcode");
     }
 
+    /// MAC16 AA is handled by the general `!is_supported` deopt, not a
+    /// per-op INTERPRETER_ONLY allow-list entry. `umul.aa.ll a0, a0`
+    /// (op0=4, op2=7, r=0, op1=0) is Instruction::Mac16Aa; the walker
+    /// must refuse the whole hot block so the interpreter runs it.
+    #[test]
+    fn walker_refuses_mac16_aa() {
+        let word: u32 = 0x0070_0004;
+        let ins = xtensa::decode(word);
+        assert!(
+            matches!(ins, Instruction::Mac16Aa { .. }),
+            "fixture must decode as Mac16Aa, got {ins:?}",
+        );
+        assert!(
+            !is_supported(&ins),
+            "Mac16Aa is not in the hot-block emit set"
+        );
+        let text = word.to_le_bytes()[..3].to_vec();
+        let ops = walk_bb(0, |pc| Some(pc as usize), &text, 16);
+        assert!(
+            ops.is_none(),
+            "hot blocks containing Mac16Aa must deopt via the general unsupported path"
+        );
+    }
+
     /// The terminator-aware walker hands back the decoded terminator the
     /// generic emitter needs; the back-compat `walk_bb` still drops it.
     #[test]

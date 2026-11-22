@@ -1,0 +1,37 @@
+{
+  "target_id": "sifive-fu540",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": false,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 0,
+    "stop_reason": "exception"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-sifive-fu540-smoke",
+  "target_triple": "riscv64imac-unknown-none-elf",
+  "script": "examples/renode-onboarding/sifive-fu540-smoke.yaml",
+  "system": "configs/systems/onboarding/sifive-fu540.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-04T15:40:45Z",
+  "finished_at_utc": "2026-11-04T15:41:00Z",
+  "elapsed_seconds": 16,
+  "elapsed_ms": 15677,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-04T15:41:00.872501Z ERROR labwired_cli::execute: Simulation error at step 0: not implemented: eight-byte physical access at 0x20000010 requires RAM; MMIO64 is unsupported",
+  "failure_hint": "Model gap. Check unsupported access logs and implement/fix the first missing peripheral behavior.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 14.305,
+    "build_firmware": 0.881,
+    "run_smoke": 0.476
+  },
+  "stages_ms": {
+    "build_cli": 14305,
+    "build_firmware": 881,
+    "run_smoke": 476
+  }
+}

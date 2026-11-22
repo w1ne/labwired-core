@@ -1,0 +1,217 @@
+{
+  "status": "passed",
+  "runtime": "compiled-wasm",
+  "firmware_bytes": 218,
+  "cpu_emulation": false,
+  "catalog_device_type": "lipo_charger",
+  "default_mv": 1875,
+  "positive_mv": 1950,
+  "negative_mv": 1875,
+  "high_charge_mv": 2100,
+  "observations": {
+    "positive": {
+      "soc_pct": 50,
+      "usb_present": 1,
+      "default_mv": 1875,
+      "result_mv": 1950,
+      "time_ns": 1000,
+      "trace": {
+        "time_unit": "ns",
+        "channels": [
+          {
+            "name": "lipo-battery.voltage_mv",
+            "port_names": [
+              "battery_mv"
+            ],
+            "unit": "mV"
+          }
+        ],
+        "dropped": 0,
+        "samples": [
+          {
+            "cycle": 0,
+            "time_ns": 0,
+            "values": [
+              1875
+            ]
+          },
+          {
+            "cycle": 1,
+            "time_ns": 1000,
+            "values": [
+              1950
+            ]
+          }
+        ]
+      }
+    },
+    "negative": {
+      "soc_pct": 50,
+      "usb_present": 0,
+      "default_mv": 1875,
+      "result_mv": 1875,
+      "time_ns": 1000,
+      "trace": {
+        "time_unit": "ns",
+        "channels": [
+          {
+            "name": "lipo-battery.voltage_mv",
+            "port_names": [
+              "battery_mv"
+            ],
+            "unit": "mV"
+          }
+        ],
+        "dropped": 0,
+        "samples": [
+          {
+            "cycle": 0,
+            "time_ns": 0,
+            "values": [
+              1875
+            ]
+          },
+          {
+            "cycle": 1,
+            "time_ns": 1000,
+            "values": [
+              1875
+            ]
+          }
+        ]
+      }
+    },
+    "high_charge": {
+      "soc_pct": 100,
+      "usb_present": 0,
+      "default_mv": 1875,
+      "result_mv": 2100,
+      "time_ns": 1000,
+      "trace": {
+        "time_unit": "ns",
+        "channels": [
+          {
+            "name": "lipo-battery.voltage_mv",
+            "port_names": [
+              "battery_mv"
+            ],
+            "unit": "mV"
+          }
+        ],
+        "dropped": 0,
+        "samples": [
+          {
+            "cycle": 0,
+            "time_ns": 0,
+            "values": [
+              1875
+            ]
+          },
+          {
+            "cycle": 1,
+            "time_ns": 1000,
+            "values": [
+              2100
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "native_model_equality": true,
+  "run_report": {
+    "assumptions": [
+      "The registered catalog model approximates terminal voltage as 3300–4200 mV linearly over state of charge.",
+      "A connected charger adds a fixed 150 mV before the terminal voltage is clamped at 4200 mV.",
+      "The observable is the modeled half-voltage divider output, sampled at 1 us boundaries."
+    ],
+    "execution_path": "flex_portable_wasm",
+    "execution_scope": {
+      "chip_parity": "not_established",
+      "detailed_target_execution_selected": false,
+      "firmware": "portable_behavior",
+      "full_board_coverage": "not_established",
+      "original_target_firmware_executed": false
+    },
+    "manifest_sha256": "336ee4bebea2c50e3d3d75651a7688775af4439a85287e48276c28651fe054d0",
+    "model_name": "flex-lipo-charger-dual-stimulus",
+    "models": [
+      {
+        "adapter": "behavior",
+        "config": {
+          "device_type": "lipo_charger"
+        },
+        "id": "lipo-battery",
+        "inputs": [
+          {
+            "name": "soc_pct",
+            "signal": "environment.soc_pct"
+          },
+          {
+            "name": "usb_present",
+            "signal": "environment.usb_present"
+          }
+        ],
+        "model_type": "lipo_charger",
+        "outputs": [
+          {
+            "name": "voltage_mv",
+            "signal": "board.battery_divider_mv"
+          }
+        ],
+        "step_ns": 1000
+      }
+    ],
+    "ports": [
+      {
+        "access": "write",
+        "initial": 50,
+        "kind": "number",
+        "name": "soc_pct",
+        "signal": "environment.soc_pct",
+        "unit": "%"
+      },
+      {
+        "access": "write",
+        "initial": 0,
+        "kind": "number",
+        "name": "usb_present",
+        "signal": "environment.usb_present",
+        "unit": "1"
+      },
+      {
+        "access": "read",
+        "kind": "number",
+        "name": "battery_mv",
+        "signal": "board.battery_divider_mv",
+        "unit": "mV"
+      }
+    ],
+    "schema_version": 1,
+    "scope_notes_complete": true,
+    "target_cpu_emulated": false,
+    "time_unit": "ns",
+    "unsupported_checks": [
+      "LiPo chemistry, discharge curve variation, temperature, aging, and physical safety behavior.",
+      "TP4056 control-loop dynamics, charge current, and the CHRG status pin."
+    ]
+  },
+  "checks": [
+    "portable-firmware-execution",
+    "two-input-routing",
+    "dimensionless-input-unit",
+    "catalog-default",
+    "native-model-equality",
+    "analog-trace-nanoseconds",
+    "charging-positive-control",
+    "charging-negative-control",
+    "state-of-charge-control"
+  ],
+  "measured_browser_ms": 404.3,
+  "browser": "156.0.8078.79",
+  "browser_driver": "Playwright",
+  "core_commit": "3c3d634807daf29b91a195f6b8d9f5a7f58c4a9a",
+  "firmware_sha256": "94261c15ae0e4650dad0c971cd117fe1b818c6988c14be42bbc41d921b356dd3",
+  "firmware_source_sha256": "789ab49b475787252887531e3465aff35a466dda2f75285ecb902da8cde807c2",
+  "system_sha256": "336ee4bebea2c50e3d3d75651a7688775af4439a85287e48276c28651fe054d0"
+}

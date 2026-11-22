@@ -1,0 +1,46 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+   Compiling firmware-f4-discovery-smoke v0.1.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-f4-discovery-smoke)
+error[E0425]: cannot find value `SPI_SR` in this scope
+   --> crates/firmware-f4-discovery-smoke/src/main.rs:209:22
+    |
+ 48 | const SPI1_SR: *const u32 = (SPI1 + 0x08) as *const u32;
+    | -------------------------------------------------------- similarly named constant `SPI1_SR` defined here
+...
+209 |         if !wait_spi(SPI_SR, SPI_SR_TXE, SPI_SR_TXE) {
+    |                      ^^^^^^
+    |
+help: a constant with a similar name exists
+    |
+209 |         if !wait_spi(SPI1_SR, SPI_SR_TXE, SPI_SR_TXE) {
+    |                         +
+
+error[E0425]: cannot find value `SPI_SR` in this scope
+   --> crates/firmware-f4-discovery-smoke/src/main.rs:224:25
+    |
+ 48 | const SPI1_SR: *const u32 = (SPI1 + 0x08) as *const u32;
+    | -------------------------------------------------------- similarly named constant `SPI1_SR` defined here
+...
+224 |     let idle = wait_spi(SPI_SR, SPI_SR_BSY, 0);
+    |                         ^^^^^^
+    |
+help: a constant with a similar name exists
+    |
+224 |     let idle = wait_spi(SPI1_SR, SPI_SR_BSY, 0);
+    |                            +
+
+For more information about this error, try `rustc --explain E0425`.
+error: could not compile `firmware-f4-discovery-smoke` (bin "firmware-f4-discovery-smoke") due to 2 previous errors

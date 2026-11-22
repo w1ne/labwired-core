@@ -1,0 +1,35 @@
+# `labwired test --script test-pause-and-hold-reset.yaml`. A tap starts focus, a
+# second tap pauses it, and a hold of 2 s goes back to idle with one chirp.
+# The release after the hold is not a tap.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: min0 }, { port: leaf }, { port: buzz }, { port: touch }] }
+  - call: { export: loop, repeat: 2344 }       # 50 ms idle
+  - set: { port: touch_contact, value: 1 }
+  - call: { export: loop, repeat: 2344 }
+  - set: { port: touch_contact, value: 0 }
+  - call: { export: loop, repeat: 2344 }       # first tap: focus
+  - set: { port: touch_contact, value: 1 }
+  - call: { export: loop, repeat: 2344 }
+  - set: { port: touch_contact, value: 0 }
+  - call: { export: loop, repeat: 2344 }       # second tap: paused
+  - set: { port: touch_contact, value: 1 }
+  - call: { export: loop, repeat: 98440 }      # 2.1 s hold: reset and chirp
+  - set: { port: touch_contact, value: 0 }
+  - call: { export: loop, repeat: 2344 }       # release after a hold
+limits:
+  max_steps: 1000000000
+  max_time_ns: 5000000000
+assertions:
+  - entry_result: { equals: 1, step: 5 }       # focus
+  - entry_result: { equals: 5, step: 9 }       # focus, paused
+  - entry_result: { equals: 0, step: 11 }      # idle after the hold
+  - entry_result: { equals: 0 }                # the release did not start focus
+  - digital_edges: { port: buzz, count: 474, to_ns: 149586000 }
+  - digital_edges: { port: buzz, count: 948 }
+  - digital_edges: { port: leaf, count: 0 }
+  - port_value: { port: d14, equals: 0 }

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.104695">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="ed8dca5031bd293a9ec9e0655956cd4690213b9fc6867a96024e19d1c7c89aa1"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.104695">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: NANO_EVERY_MAX31855" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: TC=25.00 C" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: CJ=22.0000 C" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: gpio_edges: portb:1 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

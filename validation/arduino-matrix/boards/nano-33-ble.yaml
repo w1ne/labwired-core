@@ -1,0 +1,16 @@
+id: nano-33-ble
+chip: nrf52840
+system: systems/nano-33-ble.yaml
+pio: { platform: nordicnrf52, board: nano33ble, framework: arduino }
+max_steps: 10000000
+budget_reason: "Mbed OS start-up, then USB enumeration and the host opening the CDC port (`while (!Serial)`): the first marker prints after 2.2M cycles, L6 ends at 4.2M"
+led_watch: "gpio0:13"
+led_min_edges: 2
+# L6 is UART-only on this row (no pwm_watch). analogWrite(LED_BUILTIN = D13 =
+# P0.13) plays PWM0 with PSEL.OUT[0] = P0.13, but a watch armed at reset does
+# not follow the pad to the PWM: see PROBLEMS.md.
+family: nrf
+notes: "Arduino Nano 33 BLE Rev2 (ArduinoCore-mbed): Serial is native USB CDC on the nRF52840 USBD model and a scripted host"
+sketches_skip: [L8_can]
+sketches_skip_reason:
+  L8_can: "nRF52840 has no CAN controller"

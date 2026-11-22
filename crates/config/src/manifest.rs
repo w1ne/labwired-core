@@ -56,6 +56,84 @@ pub struct BoardIoBinding {
     /// vocabulary. Absent means `pressed`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel: Option<String>,
+    /// Visible light this output gives off while it is asserted. Any output
+    /// binding may declare it (an indicator LED, a lamp, a module's status
+    /// light); the colour comes from the part's catalog data. The engine
+    /// reports the emitted colour with the binding's live state, see
+    /// [`BoardIoBinding::emitted_rgb`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emission: Option<BoardIoEmission>,
+}
+
+/// Declared light output of a board_io binding.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct BoardIoEmission {
+    /// Emitted colour at full output.
+    pub color: Rgb,
+}
+
+/// An sRGB colour written as `#rrggbb` (case-insensitive; stored lowercase).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rgb(pub [u8; 3]);
+
+impl Rgb {
+    pub fn to_hex(self) -> String {
+        format!("#{:02x}{:02x}{:02x}", self.0[0], self.0[1], self.0[2])
+    }
+
+    pub fn parse(text: &str) -> Option<Self> {
+        let hex = text.strip_prefix('#')?;
+        if hex.len() != 6 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        let n = u32::from_str_radix(hex, 16).ok()?;
+        Some(Rgb([(n >> 16) as u8, (n >> 8) as u8, n as u8]))
+    }
+}
+
+impl Serialize for Rgb {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_hex())
+    }
+}
+
+impl<'de> Deserialize<'de> for Rgb {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
+        let text = String::deserialize(deserializer)?;
+        Rgb::parse(&text).ok_or_else(|| {
+            serde::de::Error::custom(format!("colour '{text}' must be written as #rrggbb"))
+        })
+    }
+}
+
+impl BoardIoBinding {
+    /// Colour this binding emits for an engine-computed output state: the
+    /// declared colour while asserted, black while not. `None` when the
+    /// binding declares no emission.
+    pub fn emitted_rgb(&self, active: bool) -> Option<String> {
+        self.emission.as_ref().map(|e| {
+            if active {
+                e.color.to_hex()
+            } else {
+                Rgb([0, 0, 0]).to_hex()
+            }
+        })
+    }
+
+    /// The live-state record every engine front end reports for this binding:
+    /// `{ id, active }` plus `emission` (`#rrggbb`) when one is declared.
+    pub fn state_json(&self, active: bool) -> serde_json::Value {
+        let mut state = serde_json::json!({ "id": self.id, "active": active });
+        if let Some(rgb) = self.emitted_rgb(active) {
+            state["emission"] = serde_json::Value::String(rgb);
+        }
+        state
+    }
 }
 
 pub(crate) fn default_wifi_ap_ssid() -> String {
@@ -115,6 +193,9 @@ pub struct SystemManifest {
     /// including custom runners. Omit to keep existing defaults. Zero is invalid.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_peripheral_tick_interval: Option<std::num::NonZeroU32>,
+    /// Board overrides of the chip's memory layout. The engine reads one key,
+    /// `reset_vector_offset` (see [`crate::ChipDescriptor::reset_vector_offset`]),
+    /// and ignores any other with a warning.
     #[serde(default)]
     pub memory_overrides: HashMap<String, String>,
     #[serde(default)]
@@ -537,35 +618,7 @@ impl SystemManifest {
     /// catalog happened to load last — so it is an error, named, with both
     /// sources in the message.
     pub fn validate_parts(&self) -> Result<()> {
-        let mut seen: HashMap<&str, Option<&str>> = HashMap::new();
-        for entry in &self.parts {
-            let pack = match entry {
-                PartPack::Inline(d) => d.as_ref(),
-                PartPack::Path(p) => anyhow::bail!(
-                    "part pack '{}' was never loaded. `path:` is a CLI convenience that \
-                     SystemManifest::from_file inlines; a manifest handed to the engine \
-                     directly (browser, hosted runner) must carry the pack inline.",
-                    p.path
-                ),
-            };
-            let origin = pack
-                .source
-                .as_deref()
-                .map(|s| format!("source: {s}"))
-                .unwrap_or_else(|| "no declared source".to_string());
-            validate_part_pack(pack, &origin)?;
-            if let Some(prev) = seen.insert(pack.r#type.as_str(), pack.source.as_deref()) {
-                anyhow::bail!(
-                    "two part packs both define '{}' (sources: {} and {}). \
-                     One part is one document — rename one, or namespace them \
-                     `vendor:part`.",
-                    pack.r#type,
-                    prev.unwrap_or("undeclared"),
-                    pack.source.as_deref().unwrap_or("undeclared"),
-                );
-            }
-        }
-        Ok(())
+        validate_part_packs(&self.parts)
     }
 
     pub fn validate_cosim_models(&self) -> Vec<String> {
@@ -653,6 +706,52 @@ impl SystemManifest {
             Err(anyhow::anyhow!(issues.join("; ")))
         }
     }
+}
+
+/// The `parts:` contract of [`SystemManifest::validate_parts`], for every
+/// manifest that carries part packs: a system manifest and a Flex manifest.
+pub fn validate_part_packs(parts: &[PartPack]) -> Result<()> {
+    let mut seen: HashMap<&str, Option<&str>> = HashMap::new();
+    for entry in parts {
+        let pack = match entry {
+            PartPack::Inline(d) => d.as_ref(),
+            PartPack::Path(p) => anyhow::bail!(
+                "part pack '{}' was never loaded. `path:` is a CLI convenience that \
+                 SystemManifest::from_file inlines; a manifest handed to the engine \
+                 directly (browser, hosted runner) must carry the pack inline.",
+                p.path
+            ),
+        };
+        let origin = pack
+            .source
+            .as_deref()
+            .map(|s| format!("source: {s}"))
+            .unwrap_or_else(|| "no declared source".to_string());
+        validate_part_pack(pack, &origin)?;
+        if let Some(prev) = seen.insert(pack.r#type.as_str(), pack.source.as_deref()) {
+            anyhow::bail!(
+                "two part packs both define '{}' (sources: {} and {}). \
+                 One part is one document — rename one, or namespace them \
+                 `vendor:part`.",
+                pack.r#type,
+                prev.unwrap_or("undeclared"),
+                pack.source.as_deref().unwrap_or("undeclared"),
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Resolve `device_type` against a `parts:` list, the lookup a system manifest
+/// and a Flex manifest share. Run [`validate_part_packs`] first.
+pub fn resolve_part_pack<'p>(
+    parts: &'p [PartPack],
+    device_type: &str,
+) -> Option<&'p DeviceDescriptor> {
+    parts
+        .iter()
+        .filter_map(PartPack::descriptor)
+        .find(|d| d.r#type == device_type)
 }
 
 #[cfg(test)]

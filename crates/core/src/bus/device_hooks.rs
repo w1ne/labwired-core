@@ -66,7 +66,7 @@ impl SystemBus {
     /// Early-outs on a bus with no such device, which is almost every bus.
     #[inline]
     pub(crate) fn service_device_pin_drives(&mut self) {
-        if !self.device_pin_pads.is_empty() {
+        if !self.device_pin_pads.is_empty() || !self.device_output_observers.is_empty() {
             self.service_bound_device_pin_drives();
         }
     }
@@ -84,9 +84,24 @@ impl SystemBus {
             return;
         }
         for (device_id, role, raw_level) in drives {
-            // One source can feed several pads. Resolve each destination
-            // independently; the source level also remains available unchanged
-            // for a future direct device-output observer.
+            // Device-to-device wires are first-class: notify every sink that
+            // names this source role without inventing an MCU pad. One expander
+            // output may fan out to several loads, exactly as one copper net can.
+            let now = self.current_cycle;
+            for binding in self.device_output_observers.iter_mut().filter(|binding| {
+                binding.source_device_id == device_id && binding.source_role == role
+            }) {
+                let from = binding.previous_level;
+                binding.previous_level = raw_level;
+                if from != raw_level {
+                    binding
+                        .observer
+                        .on_pin_change(binding.observer_pin, from, raw_level, now);
+                }
+            }
+
+            // The same source role may also be connected to one or more MCU
+            // input pads. Resolve each destination independently.
             let pads: Vec<_> = self
                 .device_pin_pads
                 .iter()
@@ -161,13 +176,14 @@ impl SystemBus {
             return;
         }
         if let Some(irq) = p.irq {
-            if p.dev.irq_line_level() == Some(false) {
-                super::reconcile_nvic_level(&self.nvic, irq, false);
+            if p.dev.irq_line_level() == Some(false) && !self.route_irq_input_level(idx, irq, false)
+            {
+                self.reconcile_line_level(idx, irq, false);
             }
         }
         p.dev.irq_line_levels(&mut |irq, level| {
             if !level {
-                super::reconcile_nvic_level(&self.nvic, irq, false);
+                self.reconcile_line_level(idx, irq, false);
             }
         });
     }
@@ -229,6 +245,14 @@ impl SystemBus {
         }
         self.observe_gpio_edges_if_live();
         self.deliver_wire_input_edges(idx);
+        // A GPIO pad transition may latch a peripheral-local level interrupt
+        // (CMSDK AHB GPIO INTSTATUS is the current user). Unlike a timer event,
+        // this source is fully determined by the new pad state, so reconcile
+        // it at the same boundary as an MMIO write instead of waiting for a
+        // per-cycle peripheral walk.
+        if change.is_some() {
+            self.reconcile_irq_levels_after_write(idx);
+        }
         change
     }
 
@@ -414,6 +438,9 @@ impl SystemBus {
         // A select pad of an analog mux may have moved: re-route before the
         // next instruction can start a conversion.
         self.route_analog_muxes_on_write(idx);
+        // A chip-select pad may have moved: deliver the CS edge before the
+        // next SPI frame.
+        self.route_spi_cs_on_write(idx);
         // A write into a GPIO port can move its input word (OUT/DIR/PIN_CNF):
         // raise the edge for the pad now, not at the next tick.
         if self.gpio_edge_observers && self.is_edge_watched_gpio_port(idx) {

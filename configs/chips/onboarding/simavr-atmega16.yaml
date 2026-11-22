@@ -13,7 +13,21 @@ flash:
 ram:
   base: 96
   size: 1KB
-peripherals: []
+peripherals:
+  # This bounded smoke claims only GPIOA and polled USART TX. Ports B-D,
+  # timers, ADC, SPI, TWI and interrupts remain outside this imported profile.
+  - id: porta
+    type: avr_gpio
+    base_address: 0x00010039
+    size: 3
+  # Host window of the CPU's USART. ATmega16 UBRRL/UCSRB/UCSRA/UDR sit at
+  # 0x29..0x2C; the AVR core translates them onto this 328P-layout window.
+  - id: usart0
+    type: uart
+    base_address: 0x000100C0
+    size: 8
+    config:
+      profile: avr
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

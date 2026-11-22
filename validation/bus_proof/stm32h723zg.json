@@ -9,13 +9,17 @@
     "lane": "core-onboarding-smoke (push to main + nightly cron): matrix id nucleo-h723zg (scripts/onboarding_smoke.sh)"
   },
   "spi": {
-    "state": "none",
-    "gap": "No SPI controller is declared on configs/chips/stm32h723zg.yaml; the NUCLEO-H723ZG slice declares RCC, SysTick, GPIO B/C/D/E and USART3 only.",
-    "lane": "none"
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino",
+    "test": "LW_L4_OK",
+    "signal": "stock stm32duino SPI.transfer on SPI1 (PA5/PA6/PB5) reads the MAX31855 device's own 32-bit frame (exact default frame 0x01901600 required for LW_L4_OK).",
+    "lane": "core-arduino-matrix-smoke (board nucleo-h723zg): validation/arduino-matrix/run_matrix.py + labwired test"
   },
   "i2c": {
-    "state": "none",
-    "gap": "No I2C controller is declared on configs/chips/stm32h723zg.yaml; the NUCLEO-H723ZG slice declares RCC, SysTick, GPIO B/C/D/E and USART3 only.",
-    "lane": "none"
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+    "test": "LW_L3_OK",
+    "signal": "stock stm32duino Wire on I2C1 (PB8/PB9) writes and reads back the INA219 model at 0x40: config 0x399F and bus-voltage register 0x19CA must match exactly for LW_L3_OK.",
+    "lane": "core-arduino-matrix-smoke (board nucleo-h723zg): validation/arduino-matrix/run_matrix.py + labwired test"
   }
 }

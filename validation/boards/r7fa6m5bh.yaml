@@ -57,6 +57,7 @@ models:
   - crates/firmware-ek-ra6m5-smoke
   - crates/firmware-ek-ra6m5-zephyr
   - configs/chips/r7fa6m5bh.yaml
+  - crates/core/src/peripherals/declarative.rs
   # 2026-11-01 (#1607 main merge): #1597 registered these on this board but
   # left them out of the list (model_paths_drift_gate red on main 5c950855d).
   - crates/core/src/peripherals/ra_adc12.rs
@@ -64,3 +65,7 @@ models:
   - crates/core/src/peripherals/ra_gpt.rs
   - crates/core/src/peripherals/ra_iic.rs
   - configs/systems/ek-ra6m5.yaml
+  # 2026-11-13 (lane/renode-coverage): the SVD MSTP register file and the
+  # FPU context window (CPACR/FPCCR) this chip now wires.
+  - configs/peripherals/r7fa6m5bh
+  - crates/core/src/peripherals/cortex_m_fpu.rs

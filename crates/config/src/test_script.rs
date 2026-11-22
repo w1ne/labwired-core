@@ -1646,12 +1646,15 @@ pub enum LoadedTestScript {
     V1_0(TestScript),
     LegacyV1(LegacyTestScriptV1),
     Env(EnvTestScript),
+    /// Portable Flex execution, selected only by `inputs.flex`.
+    Flex(FlexTestScript),
 }
 
 /// Load a CI test script from YAML.
 ///
 /// Supported formats:
 /// - v1.0 environment: `schema_version: "1.0"` with `inputs.env`.
+/// - v1.0 Flex: `schema_version: "1.0"` with `inputs.flex` + `inputs.firmware`.
 /// - v1.0 (frozen): `schema_version: \"1.0\"` with `inputs` + `limits` + `assertions`.
 /// - legacy v1 (deprecated): `schema_version: 1` with `max_steps` at the top level.
 pub fn load_test_script<P: AsRef<Path>>(path: P) -> Result<LoadedTestScript> {
@@ -1666,6 +1669,16 @@ pub fn load_test_script<P: AsRef<Path>>(path: P) -> Result<LoadedTestScript> {
     let raw_inputs = raw_script.get("inputs");
     let raw_env = raw_inputs.and_then(|inputs| inputs.get("env"));
     let raw_firmware = raw_inputs.and_then(|inputs| inputs.get("firmware"));
+
+    if raw_inputs.and_then(|inputs| inputs.get("flex")).is_some() {
+        // `inputs.flex` is the explicit portable-execution choice. Its strict
+        // schema rejects `env`, `system`, and `chip`, so a script cannot name
+        // both a Flex manifest and a detailed target.
+        let flex_script: FlexTestScript =
+            serde_yaml::from_str(&contents).context("Failed to parse Flex Test Script YAML")?;
+        flex_script.validate()?;
+        return Ok(LoadedTestScript::Flex(flex_script));
+    }
 
     if raw_env.is_some() && raw_firmware.is_some() {
         anyhow::bail!(

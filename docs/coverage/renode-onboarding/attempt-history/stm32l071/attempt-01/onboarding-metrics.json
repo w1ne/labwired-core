@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32l071",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 800000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-stm32l071-smoke",
+  "target_triple": "thumbv6m-none-eabi",
+  "script": "examples/renode-onboarding/stm32l071-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32l071.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-03T10:02:43Z",
+  "finished_at_utc": "2026-11-03T10:02:44Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1039,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-03T10:02:44.748095Z ERROR labwired_cli::execute: Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: \"gpioPortA:5\", min_edges: 1 } }) (captured len=25)",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.278,
+    "build_firmware": 0.436,
+    "run_smoke": 0.311
+  },
+  "stages_ms": {
+    "build_cli": 278,
+    "build_firmware": 436,
+    "run_smoke": 311
+  }
+}

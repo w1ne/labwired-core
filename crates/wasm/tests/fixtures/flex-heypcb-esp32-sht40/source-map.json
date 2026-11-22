@@ -1,0 +1,50 @@
+{
+  "source": {
+    "repository": "HeyPCB/esp32-sensors-1",
+    "revision": "57a2122a19ac1aa9c092e43fb5b123c461508752",
+    "asset": "boards/sht40/kicad/esp32_sht40",
+    "title": "HeyPCB ESP32-S3 SHT40 - Sensirion SHT40 humidity and temperature sensor",
+    "board_revision": "A",
+    "license_spdx": "CERN-OHL-S-2.0",
+    "files": {
+      "schematic": { "path": "boards/sht40/kicad/esp32_sht40.kicad_sch", "git_blob": "b9f2e629c3c06aaedc8922d59163e8ed46463f08" },
+      "pcb": { "path": "boards/sht40/kicad/esp32_sht40.kicad_pcb", "git_blob": "7dec04bc58bc5cc984100acd885e64294827aa2e" },
+      "bom": { "path": "boards/sht40/fab/esp32_sht40_bom.csv", "git_blob": "a2dd9c6e5a1513a369a6f62368661b84b259be77" },
+      "board_json": { "path": "boards/sht40/board.json", "git_blob": "a22115d894830c69719b3d78ca538aa75ddd90e8" },
+      "board_readme": { "path": "boards/sht40/README.md", "git_blob": "40e8f3628d7d061998233b2f55b9c729ea485a3e" },
+      "license": { "path": "LICENSE", "git_blob": "0f1092207caa645ff426e0cc40b7eaad69caecb1" }
+    },
+    "fabrication_status": "source README says not fabricated, assembled, or powered",
+    "original_board_firmware": "none found for this board in the pinned source"
+  },
+  "sensor_bus": {
+    "evidence": "pad nets read from the pinned PCB blob; values and MPNs from the pinned BOM blob; the address from the order code in the BOM and the README sensor notes",
+    "elements": [
+      { "source_ref": "U4", "source_part": "SHT40-AD1B-R2", "lcsc": "C2909890", "pads": { "1": "I2C_SDA", "2": "I2C_SCL", "3": "3V3", "4": "GND" }, "straps": { "order code -AD1B": "address 0x44; the SHT4x has no address pin" }, "modeled_as": "catalog I2C device model `sht40` at 0x44" },
+      { "source_ref": "R6", "source_part": "0603WAF4701T5E", "lcsc": "C23162", "pads": { "1": "3V3", "2": "I2C_SDA" }, "value": "4.7k", "modeled_as": "not modeled" },
+      { "source_ref": "R7", "source_part": "0603WAF4701T5E", "lcsc": "C23162", "pads": { "1": "3V3", "2": "I2C_SCL" }, "value": "4.7k", "modeled_as": "not modeled" },
+      { "source_ref": "C7", "source_part": "CL05B104KO5NNNC", "lcsc": "C1525", "pads": { "1": "3V3", "2": "GND" }, "value": "100nF", "modeled_as": "not modeled" }
+    ],
+    "controller": {
+      "source_ref": "U3",
+      "source_part": "ESP32-S3-WROOM-1-N16R8",
+      "endpoints": { "I2C_SDA": "U3 pad 12 (IO8)", "I2C_SCL": "U3 pad 17 (IO9)" },
+      "evidence": "board.json maps U?.12 to I2C_SDA and U?.17 to I2C_SCL; README says I2C_SCL on IO9, I2C_SDA on IO8",
+      "modeled_as": "the portable firmware is the bus controller; no ESP32-S3 I2C peripheral is emulated"
+    },
+    "user_led": { "source_net": "IO48", "endpoints": ["U3 pad 25 (IO48)", "R4.1"], "indicator": "D1", "modeled_as": "digital logic state only" }
+  },
+  "runtime_bindings": {
+    "manifest": "system.yaml",
+    "bus": { "name": "sensor_i2c", "source_nets": ["I2C_SCL", "I2C_SDA"], "frequency_hz": 100000, "frequency_source": "assumption; the pinned source states no bus speed" },
+    "device": { "id": "source-u4-sht40", "source_ref": "U4", "type": "sht40", "address": "0x44" },
+    "ports": {
+      "ambient_c": "environment.temperature -> U4 input temperature",
+      "humidity_rh": "environment.humidity -> U4 input humidity",
+      "user_led_drive": "source.U3.GPIO48",
+      "user_led_state": "source.D1.logic_state"
+    }
+  },
+  "library_asset_id": "heypcb:HeyPCB/esp32-sensors-1:boards/sht40/kicad/esp32_sht40",
+  "detailed_target_alternative": "The Library lane runs ESP32-S3 test firmware for this asset on the detailed path (w1ne/labwired draft PR #3035, issue #3024, round 2026-11-20 03:00 UTC). The Flex run does not replace that run and proves nothing about it."
+}

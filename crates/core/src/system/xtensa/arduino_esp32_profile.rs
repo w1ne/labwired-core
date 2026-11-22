@@ -102,7 +102,10 @@ const FIXED_STUBS: &[(&str, u32, rom_thunks::RomThunkFn)] = &[
         0x400e_ae18,
         rom_thunks::nop_return_fake_ptr,
     ),
-    ("delay", 0x400e_5c28, rom_thunks::nop_return_zero),
+    // NB: `delay` is deliberately NOT stubbed. It is `vTaskDelay`, and the
+    // FreeRTOS tick (CCOMPARE0) is modelled, so the real call blocks for the
+    // real number of ticks. The nop it replaced returned at once: delay(50)
+    // measured 0 us in `micros()`, so every timed sketch ran at the wrong rate.
 ];
 
 /// Real-silicon noreturn functions — `abort_halt` prints diagnostics and halts
@@ -654,7 +657,9 @@ mod thunk_debt {
     ///     buying nothing and costing `nvs_flash_init()`.
     ///   * 56 → 54 when `esp_random` / `esp_fill_random` stopped being nop'd:
     ///     WDEV_RND_REG is modelled, and the nops made Arduino `random(n)` 0.
-    const CEILING: usize = 54;
+    ///   * 54 → 53 when `delay` stopped being nop'd: the FreeRTOS tick is
+    ///     modelled, and the nop made `delay(50)` return after 0 us.
+    const CEILING: usize = 53;
 
     #[test]
     fn thunk_debt_only_falls() {
@@ -665,6 +670,13 @@ mod thunk_debt {
              standing lie the twin cannot detect — prefer a boot-state seed or a modelled \
              register. See the doc comment on CEILING before changing it."
         );
+    }
+
+    /// `delay` must run the firmware's own `vTaskDelay`. The nop that used to
+    /// sit here made `delay(50)` return after 0 us on the fast-boot path.
+    #[test]
+    fn delay_is_not_thunked() {
+        assert!(!declared_thunk_symbols().contains(&"delay"));
     }
 
     #[test]

@@ -37,6 +37,9 @@ pub enum Arch {
     /// MIPS32 release 2 (Microchip PIC32MZ, M5150 class).
     #[serde(alias = "mips32", alias = "mips32r2", alias = "pic32")]
     Mips,
+    /// Texas Instruments MSP430 16-bit MCU family (CPU and 20-bit CPUX).
+    #[serde(alias = "msp430x")]
+    Msp430,
     Unknown,
 }
 
@@ -1347,6 +1350,16 @@ impl ChipDescriptor {
     /// covered by a CLI gate at all.
     pub fn is_esp32s3(&self) -> bool {
         self.arch == Arch::Xtensa && self.name.starts_with("esp32s3")
+    }
+
+    /// Is this an Espressif Xtensa part (classic ESP32 or an S3 variant)?
+    ///
+    /// Those get the code-built ESP32 memory map, mask-ROM thunks at
+    /// `0x4000_0000` and a second core. Any other Xtensa chip — e.g. the
+    /// imported Renode sample controller, whose RAM sits at `0x4000_0000` —
+    /// must get none of that: its bus comes from its own descriptor.
+    pub fn is_espressif_xtensa(&self) -> bool {
+        self.arch == Arch::Xtensa && self.name.starts_with("esp32")
     }
 
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {

@@ -8,6 +8,7 @@ pub mod debug_probe;
 pub mod environment_test;
 pub mod esp32_boot_state;
 pub mod fault_inject;
+pub mod flex_test;
 pub mod fuzz;
 pub mod machine;
 pub mod run;

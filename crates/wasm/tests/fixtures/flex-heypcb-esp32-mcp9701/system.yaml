@@ -1,0 +1,55 @@
+# Source-grounded functional slice of HeyPCB's ESP32-S3 MCP9701A board.
+# Portable firmware reads the sensor output in millivolts; the ESP32 CPU and
+# its ADC peripheral are not emulated.
+schema_version: 1
+name: heypcb-esp32-s3-mcp9701a
+assumptions:
+  - Firmware is a newly authored portable WebAssembly behavior program, not firmware from the pinned board source.
+  - U4 is the catalog `mcp9701` analog-source model, the same descriptor the detailed path binds to an ADC channel. Its output is V_out = 400 mV + 19.5 mV/°C (data sheet DS20001942L, page 3, MCP9701/9701A), truncated to whole millivolts.
+  - The sensor_mv port is the millivolt value the firmware reads on IO1, as Arduino-ESP32 analogReadMilliVolts() returns it. The ESP32-S3 ADC conversion, attenuation and calibration are not modeled; the value is exact.
+  - The model evaluates the temperature input at each 1 ms boundary, about 1,650 times faster than the 1.65 s TO-92 thermal response it does not model. A test-bench temperature step reaches the output at the next boundary.
+  - Firmware instructions take no virtual time. The firmware samples once per second, 1 ms into each period.
+  - The IO48 user LED is represented by digital logic state only.
+  - The console stands for the ESP32-S3 native USB serial port on J1, as the source README states for flashing. A write arrives whole at the time of the call and takes no virtual time.
+unsupported_checks:
+  - Original ESP32-S3 firmware execution and target instruction or ADC peripheral fidelity; the pinned source contains no board firmware.
+  - ESP32-S3 ADC quantization, attenuation range, calibration error and noise on IO1.
+  - MCP9701A accuracy (±2 °C max, 0..70 °C), output nonlinearity, line regulation, output impedance with the IO1 load, the 800 µs turn-on time and the 1.65 s TO-92 thermal response; C7 is not modeled.
+  - Temperatures outside -10..125 °C; the model refuses them.
+  - USB enumeration, CDC transfer timing and host polling of the console; text the host sends to the firmware.
+  - Full-board power, USB, boot/reset, RF, MCU integration, and assembled hardware behavior.
+ports:
+  - { name: ambient_c, signal: environment.temperature, access: write, kind: number, unit: "°C", initial: 25 }
+  - { name: sensor_mv, signal: source.net.SNS_AN1, access: read, kind: number, unit: mV }
+  - { name: user_led_drive, signal: source.U3.GPIO48, access: write, kind: bool, initial: 0 }
+  - { name: user_led_state, signal: source.D1.logic_state, access: read, kind: bool }
+cosim_models:
+  # Source net SNS_AN1: U4 pin 2 (VOUT), U3 pad 39 (IO1).
+  - id: source-u4-mcp9701a
+    adapter: behavior
+    step_ns: 1000000
+    inputs: { temperature: environment.temperature }
+    outputs: { voltage_mv: source.net.SNS_AN1 }
+    config:
+      device_type: mcp9701
+  - id: source-d1-user-led
+    adapter: behavior
+    step_ns: 1000
+    inputs: { drive: source.U3.GPIO48 }
+    outputs: { led: source.D1.logic_state }
+    config:
+      behavior:
+        primitive: gpio_device
+        states: [off, on]
+        outputs: [led]
+        pin_defaults: { led: false }
+        rules:
+          - on: { input: drive }
+            when: 'input(drive) != 0'
+            do: [{ goto: on }, { pin: led, level: 1 }]
+          - on: { input: drive }
+            when: 'input(drive) == 0'
+            do: [{ goto: off }, { pin: led, level: 0 }]
+console:
+  # The source README: "USB-C, native USB on the ESP32-S3 (no bridge chip)".
+  name: usb_serial

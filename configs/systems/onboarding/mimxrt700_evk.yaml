@@ -6,3 +6,4 @@
 
 name: mimxrt700_evk
 chip: ../../chips/onboarding/mimxrt700_evk.yaml
+debug_uart: flexcomm0

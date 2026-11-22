@@ -1,23 +1,34 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
+# Bounded Cortex-M33 profile for the imported RZ/G2L descriptor.
+# The upstream Renode platform (platforms/cpus/renesas_rz_g2l.repl) maps the
+# M33's non-secure code SRAM at 0x10000 and data SRAM at 0x20010000, each
+# 64 KiB. Of the peripherals that file maps on the M33 bus, this profile maps
+# only SCIF0-4:
+#   - SCIF0-4 at the non-secure M33 aliases 0x4004B800/BC00/C000/C400/C800:
+#     Renode `SCI.RenesasRZG_SCIFA`, modelled by the `scifa` uart profile
+#     (SMR/BRR/SCR/FTDR/FSR/FRDR/FCR/FDR/SPTR/LSR/SEMR/FTCR, TX gated on
+#     SCR.TE). Polled only: no irq is declared, so the NVIC 380..404 lines and
+#     the IM33 interrupt controller are not claimed. Baud timing, TX FIFO
+#     drain time and DMA are not claimed either. Zephyr's
+#     rzg2l_smarc/r9a07g044l23gbg/cm33 uses scif2 as its console.
+# Not mapped, because LabWired has no model for them: GPT, GTM0-2, the M33
+# watchdog, MHU, RSPI0-2, the RZ/G GPIO/pinctrl block, RIIC0-3, DMAC, IM33,
+# SYC and CPG/SYSC. The secure aliases (0x5xxxxxxx), the Cortex-A55 cluster
+# and the DDR/SPI memory windows are not represented. No flash or board-boot
+# claim is made.
 
-name: renesas_rz_g2l
-arch: arm
-flash:
-  base: 134217728
-  size: 256KB
-ram:
-  base: 536870912
-  size: 64KB
+name: "renesas_rz_g2l"
+arch: "arm"
+core: "cortex-m33"
+flash: { base: 0, size: 0 }
+ram: { base: 0x20010000, size: "64KiB" }
+flash_boot_alias: false
+memory_regions:
+  - name: "m33_nonsecure_code_sram"
+    base: 0x10000
+    size: "64KiB"
 peripherals:
-- id: timer0
-  type: arm_generictimer
-  bus: cpu0
-  base_address: 15
-- id: timer1
-  type: arm_generictimer
-  bus: cpu1
-  base_address: 15
+  - { id: scif0, type: uart, base_address: 0x4004B800, size: 1KB, config: { profile: scifa } }
+  - { id: scif1, type: uart, base_address: 0x4004BC00, size: 1KB, config: { profile: scifa } }
+  - { id: scif2, type: uart, base_address: 0x4004C000, size: 1KB, config: { profile: scifa } }
+  - { id: scif3, type: uart, base_address: 0x4004C400, size: 1KB, config: { profile: scifa } }
+  - { id: scif4, type: uart, base_address: 0x4004C800, size: 1KB, config: { profile: scifa } }

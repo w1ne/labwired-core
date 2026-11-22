@@ -72,19 +72,21 @@ const DECLARED_ONLY_CHIPS: &[(&str, &str)] = &[
 /// validated declaration table (enforced below), so new chips cannot disappear.
 const CHIPS: &[ChipConf] = &[
     ChipConf {
-        // Narrow ESP8684/C2 DevKit profile. The board's CLI smoke is in the
-        // onboarding matrix, but there is no in-crate behavior gate or silicon
-        // reset capture for this exact descriptor yet.
-        name: "esp32c2",
-        yaml: "configs/chips/esp32c2.yaml",
-        reset_oracle: None,
-        behavior_gate: None,
-    },
-    ChipConf {
         name: "esp32c3",
         yaml: "configs/chips/esp32c3.yaml",
         reset_oracle: Some("scripts/hw-oracle/captures/esp32c3/20260611T161223Z/reg_oracle.json"),
         behavior_gate: Some("firmware_survival::test_esp32c3_demo_survival"),
+    },
+    // ESP32-C2 (ESP8684H4X). SIM-DERIVED: no silicon capture, so no
+    // reset_oracle. The gate boots a committed RV32IMC ELF that prints on
+    // UART0 and toggles GPIO10.
+    ChipConf {
+        name: "esp32c2",
+        yaml: "configs/chips/esp32c2.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "esp32c2_compiled_firmware::esp32c2_compiled_rv32imc_firmware_prints_on_uart0_and_toggles_gpio10",
+        ),
     },
     ChipConf {
         // ESP32-C6 HP core (RV32IMAC). SIM-DERIVED: nothing here has been
@@ -160,8 +162,9 @@ const CHIPS: &[ChipConf] = &[
         // PolarFire SoC MPFS095T (Discovery Kit), first RV64 part: one U54
         // hart (RV64IMAC M-mode, CLINT in the core). SIM-DERIVED: no MPFS
         // bench part. Modelled: MMUART0-4 as 16550s with the DLAB divisor
-        // latch. PLIC, MSS GPIO/I2C/SPI/QSPI and the system-controller mailbox
-        // are declared stubs — see examples/mpfs-disco-kit/VALIDATION.md.
+        // latch; the PLIC, MSS GPIO_0..2, I2C0/1 and SPI1 (master). QSPI and the
+        // system-controller mailbox are declared stubs — see
+        // examples/mpfs-disco-kit/VALIDATION.md.
         name: "mpfs095t",
         yaml: "configs/chips/mpfs095t.yaml",
         reset_oracle: None,
@@ -923,6 +926,15 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: None,
     },
     ChipConf {
+        // NUCLEO-L031K6: the raw-register USART2 / LD3 smoke
+        // (examples/nucleo-l031k6) runs in the PR board lane, but no PR-run
+        // Rust survival gate or reset oracle exists for this exact part.
+        name: "stm32l031k6",
+        yaml: "configs/chips/stm32l031k6.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
         name: "stm32l476",
         yaml: "configs/chips/stm32l476.yaml",
         reset_oracle: None,
@@ -1025,12 +1037,15 @@ const CHIPS: &[ChipConf] = &[
     // ATmega4809 (megaAVR 0-series, Arduino Nano Every). SIM-DERIVED from the
     // Microchip ATDF: no silicon capture. Its Arduino matrix row and
     // examples/arduino-nano-every/io-smoke.yaml run through PlatformIO and the
-    // CLI, not as a Rust test, so no behavior_gate resolves.
+    // CLI. The behavior gate boots the committed stock-Arduino BME280 sketch
+    // (tests/fixtures/avr/arduino-nano-every-bme280.elf) over TWI0 and USART3.
     ChipConf {
         name: "atmega4809",
         yaml: "configs/chips/atmega4809.yaml",
         reset_oracle: None,
-        behavior_gate: None,
+        behavior_gate: Some(
+            "avr_nano_every_bme280::nano_every_wire_reads_compensated_bme280_values",
+        ),
     },
     // ATmega32U4 (Arduino Leonardo / Micro). SIM-DERIVED from DS7766: no
     // silicon capture. The USB device model is unit-tested in
@@ -1371,6 +1386,16 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: None,
     },
+    // Arduino matrix profile of the same S2 die on its genuine mask ROM.
+    // SIM-DERIVED: no silicon capture. Stock Arduino-ESP32 L0 boots through
+    // ESP-IDF and FreeRTOS and prints over UART0; the test has an
+    // erased-partition-table negative control.
+    ChipConf {
+        name: "esp32s2-arduino",
+        yaml: "configs/chips/esp32s2-arduino.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("esp32s2_arduino_boot::stock_arduino_l0_prints_over_uart0"),
+    },
     // Adafruit Feather RP2040 variant of the rp2040 die. Its BME280 I2C1 smoke
     // runs as a CLI script in core-onboarding-smoke, not as a Rust test.
     ChipConf {
@@ -1394,6 +1419,15 @@ const CHIPS: &[ChipConf] = &[
     ChipConf {
         name: "stm32h723zg",
         yaml: "configs/chips/stm32h723zg.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    // NUCLEO-H753ZI (RM0433). SIM-DERIVED: no silicon capture. Its stock
+    // stm32duino row runs in core-arduino-matrix-smoke, not as a Rust test,
+    // so no behavior_gate resolves.
+    ChipConf {
+        name: "stm32h753zi",
+        yaml: "configs/chips/stm32h753zi.yaml",
         reset_oracle: None,
         behavior_gate: None,
     },

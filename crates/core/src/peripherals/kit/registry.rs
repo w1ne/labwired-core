@@ -76,6 +76,8 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     // against the arithmetic the deleted model performed.
     &components::declarative_analog::NTC_THERMISTOR_KIT,
     &components::declarative_analog::TMP36_KIT,
+    &components::declarative_analog::MCP9700_KIT,
+    &components::declarative_analog::MCP9701_KIT,
     &components::declarative_analog::POTENTIOMETER_KIT,
     &components::joystick::JOYSTICK_KIT,
     &components::limit_switch::LIMIT_SWITCH_KIT,
@@ -158,6 +160,8 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::h_bridge_motor::H_BRIDGE_MOTOR_KIT,
     &components::unipolar_stepper::UNIPOLAR_STEPPER_KIT,
     // Host-side CAN tools (were residual from_config arms).
+    // ams-OSRAM TCS3200 programmable color light-to-frequency converter.
+    &components::tcs3200::TCS3200_KIT,
     &components::can_testers::CAN_DIAGNOSTIC_TESTER_KIT,
     &components::can_testers::CAN_UDS_TESTER_KIT,
     &components::can_testers::CAN_LOG_PLAYER_KIT,
@@ -221,6 +225,22 @@ static ALL_KITS: std::sync::LazyLock<Vec<&'static dyn PeripheralKit>> =
 /// Borrow the registry slice.
 pub fn kits() -> &'static [&'static dyn PeripheralKit] {
     &ALL_KITS
+}
+
+/// Build a data-driven analog source through the existing PeripheralKit
+/// registry. Co-simulation callers name the same canonical `device_type` used
+/// by system manifests; this does not create a second part registry.
+pub fn build_analog_source(
+    device_type: &str,
+    channel: u8,
+) -> anyhow::Result<Box<dyn crate::bus::sim_inputs::AnalogSource>> {
+    let kit = kits()
+        .iter()
+        .find(|kit| kit.metadata().device_type == device_type)
+        .ok_or_else(|| anyhow::anyhow!("unknown analog-source device type '{device_type}'"))?;
+    kit.build_analog_source(channel)?.ok_or_else(|| {
+        anyhow::anyhow!("device type '{device_type}' is not a registered analog_source")
+    })
 }
 
 /// Legacy `type:` spellings that predate the canonical `device_type` and are

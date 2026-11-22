@@ -4,8 +4,12 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+mod analog_source;
 mod behavior;
 mod external_process;
+mod gpio_device;
+mod onewire_device;
+pub(crate) use behavior::{build_part_adapter, catalog_descriptor};
 mod registry;
 pub mod routing;
 pub mod shm;
@@ -110,11 +114,11 @@ pub trait CosimAdapter: Send {
     /// Adopt the runner's shared analog-sample ring, naming this model's
     /// channels `<channel_prefix><name>`.
     ///
-    /// Only the in-core analog engine implements this; every other adapter
-    /// produces no waveform of its own, and a default that fabricated one
-    /// would put a line on the oscilloscope that nothing measured. The runner
-    /// calls it on every model, so an adapter that later grows a waveform has
-    /// one place to publish it.
+    /// The circuit solver records its probes, and registered analog-source
+    /// adapters record their modeled scalar output. Discrete behavior adapters
+    /// leave this empty: a Boolean signal alone is not an electrical waveform.
+    /// The runner calls this on every model so each producer can publish into
+    /// the existing oscilloscope ring.
     fn attach_analog_trace(&mut self, trace: &AnalogTraceHandle, channel_prefix: &str) {
         let _ = (trace, channel_prefix);
     }
@@ -128,7 +132,7 @@ pub trait CosimAdapter: Send {
     /// Unit of a numeric input, when the adapter knows it. Values are passed
     /// without implicit conversion; Boolean voltage drives use their explicit
     /// adapter Vdd conversion instead.
-    fn input_unit(&self, name: &str) -> Option<&'static str> {
+    fn input_unit(&self, name: &str) -> Option<&str> {
         let _ = name;
         None
     }
@@ -139,6 +143,14 @@ pub trait CosimAdapter: Send {
     fn input_kind(&self, name: &str) -> Option<CosimInputKind> {
         let _ = name;
         None
+    }
+
+    /// What the model's part holds, as inspect artifacts: a part's state that
+    /// is not a routed signal (a display's text, a sensor's memory). Most
+    /// adapters publish everything as signals and leave this empty.
+    fn artifacts(&self, id: &str) -> Vec<crate::inspect::Artifact> {
+        let _ = id;
+        Vec::new()
     }
 }
 

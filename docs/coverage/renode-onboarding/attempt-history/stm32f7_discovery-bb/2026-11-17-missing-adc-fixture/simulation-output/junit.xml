@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="2" errors="1" time="0.126308">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="687ca36b8ab268ae191287517dd791ccd69773da37ec2c55869f7c8a541b4ad8"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.126308">
+    <error message="runtime error">result_schema_version=1.0
+stop_reason=MaxSteps
+message=1 stimulus/stimuli could not be applied, so the run proved nothing about them: pot_adc1_in1.position = 25: no attached input device exposes channel &apos;pot_adc1_in1/position&apos;
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=6000000
+stop_reason_details.observed.steps_executed=6000000
+steps_executed=6000000
+cycles=6000000
+instructions=6000000
+limits:
+  - max_steps=6000000
+firmware_hash=687ca36b8ab268ae191287517dd791ccd69773da37ec2c55869f7c8a541b4ad8
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32f746g-disco-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/stm32f7_discovery-bb.yaml
+script=examples/renode-onboarding/stm32f7_discovery-bb-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;STM32F746G-DISCO SMOKE&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;rcc reset=1 gate=1 mask=1 ok&quot;, &quot;usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 uart8=1 ok&quot;, &quot;gpio pa=1 pb=1 reset=1 pi1=1 jk=1 ok&quot;, &quot;led=ld1 odr=0x00000002 blink=1 lit=1 off=1 ok&quot;, &quot;syscfg memrmp=0x00000C00 pmc=0x008700FF fields=1 cmpcr=1 ok&quot;, &quot;exti swier masked=1 routed=1 ok&quot;, &quot;b1 idle=1 presses=1 pa_quiet=1 pi11=1 cleared=1 ok&quot;, &quot;tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim2 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim5 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;dma m2m dma1_refused=1 dma2_copied=1 ok&quot;, &quot;i2c1 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok&quot;, &quot;i2c4 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok&quot;, &quot;crc word=0xDF8A8A2B crc16=0x000029B1 seed=1 std=1 init=1 idr=1 poly16=1 ok&quot;, &quot;rng off=1 ready=1 draws=1 stopped=1 ok&quot;, &quot;adc1 in1=0x000003FF gated=1 clock=1 eoc=1 ok&quot;, &quot;summary 0x7DC0FFFF&quot;, &quot;DONE&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536883200, expected_value: 2109800447, mask: None, size: Some(4), node: None } }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpioi:1&quot;, min_edges: 7 } }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</error>
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: STM32F746G-DISCO SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;rcc reset=1 gate=1 mask=1 ok&quot;, &quot;usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 u…" time="0.000000">
+    <failure message="assertion failed">assertion 2: uart_ordered: [&quot;rcc reset=1 gate=1 mask=1 ok&quot;, &quot;usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 u…
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+message=1 stimulus/stimuli could not be applied, so the run proved nothing about them: pot_adc1_in1.position = 25: no attached input device exposes channel &apos;pot_adc1_in1/position&apos;
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=6000000
+stop_reason_details.observed.steps_executed=6000000
+steps_executed=6000000
+cycles=6000000
+instructions=6000000
+limits:
+  - max_steps=6000000
+firmware_hash=687ca36b8ab268ae191287517dd791ccd69773da37ec2c55869f7c8a541b4ad8
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32f746g-disco-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/stm32f7_discovery-bb.yaml
+script=examples/renode-onboarding/stm32f7_discovery-bb-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;STM32F746G-DISCO SMOKE&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;rcc reset=1 gate=1 mask=1 ok&quot;, &quot;usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 uart8=1 ok&quot;, &quot;gpio pa=1 pb=1 reset=1 pi1=1 jk=1 ok&quot;, &quot;led=ld1 odr=0x00000002 blink=1 lit=1 off=1 ok&quot;, &quot;syscfg memrmp=0x00000C00 pmc=0x008700FF fields=1 cmpcr=1 ok&quot;, &quot;exti swier masked=1 routed=1 ok&quot;, &quot;b1 idle=1 presses=1 pa_quiet=1 pi11=1 cleared=1 ok&quot;, &quot;tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim2 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim5 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;dma m2m dma1_refused=1 dma2_copied=1 ok&quot;, &quot;i2c1 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok&quot;, &quot;i2c4 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok&quot;, &quot;crc word=0xDF8A8A2B crc16=0x000029B1 seed=1 std=1 init=1 idr=1 poly16=1 ok&quot;, &quot;rng off=1 ready=1 draws=1 stopped=1 ok&quot;, &quot;adc1 in1=0x000003FF gated=1 clock=1 eoc=1 ok&quot;, &quot;summary 0x7DC0FFFF&quot;, &quot;DONE&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536883200, expected_value: 2109800447, mask: None, size: Some(4), node: None } }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpioi:1&quot;, min_edges: 7 } }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x20003000=0x7dc0ffff" time="0.000000">
+    <failure message="assertion failed">assertion 3: memory_value: @0x20003000=0x7dc0ffff
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+message=1 stimulus/stimuli could not be applied, so the run proved nothing about them: pot_adc1_in1.position = 25: no attached input device exposes channel &apos;pot_adc1_in1/position&apos;
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=6000000
+stop_reason_details.observed.steps_executed=6000000
+steps_executed=6000000
+cycles=6000000
+instructions=6000000
+limits:
+  - max_steps=6000000
+firmware_hash=687ca36b8ab268ae191287517dd791ccd69773da37ec2c55869f7c8a541b4ad8
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32f746g-disco-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/stm32f7_discovery-bb.yaml
+script=examples/renode-onboarding/stm32f7_discovery-bb-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;STM32F746G-DISCO SMOKE&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;rcc reset=1 gate=1 mask=1 ok&quot;, &quot;usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 uart8=1 ok&quot;, &quot;gpio pa=1 pb=1 reset=1 pi1=1 jk=1 ok&quot;, &quot;led=ld1 odr=0x00000002 blink=1 lit=1 off=1 ok&quot;, &quot;syscfg memrmp=0x00000C00 pmc=0x008700FF fields=1 cmpcr=1 ok&quot;, &quot;exti swier masked=1 routed=1 ok&quot;, &quot;b1 idle=1 presses=1 pa_quiet=1 pi11=1 cleared=1 ok&quot;, &quot;tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim2 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim5 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;dma m2m dma1_refused=1 dma2_copied=1 ok&quot;, &quot;i2c1 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok&quot;, &quot;i2c4 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok&quot;, &quot;crc word=0xDF8A8A2B crc16=0x000029B1 seed=1 std=1 init=1 idr=1 poly16=1 ok&quot;, &quot;rng off=1 ready=1 draws=1 stopped=1 ok&quot;, &quot;adc1 in1=0x000003FF gated=1 clock=1 eoc=1 ok&quot;, &quot;summary 0x7DC0FFFF&quot;, &quot;DONE&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536883200, expected_value: 2109800447, mask: None, size: Some(4), node: None } }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpioi:1&quot;, min_edges: 7 } }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: gpio_edges: gpioi:1 &gt;= 7 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>
