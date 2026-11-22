@@ -2,9 +2,9 @@
   "_about": "Committed test-FUNCTION counts per target. Regenerate with scripts/ci/rust-suite-baseline.py --write. Read that file's preconditions before comparing numbers taken on different hosts.",
   "profile": "debug",
   "totals": {
-    "targets": 277,
-    "tests": 4984,
-    "ignored": 72
+    "targets": 271,
+    "tests": 4978,
+    "ignored": 66
   },
   "targets": [
     {
@@ -613,54 +613,6 @@
       "kind": "test",
       "tests": 8,
       "ignored": 0,
-      "release_only": false
-    },
-    {
-      "package": "labwired-core",
-      "target": "diag_c3_yield",
-      "kind": "test",
-      "tests": 1,
-      "ignored": 1,
-      "release_only": false
-    },
-    {
-      "package": "labwired-core",
-      "target": "diag_esp32_dual_core_boot",
-      "kind": "test",
-      "tests": 1,
-      "ignored": 1,
-      "release_only": false
-    },
-    {
-      "package": "labwired-core",
-      "target": "diag_esp32c3_boot",
-      "kind": "test",
-      "tests": 1,
-      "ignored": 1,
-      "release_only": false
-    },
-    {
-      "package": "labwired-core",
-      "target": "diag_esp32c3_panic",
-      "kind": "test",
-      "tests": 1,
-      "ignored": 1,
-      "release_only": false
-    },
-    {
-      "package": "labwired-core",
-      "target": "diag_esp32s3_boot",
-      "kind": "test",
-      "tests": 1,
-      "ignored": 1,
-      "release_only": false
-    },
-    {
-      "package": "labwired-core",
-      "target": "diag_esp32s3_l2",
-      "kind": "test",
-      "tests": 1,
-      "ignored": 1,
       "release_only": false
     },
     {
