@@ -126,6 +126,95 @@ impl Peripheral for Stm32F4Syscfg {
     }
 }
 
+/// STM32L4 EXTICR port-selection subset (RM0351). Reuse the existing mux,
+/// but mask each three-bit L4 port field and do not expose F4-only registers.
+/// MEMRMP, CFGR1/2, SCSR and SWPR behavior remains unmodeled.
+#[derive(Debug, Default)]
+pub struct Stm32L4Syscfg {
+    mux: Stm32F4Syscfg,
+}
+
+impl Peripheral for Stm32L4Syscfg {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        Ok((self.read_u32(offset & !3)? >> ((offset % 4) * 8)) as u8)
+    }
+
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let register = offset & !3;
+        let shift = (offset % 4) * 8;
+        let word = (self.read_u32(register)? & !(0xff << shift)) | (u32::from(value) << shift);
+        self.write_u32(register, word)
+    }
+
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        match offset & !3 {
+            register @ (0x08 | 0x0c | 0x10 | 0x14) => self.mux.read_u32(register),
+            _ => {
+                crate::census_reg!("syscfg:Stm32L4Syscfg", offset, "read");
+                Ok(0)
+            }
+        }
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        match offset & !3 {
+            register @ (0x08 | 0x0c | 0x10 | 0x14) => self.mux.write_u32(register, value & 0x7777),
+            _ => {
+                crate::census_reg!("syscfg:Stm32L4Syscfg", offset, "write");
+                Ok(())
+            }
+        }
+    }
+
+    fn exti_line_source(&self, line: u8) -> Option<u8> {
+        self.mux.exti_port(line)
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+    fn as_any(&self) -> Option<&dyn Any> {
+        Some(self)
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        Some(self)
+    }
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::json!({
+            "exticr": self.mux.exticr,
+            "scope": "EXTICR port selection only; MEMRMP, CFGR1/2, SCSR and SWPR are unmodeled"
+        })
+    }
+}
+
+#[cfg(test)]
+mod l4_mux_tests {
+    use super::*;
+
+    #[test]
+    fn l4_mux_resets_to_a_masks_reserved_bits_and_preserves_other_byte_fields() {
+        let mut mux = Stm32L4Syscfg::default();
+        for line in 0..16 {
+            assert_eq!(mux.exti_line_source(line), Some(0));
+        }
+        assert_eq!(mux.exti_line_source(16), None);
+        for offset in [0x08, 0x0c, 0x10, 0x14] {
+            mux.write_u32(offset, u32::MAX).unwrap();
+            assert_eq!(mux.read_u32(offset).unwrap(), 0x7777);
+        }
+        mux.write_u32(0x08, 0x6355).unwrap();
+        mux.write(0x08, 0x22).unwrap();
+        assert_eq!(mux.read_u32(0x08).unwrap(), 0x6322);
+        assert_eq!(mux.exti_line_source(2), Some(3));
+        mux.write_u32(0x20, 1).unwrap();
+        assert_eq!(
+            mux.read_u32(0x20).unwrap(),
+            0,
+            "no F4 compensation-cell READY"
+        );
+    }
+}
+
 /// STM32L0 SYSCFG (RM0367 §10; the COMP CSRs share the window): the same
 /// `SYSCFG_EXTICR1..4` line-source mux as the F4, at the same offsets
 /// (0x08..0x14), around L0-specific configuration words.

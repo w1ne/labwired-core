@@ -342,3 +342,35 @@ fn l476_named_motor_faults_drive_the_actual_output_pins_and_preserve_the_latch()
         .iter()
         .any(|f| f == "overcurrent"));
 }
+
+#[test]
+fn l476_exticr_routes_hall_edges_only_from_the_selected_gpio_port() {
+    let (mut machine, _) = fixture(false);
+    let exti = 0x4001_0400;
+    machine.bus.write_u32(exti, 1).unwrap();
+    machine.bus.write_u32(exti + 8, 1).unwrap();
+    machine.bus.write_u32(exti + 12, 1).unwrap();
+    assert_eq!(machine.bus.read_u32(0x4001_0008).unwrap(), 0);
+    let rising = |machine: &mut Machine<labwired_core::cpu::cortex_m::CortexM>, port| {
+        assert!(machine.bus.drive_input_bit(port, 0, false));
+        machine.bus.write_u32(exti + 20, 1).unwrap();
+        assert!(machine.bus.drive_input_bit(port, 0, true));
+        machine.bus.read_u32(exti + 20).unwrap() & 1
+    };
+    assert_eq!(rising(&mut machine, 0x4800_0810), 0, "C ignored at reset");
+    assert_eq!(rising(&mut machine, 0x4800_0010), 1, "reset selects A");
+    machine.bus.write_u32(0x4001_0008, 2).unwrap();
+    assert_eq!(rising(&mut machine, 0x4800_0810), 1, "EXTICR selects C");
+    assert_eq!(
+        rising(&mut machine, 0x4800_0010),
+        0,
+        "A ignored after C selection"
+    );
+    machine.bus.write_u32(exti + 20, 1).unwrap();
+    assert!(machine.bus.drive_input_bit(0x4800_0810, 0, false));
+    assert_eq!(
+        machine.bus.read_u32(exti + 20).unwrap() & 1,
+        1,
+        "falling C edge"
+    );
+}
