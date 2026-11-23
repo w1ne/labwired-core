@@ -2059,7 +2059,16 @@ pub fn try_build(
             }
             Box::new(exti)
         }
-        "afio" => Box::new(crate::peripherals::afio::Afio::new()),
+        "afio" => match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+            None | Some("stm32f1") => Box::new(crate::peripherals::afio::Afio::new()),
+            Some("wch_v00x") => Box::new(crate::peripherals::afio::Afio::new_with_layout(
+                crate::peripherals::afio::AfioLayout::WchV00x,
+            )),
+            Some(other) => anyhow::bail!(
+                "afio `{}`: unsupported profile '{other}'; supported: stm32f1, wch_v00x",
+                p_cfg.id
+            ),
+        },
         // Channel-based DMA (F1/L0/L4/G0). `config: { channel_irqs: [11, ...,
         // 17] }` gives each channel its own NVIC line (F1/L1); `requests: {
         // spi1_tx: 3, spi1_rx: [2, 1] } }` hard-wires a peripheral request to a channel
