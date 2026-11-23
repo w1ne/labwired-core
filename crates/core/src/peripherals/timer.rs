@@ -156,6 +156,13 @@ pub struct Timer {
     /// update event would otherwise latch on a general-purpose timer.
     basic: bool,
 
+    /// PSC is a 4-bit exponent: the counter clock is the kernel clock
+    /// divided by 2^PSC[3:0], not by PSC+1 (STM32W108 TIM1/TIM2; Contiki
+    /// `rtimer-arch.h`: PSC=12 gives PCLK/4096). YAML
+    /// `config: { prescaler: power_of_two }`.
+    #[serde(default)]
+    psc_power_of_two: bool,
+
     // Internal state
     /// Prescaler phase counter. `Cell` for the lazy `&self` advance.
     psc_cnt: Cell<u32>,
@@ -422,6 +429,7 @@ impl Timer {
             width,
             advanced,
             basic: false,
+            psc_power_of_two: false,
             psc_cnt: Cell::new(0),
             anchor: Cell::new(0),
             arm_seq: 0,
@@ -495,6 +503,13 @@ impl Timer {
     /// existing `new_with_layout` call sites stay unchanged.
     pub fn basic(mut self, basic: bool) -> Self {
         self.basic = basic;
+        self
+    }
+
+    /// Make PSC a 4-bit exponent (divide by 2^PSC). Builder form, like
+    /// [`Self::basic`].
+    pub fn psc_power_of_two(mut self, enabled: bool) -> Self {
+        self.psc_power_of_two = enabled;
         self
     }
 
@@ -609,10 +624,16 @@ impl Timer {
         self.wave.pads.level(ch)
     }
 
-    /// The prescaler as the counter sees it in HCLK cycles: PSC+1 timer
-    /// kernel clocks, each [`Self::kernel_div`] HCLK cycles long, minus one.
+    /// The prescaler as the counter sees it in HCLK cycles: PSC+1 (or
+    /// 2^PSC with [`Self::psc_power_of_two`]) timer kernel clocks, each
+    /// [`Self::kernel_div`] HCLK cycles long, minus one.
     fn count_psc(&self) -> u32 {
-        (self.psc + 1) * self.kernel_div.max(1) - 1
+        let divisor = if self.psc_power_of_two {
+            1 << self.psc
+        } else {
+            self.psc + 1
+        };
+        divisor * self.kernel_div.max(1) - 1
     }
 
     fn dead_time_cycles(&self) -> u64 {
@@ -1701,7 +1722,7 @@ impl Timer {
                 }
             }
             0x24 => self.cnt.set(value & self.cnt_mask()),
-            0x28 => self.psc = value & 0xFFFF,
+            0x28 => self.psc = value & if self.psc_power_of_two { 0xF } else { 0xFFFF },
             0x2C => self.arr = value & self.cnt_mask(),
             0x30 if self.advanced => self.rcr = value & 0xFFFF,
             // In input-capture mode CCRx is read-only: it holds the last
@@ -2025,7 +2046,8 @@ impl crate::Peripheral for Timer {
             .capture_compare_irq(self.capture_compare_irq)
             .trigger_com_irq(self.trigger_com_irq)
             .break_irq(self.break_irq)
-            .pad_map(self.pad_map);
+            .pad_map(self.pad_map)
+            .psc_power_of_two(self.psc_power_of_two);
         fresh.clock = self.clock.take();
         fresh.kernel_div = self.kernel_div;
         fresh.anchor.set(now.unwrap_or(0));
@@ -2439,6 +2461,35 @@ mod tests {
         t.write_u32(0x44, 1 << 15).unwrap();
         assert_eq!(t.read_u32(0x44).unwrap(), 1 << 15);
         assert!(t.has_f4_input_capture());
+    }
+
+    #[test]
+    fn power_of_two_prescaler_divides_by_two_to_the_psc() {
+        // STM32W108 TIM1/TIM2: CK_CNT = CK_PSC / 2^PSC[3:0] (Contiki
+        // rtimer-arch.h: PSC=12 -> PCLK/4096). Exponent PSC=3 must count
+        // exactly like linear PSC=7 (divide by 8), not like linear PSC=3.
+        fn count(timer: Timer, psc: u32) -> u32 {
+            let mut t = timer;
+            t.write_u32(0x28, psc).unwrap(); // PSC
+            t.write_u32(0x14, 1).unwrap(); // EGR.UG loads the prescaler
+            t.write_u32(0x00, 1).unwrap(); // CR1.CEN
+            for _ in 0..800 {
+                t.tick();
+            }
+            t.read_u32(0x24).unwrap()
+        }
+        let exponent = count(Timer::new().psc_power_of_two(true), 3);
+        assert_eq!(exponent, count(Timer::new(), 7));
+        assert_ne!(exponent, count(Timer::new(), 3));
+        assert!((99..=101).contains(&exponent), "CNT {exponent}");
+
+        // PSC is 4 bits wide; the flag survives a node reset.
+        let mut t = Timer::new().psc_power_of_two(true);
+        t.write_u32(0x28, 0x1F).unwrap();
+        assert_eq!(t.read_u32(0x28).unwrap(), 0xF);
+        t.on_node_reset();
+        t.write_u32(0x28, 0x1F).unwrap();
+        assert_eq!(t.read_u32(0x28).unwrap(), 0xF);
     }
 
     #[test]
