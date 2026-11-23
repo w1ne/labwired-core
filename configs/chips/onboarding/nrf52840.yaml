@@ -11,6 +11,9 @@
 
 name: nrf52840
 arch: arm
+# nRF52840 Cortex-M4F runs at a fixed 64 MHz; the TIMER base clock is
+# 16 MHz (`peripheral_hz` below), so the ratio needs this clock.
+cpu_hz: 64000000
 flash:
   base: 0           # 0x00000000 — Nordic nRF52840 flash
   size: 1048576B    # 1024 KiB
@@ -114,22 +117,29 @@ peripherals:
   bus: sysbus
   base_address: 1073774592
   irq: 8
+  config:
+    peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
 - id: timer1
   type: nrf52840_timer
   bus: sysbus
   base_address: 1073778688
   irq: 9
+  config:
+    peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
 - id: timer2
   type: nrf52840_timer
   bus: sysbus
   base_address: 1073782784
   irq: 10
+  config:
+    peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
 - id: timer3
   type: nrf52840_timer
   bus: sysbus
   base_address: 1073848320
   irq: 26
   config:
+    peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
     num_cc: 6
 - id: timer4
   type: nrf52840_timer
@@ -137,6 +147,7 @@ peripherals:
   base_address: 1073852416
   irq: 27
   config:
+    peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
     num_cc: 6
 - id: i2s
   type: nrf52840_i2s

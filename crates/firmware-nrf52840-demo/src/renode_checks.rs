@@ -93,6 +93,8 @@ const SCB_ICSR: u32 = 0xE000_ED04;
 const SCB_VTOR: u32 = 0xE000_ED08;
 const SCB_SHPR3: u32 = 0xE000_ED20;
 const SYSTICK_CSR: u32 = 0xE000_E010;
+const SYSTICK_RVR: u32 = 0xE000_E014;
+const SYSTICK_CVR: u32 = 0xE000_E018;
 const ICSR_PENDSTSET: u32 = 1 << 26;
 const ICSR_PENDSTCLR: u32 = 1 << 25;
 const ICSR_PENDSVSET: u32 = 1 << 28;
@@ -271,7 +273,37 @@ pub fn chip_checks(l: &mut Line) -> u32 {
         .hex(cleared, 8)
         .ok(pass)
         .send();
-    summary |= (pass as u32) << 4;
+
+    // TIMER0 base clock against the CPU clock: PRESCALER=0 counts the 16 MHz
+    // base clock, SysTick (CLKSOURCE=1) counts the 64 MHz core clock, so over
+    // one busy loop SysTick must advance 4x TIMER0 (accept 3x..5x). A TIMER
+    // that counts CPU cycles gives 1x.
+    wr(TIM_PRESCALER, 0);
+    wr(TIM_TASKS_CLEAR, 1);
+    wr(SYSTICK_CSR, 0);
+    wr(SYSTICK_RVR, 0x00FF_FFFF);
+    wr(SYSTICK_CVR, 0);
+    wr(SYSTICK_CSR, 0b101);
+    wr(TIM_TASKS_START, 1);
+    let sys0 = rd(SYSTICK_CVR);
+    for _ in 0..2000u32 {
+        let _ = rd(NVMC_READY);
+    }
+    wr(TIM_TASKS_CAPTURE1, 1);
+    let sys1 = rd(SYSTICK_CVR);
+    let tim = rd(TIM_CC1);
+    wr(TIM_TASKS_STOP, 1);
+    wr(SYSTICK_CSR, 0);
+    wr(TIM_PRESCALER, 4);
+    let sys = sys0.wrapping_sub(sys1) & 0x00FF_FFFF;
+    let clk_ok = tim > 0 && sys >= 3 * tim && sys <= 5 * tim;
+    l.s(b"timer0 clk sys=")
+        .hex(sys, 6)
+        .s(b" tim=")
+        .hex(tim, 6)
+        .ok(clk_ok)
+        .send();
+    summary |= ((pass && clk_ok) as u32) << 4;
 
     // RTC0 off the LFCLK started above: PRESCALER=0, CC[0]=4.
     wr(RTC_PRESCALER, 0);

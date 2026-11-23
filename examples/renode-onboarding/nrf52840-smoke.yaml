@@ -62,6 +62,7 @@ assertions:
       - "gpio p0.13 in=00002000/00000000 ok"
       - "gpiote out0 p0.14 in=10 out=0 ok"
       - "timer0 cmp=1 cap>=50 1 clear=00000000 ok"
+      - "timer0 clk sys="
       - "rtc0 cmp=1 counter>=4 1 ok"
       - "rng valrdy=11 bytes<=ff ok"
       - "ppi egu0->egu1 off=0 on=1 ok"
