@@ -483,3 +483,95 @@ fn ch32v003_arduino_delay_never_returns_without_the_stk_irq_line() {
     assert_eq!(out, "CH32V003_ARDUINO_BOOT\r\n");
     assert_eq!(mcause, 0, "no trap");
 }
+
+const EXTI_FIXTURE: &str = "ch32v003f4p6-arduino-openwch-exti.elf";
+
+/// Run the openwch `attachInterrupt` fixture: hold PD3 high, give three
+/// falling pulses after the boot line, then type `wch\n` on USART1 once the
+/// sketch reports its count.
+fn run_exti_fixture(chip: &ChipDescriptor) -> String {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut bus = SystemBus::from_config(chip, &SystemManifest::default())
+        .expect("CH32V003 peripherals and clock gates");
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+    let source = bus
+        .attach_uart_rx_source_named("usart1")
+        .expect("usart1 rx source");
+    let gpiod = bus.find_peripheral_index_by_name("gpiod").expect("GPIOD");
+    bus.set_peripheral_gpio_input(gpiod, 3, true);
+    let image = labwired_loader::load_elf(&root.join("tests/fixtures").join(EXTI_FIXTURE))
+        .expect("openwch Arduino ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load CH32V003 ELF");
+    let text = |sink: &std::sync::Mutex<Vec<u8>>| {
+        String::from_utf8_lossy(&sink.lock().unwrap()).into_owned()
+    };
+    let mut pulses = 0;
+    let mut typed = false;
+    for step in 1..=6_000_000u64 {
+        if machine.step().is_err() {
+            break;
+        }
+        if step % 5_000 != 0 {
+            continue;
+        }
+        let out = text(&sink);
+        if out.contains("BOOT\r\n") && pulses < 6 {
+            // Low on even slots, high on odd: three falling edges.
+            machine
+                .bus
+                .set_peripheral_gpio_input(gpiod, 3, pulses % 2 == 1);
+            pulses += 1;
+        }
+        if !typed && out.contains("falls=") && out.ends_with('\n') {
+            source.lock().unwrap().extend(b"wch\n");
+            typed = true;
+        }
+        if out.contains("DONE") && out.ends_with('\n') {
+            break;
+        }
+    }
+    text(&sink)
+}
+
+#[test]
+fn ch32v003_openwch_attach_interrupt_and_serial_read_run_unmodified() {
+    // Stock openwch arduino_core_ch32: attachInterrupt(PD3, IPU, FALLING)
+    // writes AFIO EXTICR (2 bits per line, GPIOD = 3) and EXTI INTENR /
+    // FTENR, and enables EXTI7_0_IRQn (20). The core's `WCH-Interrupt-fast`
+    // EXTI7_0_IRQHandler clears INTFR and calls the sketch callback.
+    // Serial.read() polls USART1 RXNE.
+    let chip = load_chip("ch32v003f4p6");
+    let out = run_exti_fixture(&chip);
+    assert_eq!(
+        out,
+        "CH32V003_EXTI_BOOT\r\nfalls=3\r\nrx=wch\r\n\
+         CH32V003_EXTI_PASS\r\nCH32V003_EXTI_DONE\r\n",
+        "USART1 TX stream"
+    );
+}
+
+#[test]
+fn ch32v003_attach_interrupt_misses_pd3_with_the_stm32f1_afio_mux() {
+    // Negative control: the STM32F1 AFIO reads EXTICR as 4-bit fields, so
+    // the V00x write `3 << 6` (line 3 = GPIOD) selects port A for line 3 and
+    // no PD3 edge reaches EXTI.
+    let mut yaml = chip_yaml("ch32v003f4p6");
+    let afio = yaml["peripherals"]
+        .as_sequence_mut()
+        .expect("peripherals list")
+        .iter_mut()
+        .find(|p| p["id"].as_str() == Some("afio"))
+        .expect("afio block");
+    assert_eq!(afio["config"]["profile"].as_str(), Some("wch_v00x"));
+    afio["config"]["profile"] = "stm32f1".into();
+    let chip: ChipDescriptor = serde_yaml::from_value(yaml).expect("descriptor with F1 AFIO");
+    let out = run_exti_fixture(&chip);
+    assert!(
+        out.starts_with("CH32V003_EXTI_BOOT\r\nfalls=0\r\n"),
+        "{out}"
+    );
+    assert!(out.contains("CH32V003_EXTI_FAIL"), "{out}");
+}

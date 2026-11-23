@@ -99,6 +99,31 @@ peripherals:
     clock: { reg: "apb2pcenr", bit: 14 }
     irq: 32
 
+  # AFIO (ch32v00x.h): AFIO_BASE = APB2PERIPH_BASE + 0x0000, RCC_AFIOEN =
+  # APB2PCENR bit 0. AFIO_TypeDef is RESERVED0, PCFR1, EXTICR; EXTICR holds a
+  # 2-bit port select per EXTI line 0..7 (GPIO_EXTILineConfig), profile
+  # `wch_v00x`.
+  - id: "afio"
+    type: "afio"
+    base_address: 0x40010000
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 0 }
+    config:
+      profile: "wch_v00x"
+
+  # EXTI (ch32v00x.h): EXTI_BASE = APB2PERIPH_BASE + 0x0400. EXTI_TypeDef is
+  # INTENR, EVENR, RTENR, FTENR, SWIEVR, INTFR, the STM32F1 EXTI register
+  # file. Lines 0..7 are GPIO, 8 is PVD, 9 is AWU (ch32v00x_exti.h). A pending
+  # unmasked GPIO line pends EXTI7_0_IRQn (20) in the PFIC; PVD and AWU
+  # vectors are not wired.
+  - id: "exti"
+    type: "exti"
+    base_address: 0x40010400
+    size: "1KB"
+    config:
+      profile: "wch_v00x"
+      lines: 10
+
   # QingKe V2 system timer STK (core_riscv.h): SysTick_Type at 0xE000F000 is
   # CTLR, SR, CNT, reserved, CMP. The vendor noneos-sdk `Delay_Us`/`Delay_Ms`
   # poll SR.CNTIF. The STK is a core block (no RCC gate). With CTLR.STIE set a
