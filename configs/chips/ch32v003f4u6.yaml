@@ -90,13 +90,14 @@ peripherals:
   # USART1 (ch32v00x.h): USART1_BASE = APB2PERIPH_BASE + 0x3800, RCC_USART1EN =
   # APB2PCENR bit 14. USART_TypeDef is STATR, DATAR, BRR, CTLR1, CTLR2, CTLR3,
   # GPR at 4-byte strides, the same layout as the STM32F1 USART, so the default
-  # `stm32f1` UART layout serves it. No `irq` yet: the PFIC is modelled, but
-  # USART1_IRQn (32) delivery has no test. TX is polled only.
+  # `stm32f1` UART layout serves it. With CTLR1.RXNEIE/TXEIE set the UART
+  # pends USART1_IRQn (32, ch32v00x.h) in the PFIC.
   - id: "usart1"
     type: "uart"
     base_address: 0x40013800
     size: "1KB"
     clock: { reg: "apb2pcenr", bit: 14 }
+    irq: 32
 
   # QingKe V2 system timer STK (core_riscv.h): SysTick_Type at 0xE000F000 is
   # CTLR, SR, CNT, reserved, CMP. The vendor noneos-sdk `Delay_Us`/`Delay_Ms`
