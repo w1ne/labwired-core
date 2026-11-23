@@ -112,7 +112,7 @@ const EPAPER_TRICOLOR: &[&str] = &[F::EPAPER_TRICOLOR_PLANES];
 /// A string keeps the value exact and keeps it comparable (`!==` is all a
 /// change-detector needs), where an `f64` would silently alias two different
 /// buffers to one generation and a `BigInt` would make `JSON.stringify` throw.
-fn js_safe_meta(meta: &serde_json::Value) -> serde_json::Value {
+pub(crate) fn js_safe_meta(meta: &serde_json::Value) -> serde_json::Value {
     const MAX_EXACT: u64 = 1 << 53;
     match meta {
         serde_json::Value::Number(n) => match n.as_u64() {
@@ -1570,5 +1570,45 @@ mod logic_ref_deserialize_tests {
         assert_eq!(refs[0].kind, "gpio");
         assert_eq!(refs[0].peripheral, "gpiob");
         assert_eq!(refs[0].line, None);
+    }
+}
+
+#[cfg(test)]
+mod js_safe_meta_tests {
+    use super::js_safe_meta;
+    use serde_json::json;
+
+    #[test]
+    fn js_safe_meta_preserves_safe_numbers_and_exact_wide_unsigned_values() {
+        let boundary = 1_u64 << 53;
+        assert_eq!(js_safe_meta(&json!(0)), json!(0));
+        assert_eq!(js_safe_meta(&json!(boundary - 1)), json!(boundary - 1));
+        assert_eq!(js_safe_meta(&json!(boundary)), json!("9007199254740992"));
+        assert_eq!(
+            js_safe_meta(&json!(boundary + 1)),
+            json!("9007199254740993")
+        );
+        assert_eq!(
+            js_safe_meta(&json!(u64::MAX)),
+            json!("18446744073709551615")
+        );
+    }
+
+    #[test]
+    fn js_safe_meta_normalizes_nested_copies_without_changing_native_metadata() {
+        let native = json!({
+            "registers": [u32::MAX, 0],
+            "nested": [{"rsf_due": u64::MAX, "anchor_cycle": 0}],
+            "label": "rtc",
+            "running": false,
+            "missing": null,
+            "negative": -7,
+            "voltage": 3.3,
+        });
+        let normalized = js_safe_meta(&native);
+        let mut expected = native.clone();
+        expected["nested"][0]["rsf_due"] = json!("18446744073709551615");
+        assert_eq!(normalized, expected);
+        assert_eq!(native["nested"][0]["rsf_due"].as_u64(), Some(u64::MAX));
     }
 }
