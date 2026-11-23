@@ -27,12 +27,14 @@
 //! Counter mode (`MODE=1` / `MODE=2`) increments only on TASKS_COUNT and
 //! is supported by the register surface but not auto-driven by `tick()`.
 //!
-//! Timing fidelity: the sim ticks the prescaler accumulator once per
-//! `tick()` call (i.e. once per CPU step at the default
-//! peripheral_tick_interval=1).  That means TIMER advances at ~CPU rate,
-//! not 16 MHz, but the ordering of events is preserved — which is what
-//! firmware control flow depends on. Absolute wall-clock fidelity is
-//! left to a future cycle-budget calibration pass.
+//! Clocking: the TIMER base clock is 16 MHz on silicon (PS §6.30:
+//! `fTIMER = 16 MHz / 2^PRESCALER`; Renode `NRF52840_Timer.cs`
+//! `InitialFrequency = 16000000`, `Divider = 1 << PRESCALER`), but the
+//! nRF52 Cortex-M4 runs at 64 MHz. A descriptor declares the base clock with
+//! `config: { peripheral_hz: 16_000_000 }`; the model then converts CPU
+//! cycles (`attach_cpu_hz`) to base ticks with an exact integer residue.
+//! Without the key, or on a bus with no `cpu_hz`, one CPU cycle is one base
+//! tick (the former behaviour, 4x fast on a 64 MHz part).
 
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
@@ -84,6 +86,14 @@ pub struct Nrf52Timer {
     counter: u32,
     prescaler_accum: u32,
 
+    /// Base clock from `config: { peripheral_hz }`. `None` = CPU clock.
+    peripheral_hz: Option<u64>,
+    /// Core clock from `attach_cpu_hz`. Zero on a hand-built bus.
+    cpu_hz: u64,
+    /// CPU-cycle to base-tick residue, in units of `peripheral_hz / cpu_hz`
+    /// base ticks: `base = (clock_frac + cycles * peripheral_hz) / cpu_hz`.
+    clock_frac: u64,
+
     /// Bus-published cycle clock (event-scheduler builds). When present the
     /// model is walk-independent: counter advances lazily via `sync_to` and
     /// compare matches ride scheduled events.
@@ -117,6 +127,9 @@ impl Default for Nrf52Timer {
             running: false,
             counter: 0,
             prescaler_accum: 0,
+            peripheral_hz: None,
+            cpu_hz: 0,
+            clock_frac: 0,
             clock: None,
             anchor: 0,
             arm_seq: 0,
@@ -137,6 +150,39 @@ impl Nrf52Timer {
             num_cc: num_cc.clamp(1, 6),
             ..Self::default()
         }
+    }
+
+    /// Declare the TIMER base clock in Hz (`config: { peripheral_hz }`).
+    pub fn set_peripheral_hz(&mut self, hz: u64) {
+        self.peripheral_hz = Some(hz.max(1));
+    }
+
+    /// `(base_hz, cpu_hz)` when the base clock differs from the CPU clock.
+    fn clock_ratio(&self) -> Option<(u64, u64)> {
+        match self.peripheral_hz {
+            Some(base) if self.cpu_hz != 0 && base != self.cpu_hz => Some((base, self.cpu_hz)),
+            _ => None,
+        }
+    }
+
+    /// Convert elapsed CPU cycles to base-clock ticks, keeping the residue.
+    fn cpu_cycles_to_base_ticks(&mut self, cycles: u64) -> u64 {
+        let Some((base, cpu)) = self.clock_ratio() else {
+            return cycles;
+        };
+        let total = u128::from(self.clock_frac) + u128::from(cycles) * u128::from(base);
+        self.clock_frac = (total % u128::from(cpu)) as u64;
+        (total / u128::from(cpu)) as u64
+    }
+
+    /// CPU cycles until `ticks` (>= 1) more base-clock ticks have elapsed.
+    fn base_ticks_to_cpu_cycles(&self, ticks: u64) -> u64 {
+        let Some((base, cpu)) = self.clock_ratio() else {
+            return ticks;
+        };
+        let need =
+            (u128::from(ticks) * u128::from(cpu)).saturating_sub(u128::from(self.clock_frac));
+        need.div_ceil(u128::from(base)).min(u128::from(u64::MAX)) as u64
     }
 
     /// SHORTS writable mask: COMPARE[0..num_cc)_CLEAR (bits 0..num_cc) +
@@ -167,10 +213,14 @@ impl Nrf52Timer {
         self.clock.is_some()
     }
 
-    /// Advance the timer by `cycles` base ticks (one base tick ≡ one legacy
-    /// `tick()` call). Collects compare matches into `fired` / `irq`.
+    /// Advance the timer by `cycles` CPU cycles (one legacy `tick()` call is
+    /// one cycle). Collects compare matches into `fired` / `irq`.
     fn advance_cycles(&mut self, cycles: u64) -> PeripheralTickResult {
         if !self.running || self.mode != MODE_TIMER || cycles == 0 {
+            return PeripheralTickResult::default();
+        }
+        let cycles = self.cpu_cycles_to_base_ticks(cycles);
+        if cycles == 0 {
             return PeripheralTickResult::default();
         }
         let divider = 1u32 << (self.prescaler & 0xF);
@@ -235,10 +285,10 @@ impl Nrf52Timer {
                 // equal or behind: full period to re-hit
                 (mask as u64 + 1) - (cur as u64) + (target as u64)
             };
-            // Cycles: finish current prescaler quantum, then (steps-1) full
-            // quanta, then the final quantum that increments onto target.
+            // Base ticks: finish current prescaler quantum, then (steps-1)
+            // full quanta, then the final quantum that increments onto target.
             let first = (divider - self.prescaler_accum) as u64;
-            let cycles = first + (steps - 1) * divider as u64;
+            let cycles = self.base_ticks_to_cpu_cycles(first + (steps - 1) * divider as u64);
             best = Some(best.map_or(cycles, |b| b.min(cycles)));
         }
         best
@@ -399,6 +449,10 @@ impl Peripheral for Nrf52Timer {
 
     fn attach_cycle_clock(&mut self, clock: CycleClock) {
         self.clock = Some(clock);
+    }
+
+    fn attach_cpu_hz(&mut self, hz: u64) {
+        self.cpu_hz = hz;
     }
 
     fn sync_to(&mut self, now_cycle: u64) {
@@ -729,5 +783,59 @@ mod tests {
         t.write_u32(OFF_TASKS_CLEAR, 1).unwrap();
         assert_eq!(t.counter, 0);
         assert_eq!(t.prescaler_accum, 0);
+    }
+
+    /// nRF52: 64 MHz CPU, 16 MHz TIMER base clock. Four CPU cycles make one
+    /// base tick; PRESCALER divides the base clock, not the CPU clock.
+    #[test]
+    fn peripheral_hz_divides_the_cpu_clock() {
+        let mut t = Nrf52Timer::new();
+        t.attach_cpu_hz(64_000_000);
+        t.set_peripheral_hz(16_000_000);
+        t.write_u32(OFF_BITMODE, 3).unwrap();
+        t.write_u32(OFF_PRESCALER, 4).unwrap(); // 1 MHz
+        t.write_u32(OFF_TASKS_START, 1).unwrap();
+        for _ in 0..(64 * 10 - 1) {
+            t.tick();
+        }
+        assert_eq!(t.counter, 9, "one cycle short of 10 us");
+        t.tick();
+        assert_eq!(t.counter, 10, "640 CPU cycles at 64 MHz = 10 us at 1 MHz");
+    }
+
+    #[test]
+    fn next_compare_is_counted_in_cpu_cycles() {
+        let mut t = Nrf52Timer::new();
+        t.attach_cpu_hz(64_000_000);
+        t.set_peripheral_hz(16_000_000);
+        t.write_u32(OFF_BITMODE, 3).unwrap();
+        t.write_u32(OFF_CC0, 10).unwrap();
+        t.write_u32(OFF_TASKS_START, 1).unwrap();
+        assert_eq!(t.cycles_until_next_compare(), Some(40));
+        // One CPU cycle leaves a quarter base tick in the residue.
+        let _ = t.advance_cycles(1);
+        assert_eq!(t.cycles_until_next_compare(), Some(39));
+        let r = t.advance_cycles(39);
+        assert_eq!(t.counter, 10);
+        assert_eq!(
+            t.events_compare[0], 1,
+            "compare lands on the predicted cycle"
+        );
+        assert!(!r.irq, "INTEN clear");
+    }
+
+    /// No `peripheral_hz`, or no `cpu_hz` on the bus: one cycle per base tick.
+    #[test]
+    fn clock_ratio_needs_both_clocks() {
+        let mut t = Nrf52Timer::new();
+        t.set_peripheral_hz(16_000_000);
+        t.write_u32(OFF_TASKS_START, 1).unwrap();
+        t.tick();
+        assert_eq!(t.counter, 1, "cpu_hz 0: ratio off");
+        let mut u = Nrf52Timer::new();
+        u.attach_cpu_hz(64_000_000);
+        u.write_u32(OFF_TASKS_START, 1).unwrap();
+        u.tick();
+        assert_eq!(u.counter, 1, "no peripheral_hz: ratio off");
     }
 }

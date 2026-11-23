@@ -288,7 +288,9 @@ fn nrf52840_machine_timer_retargeted_later_keeps_one_wake_and_fires_on_time() {
     assert_eq!(stats.live_event_ceiling_trips, 0, "no ceiling trips");
 
     // The final target still fires — not early, and within one interval.
-    let due = started + u64::from(cc);
+    // TIMER counts the 16 MHz base clock (`peripheral_hz`), the core runs at
+    // 64 MHz: one count is four CPU cycles at PRESCALER=0.
+    let due = started + 4 * u64::from(cc);
     let mut fired_at = None;
     while machine.total_cycles < due + 4 * RECOMMENDED_TICK_INTERVAL as u64 {
         machine

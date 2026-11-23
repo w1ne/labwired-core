@@ -86,7 +86,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32f401vd | open | L0 | 24 | 834.6 | 1.5 | ≥1× (CI) | — |
 | stm32f401ve | open | L0 | 24 | 834.6 | 1.5 | ≥1× (CI) | — |
 | stm32f405 | open | L1 | 22 | 834.1 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32f405.md) |
-| stm32f767 | open | L1 | 37 | 834.4 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f767.md) |
+| stm32f767 | open | L1 | 38 | 834.4 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f767.md) |
 | rp2350 | open | L1 | 28 | 906.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/rp2350.md) |
 | stm32f407 | open | L1 | 34 | 834.5 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f407.md) |
 | stm32f407ie | open | L0 | 34 | 834.5 | 1.6 | ≥1× (CI) | — |

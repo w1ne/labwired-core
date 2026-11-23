@@ -18,7 +18,8 @@
 //!           output driving OUT = 0 with its input buffer connected (PIN_CNF =
 //!           1), so IN only follows the toggles if it samples the GPIOTE-driven
 //!           pad rather than OUT.
-//!   TIMER0  32-bit timer, CC[0] compare event, CAPTURE advances, CLEAR resets
+//!   TIMER0  32-bit timer, CC[0] compare event, CAPTURE advances, CLEAR resets;
+//!           the 16 MHz base clock runs at 1/4 of the 64 MHz SysTick count
 //!   RTC0    COUNTER advances, CC[0] compare event (EVTEN.COMPARE0 on, as
 //!           nrfx does; the INTEN-only event path is not exercised)
 //!   RNG     two EVENTS_VALRDY samples

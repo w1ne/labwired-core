@@ -1,0 +1,10 @@
+schema_version: "1.0"
+inputs:
+  firmware: ../../tests/fixtures/ch32v003f4p6-arduino-openwch.elf
+  system: ./system.yaml
+limits:
+  max_steps: 4000000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_contains: "CH32V003_ARDUINO_BOOT"
+  - uart_contains: "CH32V003_ARDUINO_PASS"

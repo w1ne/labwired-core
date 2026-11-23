@@ -21,7 +21,9 @@ arch: arm
 # no UART IRQ is claimed.
 #
 # The generic STM32 timer model covers the counter path (CR1/EGR/CNT/PSC/ARR,
-# 16-bit). On this part the update/compare flags and interrupt enables live in
+# 16-bit). PSC[3:0] is an exponent on this part (CK_CNT = PCLK / 2^PSC,
+# Contiki cpu/stm32w108/rtimer-arch.h), so both timers set
+# `prescaler: power_of_two`. On this part the update/compare flags and interrupt enables live in
 # the separate INT_TIMx block at 0x4000_A800, which is not mapped, so no timer
 # IRQ is claimed. Renode maps no GPIO block for this part; GPIO, SC2, the
 # radio, the calibration ADC, the FIB, external RAM and clock control are not
@@ -51,7 +53,11 @@ peripherals:
   type: timer
   base_address: 0x4000E000
   size: 1KB
+  config:
+    prescaler: power_of_two
 - id: tim2
   type: timer
   base_address: 0x4000F000
   size: 1KB
+  config:
+    prescaler: power_of_two
