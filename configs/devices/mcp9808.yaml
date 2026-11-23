@@ -16,7 +16,8 @@
 # τ≈1 s first-order thermal lag (effective only on buses with an honest µs
 # source).
 #
-# Write masks follow the unimplemented bits of each register: CONFIG 15:11
+# Write masks follow the unimplemented and read-only bits of each register:
+# CONFIG 15:11, bit 5 (Int Clear, reads 0) and bit 4 (Alert Stat, read-only)
 # (Register 5-1), the limit registers 15:13 and 1:0 (Register 5-3, 0.25 °C
 # steps), RESOLUTION 7:2 (Register 5-7).
 #
@@ -35,7 +36,7 @@ behavior:
     pointer_mask: 0x0F
     registers:
       # CONFIG: hysteresis, shutdown, lock and alert bits; storage only.
-      - { name: CONFIG, addr: 0x01, width: 2, endian: be, access: rw, reset: 0x0000, write_mask: 0x07FF }
+      - { name: CONFIG, addr: 0x01, width: 2, endian: be, access: rw, reset: 0x0000, write_mask: 0x07CF }
       # Alert limits: sign at bit 12, 0.25 °C steps in bits 11:2.
       - { name: T_UPPER, addr: 0x02, width: 2, endian: be, access: rw, reset: 0x0000, write_mask: 0x1FFC }
       - { name: T_LOWER, addr: 0x03, width: 2, endian: be, access: rw, reset: 0x0000, write_mask: 0x1FFC }

@@ -204,6 +204,20 @@ fn mcp9808_config_is_writable_storage() {
     assert_eq!(read_reg16(&mut dev, 0x01), 0x0100);
 }
 
+/// Register 5-1: bits 15:11 are unimplemented, bit 5 (Int Clear) always
+/// reads 0 and bit 4 (Alert Stat) is read-only (0 while the alert output is
+/// not modelled), so a write of 0xFFFF reads back 0x07CF.
+#[test]
+fn mcp9808_config_drops_unimplemented_and_read_only_bits() {
+    let mut dev = build_mcp9808();
+    dev.start();
+    dev.write(0x01); // pointer = CONFIG
+    dev.write(0xFF);
+    dev.write(0xFF);
+    dev.stop();
+    assert_eq!(read_reg16(&mut dev, 0x01), 0x07CF);
+}
+
 #[test]
 fn mcp9808_noise_replays_per_component() {
     let mut a = build_mcp9808();
