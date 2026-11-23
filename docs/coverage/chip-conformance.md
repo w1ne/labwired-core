@@ -85,7 +85,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32f401vd | **L0** | ✓ | 24 | — | — | — |
 | stm32f401ve | **L0** | ✓ | 24 | — | — | — |
 | stm32f405 | **L1** | ✓ | 22 | — | — | firmware_survival::test_stm32f405_tier1_survival |
-| stm32f767 | **L1** | ✓ | 37 | — | — | firmware_survival::test_stm32f767_tier1_survival |
+| stm32f767 | **L1** | ✓ | 38 | — | — | firmware_survival::test_stm32f767_tier1_survival |
 | rp2350 | **L1** | ✓ | 28 | — | — | firmware_survival::test_rp2350_demo_survival |
 | stm32f407 | **L1** | ✓ | 34 | — | — | firmware_survival::test_nucleo_f407_smoke_survival |
 | stm32f407ie | **L0** | ✓ | 34 | — | — | — |
