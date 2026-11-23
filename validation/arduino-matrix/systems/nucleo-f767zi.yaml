@@ -1,0 +1,29 @@
+# Arduino matrix system — NUCLEO-F767ZI (MB1137). INA219 on Wire for L3,
+# MAX31855 on SPI for L4; L0–L2 ignore them.
+name: "arduino-matrix-nucleo-f767zi"
+chip: "../../../configs/chips/stm32f767.yaml"
+external_devices:
+  # Matrix L3_i2c_sensor: INA219 at 0x40 on stm32duino's Wire = I2C1
+  # (Arduino D15/D14 = PB8/PB9 on the NUCLEO_F767ZI variant).
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x40
+  # Matrix L4_spi_sensor: MAX31855 on stm32duino's SPI = SPI1 (Arduino
+  # D13/D12/D11 = PA5/PA6/PA7); CS is D10 = PD14.
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PD14"
+# Matrix L5_adc: A0 = PA3 = ADC123_IN3 held at 1650 mV (half of the 3.3 V
+# reference), so analogRead(A0) has one exact answer instead of the
+# model's incrementing fallback. Merged into the chip's adc1 by id.
+peripherals:
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012000
+    config:
+      input_mv: { 3: 1650 }
+board_io: []
