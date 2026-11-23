@@ -775,50 +775,109 @@ fn flex_lipo_charger_reuses_multi_input_catalog_source_and_dimensionless_unit() 
     );
 }
 
-#[test]
-fn flex_lipo_browser_evidence_pins_firmware_and_manifest_inputs() {
-    use sha2::{Digest, Sha256};
-
-    fn normalize_numbers(value: &serde_json::Value) -> serde_json::Value {
-        match value {
-            serde_json::Value::Number(number) => {
-                serde_json::json!(number.as_f64().expect("finite fixture number"))
-            }
-            serde_json::Value::Array(items) => {
-                serde_json::Value::Array(items.iter().map(normalize_numbers).collect())
-            }
-            serde_json::Value::Object(fields) => serde_json::Value::Object(
-                fields
-                    .iter()
-                    .map(|(key, value)| (key.clone(), normalize_numbers(value)))
-                    .collect(),
-            ),
-            other => other.clone(),
+fn normalize_numbers(value: &serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Number(number) => {
+            serde_json::json!(number.as_f64().expect("finite fixture number"))
         }
+        serde_json::Value::Array(items) => {
+            serde_json::Value::Array(items.iter().map(normalize_numbers).collect())
+        }
+        serde_json::Value::Object(fields) => serde_json::Value::Object(
+            fields
+                .iter()
+                .map(|(key, value)| (key.clone(), normalize_numbers(value)))
+                .collect(),
+        ),
+        other => other.clone(),
     }
+}
 
-    fn sha256(bytes: &[u8]) -> String {
-        format!("{:x}", Sha256::digest(bytes))
-    }
+fn sha256(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(bytes))
+}
 
-    let browser: serde_json::Value = serde_json::from_str(LIPO_BROWSER).unwrap();
-    let native: serde_json::Value = serde_json::from_str(LIPO_NATIVE).unwrap();
-    let core_commit = browser["core_commit"].as_str().unwrap();
-    assert_eq!(core_commit.len(), 40);
-    assert!(core_commit.bytes().all(|byte| byte.is_ascii_hexdigit()));
-    assert_eq!(browser["native_model_equality"], true);
-    assert_eq!(browser["firmware_sha256"], sha256(LIPO_FIRMWARE));
-    assert_eq!(
-        browser["firmware_source_sha256"],
-        sha256(LIPO_FIRMWARE_SOURCE)
-    );
-    assert_eq!(browser["system_sha256"], sha256(LIPO_SYSTEM_BYTES));
-    for case in ["positive", "negative", "high_charge"] {
-        assert_eq!(
-            normalize_numbers(&browser["observations"][case]),
-            normalize_numbers(&native[case]),
-            "browser evidence for {case} must include the exact native-matched instrument samples"
+/// The browser evidence of the catalog analog fixtures that share one shape:
+/// the committed browser run names the exact firmware, firmware source and
+/// manifest bytes, claims native-model equality, and every case's observations
+/// equal the native instrument capture. (The GP2Y0A21, dual-sensor and LDR
+/// evidence tests also pin traces, run reports or source maps, so they keep
+/// their own bodies.)
+struct BrowserEvidence {
+    name: &'static str,
+    browser: &'static str,
+    native: &'static str,
+    firmware: &'static [u8],
+    firmware_source: &'static [u8],
+    system_bytes: &'static [u8],
+    cases: &'static [&'static str],
+    /// Failure text per case; `{case}` is replaced by the case name.
+    case_msg: &'static str,
+}
+
+const BROWSER_EVIDENCE: &[BrowserEvidence] = &[
+    BrowserEvidence {
+        name: "lipo",
+        browser: LIPO_BROWSER,
+        native: LIPO_NATIVE,
+        firmware: LIPO_FIRMWARE,
+        firmware_source: LIPO_FIRMWARE_SOURCE,
+        system_bytes: LIPO_SYSTEM_BYTES,
+        cases: &["positive", "negative", "high_charge"],
+        case_msg:
+            "browser evidence for {case} must include the exact native-matched instrument samples",
+    },
+    BrowserEvidence {
+        name: "tmp36",
+        browser: TMP36_BROWSER,
+        native: TMP36_NATIVE,
+        firmware: TMP36_FIRMWARE,
+        firmware_source: TMP36_FIRMWARE_SOURCE,
+        system_bytes: TMP36_SYSTEM_BYTES,
+        cases: &["cold", "zero", "default", "hot"],
+        case_msg: "browser evidence for {case} must match the native instrument trace",
+    },
+    BrowserEvidence {
+        name: "ntc",
+        browser: NTC_BROWSER,
+        native: NTC_NATIVE,
+        firmware: NTC_FIRMWARE,
+        firmware_source: NTC_FIRMWARE_SOURCE,
+        system_bytes: NTC_SYSTEM_BYTES,
+        cases: &["cold", "ambient", "hot"],
+        case_msg: "browser NTC evidence for {case} must equal native analog/digital traces",
+    },
+];
+
+#[test]
+fn every_catalog_analog_browser_evidence_pins_firmware_and_manifest_inputs() {
+    for row in BROWSER_EVIDENCE {
+        let name = row.name;
+        let browser: serde_json::Value = serde_json::from_str(row.browser).unwrap();
+        let native: serde_json::Value = serde_json::from_str(row.native).unwrap();
+        let core_commit = browser["core_commit"].as_str().unwrap();
+        assert_eq!(core_commit.len(), 40, "{name}");
+        assert!(
+            core_commit.bytes().all(|byte| byte.is_ascii_hexdigit()),
+            "{name}"
         );
+        assert_eq!(browser["native_model_equality"], true, "{name}");
+        assert_eq!(browser["firmware_sha256"], sha256(row.firmware), "{name}");
+        assert_eq!(
+            browser["firmware_source_sha256"],
+            sha256(row.firmware_source),
+            "{name}"
+        );
+        assert_eq!(browser["system_sha256"], sha256(row.system_bytes), "{name}");
+        for case in row.cases {
+            assert_eq!(
+                normalize_numbers(&browser["observations"][case]),
+                normalize_numbers(&native[case]),
+                "{name}: {}",
+                row.case_msg.replace("{case}", case)
+            );
+        }
     }
 }
 
@@ -889,53 +948,6 @@ fn flex_tmp36_reuses_formula_source_with_temperature_units_and_scope_trace() {
         measured, expected,
         "formula-backed analog observations changed"
     );
-}
-
-#[test]
-fn flex_tmp36_browser_evidence_pins_firmware_and_manifest_inputs() {
-    use sha2::{Digest, Sha256};
-
-    fn normalize_numbers(value: &serde_json::Value) -> serde_json::Value {
-        match value {
-            serde_json::Value::Number(number) => {
-                serde_json::json!(number.as_f64().expect("finite fixture number"))
-            }
-            serde_json::Value::Array(items) => {
-                serde_json::Value::Array(items.iter().map(normalize_numbers).collect())
-            }
-            serde_json::Value::Object(fields) => serde_json::Value::Object(
-                fields
-                    .iter()
-                    .map(|(key, value)| (key.clone(), normalize_numbers(value)))
-                    .collect(),
-            ),
-            other => other.clone(),
-        }
-    }
-
-    fn sha256(bytes: &[u8]) -> String {
-        format!("{:x}", Sha256::digest(bytes))
-    }
-
-    let browser: serde_json::Value = serde_json::from_str(TMP36_BROWSER).unwrap();
-    let native: serde_json::Value = serde_json::from_str(TMP36_NATIVE).unwrap();
-    let core_commit = browser["core_commit"].as_str().unwrap();
-    assert_eq!(core_commit.len(), 40);
-    assert!(core_commit.bytes().all(|byte| byte.is_ascii_hexdigit()));
-    assert_eq!(browser["native_model_equality"], true);
-    assert_eq!(browser["firmware_sha256"], sha256(TMP36_FIRMWARE));
-    assert_eq!(
-        browser["firmware_source_sha256"],
-        sha256(TMP36_FIRMWARE_SOURCE)
-    );
-    assert_eq!(browser["system_sha256"], sha256(TMP36_SYSTEM_BYTES));
-    for case in ["cold", "zero", "default", "hot"] {
-        assert_eq!(
-            normalize_numbers(&browser["observations"][case]),
-            normalize_numbers(&native[case]),
-            "browser evidence for {case} must match the native instrument trace"
-        );
-    }
 }
 
 fn gp2y0a21_reference() -> serde_json::Value {
@@ -1071,29 +1083,6 @@ fn flex_gp2y0a21_reuses_the_corrected_catalog_curve_in_both_instruments() {
 
 #[test]
 fn flex_gp2y0a21_browser_proof_pins_firmware_and_model_inputs() {
-    use sha2::{Digest, Sha256};
-
-    fn normalize_numbers(value: &serde_json::Value) -> serde_json::Value {
-        match value {
-            serde_json::Value::Number(number) => {
-                serde_json::json!(number.as_f64().expect("finite fixture number"))
-            }
-            serde_json::Value::Array(items) => {
-                serde_json::Value::Array(items.iter().map(normalize_numbers).collect())
-            }
-            serde_json::Value::Object(fields) => serde_json::Value::Object(
-                fields
-                    .iter()
-                    .map(|(key, value)| (key.clone(), normalize_numbers(value)))
-                    .collect(),
-            ),
-            other => other.clone(),
-        }
-    }
-    fn sha256(bytes: &[u8]) -> String {
-        format!("{:x}", Sha256::digest(bytes))
-    }
-
     let browser: serde_json::Value = serde_json::from_str(GP2Y_BROWSER).unwrap();
     let native: serde_json::Value = serde_json::from_str(GP2Y_NATIVE).unwrap();
     let core_commit = browser["core_commit"].as_str().unwrap();
@@ -1271,29 +1260,6 @@ fn flex_dual_sensor_reuses_one_catalog_model_for_independent_instances() {
 
 #[test]
 fn flex_dual_sensor_browser_proof_pins_firmware_and_initial_trace() {
-    use sha2::{Digest, Sha256};
-
-    fn normalize_numbers(value: &serde_json::Value) -> serde_json::Value {
-        match value {
-            serde_json::Value::Number(number) => {
-                serde_json::json!(number.as_f64().expect("finite fixture number"))
-            }
-            serde_json::Value::Array(items) => {
-                serde_json::Value::Array(items.iter().map(normalize_numbers).collect())
-            }
-            serde_json::Value::Object(fields) => serde_json::Value::Object(
-                fields
-                    .iter()
-                    .map(|(key, value)| (key.clone(), normalize_numbers(value)))
-                    .collect(),
-            ),
-            other => other.clone(),
-        }
-    }
-    fn sha256(bytes: &[u8]) -> String {
-        format!("{:x}", Sha256::digest(bytes))
-    }
-
     let browser: serde_json::Value = serde_json::from_str(DUAL_GP2Y_BROWSER).unwrap();
     let native_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/flex-dual-gp2y0a21/native.json");
@@ -1739,30 +1705,6 @@ fn flex_heypcb_ldr_network_refuses_illuminance_outside_the_data_sheet_range() {
 
 #[test]
 fn flex_heypcb_ldr_network_browser_evidence_pins_source_and_exact_runtime_inputs() {
-    use sha2::{Digest, Sha256};
-
-    fn normalize_numbers(value: &serde_json::Value) -> serde_json::Value {
-        match value {
-            serde_json::Value::Number(number) => {
-                serde_json::json!(number.as_f64().expect("finite fixture number"))
-            }
-            serde_json::Value::Array(items) => {
-                serde_json::Value::Array(items.iter().map(normalize_numbers).collect())
-            }
-            serde_json::Value::Object(fields) => serde_json::Value::Object(
-                fields
-                    .iter()
-                    .map(|(key, value)| (key.clone(), normalize_numbers(value)))
-                    .collect(),
-            ),
-            other => other.clone(),
-        }
-    }
-
-    fn sha256(bytes: &[u8]) -> String {
-        format!("{:x}", Sha256::digest(bytes))
-    }
-
     let browser: serde_json::Value = serde_json::from_str(LDR_NETWORK_BROWSER).unwrap();
     let native: serde_json::Value = serde_json::from_str(LDR_NETWORK_NATIVE).unwrap();
     let source_map: serde_json::Value = serde_json::from_str(LDR_NETWORK_SOURCE_MAP).unwrap();
@@ -1871,12 +1813,6 @@ fn flex_heypcb_ldr_trace_snapshots_report_history_lost_to_late_consumers() {
 
 #[test]
 fn flex_heypcb_ldr_browser_evidence_pins_source_and_exact_runtime_inputs() {
-    use sha2::{Digest, Sha256};
-
-    fn sha256(bytes: &[u8]) -> String {
-        format!("{:x}", Sha256::digest(bytes))
-    }
-
     let browser: serde_json::Value = serde_json::from_str(HEYPCB_LDR_BROWSER).unwrap();
     let source_map: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
 
@@ -2159,53 +2095,6 @@ fn flex_ntc_reuses_registered_formula_for_a_portable_overtemperature_workload() 
 }
 
 #[test]
-fn flex_ntc_browser_evidence_pins_firmware_and_manifest_inputs() {
-    use sha2::{Digest, Sha256};
-
-    fn normalize_numbers(value: &serde_json::Value) -> serde_json::Value {
-        match value {
-            serde_json::Value::Number(number) => {
-                serde_json::json!(number.as_f64().expect("finite fixture number"))
-            }
-            serde_json::Value::Array(items) => {
-                serde_json::Value::Array(items.iter().map(normalize_numbers).collect())
-            }
-            serde_json::Value::Object(fields) => serde_json::Value::Object(
-                fields
-                    .iter()
-                    .map(|(key, value)| (key.clone(), normalize_numbers(value)))
-                    .collect(),
-            ),
-            other => other.clone(),
-        }
-    }
-
-    fn sha256(bytes: &[u8]) -> String {
-        format!("{:x}", Sha256::digest(bytes))
-    }
-
-    let browser: serde_json::Value = serde_json::from_str(NTC_BROWSER).unwrap();
-    let native: serde_json::Value = serde_json::from_str(NTC_NATIVE).unwrap();
-    let core_commit = browser["core_commit"].as_str().unwrap();
-    assert_eq!(core_commit.len(), 40);
-    assert!(core_commit.bytes().all(|byte| byte.is_ascii_hexdigit()));
-    assert_eq!(browser["native_model_equality"], true);
-    assert_eq!(browser["firmware_sha256"], sha256(NTC_FIRMWARE));
-    assert_eq!(
-        browser["firmware_source_sha256"],
-        sha256(NTC_FIRMWARE_SOURCE)
-    );
-    assert_eq!(browser["system_sha256"], sha256(NTC_SYSTEM_BYTES));
-    for case in ["cold", "ambient", "hot"] {
-        assert_eq!(
-            normalize_numbers(&browser["observations"][case]),
-            normalize_numbers(&native[case]),
-            "browser NTC evidence for {case} must equal native analog/digital traces"
-        );
-    }
-}
-
-#[test]
 fn flex_gpio_reuse_binds_shared_behavior_to_pomodoro_and_uno_with_held_out_workload() {
     let pomodoro: serde_yaml::Value = serde_yaml::from_str(GPIO_REUSE_POMODORO).unwrap();
     let uno: serde_yaml::Value = serde_yaml::from_str(GPIO_REUSE_UNO).unwrap();
@@ -2409,38 +2298,32 @@ fn flex_script_binding_reports_bad_scripts_and_limits_without_a_pass() {
     assert_eq!(result["time_ns"], 299_996_000_u64);
 }
 
+/// One pinned-source contract for every heypcb sensor fixture. Each board is a
+/// row: the common checks (same pinned repository revision and LICENSE blob as
+/// the LDR fixture, the board's own asset path and five pinned file blobs, a
+/// runtime that loads with complete scope notes, no original-target firmware,
+/// and every pinned port resolving) run for all rows; `check` carries the
+/// assertions specific to the board (strapping, bus address, net names, model
+/// binding).
+struct HeypcbFixture {
+    /// Directory under `boards/` in the pinned repository.
+    board: &'static str,
+    /// Pinned `source.asset`; `None` where the fixture never pinned it.
+    asset: Option<&'static str>,
+    source_map: &'static str,
+    system: &'static str,
+    check: fn(&serde_json::Value, &serde_yaml::Value, &labwired_core::flex::FlexRunReport),
+}
+
 /// The BME280 fixture's bus is the pinned board's bus: same source pin as the
 /// LDR fixture of the same repository, U4 strapped for I2C at the address the
 /// manifest gives the catalog model, and firmware built from the committed
 /// source.
-#[test]
-fn flex_heypcb_bme280_bus_matches_the_pinned_source_nets() {
-    const SOURCE_MAP: &str =
-        include_str!("../tests/fixtures/flex-heypcb-esp32-bme280/source-map.json");
-    const SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-esp32-bme280/system.yaml");
-
-    let source_map: serde_json::Value = serde_json::from_str(SOURCE_MAP).unwrap();
-    let sibling: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
-    for key in ["repository", "revision", "license_spdx"] {
-        assert_eq!(source_map["source"][key], sibling["source"][key], "{key}");
-    }
-    assert_eq!(
-        source_map["source"]["files"]["license"], sibling["source"]["files"]["license"],
-        "one repository revision has one LICENSE blob"
-    );
-    assert_eq!(
-        source_map["source"]["asset"],
-        "boards/bme280/kicad/esp32_bme280"
-    );
-    for file in ["schematic", "pcb", "bom", "board_json", "board_readme"] {
-        let entry = &source_map["source"]["files"][file];
-        assert!(entry["path"]
-            .as_str()
-            .unwrap()
-            .starts_with("boards/bme280/"));
-        assert_eq!(entry["git_blob"].as_str().unwrap().len(), 40, "{file}");
-    }
-
+fn check_heypcb_bme280(
+    source_map: &serde_json::Value,
+    yaml: &serde_yaml::Value,
+    report: &labwired_core::flex::FlexRunReport,
+) {
     // U4: the datasheet's I2C straps, on the bus nets of the board.
     let u4 = &source_map["sensor_bus"]["elements"][0];
     assert_eq!(u4["source_ref"], "U4");
@@ -2449,7 +2332,6 @@ fn flex_heypcb_bme280_bus_matches_the_pinned_source_nets() {
     assert_eq!(u4["pads"]["3"], "I2C_SDA");
     assert_eq!(u4["pads"]["4"], "I2C_SCL");
 
-    let yaml: serde_yaml::Value = serde_yaml::from_str(SYSTEM).unwrap();
     let bus = &yaml["i2c_buses"][0];
     let binding = &source_map["runtime_bindings"];
     assert_eq!(bus["name"], binding["bus"]["name"].as_str().unwrap());
@@ -2463,57 +2345,24 @@ fn flex_heypcb_bme280_bus_matches_the_pinned_source_nets() {
     assert_eq!(device["config"]["i2c_address"], 0x76);
     assert_eq!(binding["device"]["address"], "0x76");
 
-    let runtime = FlexRuntime::from_yaml(SYSTEM).unwrap();
-    let report = runtime.run_report();
-    assert!(report.scope_notes_complete);
-    assert!(!report.execution_scope.original_target_firmware_executed);
-    assert_eq!(report.execution_scope.chip_parity, "not_established");
     assert_eq!(report.i2c_buses.len(), 1);
     assert_eq!(report.i2c_buses[0].devices[0].address, 0x76);
-    for port in binding["ports"].as_object().unwrap().keys() {
-        runtime.port_id(port).unwrap();
-    }
-    assert_eq!(
-        report.ports.len(),
-        binding["ports"].as_object().unwrap().len()
-    );
 }
 
 /// The SHT40 fixture is a second board of the same pinned repository: same
 /// revision and license, U4 on the bus nets of the pinned PCB, and the
 /// address of the order code in the pinned BOM given to the catalog model.
-#[test]
-fn flex_heypcb_sht40_bus_matches_the_pinned_source_nets() {
-    const SOURCE_MAP: &str =
-        include_str!("../tests/fixtures/flex-heypcb-esp32-sht40/source-map.json");
-    const SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-esp32-sht40/system.yaml");
-
-    let source_map: serde_json::Value = serde_json::from_str(SOURCE_MAP).unwrap();
-    let sibling: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
-    for key in ["repository", "revision", "license_spdx"] {
-        assert_eq!(source_map["source"][key], sibling["source"][key], "{key}");
-    }
-    assert_eq!(
-        source_map["source"]["files"]["license"],
-        sibling["source"]["files"]["license"]
-    );
-    assert_eq!(
-        source_map["source"]["asset"],
-        "boards/sht40/kicad/esp32_sht40"
-    );
-    for file in ["schematic", "pcb", "bom", "board_json", "board_readme"] {
-        let entry = &source_map["source"]["files"][file];
-        assert!(entry["path"].as_str().unwrap().starts_with("boards/sht40/"));
-        assert_eq!(entry["git_blob"].as_str().unwrap().len(), 40, "{file}");
-    }
-
+fn check_heypcb_sht40(
+    source_map: &serde_json::Value,
+    yaml: &serde_yaml::Value,
+    report: &labwired_core::flex::FlexRunReport,
+) {
     let u4 = &source_map["sensor_bus"]["elements"][0];
     assert_eq!(u4["source_ref"], "U4");
     assert_eq!(u4["source_part"], "SHT40-AD1B-R2", "-AD1B is address 0x44");
     assert_eq!(u4["pads"]["1"], "I2C_SDA");
     assert_eq!(u4["pads"]["2"], "I2C_SCL");
 
-    let yaml: serde_yaml::Value = serde_yaml::from_str(SYSTEM).unwrap();
     let bus = &yaml["i2c_buses"][0];
     let binding = &source_map["runtime_bindings"];
     assert_eq!(bus["name"], binding["bus"]["name"].as_str().unwrap());
@@ -2522,52 +2371,17 @@ fn flex_heypcb_sht40_bus_matches_the_pinned_source_nets() {
     assert_eq!(device["type"], "sht40");
     assert_eq!(device["config"]["i2c_address"], 0x44);
 
-    let runtime = FlexRuntime::from_yaml(SYSTEM).unwrap();
-    let report = runtime.run_report();
-    assert!(report.scope_notes_complete);
-    assert!(!report.execution_scope.original_target_firmware_executed);
-    assert_eq!(report.execution_scope.chip_parity, "not_established");
     assert_eq!(report.i2c_buses[0].devices[0].address, 0x44);
-    for port in binding["ports"].as_object().unwrap().keys() {
-        runtime.port_id(port).unwrap();
-    }
-    assert_eq!(
-        report.ports.len(),
-        binding["ports"].as_object().unwrap().len()
-    );
 }
 
 /// The TMP117 fixture is a third I2C board of the same pinned repository,
 /// with no Flex code of its own: U4 on the bus nets of the pinned PCB, ADD0
 /// on GND for 0x48, and the ALERT net reported as unsupported.
-#[test]
-fn flex_heypcb_tmp117_bus_matches_the_pinned_source_nets() {
-    const SOURCE_MAP: &str =
-        include_str!("../tests/fixtures/flex-heypcb-esp32-tmp117/source-map.json");
-    const SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-esp32-tmp117/system.yaml");
-
-    let source_map: serde_json::Value = serde_json::from_str(SOURCE_MAP).unwrap();
-    let sibling: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
-    for key in ["repository", "revision", "license_spdx"] {
-        assert_eq!(source_map["source"][key], sibling["source"][key], "{key}");
-    }
-    assert_eq!(
-        source_map["source"]["files"]["license"],
-        sibling["source"]["files"]["license"]
-    );
-    assert_eq!(
-        source_map["source"]["asset"],
-        "boards/tmp117/kicad/esp32_tmp117"
-    );
-    for file in ["schematic", "pcb", "bom", "board_json", "board_readme"] {
-        let entry = &source_map["source"]["files"][file];
-        assert!(entry["path"]
-            .as_str()
-            .unwrap()
-            .starts_with("boards/tmp117/"));
-        assert_eq!(entry["git_blob"].as_str().unwrap().len(), 40, "{file}");
-    }
-
+fn check_heypcb_tmp117(
+    source_map: &serde_json::Value,
+    yaml: &serde_yaml::Value,
+    report: &labwired_core::flex::FlexRunReport,
+) {
     let u4 = &source_map["sensor_bus"]["elements"][0];
     assert_eq!(u4["source_ref"], "U4");
     assert_eq!(u4["source_part"], "TMP117AIDRVR");
@@ -2576,7 +2390,6 @@ fn flex_heypcb_tmp117_bus_matches_the_pinned_source_nets() {
     assert_eq!(u4["pads"]["4"], "GND", "ADD0 on GND is address 0x48");
     assert_eq!(u4["pads"]["3"], "SNS_INT");
 
-    let yaml: serde_yaml::Value = serde_yaml::from_str(SYSTEM).unwrap();
     let bus = &yaml["i2c_buses"][0];
     let binding = &source_map["runtime_bindings"];
     assert_eq!(bus["name"], binding["bus"]["name"].as_str().unwrap());
@@ -2585,11 +2398,6 @@ fn flex_heypcb_tmp117_bus_matches_the_pinned_source_nets() {
     assert_eq!(device["type"], "tmp117");
     assert_eq!(device["config"]["i2c_address"], 0x48);
 
-    let runtime = FlexRuntime::from_yaml(SYSTEM).unwrap();
-    let report = runtime.run_report();
-    assert!(report.scope_notes_complete);
-    assert!(!report.execution_scope.original_target_firmware_executed);
-    assert_eq!(report.execution_scope.chip_parity, "not_established");
     assert_eq!(report.i2c_buses[0].devices[0].address, 0x48);
     // The model has no alert comparator; the manifest must say so.
     assert!(yaml["unsupported_checks"]
@@ -2597,50 +2405,22 @@ fn flex_heypcb_tmp117_bus_matches_the_pinned_source_nets() {
         .unwrap()
         .iter()
         .any(|check| check.as_str().unwrap().contains("SNS_INT")));
-    for port in binding["ports"].as_object().unwrap().keys() {
-        runtime.port_id(port).unwrap();
-    }
-    assert_eq!(
-        report.ports.len(),
-        binding["ports"].as_object().unwrap().len()
-    );
 }
 
 /// The SCD41 fixture is a fourth I2C board of the same pinned repository,
 /// with no Flex code of its own: U4 on the bus nets of the pinned PCB at its
 /// fixed address, and the always-ready data status reported as unsupported.
-#[test]
-fn flex_heypcb_scd41_bus_matches_the_pinned_source_nets() {
-    const SOURCE_MAP: &str =
-        include_str!("../tests/fixtures/flex-heypcb-esp32-scd41/source-map.json");
-    const SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-esp32-scd41/system.yaml");
-
-    let source_map: serde_json::Value = serde_json::from_str(SOURCE_MAP).unwrap();
-    let sibling: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
-    for key in ["repository", "revision", "license_spdx"] {
-        assert_eq!(source_map["source"][key], sibling["source"][key], "{key}");
-    }
-    assert_eq!(
-        source_map["source"]["files"]["license"],
-        sibling["source"]["files"]["license"]
-    );
-    assert_eq!(
-        source_map["source"]["asset"],
-        "boards/scd41/kicad/esp32_scd41"
-    );
-    for file in ["schematic", "pcb", "bom", "board_json", "board_readme"] {
-        let entry = &source_map["source"]["files"][file];
-        assert!(entry["path"].as_str().unwrap().starts_with("boards/scd41/"));
-        assert_eq!(entry["git_blob"].as_str().unwrap().len(), 40, "{file}");
-    }
-
+fn check_heypcb_scd41(
+    source_map: &serde_json::Value,
+    yaml: &serde_yaml::Value,
+    report: &labwired_core::flex::FlexRunReport,
+) {
     let u4 = &source_map["sensor_bus"]["elements"][0];
     assert_eq!(u4["source_ref"], "U4");
     assert_eq!(u4["source_part"], "SCD41-D-R2");
     assert_eq!(u4["pads"]["8"], "I2C_SCL");
     assert_eq!(u4["pads"]["10"], "I2C_SDA");
 
-    let yaml: serde_yaml::Value = serde_yaml::from_str(SYSTEM).unwrap();
     let bus = &yaml["i2c_buses"][0];
     let binding = &source_map["runtime_bindings"];
     assert_eq!(bus["name"], binding["bus"]["name"].as_str().unwrap());
@@ -2649,11 +2429,6 @@ fn flex_heypcb_scd41_bus_matches_the_pinned_source_nets() {
     assert_eq!(device["type"], "scd41");
     assert_eq!(device["config"]["i2c_address"], 0x62);
 
-    let runtime = FlexRuntime::from_yaml(SYSTEM).unwrap();
-    let report = runtime.run_report();
-    assert!(report.scope_notes_complete);
-    assert!(!report.execution_scope.original_target_firmware_executed);
-    assert_eq!(report.execution_scope.chip_parity, "not_established");
     assert_eq!(report.i2c_buses[0].devices[0].address, 0x62);
     // The model reports data ready at all times; the manifest must say so.
     assert!(yaml["unsupported_checks"]
@@ -2661,43 +2436,16 @@ fn flex_heypcb_scd41_bus_matches_the_pinned_source_nets() {
         .unwrap()
         .iter()
         .any(|check| check.as_str().unwrap().contains("5 s periodic")));
-    for port in binding["ports"].as_object().unwrap().keys() {
-        runtime.port_id(port).unwrap();
-    }
-    assert_eq!(
-        report.ports.len(),
-        binding["ports"].as_object().unwrap().len()
-    );
 }
 
 /// The DHT11 fixture is a single-wire board of the same pinned repository:
 /// U4 is the catalog `dht11` pins-only model on the `behavior` adapter, its
 /// DATA role on the SNS_IO1 net of the pinned PCB, with the R6 pull-up.
-#[test]
-fn flex_heypcb_dht11_line_matches_the_pinned_source_nets() {
-    const SOURCE_MAP: &str =
-        include_str!("../tests/fixtures/flex-heypcb-esp32-dht11/source-map.json");
-    const SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-esp32-dht11/system.yaml");
-
-    let source_map: serde_json::Value = serde_json::from_str(SOURCE_MAP).unwrap();
-    let sibling: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
-    for key in ["repository", "revision", "license_spdx"] {
-        assert_eq!(source_map["source"][key], sibling["source"][key], "{key}");
-    }
-    assert_eq!(
-        source_map["source"]["files"]["license"],
-        sibling["source"]["files"]["license"]
-    );
-    assert_eq!(
-        source_map["source"]["asset"],
-        "boards/dht11/kicad/esp32_dht11"
-    );
-    for file in ["schematic", "pcb", "bom", "board_json", "board_readme"] {
-        let entry = &source_map["source"]["files"][file];
-        assert!(entry["path"].as_str().unwrap().starts_with("boards/dht11/"));
-        assert_eq!(entry["git_blob"].as_str().unwrap().len(), 40, "{file}");
-    }
-
+fn check_heypcb_dht11(
+    source_map: &serde_json::Value,
+    yaml: &serde_yaml::Value,
+    _report: &labwired_core::flex::FlexRunReport,
+) {
     let elements = &source_map["sensor_line"]["elements"];
     assert_eq!(elements[0]["source_ref"], "U4");
     assert_eq!(elements[0]["source_part"], "DHT11");
@@ -2709,7 +2457,6 @@ fn flex_heypcb_dht11_line_matches_the_pinned_source_nets() {
     );
     assert_eq!(elements[1]["pads"]["1"], "3V3");
 
-    let yaml: serde_yaml::Value = serde_yaml::from_str(SYSTEM).unwrap();
     let model = &yaml["cosim_models"][0];
     let binding = &source_map["runtime_bindings"]["device"];
     assert_eq!(model["id"], binding["id"].as_str().unwrap());
@@ -2717,50 +2464,16 @@ fn flex_heypcb_dht11_line_matches_the_pinned_source_nets() {
     assert_eq!(model["config"]["device_type"], "dht11");
     assert_eq!(model["inputs"]["DATA"], "source.U3.GPIO4");
     assert_eq!(model["outputs"]["DATA"], "source.net.SNS_IO1");
-
-    let runtime = FlexRuntime::from_yaml(SYSTEM).unwrap();
-    let report = runtime.run_report();
-    assert!(report.scope_notes_complete);
-    assert!(!report.execution_scope.original_target_firmware_executed);
-    assert_eq!(report.execution_scope.chip_parity, "not_established");
-    let ports = &source_map["runtime_bindings"]["ports"];
-    for port in ports.as_object().unwrap().keys() {
-        runtime.port_id(port).unwrap();
-    }
-    assert_eq!(report.ports.len(), ports.as_object().unwrap().len());
 }
 
 /// The MCP9700 fixture is an analog board of the same pinned repository: U4
 /// is the catalog `mcp9700` analog source, its VOUT pad on the SNS_AN1 net
 /// that the pinned PCB routes to IO1.
-#[test]
-fn flex_heypcb_mcp9700_output_matches_the_pinned_source_nets() {
-    const SOURCE_MAP: &str =
-        include_str!("../tests/fixtures/flex-heypcb-esp32-mcp9700/source-map.json");
-    const SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-esp32-mcp9700/system.yaml");
-
-    let source_map: serde_json::Value = serde_json::from_str(SOURCE_MAP).unwrap();
-    let sibling: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
-    for key in ["repository", "revision", "license_spdx"] {
-        assert_eq!(source_map["source"][key], sibling["source"][key], "{key}");
-    }
-    assert_eq!(
-        source_map["source"]["files"]["license"],
-        sibling["source"]["files"]["license"]
-    );
-    assert_eq!(
-        source_map["source"]["asset"],
-        "boards/mcp9700/kicad/esp32_mcp9700"
-    );
-    for file in ["schematic", "pcb", "bom", "board_json", "board_readme"] {
-        let entry = &source_map["source"]["files"][file];
-        assert!(entry["path"]
-            .as_str()
-            .unwrap()
-            .starts_with("boards/mcp9700/"));
-        assert_eq!(entry["git_blob"].as_str().unwrap().len(), 40, "{file}");
-    }
-
+fn check_heypcb_mcp9700(
+    source_map: &serde_json::Value,
+    yaml: &serde_yaml::Value,
+    _report: &labwired_core::flex::FlexRunReport,
+) {
     // The data sheet pin table and the PCB agree: VOUT is pad 3.
     let facts = &source_map["part_source"]["facts"];
     assert_eq!(facts["sc70_5_pins"]["3"], "VOUT");
@@ -2771,57 +2484,22 @@ fn flex_heypcb_mcp9700_output_matches_the_pinned_source_nets() {
     assert_eq!(u4["pads"]["4"], "3V3");
     assert_eq!(u4["pads"]["2"], "GND");
 
-    let yaml: serde_yaml::Value = serde_yaml::from_str(SYSTEM).unwrap();
     let model = &yaml["cosim_models"][0];
     let binding = &source_map["runtime_bindings"]["device"];
     assert_eq!(model["id"], binding["id"].as_str().unwrap());
     assert_eq!(model["adapter"], "behavior");
     assert_eq!(model["config"]["device_type"], "mcp9700");
     assert_eq!(model["outputs"]["voltage_mv"], "source.net.SNS_AN1");
-
-    let runtime = FlexRuntime::from_yaml(SYSTEM).unwrap();
-    let report = runtime.run_report();
-    assert!(report.scope_notes_complete);
-    assert!(!report.execution_scope.original_target_firmware_executed);
-    assert_eq!(report.execution_scope.chip_parity, "not_established");
-    let ports = &source_map["runtime_bindings"]["ports"];
-    for port in ports.as_object().unwrap().keys() {
-        runtime.port_id(port).unwrap();
-    }
-    assert_eq!(report.ports.len(), ports.as_object().unwrap().len());
 }
 
 /// The MCP9701A fixture is the next board of the same series: U4 is the
 /// catalog `mcp9701` analog source in a TO-92 package, its VOUT pin 2 on the
 /// SNS_AN1 net that the pinned PCB routes to IO1.
-#[test]
-fn flex_heypcb_mcp9701a_output_matches_the_pinned_source_nets() {
-    const SOURCE_MAP: &str =
-        include_str!("../tests/fixtures/flex-heypcb-esp32-mcp9701/source-map.json");
-    const SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-esp32-mcp9701/system.yaml");
-
-    let source_map: serde_json::Value = serde_json::from_str(SOURCE_MAP).unwrap();
-    let sibling: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
-    for key in ["repository", "revision", "license_spdx"] {
-        assert_eq!(source_map["source"][key], sibling["source"][key], "{key}");
-    }
-    assert_eq!(
-        source_map["source"]["files"]["license"],
-        sibling["source"]["files"]["license"]
-    );
-    assert_eq!(
-        source_map["source"]["asset"],
-        "boards/mcp9701/kicad/esp32_mcp9701"
-    );
-    for file in ["schematic", "pcb", "bom", "board_json", "board_readme"] {
-        let entry = &source_map["source"]["files"][file];
-        assert!(entry["path"]
-            .as_str()
-            .unwrap()
-            .starts_with("boards/mcp9701/"));
-        assert_eq!(entry["git_blob"].as_str().unwrap().len(), 40, "{file}");
-    }
-
+fn check_heypcb_mcp9701a(
+    source_map: &serde_json::Value,
+    yaml: &serde_yaml::Value,
+    _report: &labwired_core::flex::FlexRunReport,
+) {
     // The data sheet TO-92 pin table and the PCB agree: VOUT is pin 2.
     let facts = &source_map["part_source"]["facts"];
     assert_eq!(facts["to92_3_pins"]["2"], "VOUT");
@@ -2834,53 +2512,23 @@ fn flex_heypcb_mcp9701a_output_matches_the_pinned_source_nets() {
     assert_eq!(u4["pads"]["2"], "SNS_AN1");
     assert_eq!(u4["pads"]["3"], "GND");
 
-    let yaml: serde_yaml::Value = serde_yaml::from_str(SYSTEM).unwrap();
     let model = &yaml["cosim_models"][0];
     let binding = &source_map["runtime_bindings"]["device"];
     assert_eq!(model["id"], binding["id"].as_str().unwrap());
     assert_eq!(model["adapter"], "behavior");
     assert_eq!(model["config"]["device_type"], "mcp9701");
     assert_eq!(model["outputs"]["voltage_mv"], "source.net.SNS_AN1");
-
-    let runtime = FlexRuntime::from_yaml(SYSTEM).unwrap();
-    let report = runtime.run_report();
-    assert!(report.scope_notes_complete);
-    assert!(!report.execution_scope.original_target_firmware_executed);
-    assert_eq!(report.execution_scope.chip_parity, "not_established");
-    let ports = &source_map["runtime_bindings"]["ports"];
-    for port in ports.as_object().unwrap().keys() {
-        runtime.port_id(port).unwrap();
-    }
-    assert_eq!(report.ports.len(), ports.as_object().unwrap().len());
 }
 
 /// The NTC fixture solves the board's own divider: R6 from 3V3 to SNS_AN1,
 /// U4 and C7 from SNS_AN1 to GND, as the pinned PCB routes them. U4 is a
 /// netlist resistor bound to the analog adapter's beta-curve thermistor with
 /// the Murata catalog values and a declared range inside the catalog table.
-#[test]
-fn flex_heypcb_ntc_network_matches_the_pinned_source_nets() {
-    const SOURCE_MAP: &str =
-        include_str!("../tests/fixtures/flex-heypcb-esp32-ntc/source-map.json");
-    const SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-esp32-ntc/system.yaml");
-
-    let source_map: serde_json::Value = serde_json::from_str(SOURCE_MAP).unwrap();
-    let sibling: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
-    for key in ["repository", "revision", "license_spdx"] {
-        assert_eq!(source_map["source"][key], sibling["source"][key], "{key}");
-    }
-    assert_eq!(
-        source_map["source"]["files"]["license"],
-        sibling["source"]["files"]["license"]
-    );
-    assert_eq!(source_map["source"]["asset"], "boards/ntc/kicad/esp32_ntc");
-    for file in ["schematic", "pcb", "bom", "board_json", "board_readme"] {
-        let entry = &source_map["source"]["files"][file];
-        assert!(entry["path"].as_str().unwrap().starts_with("boards/ntc/"));
-        assert_eq!(entry["git_blob"].as_str().unwrap().len(), 40, "{file}");
-    }
-
-    let yaml: serde_yaml::Value = serde_yaml::from_str(SYSTEM).unwrap();
+fn check_heypcb_ntc(
+    source_map: &serde_json::Value,
+    yaml: &serde_yaml::Value,
+    _report: &labwired_core::flex::FlexRunReport,
+) {
     let model = &yaml["cosim_models"][0];
     let binding = &source_map["runtime_bindings"]["network"];
     assert_eq!(model["id"], binding["id"].as_str().unwrap());
@@ -2937,17 +2585,163 @@ fn flex_heypcb_ntc_network_matches_the_pinned_source_nets() {
             assert!(deviation > 0.0171, "{celsius} C could be inside the range");
         }
     }
+}
 
-    let runtime = FlexRuntime::from_yaml(SYSTEM).unwrap();
-    let report = runtime.run_report();
-    assert!(report.scope_notes_complete);
-    assert!(!report.execution_scope.original_target_firmware_executed);
-    assert_eq!(report.execution_scope.chip_parity, "not_established");
-    let ports = &source_map["runtime_bindings"]["ports"];
-    for port in ports.as_object().unwrap().keys() {
-        runtime.port_id(port).unwrap();
+/// The MAX31855 fixture is a third board of the same pinned repository, and
+/// the first on a Flex SPI bus: U4 on the SPI nets of the pinned PCB, its
+/// chip select the GPIO of the SPI_CS net.
+fn check_heypcb_max31855(
+    source_map: &serde_json::Value,
+    yaml: &serde_yaml::Value,
+    report: &labwired_core::flex::FlexRunReport,
+) {
+    let u4 = &source_map["sensor_bus"]["elements"][0];
+    assert_eq!(u4["source_ref"], "U4");
+    assert_eq!(u4["source_part"], "MAX31855KASA+T");
+    assert_eq!(u4["pads"]["5"], "SPI_SCK");
+    assert_eq!(u4["pads"]["6"], "SPI_CS");
+    assert_eq!(u4["pads"]["7"], "SPI_MISO");
+    assert_eq!(
+        source_map["sensor_bus"]["controller"]["endpoints"]["SPI_CS"],
+        "U3 pad 18 (IO10)"
+    );
+
+    let bus = &yaml["spi_buses"][0];
+    let binding = &source_map["runtime_bindings"];
+    assert_eq!(bus["name"], binding["bus"]["name"].as_str().unwrap());
+    let device = &bus["devices"][0];
+    assert_eq!(device["id"], binding["device"]["id"].as_str().unwrap());
+    assert_eq!(device["type"], "max31855");
+    assert_eq!(device["cs"], 10);
+
+    assert_eq!(report.spi_buses[0].devices[0].cs, 10);
+}
+
+macro_rules! heypcb_fixture {
+    ($board:literal, $asset:expr, $check:expr) => {
+        HeypcbFixture {
+            board: $board,
+            asset: $asset,
+            source_map: include_str!(concat!(
+                "../tests/fixtures/flex-heypcb-esp32-",
+                $board,
+                "/source-map.json"
+            )),
+            system: include_str!(concat!(
+                "../tests/fixtures/flex-heypcb-esp32-",
+                $board,
+                "/system.yaml"
+            )),
+            check: $check,
+        }
+    };
+}
+
+const HEYPCB_FIXTURES: &[HeypcbFixture] = &[
+    heypcb_fixture!(
+        "bme280",
+        Some("boards/bme280/kicad/esp32_bme280"),
+        check_heypcb_bme280
+    ),
+    heypcb_fixture!(
+        "sht40",
+        Some("boards/sht40/kicad/esp32_sht40"),
+        check_heypcb_sht40
+    ),
+    heypcb_fixture!(
+        "tmp117",
+        Some("boards/tmp117/kicad/esp32_tmp117"),
+        check_heypcb_tmp117
+    ),
+    heypcb_fixture!(
+        "scd41",
+        Some("boards/scd41/kicad/esp32_scd41"),
+        check_heypcb_scd41
+    ),
+    heypcb_fixture!(
+        "dht11",
+        Some("boards/dht11/kicad/esp32_dht11"),
+        check_heypcb_dht11
+    ),
+    heypcb_fixture!(
+        "mcp9700",
+        Some("boards/mcp9700/kicad/esp32_mcp9700"),
+        check_heypcb_mcp9700
+    ),
+    // MCP9701A: the fixture directory and the pinned board are both `mcp9701`.
+    heypcb_fixture!(
+        "mcp9701",
+        Some("boards/mcp9701/kicad/esp32_mcp9701"),
+        check_heypcb_mcp9701a
+    ),
+    heypcb_fixture!("ntc", Some("boards/ntc/kicad/esp32_ntc"), check_heypcb_ntc),
+    // MAX31855 never pinned `source.asset`.
+    heypcb_fixture!("max31855", None, check_heypcb_max31855),
+];
+
+#[test]
+fn every_heypcb_fixture_matches_its_pinned_source_nets() {
+    for row in HEYPCB_FIXTURES {
+        eprintln!("heypcb fixture: {}", row.board);
+        let source_map: serde_json::Value = serde_json::from_str(row.source_map).unwrap();
+        let sibling: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
+        for key in ["repository", "revision", "license_spdx"] {
+            assert_eq!(
+                source_map["source"][key], sibling["source"][key],
+                "{}: {key}",
+                row.board
+            );
+        }
+        assert_eq!(
+            source_map["source"]["files"]["license"], sibling["source"]["files"]["license"],
+            "{}: one repository revision has one LICENSE blob",
+            row.board
+        );
+        if let Some(asset) = row.asset {
+            assert_eq!(source_map["source"]["asset"], asset, "{}", row.board);
+        }
+        let prefix = format!("boards/{}/", row.board);
+        for file in ["schematic", "pcb", "bom", "board_json", "board_readme"] {
+            let entry = &source_map["source"]["files"][file];
+            assert!(
+                entry["path"].as_str().unwrap().starts_with(&prefix),
+                "{}: {file}",
+                row.board
+            );
+            assert_eq!(
+                entry["git_blob"].as_str().unwrap().len(),
+                40,
+                "{}: {file}",
+                row.board
+            );
+        }
+
+        let yaml: serde_yaml::Value = serde_yaml::from_str(row.system).unwrap();
+        let runtime = FlexRuntime::from_yaml(row.system).unwrap();
+        let report = runtime.run_report();
+        assert!(report.scope_notes_complete, "{}", row.board);
+        assert!(
+            !report.execution_scope.original_target_firmware_executed,
+            "{}",
+            row.board
+        );
+        assert_eq!(
+            report.execution_scope.chip_parity, "not_established",
+            "{}",
+            row.board
+        );
+        (row.check)(&source_map, &yaml, &report);
+        let ports = &source_map["runtime_bindings"]["ports"];
+        for port in ports.as_object().unwrap().keys() {
+            runtime.port_id(port).unwrap();
+        }
+        assert_eq!(
+            report.ports.len(),
+            ports.as_object().unwrap().len(),
+            "{}",
+            row.board
+        );
     }
-    assert_eq!(report.ports.len(), ports.as_object().unwrap().len());
 }
 
 /// The Chromium receipt of `scripts/test_browser_flex_scripts.mjs` covers
@@ -2955,12 +2749,6 @@ fn flex_heypcb_ntc_network_matches_the_pinned_source_nets() {
 /// result text that Chromium and the CLI gave.
 #[test]
 fn flex_browser_script_receipt_covers_every_script_and_matches_the_shared_runner() {
-    use sha2::{Digest, Sha256};
-
-    fn sha256(bytes: &[u8]) -> String {
-        format!("{:x}", Sha256::digest(bytes))
-    }
-
     let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let receipt: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(fixtures.join("browser-flex-scripts.json")).unwrap(),
@@ -3075,67 +2863,5 @@ fn flex_browser_script_receipt_covers_every_script_and_matches_the_shared_runner
     assert!(
         suspended_steps >= 13,
         "the receipt must include the endless-`main` scripts"
-    );
-}
-
-/// The MAX31855 fixture is a third board of the same pinned repository, and
-/// the first on a Flex SPI bus: U4 on the SPI nets of the pinned PCB, its
-/// chip select the GPIO of the SPI_CS net.
-#[test]
-fn flex_heypcb_max31855_bus_matches_the_pinned_source_nets() {
-    const SOURCE_MAP: &str =
-        include_str!("../tests/fixtures/flex-heypcb-esp32-max31855/source-map.json");
-    const SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-esp32-max31855/system.yaml");
-
-    let source_map: serde_json::Value = serde_json::from_str(SOURCE_MAP).unwrap();
-    let sibling: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
-    for key in ["repository", "revision", "license_spdx"] {
-        assert_eq!(source_map["source"][key], sibling["source"][key], "{key}");
-    }
-    assert_eq!(
-        source_map["source"]["files"]["license"],
-        sibling["source"]["files"]["license"]
-    );
-    for file in ["schematic", "pcb", "bom", "board_json", "board_readme"] {
-        let entry = &source_map["source"]["files"][file];
-        assert!(entry["path"]
-            .as_str()
-            .unwrap()
-            .starts_with("boards/max31855/"));
-        assert_eq!(entry["git_blob"].as_str().unwrap().len(), 40, "{file}");
-    }
-
-    let u4 = &source_map["sensor_bus"]["elements"][0];
-    assert_eq!(u4["source_ref"], "U4");
-    assert_eq!(u4["source_part"], "MAX31855KASA+T");
-    assert_eq!(u4["pads"]["5"], "SPI_SCK");
-    assert_eq!(u4["pads"]["6"], "SPI_CS");
-    assert_eq!(u4["pads"]["7"], "SPI_MISO");
-    assert_eq!(
-        source_map["sensor_bus"]["controller"]["endpoints"]["SPI_CS"],
-        "U3 pad 18 (IO10)"
-    );
-
-    let yaml: serde_yaml::Value = serde_yaml::from_str(SYSTEM).unwrap();
-    let bus = &yaml["spi_buses"][0];
-    let binding = &source_map["runtime_bindings"];
-    assert_eq!(bus["name"], binding["bus"]["name"].as_str().unwrap());
-    let device = &bus["devices"][0];
-    assert_eq!(device["id"], binding["device"]["id"].as_str().unwrap());
-    assert_eq!(device["type"], "max31855");
-    assert_eq!(device["cs"], 10);
-
-    let runtime = FlexRuntime::from_yaml(SYSTEM).unwrap();
-    let report = runtime.run_report();
-    assert!(report.scope_notes_complete);
-    assert!(!report.execution_scope.original_target_firmware_executed);
-    assert_eq!(report.execution_scope.chip_parity, "not_established");
-    assert_eq!(report.spi_buses[0].devices[0].cs, 10);
-    for port in binding["ports"].as_object().unwrap().keys() {
-        runtime.port_id(port).unwrap();
-    }
-    assert_eq!(
-        report.ports.len(),
-        binding["ports"].as_object().unwrap().len()
     );
 }

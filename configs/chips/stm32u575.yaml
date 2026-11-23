@@ -400,8 +400,13 @@ peripherals:
     type: "timer"
     base_address: 0x40012C00
     size: "1KB"
+    # TIM1_UP_IRQn = 42, TIM1_CC_IRQn = 44 (CMSIS).
+    # BRK (41) and TRG/COM (43) route BIF and TIF/COMIF.
     irq: 42
     config:
+      capture_compare_irq: 44
+      trigger_com_irq: 43
+      break_irq: 41
       # Channel outputs reach the pads through the U5 AF table
       # (bus/attach.rs STM32U5_TIMER_PADS, from stm32duino PinMap_TIM).
       pad_map: "stm32u5"

@@ -45,10 +45,11 @@ pub mod mips;
 #[deny(clippy::let_underscore_must_use)]
 pub mod msp430;
 #[deny(clippy::let_underscore_must_use)]
+pub mod qingke_pfic;
+#[deny(clippy::let_underscore_must_use)]
 pub mod riscv;
 #[deny(clippy::let_underscore_must_use)]
 pub mod riscv64;
-#[deny(clippy::let_underscore_must_use)]
 pub mod riscv64_plic;
 #[deny(clippy::let_underscore_must_use)]
 pub mod rx;

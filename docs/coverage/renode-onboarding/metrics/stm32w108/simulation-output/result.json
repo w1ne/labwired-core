@@ -96,7 +96,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "7a2527b9520e1f7754ca26a1735cc71368e70b81ad833a8939b3340f77503ad9",
+  "firmware_hash": "d6a4f299a2f040b907eb3b950de6890e2fc544bdd7b5a9653421a97d7835380f",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-stm32w108-boot-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32w108.yaml",

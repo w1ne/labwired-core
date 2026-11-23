@@ -9,7 +9,8 @@
 use crate::cpu::xtensa_lx7::XtensaLx7;
 use crate::{Bus, SimResult};
 
-use crate::cpu::xtensa_sr::SAR;
+use crate::cpu::xtensa_sr::{ACCHI, ACCLO, SAR};
+use crate::decoder::xtensa::{Mac16Half, Mac16Op};
 impl XtensaLx7 {
     #[inline(always)]
     pub(in crate::cpu::xtensa_lx7) fn exec_ssl(
@@ -365,4 +366,63 @@ impl XtensaLx7 {
         self.pc = self.pc.wrapping_add(len);
         Ok(())
     }
+
+    /// `{umul,mul,mula,muls}.aa.{ll,hl,lh,hh}` — Xtensa ISA RM, MAC16 option.
+    ///
+    /// The accumulator is the signed 40-bit value `{ACCHI[7:0], ACCLO[31:0]}`.
+    /// Signed ops sign-extend each selected halfword; UMUL zero-extends them.
+    /// MUL/UMUL replace the accumulator with the 16×16 product; MULA adds the
+    /// product; MULS subtracts it. Results wrap in 40 bits.
+    #[inline(always)]
+    pub(in crate::cpu::xtensa_lx7) fn exec_mac16_aa(
+        &mut self,
+        _bus: &mut dyn Bus,
+        len: u32,
+        as_: u8,
+        at: u8,
+        half: Mac16Half,
+        op: Mac16Op,
+    ) -> SimResult<()> {
+        let vs = self.regs.read_logical(as_);
+        let vt = self.regs.read_logical(at);
+        let signed = !matches!(op, Mac16Op::Umul);
+        let (as_high, at_high) = match half {
+            Mac16Half::Ll => (false, false),
+            Mac16Half::Hl => (true, false),
+            Mac16Half::Lh => (false, true),
+            Mac16Half::Hh => (true, true),
+        };
+        let a = mac16_half(vs, as_high, signed);
+        let b = mac16_half(vt, at_high, signed);
+        let product = a * b;
+        let acc = match op {
+            Mac16Op::Umul | Mac16Op::Mul => product,
+            Mac16Op::Mula => acc40(&self.sr).wrapping_add(product),
+            Mac16Op::Muls => acc40(&self.sr).wrapping_sub(product),
+        };
+        set_acc40(&mut self.sr, acc);
+        self.pc = self.pc.wrapping_add(len);
+        Ok(())
+    }
+}
+
+fn mac16_half(reg: u32, high: bool, signed: bool) -> i64 {
+    let half = if high { reg >> 16 } else { reg & 0xFFFF };
+    if signed {
+        half as u16 as i16 as i64
+    } else {
+        half as u16 as i64
+    }
+}
+
+fn acc40(sr: &crate::cpu::xtensa_sr::XtensaSrFile) -> i64 {
+    let hi = sr.read(ACCHI) as i8 as i64;
+    (hi << 32) | (sr.read(ACCLO) as i64)
+}
+
+fn set_acc40(sr: &mut crate::cpu::xtensa_sr::XtensaSrFile, value: i64) {
+    // Signed 40-bit wrap, then ACCHI is the sign-extended 8-bit high byte.
+    let wrapped = (value << 24) >> 24;
+    sr.write(ACCLO, wrapped as u32);
+    sr.write(ACCHI, ((wrapped >> 32) as i8 as i32) as u32);
 }

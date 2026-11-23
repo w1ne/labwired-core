@@ -482,6 +482,9 @@ impl<C: Cpu> Machine<C> {
             if self.sd_hle.is_some() {
                 self.service_sd_hle()?;
             }
+            if self.s140_disabled.is_some() {
+                self.service_s140_disabled()?;
+            }
 
             // Firmware-authored verdict. Drained here — after the batch's
             // writes have committed — so the `EXIT` store and a semihosting

@@ -156,6 +156,13 @@ pub struct Timer {
     /// update event would otherwise latch on a general-purpose timer.
     basic: bool,
 
+    /// PSC is a 4-bit exponent: the counter clock is the kernel clock
+    /// divided by 2^PSC[3:0], not by PSC+1 (STM32W108 TIM1/TIM2; Contiki
+    /// `rtimer-arch.h`: PSC=12 gives PCLK/4096). YAML
+    /// `config: { prescaler: power_of_two }`.
+    #[serde(default)]
+    psc_power_of_two: bool,
+
     // Internal state
     /// Prescaler phase counter. `Cell` for the lazy `&self` advance.
     psc_cnt: Cell<u32>,
@@ -205,6 +212,14 @@ pub struct Timer {
     /// `None` keeps the single shared line every other timer has.
     #[serde(skip)]
     capture_compare_irq: Option<u32>,
+    /// Separate trigger/commutation vector for TIF and COMIF (STM32F1/F4/L4
+    /// TIM1_TRG_COM). `None` keeps both flags on the timer's own line.
+    #[serde(skip)]
+    trigger_com_irq: Option<u32>,
+    /// Separate break vector for BIF (STM32F1/F4/L4 TIM1_BRK). `None` keeps
+    /// the flag on the timer's own line.
+    #[serde(skip)]
+    break_irq: Option<u32>,
     /// The V2 alternate-function table the bus routes this timer's channel
     /// OUTPUTS through, when it is not the F4 one (chip yaml `config: {
     /// pad_map: stm32g0 | stm32g4 | stm32l0 | stm32l4 | stm32wb | stm32wba |
@@ -292,6 +307,12 @@ pub enum TimerInputStage {
 
 /// SR flag bits the input-capture path sets (RM0368 §13.4.5 / RM0008 §15.4.5).
 const SR_TIF: u32 = 1 << 6;
+const SR_CC_FLAGS: u32 = 0x1E;
+const SR_COMIF: u32 = 1 << 5;
+const SR_BIF: u32 = 1 << 7;
+/// Every SR flag with a DIER enable at the same bit: UIF, CC1..4IF, COMIF,
+/// TIF, BIF.
+const SR_IRQ_FLAGS: u32 = 0xFF;
 /// CCxOF (over-capture) for channel `ch` (0-based) sits at SR bit 9 + ch.
 const SR_CCOF_SHIFT: u32 = 9;
 
@@ -408,6 +429,7 @@ impl Timer {
             width,
             advanced,
             basic: false,
+            psc_power_of_two: false,
             psc_cnt: Cell::new(0),
             anchor: Cell::new(0),
             arm_seq: 0,
@@ -418,6 +440,8 @@ impl Timer {
             kernel_div: 1,
             ccer_np: false,
             capture_compare_irq: None,
+            trigger_com_irq: None,
+            break_irq: None,
             pad_map: None,
             ic_psc_count: [0; 4],
             ti_level: [false; 4],
@@ -439,6 +463,20 @@ impl Timer {
     /// Builder form, like [`Self::ccer_np`].
     pub fn capture_compare_irq(mut self, irq: Option<u32>) -> Self {
         self.capture_compare_irq = irq;
+        self
+    }
+
+    /// Route TIF and COMIF to their own vector. Builder form, like
+    /// [`Self::capture_compare_irq`].
+    pub fn trigger_com_irq(mut self, irq: Option<u32>) -> Self {
+        self.trigger_com_irq = irq;
+        self
+    }
+
+    /// Route BIF to its own vector. Builder form, like
+    /// [`Self::capture_compare_irq`].
+    pub fn break_irq(mut self, irq: Option<u32>) -> Self {
+        self.break_irq = irq;
         self
     }
 
@@ -465,6 +503,13 @@ impl Timer {
     /// existing `new_with_layout` call sites stay unchanged.
     pub fn basic(mut self, basic: bool) -> Self {
         self.basic = basic;
+        self
+    }
+
+    /// Make PSC a 4-bit exponent (divide by 2^PSC). Builder form, like
+    /// [`Self::basic`].
+    pub fn psc_power_of_two(mut self, enabled: bool) -> Self {
+        self.psc_power_of_two = enabled;
         self
     }
 
@@ -579,10 +624,16 @@ impl Timer {
         self.wave.pads.level(ch)
     }
 
-    /// The prescaler as the counter sees it in HCLK cycles: PSC+1 timer
-    /// kernel clocks, each [`Self::kernel_div`] HCLK cycles long, minus one.
+    /// The prescaler as the counter sees it in HCLK cycles: PSC+1 (or
+    /// 2^PSC with [`Self::psc_power_of_two`]) timer kernel clocks, each
+    /// [`Self::kernel_div`] HCLK cycles long, minus one.
     fn count_psc(&self) -> u32 {
-        (self.psc + 1) * self.kernel_div.max(1) - 1
+        let divisor = if self.psc_power_of_two {
+            1 << self.psc
+        } else {
+            self.psc + 1
+        };
+        divisor * self.kernel_div.max(1) - 1
     }
 
     fn dead_time_cycles(&self) -> u64 {
@@ -810,29 +861,43 @@ impl Timer {
         (drive, true)
     }
 
-    /// IRQ-level / counter-freeze predicate: the legacy `tick()` returns the
-    /// held IRQ level (and skips all counting) while any enabled status flag
-    /// among UIF/CC1..4IF is latched.
+    /// IRQ-level predicate: any enabled status flag among UIF, CC1..4IF,
+    /// COMIF, TIF and BIF is latched, on whichever line it routes to.
     #[inline]
     fn irq_level_held(&self) -> bool {
-        (self.sr.get() & self.dier & 0x1F) != 0
+        (self.sr.get() & self.dier & SR_IRQ_FLAGS) != 0
     }
 
-    /// The timer's own line: UIF only when CC flags have a separate vector.
+    /// The separate vectors this timer has, each with the SR flags it owns.
+    fn split_lines(&self) -> impl Iterator<Item = (u32, u32)> {
+        [
+            (self.capture_compare_irq, SR_CC_FLAGS),
+            (self.trigger_com_irq, SR_COMIF | SR_TIF),
+            (self.break_irq, SR_BIF),
+        ]
+        .into_iter()
+        .filter_map(|(irq, mask)| irq.map(|irq| (irq, mask)))
+    }
+
+    #[inline]
+    fn has_split_lines(&self) -> bool {
+        self.split_lines().next().is_some()
+    }
+
+    /// The timer's own line: every enabled flag that no separate vector owns.
     #[inline]
     fn own_irq_held(&self) -> bool {
-        if self.capture_compare_irq.is_some() {
-            self.sr.get() & self.dier & 1 != 0
-        } else {
-            self.irq_level_held()
-        }
+        let routed = self.split_lines().fold(0, |acc, (_, mask)| acc | mask);
+        self.sr.get() & self.dier & SR_IRQ_FLAGS & !routed != 0
     }
 
-    /// The separate capture/compare vector, while an enabled CCxIF is held.
-    #[inline]
-    fn capture_compare_irq_held(&self) -> Option<u32> {
-        self.capture_compare_irq
-            .filter(|_| self.sr.get() & self.dier & 0x1e != 0)
+    /// The separate vectors whose enabled flags are held.
+    fn split_irqs_held(&self) -> Vec<u32> {
+        let held = self.sr.get() & self.dier;
+        self.split_lines()
+            .filter(|&(_, mask)| held & mask != 0)
+            .map(|(irq, _)| irq)
+            .collect()
     }
 
     /// The counter-freeze predicate. The same conjunction as
@@ -861,11 +926,12 @@ impl Timer {
         mask
     }
 
-    /// An enabled input-capture flag is latched: the NVIC line is held, but
+    /// An enabled flag that does not freeze the counter is latched (an
+    /// input-capture CCxIF, COMIF, TIF or BIF): the NVIC line is held, but
     /// the counter keeps running (silicon behaviour).
     #[inline]
     fn capture_irq_held(&self) -> bool {
-        (self.sr.get() & self.dier & 0x1F & !self.freezing_flag_mask()) != 0
+        (self.sr.get() & self.dier & SR_IRQ_FLAGS & !self.freezing_flag_mask()) != 0
     }
 
     /// CCxS of channel `ch` (0-based): 00 output, 01/10/11 input.
@@ -1613,11 +1679,11 @@ impl Timer {
                 }
                 if self.advanced {
                     if self.egr & (1 << 5) != 0 {
-                        self.sr.set(self.sr.get() | (1 << 5));
+                        self.sr.set(self.sr.get() | SR_COMIF);
                         self.request_dma(5);
                     }
                     if self.egr & (1 << 7) != 0 {
-                        self.sr.set(self.sr.get() | (1 << 7));
+                        self.sr.set(self.sr.get() | SR_BIF);
                     }
                 }
             }
@@ -1656,7 +1722,7 @@ impl Timer {
                 }
             }
             0x24 => self.cnt.set(value & self.cnt_mask()),
-            0x28 => self.psc = value & 0xFFFF,
+            0x28 => self.psc = value & if self.psc_power_of_two { 0xF } else { 0xFFFF },
             0x2C => self.arr = value & self.cnt_mask(),
             0x30 if self.advanced => self.rcr = value & 0xFFFF,
             // In input-capture mode CCRx is read-only: it holds the last
@@ -1903,9 +1969,10 @@ impl crate::Peripheral for Timer {
         if !self.scheduler_mode() {
             result.dma_signals = self.take_dma_signals();
         }
-        if self.capture_compare_irq.is_some() {
+        if self.has_split_lines() {
             result.irq = self.own_irq_held();
-            result.explicit_irqs = self.capture_compare_irq_held().map(|irq| vec![irq]);
+            let held = self.split_irqs_held();
+            result.explicit_irqs = (!held.is_empty()).then_some(held);
         }
         if !self.scheduler_mode() {
             self.wave.walk_ticks += 1;
@@ -1977,7 +2044,10 @@ impl crate::Peripheral for Timer {
             .basic(self.basic)
             .ccer_np(self.ccer_np)
             .capture_compare_irq(self.capture_compare_irq)
-            .pad_map(self.pad_map);
+            .trigger_com_irq(self.trigger_com_irq)
+            .break_irq(self.break_irq)
+            .pad_map(self.pad_map)
+            .psc_power_of_two(self.psc_power_of_two);
         fresh.clock = self.clock.take();
         fresh.kernel_div = self.kernel_div;
         fresh.anchor.set(now.unwrap_or(0));
@@ -2092,7 +2162,7 @@ impl crate::Peripheral for Timer {
             crate::sched::EventResult {
                 raise_own_irq: self.own_irq_held(),
                 dma_signals,
-                explicit_irqs: self.capture_compare_irq_held().into_iter().collect(),
+                explicit_irqs: self.split_irqs_held(),
                 reschedule_delay: Some(1),
                 level_hold: self.counter_frozen() && self.ic_pending.is_empty(),
                 ..Default::default()
@@ -2162,8 +2232,9 @@ impl crate::Peripheral for Timer {
     }
 
     fn irq_line_levels(&self, report: &mut dyn FnMut(u32, bool)) {
-        if let Some(irq) = self.capture_compare_irq {
-            report(irq, self.sr.get() & self.dier & 0x1e != 0);
+        let held = self.sr.get() & self.dier;
+        for (irq, mask) in self.split_lines() {
+            report(irq, held & mask != 0);
         }
     }
 
@@ -2182,7 +2253,7 @@ impl crate::Peripheral for Timer {
 
 #[cfg(test)]
 mod tests {
-    use super::{Timer, TimerChannelOutputMode};
+    use super::{Timer, TimerChannelOutputMode, SR_BIF, SR_COMIF, SR_TIF};
     use crate::Peripheral;
 
     #[test]
@@ -2390,6 +2461,35 @@ mod tests {
         t.write_u32(0x44, 1 << 15).unwrap();
         assert_eq!(t.read_u32(0x44).unwrap(), 1 << 15);
         assert!(t.has_f4_input_capture());
+    }
+
+    #[test]
+    fn power_of_two_prescaler_divides_by_two_to_the_psc() {
+        // STM32W108 TIM1/TIM2: CK_CNT = CK_PSC / 2^PSC[3:0] (Contiki
+        // rtimer-arch.h: PSC=12 -> PCLK/4096). Exponent PSC=3 must count
+        // exactly like linear PSC=7 (divide by 8), not like linear PSC=3.
+        fn count(timer: Timer, psc: u32) -> u32 {
+            let mut t = timer;
+            t.write_u32(0x28, psc).unwrap(); // PSC
+            t.write_u32(0x14, 1).unwrap(); // EGR.UG loads the prescaler
+            t.write_u32(0x00, 1).unwrap(); // CR1.CEN
+            for _ in 0..800 {
+                t.tick();
+            }
+            t.read_u32(0x24).unwrap()
+        }
+        let exponent = count(Timer::new().psc_power_of_two(true), 3);
+        assert_eq!(exponent, count(Timer::new(), 7));
+        assert_ne!(exponent, count(Timer::new(), 3));
+        assert!((99..=101).contains(&exponent), "CNT {exponent}");
+
+        // PSC is 4 bits wide; the flag survives a node reset.
+        let mut t = Timer::new().psc_power_of_two(true);
+        t.write_u32(0x28, 0x1F).unwrap();
+        assert_eq!(t.read_u32(0x28).unwrap(), 0xF);
+        t.on_node_reset();
+        t.write_u32(0x28, 0x1F).unwrap();
+        assert_eq!(t.read_u32(0x28).unwrap(), 0xF);
     }
 
     #[test]
@@ -2700,6 +2800,87 @@ mod tests {
         t.write_reg(0x14, 0x02); // CC1G
         assert_eq!(t.read_reg(0x34), 7);
         assert_eq!(t.read_reg(0x10) & 0x2, 0x2);
+    }
+
+    /// The lines a peripheral reports through `irq_line_levels`, held only.
+    fn held_split_lines(t: &Timer) -> Vec<u32> {
+        let mut held = Vec::new();
+        t.irq_line_levels(&mut |irq, level| {
+            if level {
+                held.push(irq);
+            }
+        });
+        held
+    }
+
+    #[test]
+    fn trigger_flag_with_tie_holds_the_general_purpose_line() {
+        // RM0008 §15.4.4: TIE enables the trigger interrupt. A general-purpose
+        // timer has one vector, so TIF pends it. The counter keeps running.
+        let mut t = Timer::new_with_layout(16, false);
+        t.write_reg(0x00, 0x01); // CEN
+        t.write_reg(0x0C, SR_TIF); // TIE
+        assert!(!t.tick().irq);
+        t.write_reg(0x14, 1 << 6); // EGR.TG
+        let before = t.read_reg(0x24);
+        assert!(t.tick().irq, "TIF with TIE pends the line");
+        assert_eq!(t.read_reg(0x24), before + 1, "counter keeps running");
+        t.write_reg(0x10, !SR_TIF); // rc_w0 clear
+        assert!(!t.tick().irq, "line drops once TIF is cleared");
+    }
+
+    #[test]
+    fn advanced_break_and_commutation_flags_hold_the_single_line() {
+        // F0/G0 TIM1_BRK_UP_TRG_COM: one vector for BIF, COMIF, TIF and UIF.
+        let mut t = Timer::new_with_layout(16, true);
+        t.write_reg(0x0C, SR_BIF | SR_COMIF); // BIE, COMIE
+        t.write_reg(0x14, 1 << 7); // EGR.BG
+        assert!(t.tick().irq, "BIF with BIE pends the line");
+        t.write_reg(0x10, !SR_BIF);
+        assert!(!t.tick().irq);
+        t.write_reg(0x14, 1 << 5); // EGR.COMG
+        assert!(t.tick().irq, "COMIF with COMIE pends the line");
+    }
+
+    #[test]
+    fn advanced_timer_routes_each_flag_group_to_its_vector() {
+        // STM32F103 TIM1 (RM0008 Table 63): BRK 24, UP 25, TRG_COM 26, CC 27.
+        let mut t = Timer::new_with_layout(16, true)
+            .capture_compare_irq(Some(27))
+            .trigger_com_irq(Some(26))
+            .break_irq(Some(24));
+        t.write_reg(0x0C, 0xFF); // every interrupt enable
+        let cases: [(u32, u32, Option<u32>); 4] = [
+            (1 << 1, 1 << 1, Some(27)),
+            (1 << 5, SR_COMIF, Some(26)),
+            (1 << 6, SR_TIF, Some(26)),
+            (1 << 7, SR_BIF, Some(24)),
+        ];
+        for (egr, flag, line) in cases {
+            t.write_reg(0x14, egr);
+            assert_eq!(t.read_reg(0x10) & flag, flag, "EGR {egr:#x} sets {flag:#x}");
+            let r = t.tick();
+            assert_eq!(r.irq, line.is_none(), "own line for SR {flag:#x}");
+            assert_eq!(
+                r.explicit_irqs.unwrap_or_default(),
+                line.into_iter().collect::<Vec<_>>(),
+                "split line for SR {flag:#x}"
+            );
+            assert_eq!(held_split_lines(&t), line.into_iter().collect::<Vec<_>>());
+            t.write_reg(0x10, 0);
+            assert!(held_split_lines(&t).is_empty());
+        }
+    }
+
+    #[test]
+    fn node_reset_keeps_the_split_vectors() {
+        let mut t = Timer::new_with_layout(16, true)
+            .trigger_com_irq(Some(26))
+            .break_irq(Some(24));
+        t.on_node_reset();
+        t.write_reg(0x0C, SR_BIF);
+        t.write_reg(0x14, 1 << 7);
+        assert_eq!(held_split_lines(&t), vec![24]);
     }
 
     #[cfg(feature = "event-scheduler")]

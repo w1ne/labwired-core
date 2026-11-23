@@ -1,6 +1,6 @@
 //! Browser-safe multi-node World wrapper.
 
-use crate::inspect::LogicRef;
+use crate::inspect::{js_safe_meta, LogicRef};
 use labwired_config::{
     BoardIoBinding, BoardIoKind, BoardIoSignal, ChipDescriptor, EnvironmentManifest, SystemManifest,
 };
@@ -228,7 +228,7 @@ impl WasmWorld {
             .map_err(|e| JsValue::from_str(&format!("get_board_io_config: {e}")))
     }
 
-    /// Node `node_id`'s `board_io` states, `[{ id, active }]`.
+    /// Node `node_id`'s `board_io` states, `[{ id, active, emission? }]`.
     pub fn get_board_io_states(&self, node_id: &str) -> Result<JsValue, JsValue> {
         let machine = self.machine(node_id)?;
         let bindings = self
@@ -262,7 +262,7 @@ impl WasmWorld {
                         }
                     }
                 };
-                serde_json::json!({ "id": b.id, "active": active })
+                b.state_json(active)
             })
             .collect();
         serde_wasm_bindgen::to_value(&states)
@@ -419,8 +419,10 @@ impl WasmWorld {
             .map_err(|error| JsValue::from_str(&format!("node '{node_id}' read: {error:?}")))
     }
 
+    /// Diagnostic state with wide peripheral integers represented as exact
+    /// decimal strings, matching `inspect`. Native snapshot state is unchanged.
     pub fn node_snapshot(&self, node_id: &str) -> Result<JsValue, JsValue> {
-        let snapshot = self
+        let mut snapshot = self
             .world
             .machines
             .get(node_id)
@@ -429,6 +431,9 @@ impl WasmWorld {
             .ok_or_else(|| {
                 JsValue::from_str(&format!("node '{node_id}' has no snapshot support"))
             })?;
+        for metadata in snapshot.peripherals.values_mut() {
+            *metadata = js_safe_meta(metadata);
+        }
         serde_wasm_bindgen::to_value(&snapshot)
             .map_err(|error| JsValue::from_str(&format!("node '{node_id}' snapshot: {error}")))
     }

@@ -540,7 +540,7 @@ _Sim-derived F7 (no bench part) and no tier-1 target — absent from TIER1_TARGE
 
 ### `stm32f767`
 
-_Not a tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json), so this entry carries the whole story: its committed part-specific fixture runs PR-gated as `firmware_survival::test_stm32f767_tier1_survival` and in the nightly coverage-matrix cell examples/nucleo-f767zi/tier1-smoke.yaml, driving clock/gpio/timer/i2c/spi/adc/wdt/rtc over USART2 and leaving dma/irq/pwm unclaimed — the fixture never attempts them even though the descriptor now wires `stm32f4_dma` and `nvic` (the fixture's header comment still says no DMA/NVIC id is declared). That leaves PWR (real stm32f4-profile model) and both DMA stream controllers unit-only, and DBGMCU (real model, IDCODE 0x10006451 per RM0410) exercised by nothing at all._
+_Not a tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json), so this entry carries the whole story: its committed part-specific fixture runs PR-gated as `firmware_survival::test_stm32f767_tier1_survival` and in the nightly coverage-matrix cell examples/nucleo-f767zi/tier1-smoke.yaml, driving clock/gpio/timer/i2c/spi/adc/wdt/rtc over USART2 and leaving dma/irq/pwm unclaimed — the fixture never attempts them even though the descriptor now wires `stm32f4_dma` and `nvic` (the fixture's header comment still says no DMA/NVIC id is declared). That leaves PWR (real stm32f4-profile model) and both DMA stream controllers unit-only, and DBGMCU (real model, IDCODE 0x10006451 per RM0410) exercised by nothing at all. Stock stm32duino NUCLEO_F767ZI also runs the Arduino matrix row L0-L8 (core-arduino-matrix-smoke, nightly + push to main; evidence validation/arduino-matrix/evidence/nucleo-f767zi): PWR over-drive and the 216 MHz PLL, USART3 VCP, LD1 GPIO, INA219 over I2C1 at the exact tier, MAX31855 over SPI1, ADC1_IN3 (A0 = PA3) at a board-held 1650 mV read at 10 bits = 511, TIM2_CH1 PWM edges on PA0, SysTick micros() and the bxCAN1 register-level loopback (L8). That lane does not run on PRs, so nothing is recorded as functional here. No physical silicon run exists._
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `PWR`, `DMA1`, `DMA2`
 
@@ -597,6 +597,10 @@ _SIM-DERIVED first Cortex-M7 part. Its committed tier-1 fixture is PR-gated (`fi
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `SYSCFG` (configs/chips/stm32h735.yaml:450 (type: syscfg; crates/core/src/peripherals/generic_factory.rs:739; docs/coverage/silent-path-census.md:404)) — CLOSABLE: hardcoded StubPeripheral with one canned value — CCCSR (0x20) reads READY=1 so the H7 HAL's rcc.freeze() compensation-cell poll exits (examples/stm32h735-hal-demo/src/main.rs:43); writes are dropped, so the enable never latches and EXTI source-select is not modelled. The census records it as the telematics lab's only live stub.
 - `WWDG` (configs/chips/stm32h735.yaml:487 (type: wwdg; crates/core/src/peripherals/wwdg.rs:63)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; no behavioural test and no gated firmware drives it.
+
+### `stm32l031k6`
+
+_NUCLEO-L031K6. PR-gated raw-register smoke (examples/nucleo-l031k6/io-smoke.yaml): reset/stack, RCC IOPENR/APB1ENR, GPIOA/GPIOB, USART2 banner STM32L031K6_OK and PB3 LED edges. No Arduino matrix row and no physical silicon run exist, so nothing is recorded as functional here. USB, LCD, DAC and LPTIM are absent on this die and are not declared. SYSCFG is the real STM32L0 model; PWR, FLASH, ADC, DMA, SPI and I2C are also modelled. This smoke does not drive those blocks._
 
 ### `stm32l073`
 

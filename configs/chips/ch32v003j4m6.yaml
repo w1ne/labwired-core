@@ -85,22 +85,25 @@ peripherals:
   # USART1 (ch32v00x.h): USART1_BASE = APB2PERIPH_BASE + 0x3800, RCC_USART1EN =
   # APB2PCENR bit 14. USART_TypeDef is STATR, DATAR, BRR, CTLR1, CTLR2, CTLR3,
   # GPR at 4-byte strides, the same layout as the STM32F1 USART, so the default
-  # `stm32f1` UART layout serves it. No `irq`: the PFIC is not modelled, so
-  # USART1_IRQn (32) has no controller to reach. TX is polled only.
+  # `stm32f1` UART layout serves it. With CTLR1.RXNEIE/TXEIE set the UART
+  # pends USART1_IRQn (32, ch32v00x.h) in the PFIC.
   - id: "usart1"
     type: "uart"
     base_address: 0x40013800
     size: "1KB"
     clock: { reg: "apb2pcenr", bit: 14 }
+    irq: 32
 
   # QingKe V2 system timer STK (core_riscv.h): SysTick_Type at 0xE000F000 is
   # CTLR, SR, CNT, reserved, CMP. The vendor noneos-sdk `Delay_Us`/`Delay_Ms`
-  # poll SR.CNTIF. The STK is a core block (no RCC gate). No `irq`: the PFIC is
-  # not modelled, so SysTick_IRQn (12) has no controller to reach.
+  # poll SR.CNTIF. The STK is a core block (no RCC gate). With CTLR.STIE set a
+  # compare match pends SysTick_IRQn (12, ch32v00x.h) in the core-decoded PFIC
+  # at 0xE000E000.
   - id: "stk"
     type: "qingke_stk"
     base_address: 0xE000F000
     size: "32B"
+    irq: 12
 
   # FLASH interface (ch32v00x.h): FLASH_R_BASE = AHBPERIPH_BASE + 0x2000.
   # FLASH_TypeDef starts ACTLR, KEYR, OBKEYR, STATR, CTLR, ADDR, as the STM32F1

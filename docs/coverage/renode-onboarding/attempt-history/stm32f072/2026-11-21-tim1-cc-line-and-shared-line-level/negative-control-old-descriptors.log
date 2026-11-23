@@ -1,0 +1,39 @@
+test stm32_advanced_timer_irq_lines::f103_adc2_eoc_pends_shared_adc1_2_line ... FAILED
+test stm32_advanced_timer_irq_lines::advanced_timers_pend_update_and_cc_on_their_own_lines ... FAILED
+thread 'stm32_advanced_timer_irq_lines::f103_adc2_eoc_pends_shared_adc1_2_line' panicked at crates/core/tests/stm32/stm32_advanced_timer_irq_lines.rs:198:9:
+thread 'stm32_advanced_timer_irq_lines::advanced_timers_pend_update_and_cc_on_their_own_lines' panicked at crates/core/tests/stm32/stm32_advanced_timer_irq_lines.rs:154:5:
+stm32f103 tim1: CC1G pended line 27=false line 25=true
+stm32f103c4 tim1: CC1G pended line 27=false line 25=true
+stm32f103c6 tim1: CC1G pended line 27=false line 25=true
+stm32f103r4 tim1: CC1G pended line 27=false line 25=true
+stm32f103r4h tim1: CC1G pended line 27=false line 25=true
+stm32f103r6 tim1: CC1G pended line 27=false line 25=true
+stm32f103r6h tim1: CC1G pended line 27=false line 25=true
+stm32f103r8 tim1: CC1G pended line 27=false line 25=true
+stm32f103rb tim1: CC1G pended line 27=false line 25=true
+stm32f103t4 tim1: CC1G pended line 27=false line 25=true
+stm32f103t6 tim1: CC1G pended line 27=false line 25=true
+stm32g431rb tim1_pwm: UG pended line 25=false line 27=false
+stm32g431rb tim1_pwm: CC1G pended line 27=false line 25=false
+stm32g474re tim1_pwm: UG pended line 25=false line 27=false
+stm32g474re tim1_pwm: CC1G pended line 27=false line 25=false
+stm32wb55 tim1_pwm: UG pended line 25=false line 27=false
+stm32wb55 tim1_pwm: CC1G pended line 27=false line 25=false
+stm32l476 tim1: UG pended line 25=false line 27=true
+stm32l476 tim8: UG pended line 44=false line 46=true
+stm32l432kc tim1: UG pended line 25=false line 27=true
+ci-fixture-stm32l476-readonly tim1: UG pended line 25=false line 27=true
+ci-fixture-stm32l476-readonly tim8: UG pended line 44=false line 46=true
+stm32l552 tim1: CC1G pended line 44=false line 42=true
+stm32l552 tim8: CC1G pended line 54=false line 52=true
+stm32h563 tim1_pwm: CC1G pended line 44=false line 42=true
+stm32u545 tim1_pwm: CC1G pended line 44=false line 42=true
+stm32u575 tim1_pwm: CC1G pended line 44=false line 42=true
+stm32u5a5zj tim1_pwm: CC1G pended line 44=false line 42=true
+stm32wba52 tim1_pwm: CC1G pended line 40=false line 38=true
+stm32f072 tim1: CC1G pended line 14=false line 13=true
+onboarding/stm32f042 tim1: CC1G pended line 14=false line 13=true
+onboarding/stm32f072 tim1: CC1G pended line 14=false line 13=true
+stm32g071 tim1_pwm: CC1G pended line 14=false line 13=true
+stm32c031c6 tim1_pwm: CC1G pended line 14=false line 13=true
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 183 filtered out; finished in 0.68s

@@ -7,9 +7,10 @@
 #include <Arduino.h>
 
 #ifndef LW_PWM_PIN
-  // Nucleo-G474RE LED is PA5 = DAC1_OUT2 — analogWrite prefers DAC and the
-  // twin has no DAC window → memory_violation. Use TIM2_CH1 PA0.
-#  if defined(ARDUINO_NUCLEO_G474RE) || defined(ARDUINO_NUCLEO_G474RE_P)
+  // Nucleo-G474RE/G431RB LED is PA5 = DAC1_OUT2 — analogWrite prefers DAC and
+  // the twin has no DAC window → memory_violation. Use TIM2_CH1 PA0.
+#  if defined(ARDUINO_NUCLEO_G474RE) || defined(ARDUINO_NUCLEO_G474RE_P) || \
+      defined(ARDUINO_NUCLEO_G431RB)
 #    define LW_PWM_PIN PA0
 #  elif defined(ARDUINO_NUCLEO_G071RB)
 // NUCLEO-G071RB LD4 is PA5 = DAC1_OUT2 too, and the twin models DAC1, so
@@ -28,8 +29,9 @@
 // PinMap_TIM, so analogWrite would fall back to digitalWrite. Use TIM2_CH1
 // on PA0.
 #    define LW_PWM_PIN PA0
-#  elif defined(STM32H563xx) || defined(STM32H723xx) || defined(STM32H753xx)
-// NUCLEO-H563ZI / NUCLEO-H723ZG / NUCLEO-H753ZI LD1 is PB0, whose PinMap_TIM entry is
+#  elif defined(STM32H563xx) || defined(STM32H723xx) || defined(STM32H753xx) || \
+      defined(ARDUINO_NUCLEO_F767ZI)
+// NUCLEO-H563ZI / NUCLEO-H723ZG / NUCLEO-H753ZI / NUCLEO-F767ZI LD1 is PB0, whose PinMap_TIM entry is
 // TIM1_CH2N, a complementary output the twin's timer does not generate. Use
 // TIM2_CH1 on PA0.
 #    define LW_PWM_PIN PA0

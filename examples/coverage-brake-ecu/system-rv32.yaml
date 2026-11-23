@@ -5,5 +5,5 @@
 # See the LICENSE file in the project root for full license information.
 
 name: "coverage-brake-ecu-rv32"
-chip: "../../configs/chips/ci-fixture-riscv.yaml"
+chip: "chip-rv32.yaml"
 external_devices: []

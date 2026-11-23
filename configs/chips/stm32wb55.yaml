@@ -138,8 +138,13 @@ peripherals:
     type: "timer"
     base_address: 0x40012C00
     size: "1KB"
-    irq: 24
+    # TIM1_UP_TIM16_IRQn = 25, TIM1_CC_IRQn = 27 (stm32wb55xx.h).
+    # BRK (24) and TRG/COM (26) route BIF and TIF/COMIF.
+    irq: 25
     config:
+      capture_compare_irq: 27
+      trigger_com_irq: 26
+      break_irq: 24
       # Channel outputs reach the pads through the WB AF table
       # (bus/attach.rs STM32WB_TIMER_PADS, from stm32duino PinMap_TIM).
       pad_map: "stm32wb"

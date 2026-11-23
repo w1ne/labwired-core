@@ -118,10 +118,16 @@ fn motor_error_to_js(error: MotorControlError) -> JsValue {
 }
 
 fn validate_motor_input(id: &str, name: &str, value: f64) -> Result<(), MotorControlError> {
-    if !matches!(name, "load-torque-nm" | "supply-voltage-v") {
+    if !matches!(
+        name,
+        "load-torque-nm" | "supply-voltage-v" | "quadratic-drag-nm-per-rad-s2"
+    ) {
         return Err(MotorControlError::unknown_input(id, name));
     }
-    if !value.is_finite() || (name == "supply-voltage-v" && value <= 0.0) {
+    if !value.is_finite()
+        || (name == "supply-voltage-v" && value <= 0.0)
+        || (name == "quadratic-drag-nm-per-rad-s2" && value < 0.0)
+    {
         return Err(MotorControlError::named(
             "invalid-value",
             id,
@@ -130,6 +136,8 @@ fn validate_motor_input(id: &str, name: &str, value: f64) -> Result<(), MotorCon
                 "{name} must be {}",
                 if name == "supply-voltage-v" {
                     "positive and finite"
+                } else if name == "quadratic-drag-nm-per-rad-s2" {
+                    "non-negative and finite"
                 } else {
                     "finite"
                 }

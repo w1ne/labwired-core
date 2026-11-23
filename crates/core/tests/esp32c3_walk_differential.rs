@@ -271,6 +271,11 @@ fn build_oled_lab(
     // rom-boot derivation reads walk-DELETED, so a pinned-back peripheral would
     // be starved of ticks unless we recompute the flag over the live set (the
     // same recompute the in-crate routing gates do after `force_legacy_walk`).
+    // The tick indices are likewise derived from `uses_scheduler()` at range
+    // rebuild time (#1500), so a model pinned back onto the walk after assembly
+    // must be re-indexed (`Peripheral::force_legacy_walk` documents this
+    // pairing) or it is neither walked nor scheduled and never ticks.
+    machine.bus.refresh_peripheral_index();
     machine.bus.recompute_walk_deletable();
 
     machine.config.peripheral_tick_interval = tick_interval;
@@ -318,15 +323,20 @@ fn run_lab(mut lab: OledLab, budget: u64) -> (u64, Vec<u8>, Vec<u8>) {
 }
 
 /// Instruction budget that comfortably covers bootloader + app + first OLED
-/// paint on the fast-start path (the wasm gate paints well inside 40M).
-const PAINT_BUDGET: u64 = 30_000_000;
+/// paint on the fast-start path. Measured on main 2026-11-20 (event-scheduler,
+/// no idle fast-forward): `app_main` is entered between steps 43M and 44M and
+/// the OLED is painted by 45M. About 22M of that is the ROM delay loop
+/// (0x4004c0d4..0x4004c0dc) spinning through the IDF `rtc_init`/`calibrate_ocode`
+/// wait, so the boot lands at ~275 ms of device time against ~249 ms on
+/// silicon. The old 30M budget (187 ms) can no longer reach `app_main`.
+const PAINT_BUDGET: u64 = 60_000_000;
 /// "LabWired" wordmark + frame + bar → well over this many lit pixels.
 const MIN_LIT: usize = 400;
 
 /// Gate 1 (interval 1): walk-on RTC vs scheduler RTC — event observables must
 /// be byte-identical: same serial bytes, same total cycles, same framebuffer.
 #[test]
-#[ignore = "runs the real C3 bootloader + app (~2x30M steps); run with --release --ignored"]
+#[ignore = "runs the real C3 bootloader + app (~2x60M steps); run with --release --ignored"]
 fn oled_lab_walk_on_vs_scheduler_rtc_is_byte_identical_at_interval_1() {
     let (walk_cycles, walk_fb, walk_serial) = run_lab(
         build_oled_lab(1, true, false, false, false, false),
@@ -364,7 +374,7 @@ fn oled_lab_walk_on_vs_scheduler_rtc_is_byte_identical_at_interval_1() {
 /// the write-path bound and to what the legacy walk itself does at interval
 /// 64), but the SSD1306 output must not change: byte-identical framebuffer.
 #[test]
-#[ignore = "runs the real C3 bootloader + app (~2x30M steps); run with --release --ignored"]
+#[ignore = "runs the real C3 bootloader + app (~2x60M steps); run with --release --ignored"]
 fn oled_lab_framebuffer_is_byte_identical_across_tick_intervals() {
     let (_, fb_1, _) = run_lab(
         build_oled_lab(1, false, false, false, false, false),
@@ -394,7 +404,7 @@ fn oled_lab_framebuffer_is_byte_identical_across_tick_intervals() {
 /// exact cycles; a wider interval only reduces host drain frequency.
 /// Byte-identical FB is the licence for `RECOMMENDED_TICK_INTERVAL`.
 #[test]
-#[ignore = "runs the real C3 bootloader + app (~2x30M steps); run with --release --ignored"]
+#[ignore = "runs the real C3 bootloader + app (~2x60M steps); run with --release --ignored"]
 fn oled_lab_framebuffer_is_byte_identical_at_recommended_interval() {
     let step_started = std::time::Instant::now();
     let (_, fb_1, _) = run_lab(
@@ -450,7 +460,7 @@ fn oled_lab_framebuffer_is_byte_identical_at_recommended_interval() {
 /// downstream can differ. This is the cycle-exact identity that licenses
 /// un-pinning the SYSTIMER from the walk.
 #[test]
-#[ignore = "runs the real C3 bootloader + app (~4x30M steps); run with --release --ignored"]
+#[ignore = "runs the real C3 bootloader + app (~4x60M steps); run with --release --ignored"]
 fn oled_lab_systimer_walk_on_vs_scheduler_is_byte_identical() {
     for interval in [1u32, 64] {
         // reference: SYSTIMER on the legacy walk; test: SYSTIMER scheduler.
@@ -506,7 +516,7 @@ fn oled_lab_systimer_walk_on_vs_scheduler_is_byte_identical() {
 /// painted OLED output is interval-independent. This is the cycle-exact identity
 /// that licenses un-pinning I²C0 from the walk.
 #[test]
-#[ignore = "runs the real C3 bootloader + app (~4x30M steps); run with --release --ignored"]
+#[ignore = "runs the real C3 bootloader + app (~4x60M steps); run with --release --ignored"]
 fn oled_lab_i2c0_walk_on_vs_scheduler_is_byte_identical() {
     // interval 1: full byte-identity (serial + total_cycles + framebuffer).
     let (walk_cycles, walk_fb, walk_serial) = run_lab(
@@ -570,7 +580,7 @@ fn oled_lab_i2c0_walk_on_vs_scheduler_is_byte_identical() {
 /// gate proves the quiescent case. RTC + SYSTIMER + I²C0 are scheduler-driven in
 /// both configs so the pair is the only variable.
 #[test]
-#[ignore = "runs the real C3 bootloader + app (~4x30M steps); run with --release --ignored"]
+#[ignore = "runs the real C3 bootloader + app (~4x60M steps); run with --release --ignored"]
 fn oled_lab_spi2_apb_saradc_walk_on_vs_scheduler_is_byte_identical() {
     // interval 1: full byte-identity (serial + total_cycles + framebuffer).
     let (walk_cycles, walk_fb, walk_serial) = run_lab(
@@ -935,7 +945,7 @@ fn oled_lab_sim_serial_vs_silicon_report() {
 /// unconditionally, exactly as the old scheduler path did. If skipping those
 /// wakeups changed ANY guest-visible byte, this differential diverges.
 #[test]
-#[ignore = "runs the real C3 bootloader + app (~4x30M steps); run with --release --ignored"]
+#[ignore = "runs the real C3 bootloader + app (~4x60M steps); run with --release --ignored"]
 fn oled_lab_uart0_walk_on_vs_scheduler_is_byte_identical() {
     // interval 1: full byte-identity (serial + total_cycles + framebuffer).
     let (walk_cycles, walk_fb, walk_serial) = run_lab(

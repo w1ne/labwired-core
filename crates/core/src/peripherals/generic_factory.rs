@@ -1367,9 +1367,13 @@ pub fn try_build(
                     .and_then(|v| v.as_u64())
                     .map(|n| n as usize)
                     .unwrap_or(4);
-                Box::new(crate::peripherals::nrf52::timer::Nrf52Timer::new_with_cc(
-                    num_cc,
-                ))
+                let mut timer = crate::peripherals::nrf52::timer::Nrf52Timer::new_with_cc(num_cc);
+                // ⚠️ The TIMER base clock is 16 MHz on nRF52, not `cpu_hz`
+                // (64 MHz). Absent key = CPU clock; see the model's header.
+                if let Some(hz) = p_cfg.config.get("peripheral_hz").and_then(|v| v.as_u64()) {
+                    timer.set_peripheral_hz(hz);
+                }
+                Box::new(timer)
             } else {
                 // Width selector for 32-bit TIM2/TIM5 (STM32L4 etc).
                 // YAML: `config: { width: 32 }`. Defaults to 16 for
@@ -1431,29 +1435,47 @@ pub fn try_build(
                         ))
                     }
                 };
-                // `capture_compare_irq: N` — a separate CC vector (AT32F421
-                // TMR1: overflow/trigger/hall IRQ13, channel IRQ14).
-                let capture_compare_irq = p_cfg
-                    .config
-                    .get("capture_compare_irq")
-                    .map(|value| {
-                        value
-                            .as_u64()
-                            .and_then(|v| u32::try_from(v).ok())
-                            .ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "timer '{}': capture_compare_irq must be a u32",
-                                    p_cfg.id
-                                )
-                            })
-                    })
-                    .transpose()?;
+                // Separate vectors of a split timer interrupt:
+                // `capture_compare_irq: N` for CC1..4IF (AT32F421 TMR1:
+                // overflow/trigger/hall IRQ13, channel IRQ14),
+                // `trigger_com_irq: N` for TIF/COMIF and `break_irq: N` for
+                // BIF (STM32F1/F4 TIM1_TRG_COM / TIM1_BRK).
+                // `prescaler: power_of_two` — PSC[3:0] is an exponent, the
+                // counter clock is the kernel clock / 2^PSC (STM32W108).
+                let psc_power_of_two = match p_cfg.config.get("prescaler").and_then(|v| v.as_str())
+                {
+                    None | Some("linear") => false,
+                    Some("power_of_two") => true,
+                    Some(other) => {
+                        return Err(anyhow::anyhow!(
+                        "timer '{}': unknown prescaler '{other}' (supported: linear, power_of_two)",
+                        p_cfg.id
+                    ))
+                    }
+                };
+                let split_irq = |key: &str| {
+                    p_cfg
+                        .config
+                        .get(key)
+                        .map(|value| {
+                            value
+                                .as_u64()
+                                .and_then(|v| u32::try_from(v).ok())
+                                .ok_or_else(|| {
+                                    anyhow::anyhow!("timer '{}': {key} must be a u32", p_cfg.id)
+                                })
+                        })
+                        .transpose()
+                };
                 Box::new(
                     crate::peripherals::timer::Timer::new_with_layout(width, advanced)
                         .basic(basic)
                         .ccer_np(ccer_np)
-                        .capture_compare_irq(capture_compare_irq)
-                        .pad_map(pad_map),
+                        .capture_compare_irq(split_irq("capture_compare_irq")?)
+                        .trigger_com_irq(split_irq("trigger_com_irq")?)
+                        .break_irq(split_irq("break_irq")?)
+                        .pad_map(pad_map)
+                        .psc_power_of_two(psc_power_of_two),
                 )
             }
         }
@@ -2368,6 +2390,11 @@ pub fn try_build(
         // MEMRMP.SWP_FB (RM0410 §7).
         "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32f76x") => {
             Box::new(crate::peripherals::syscfg::Stm32F4Syscfg::new_f76x())
+        }
+        // L4 has the same EXTICR offsets, with three-bit port fields. Only
+        // that mux is modeled; do not inherit the F4 compensation-cell fields.
+        "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32l4") => {
+            Box::new(crate::peripherals::syscfg::Stm32L4Syscfg::default())
         }
         // SYSCFG on STM32L0 (`profile: stm32l0`): the same EXTICR line-source
         // mux, among the L0's own configuration words (RM0367 §10).

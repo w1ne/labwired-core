@@ -50,6 +50,27 @@ peripherals:
     base_address: 0xE000E010
     size: "16B"
 
+  # Architectural Cortex-M4F FPU register window in the System Control Space.
+  # nRF52840 Product Specification v1.11, CPU chapter
+  # (https://docs.nordicsemi.com/r/bundle/ps_nrf52840/page/cpu.html):
+  # the core is an Arm Cortex-M4 processor with a single-precision FPU, and
+  # the "CPU and support module configuration" table lists FPU as implemented.
+  # That chapter points at the Cortex-M4 Devices Generic User Guide for the
+  # FPU registers; the addresses (FPCCR at 0xE000EF34, and the 28-byte window
+  # starting at 0xE000EF30) and the FPv4-SP feature-register reset values are
+  # Arm Cortex-M4 TRM DDI 0439B, Table 7-4. This is not the Nordic FPU
+  # interrupt block in the SVD (0x40026000, IRQ 38). The id is
+  # `cortex_m_fpu` so this window is not matched to that SVD instance.
+  - id: "cortex_m_fpu"
+    type: "cortex_m_fpu"
+    base_address: 0xE000EF30
+    size: "28B"
+    config:
+      mvfr0: 0x10110021
+      mvfr1: 0x11000011
+      # MVFR2 is not implemented on Cortex-M4F (DDI 0439B).
+      mvfr2: 0x00000000
+
   - id: "uart0"
     type: "nrf52840_uart"
     base_address: 0x40002000
@@ -173,6 +194,7 @@ peripherals:
     size: "4KB"
     irq: 8
     config:
+      peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
       debug_schema: "../peripherals/nrf52840/timer0.yaml"
   - id: "timer1"
     type: "nrf52840_timer"
@@ -180,6 +202,7 @@ peripherals:
     size: "4KB"
     irq: 9
     config:
+      peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
       debug_schema: "../peripherals/nrf52840/timer1.yaml"
   - id: "timer2"
     type: "nrf52840_timer"
@@ -187,6 +210,7 @@ peripherals:
     size: "4KB"
     irq: 10
     config:
+      peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
       debug_schema: "../peripherals/nrf52840/timer2.yaml"
   - id: "timer3"
     type: "nrf52840_timer"
@@ -194,6 +218,7 @@ peripherals:
     size: "4KB"
     irq: 26
     config:
+      peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
       debug_schema: "../peripherals/nrf52840/timer3.yaml"
       num_cc: 6
   - id: "timer4"
@@ -202,6 +227,7 @@ peripherals:
     size: "4KB"
     irq: 27
     config:
+      peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
       debug_schema: "../peripherals/nrf52840/timer4.yaml"
       num_cc: 6
   - id: "i2s"

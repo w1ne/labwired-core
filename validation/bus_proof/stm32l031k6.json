@@ -1,0 +1,22 @@
+{
+  "id": "stm32l031k6",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "examples/nucleo-l031k6/io-smoke.yaml",
+    "test": "STM32L031K6_OK",
+    "signal": "a raw-register firmware (examples/nucleo-l031k6/firmware/main.c) enables RCC IOPENR/APB1ENR, puts PA2 on AF4 and writes USART2 TDR; the sim captures the banner STM32L031K6_OK and a uart_contains oracle matches it. A negative control that moves the USART2 clock gate to the wrong APB1ENR bit captures zero bytes.",
+    "lane": "core-ci board lane (configs/ci/boards.yml nucleo-l031k6, gate: true)",
+    "note": "examples/nucleo-l031k6/evidence/io-smoke/, 2026-11-21"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "SPI1 is modelled on this die, but no firmware has been run that moves observable data on the bus. There is no Arduino-matrix row or raw-register SPI smoke for stm32l031k6 yet.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "I2C1 is modelled on this die, but no firmware has been run that moves observable data on the bus. There is no Arduino-matrix row or raw-register I2C smoke for stm32l031k6 yet.",
+    "lane": "none"
+  }
+}

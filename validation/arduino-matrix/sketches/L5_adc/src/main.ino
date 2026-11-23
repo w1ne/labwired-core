@@ -112,9 +112,9 @@ static bool samples_ok(int v0, int v1) {
   return v0 == 512 && v1 == 512;
 
 #elif defined(ARDUINO_NUCLEO_L476RG) || defined(ARDUINO_NUCLEO_G474RE) || \
-    defined(ARDUINO_P_NUCLEO_WB55RG)
+    defined(ARDUINO_NUCLEO_G431RB) || defined(ARDUINO_P_NUCLEO_WB55RG)
   // adc profile stm32l4: the matrix system holds A0 at 1651 mV (L476 PA0 =
-  // ADC1_IN5; G474 PA0 = ADC1_IN1; WB55 PC0 = ADC1_IN1), and SQR1.SQ1
+  // ADC1_IN5; G474/G431 PA0 = ADC1_IN1; WB55 PC0 = ADC1_IN1), and SQR1.SQ1
   // selects it. 12-bit against 3.3 V is 2048; stm32duino returns 10 bits:
   // 512. Exact; the unheld fixed source (3.0 V) reads 930, no conversion 0.
   return v0 == 512 && v1 == 512;
@@ -175,6 +175,13 @@ static bool samples_ok(int v0, int v1) {
   // 10 bits is 2047 >> 2 = 511. Exact; "2 3" is the model's incrementing
   // fallback, i.e. the board level never reached the selected channel.
   // Keyed on the board, not STM32F411xE: the Black Pill row holds no level.
+  return v0 == 511 && v1 == 511;
+
+#elif defined(ARDUINO_NUCLEO_F767ZI)
+  // NUCLEO-F767ZI: the matrix system holds A0 = PA3 = ADC123_IN3 at
+  // 1650 mV. floor(1650 * 4095 / 3300) = 2047 at 12 bits; stm32duino sets
+  // ADC_CR1.RES = 10 bits: 511. Exact; "2 3" is the model's incrementing
+  // fallback, i.e. the board level never reached the selected channel.
   return v0 == 511 && v1 == 511;
 
 #else

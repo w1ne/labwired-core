@@ -632,6 +632,14 @@ nodes count against the 128-unknown ceiling and can be probed.
   answer is bit-identical whatever state the iteration started from. Running out
   of iterations is a coded error naming the step, the time and the unknown that
   was still moving — never a `NaN` written into the trace.
+- Diode series resistance uses an equivalent KCL row reduction to avoid
+  subtracting large `voltage / RS` terms when the actual diode current is tiny.
+  The transform includes the completed charge, dependent-source and gmin stamps;
+  it preserves the authored element values, internal node voltages, current-probe
+  semantics and unknown count. Internal-node chains are reduced from their leaves.
+  Cycles, self-links and shared internal rows retain their original conductance
+  stamps. The 128-unknown bound, Newton iteration limit and convergence tolerances
+  remain unchanged.
 - A circuit with **no** nonlinear element takes the pre-Newton code path
   unchanged, down to the floating-point operation order.
   `crates/core/tests/analog/analog_linear_golden.rs` pins that against bit patterns

@@ -56,6 +56,19 @@ use std::sync::mpsc::{Receiver, Sender};
 pub trait I2cSlaveHost {
     fn attach_slave(&mut self, device: Box<dyn I2cDevice>);
 
+    /// Attach a slave with its declared physical route. Fixed-pin hosts keep
+    /// their existing behavior; matrix-routed hosts override this capability
+    /// and validate the route before accepting the attachment. The bus never
+    /// needs to downcast a concrete I2C controller for this operation.
+    fn attach_slave_with_route(
+        &mut self,
+        device: Box<dyn I2cDevice>,
+        _route: Option<&std::collections::BTreeMap<String, String>>,
+    ) -> anyhow::Result<()> {
+        self.attach_slave(device);
+        Ok(())
+    }
+
     /// How this controller reaches pads through a GPIO output matrix, for a
     /// controller on a part where any I²C can drive any pad (the ESP32
     /// family). `None` — the default — for a controller with fixed pins.
