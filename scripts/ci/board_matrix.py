@@ -272,10 +272,12 @@ def check_selection(
 
     `validate()` above answers "is this manifest well formed"; it cannot
     answer the question the workflow actually depends on. `core-board-ci.yml`
-    pipes this script's stdout straight into `strategy.matrix` and has no
-    aggregator job, so `{"include": []}` skips the `board` job and the whole
-    workflow reports SUCCESS having compiled no firmware. A manifest with
-    every entry `gate: false` is perfectly valid and produces exactly that.
+    pipes this script's stdout into `strategy.matrix`, gates the `board` job
+    on `has_boards` (GitHub Actions fails a run whose matrix has an empty
+    `include`), and has no aggregator job. So `{"include": []}` skips the
+    `board` job and the whole workflow reports SUCCESS having compiled no
+    firmware. A manifest with every entry `gate: false` is perfectly valid
+    and produces exactly that.
 
     An unscoped gate run must select at least one board; otherwise a manifest
     with every entry `gate: false` silently skips the board job. A push with a

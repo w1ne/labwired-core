@@ -231,3 +231,54 @@ def test_push_unknown_config_paths_fail_closed():
 
 def test_push_new_unmanifested_example_runs_no_board():
     assert _push(["examples/some-new-board-bme280/bme280-smoke.yaml"]) == set()
+
+
+def _workflow_jobs():
+    import yaml
+
+    wf = yaml.safe_load((REPO_ROOT / ".github/workflows/core-board-ci.yml").read_text())
+    return wf["jobs"]
+
+
+def test_setup_exports_has_boards_from_the_emitted_matrix():
+    """A scoped push may emit {"include": []}; setup must say so explicitly.
+
+    GitHub Actions fails the run when `strategy.matrix` has an empty
+    `include`, so the workflow needs a flag to skip `board` instead.
+    """
+    setup = _workflow_jobs()["setup"]
+    assert setup["outputs"]["has_boards"] == "${{ steps.gen.outputs.has_boards }}"
+    gen = next(s for s in setup["steps"] if s.get("id") == "gen")
+    assert 'echo "has_boards=$has_boards" >> "$GITHUB_OUTPUT"' in gen["run"]
+    assert '["include"]' in gen["run"]
+
+
+def test_board_job_runs_only_when_the_matrix_has_boards():
+    cond = " ".join(_workflow_jobs()["board"]["if"].split())
+    assert "needs.setup.outputs.has_boards == 'true'" in cond
+    # The schedule fork guard must survive alongside the new condition.
+    assert (
+        "(github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core')"
+        in cond
+    )
+    assert "&&" in cond
+
+
+def test_scoped_push_with_no_affected_board_emits_empty_include(tmp_path):
+    """The case the has_boards guard exists for: exit 0, empty include."""
+    changed = tmp_path / "changed-paths.txt"
+    changed.write_text("examples/renode-onboarding/nrf52840-smoke.yaml\n")
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "scripts/ci/board_matrix.py"),
+         "--event", "push", "--repo-root", str(REPO_ROOT),
+         "--changed-paths-file", str(changed)],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {"include": []}
+
+
+def test_unscoped_push_with_no_gated_board_still_fails_closed(tmp_path):
+    result = _run_cli(_all_ungated_manifest(tmp_path), "push")
+    assert result.returncode != 0
+    assert "selected 0" in result.stderr

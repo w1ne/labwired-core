@@ -39,6 +39,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
+      has_boards: ${{ steps.gen.outputs.has_boards }}
       run_coverage: ${{ steps.gen.outputs.run_coverage }}
     steps:
       - uses: actions/checkout@v4
@@ -73,12 +74,20 @@ jobs:
             matrix="$(python scripts/ci/board_matrix.py --event "$EVENT_NAME")"
             run_coverage=true
           fi
+          # A scoped push may select no board (board_matrix.py exits 0 with
+          # {"include": []}). GitHub Actions rejects a matrix with an empty
+          # include list and fails the run, so `board` is gated on has_boards.
+          # Unscoped gate events still fail closed inside board_matrix.py.
+          has_boards="$(printf '%s' "$matrix" | python -c 'import json, sys; print("true" if json.load(sys.stdin)["include"] else "false")')"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "has_boards=$has_boards" >> "$GITHUB_OUTPUT"
           echo "run_coverage=$run_coverage" >> "$GITHUB_OUTPUT"
 
   board:
-    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
     needs: setup
+    if: >-
+      ${{ needs.setup.outputs.has_boards == 'true' &&
+          (github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
