@@ -2578,12 +2578,18 @@ impl Solver {
 
     /// Small-signal AC analysis at each of `frequencies` (hertz), linearised
     /// about the solver's present solution — the DC operating point on a
-    /// fresh solver. The stimulus is every source's `AC <mag> [<phase>]`.
+    /// fresh solver, solved without `.ic` holds and without `uic`, as
+    /// ngspice's `MODEDCOP` (see `small_signal_point`; the same holds for
+    /// `.noise`, `.tf`, `.sens` and `.pz`). The stimulus is every source's
+    /// `AC <mag> [<phase>]`.
     ///
     /// The transient state is left exactly as it was: the next
     /// [`Solver::advance`] produces the same bits it would have without
     /// this call.
     pub fn ac_analysis(&mut self, frequencies: &[f64]) -> Result<AcResponse, AnalogError> {
+        if let Some(mut free) = self.small_signal_point()? {
+            return free.ac_analysis(frequencies);
+        }
         if let Some(bad) = frequencies.iter().find(|f| !(f.is_finite() && **f >= 0.0)) {
             return Err(AnalogError::Config(format!(
                 "`.ac` frequency {bad} Hz must be finite and not negative"
@@ -2656,6 +2662,9 @@ impl Solver {
         input: &str,
         frequencies: &[f64],
     ) -> Result<NoiseResponse, AnalogError> {
+        if let Some(mut free) = self.small_signal_point()? {
+            return free.noise_analysis(output, reference, input, frequencies);
+        }
         if let Some(bad) = frequencies.iter().find(|f| !(f.is_finite() && **f > 0.0)) {
             return Err(AnalogError::Config(format!(
                 "`.noise` frequency {bad} Hz must be finite and positive"
@@ -2770,6 +2779,9 @@ impl Solver {
         output: &TransferOutput,
         input: &str,
     ) -> Result<TransferResponse, AnalogError> {
+        if let Some(mut free) = self.small_signal_point()? {
+            return free.transfer_analysis(output, input);
+        }
         let input_port = if let Some(index) = self.voltage_source_index(input) {
             Port::Branch(self.nodes + index)
         } else if let Some(index) = self.current_source_index(input) {
@@ -2856,6 +2868,9 @@ impl Solver {
         &mut self,
         output: &TransferOutput,
     ) -> Result<SensitivityResponse, AnalogError> {
+        if let Some(mut free) = self.small_signal_point()? {
+            return free.model_sensitivity_analysis(output);
+        }
         let circuit = &self.circuit;
         let mut moves = Vec::new();
         for (name, model) in circuit
@@ -2908,6 +2923,9 @@ impl Solver {
         &mut self,
         output: &TransferOutput,
     ) -> Result<SensitivityResponse, AnalogError> {
+        if let Some(mut free) = self.small_signal_point()? {
+            return free.instance_sensitivity_analysis(output);
+        }
         use InstanceParameter::{Area, Length, Multiplier, Temperature, Width};
         let circuit = &self.circuit;
         let mut moves = Vec::new();
@@ -3114,6 +3132,9 @@ impl Solver {
         &mut self,
         output: &TransferOutput,
     ) -> Result<SensitivityResponse, AnalogError> {
+        if let Some(mut free) = self.small_signal_point()? {
+            return free.sensitivity_analysis(output);
+        }
         let output_port = self.output_port(output, ".sens")?;
         let w = self.dc_adjoint(output_port)?;
         let x: Vec<f64> = self.node_v.iter().chain(&self.branch_i).copied().collect();
@@ -3177,6 +3198,9 @@ impl Solver {
     /// The transient state is left exactly as it was, as for
     /// [`Solver::ac_analysis`].
     pub fn pole_zero_analysis(&mut self, card: &PoleZero) -> Result<PoleZeroResponse, AnalogError> {
+        if let Some(mut free) = self.small_signal_point()? {
+            return free.pole_zero_analysis(card);
+        }
         let node = |name: &str| {
             self.circuit.node(name).ok_or_else(|| {
                 AnalogError::Config(format!("`.pz` node `{name}` is not in the netlist"))
@@ -3317,6 +3341,9 @@ impl Solver {
         output: &TransferOutput,
         frequencies: &[f64],
     ) -> Result<AcSensitivityResponse, AnalogError> {
+        if let Some(mut free) = self.small_signal_point()? {
+            return free.ac_sensitivity_analysis(output, frequencies);
+        }
         if let Some(bad) = frequencies.iter().find(|f| !(f.is_finite() && **f >= 0.0)) {
             return Err(AnalogError::Config(format!(
                 "`.sens` frequency {bad} Hz must be finite and not negative"
@@ -3605,6 +3632,28 @@ impl Solver {
     /// Run `body` with every nonlinear device linearised at the present
     /// solution, then put the linearisation back so the next transient step
     /// is unchanged.
+    /// The solver the small-signal analyses must run on instead of `self`,
+    /// if `self` is not at the DC operating point they linearise about.
+    ///
+    /// ngspice's `.ac`, `.noise`, `.tf`, `.sens` and `.pz` solve their own
+    /// operating point in `MODEDCOP`, where `CKTload` holds no `.ic` node and
+    /// `uic` does not apply. A solver that has not advanced holds the
+    /// transient's operating point instead: every `.ic` node held at its
+    /// value, or under `uic` every node at zero. For such a solver this
+    /// returns a copy with the free operating point solved; once the
+    /// transient has advanced, the present solution is used as it is.
+    fn small_signal_point(&self) -> Result<Option<Self>, AnalogError> {
+        let held = self.circuit.uic || !self.circuit.node_ic.is_empty();
+        if !held || self.step_index != 0 {
+            return Ok(None);
+        }
+        let mut free = self.clone();
+        free.circuit.uic = false;
+        free.circuit.node_ic.clear();
+        free.solve_operating_point()?;
+        Ok(Some(free))
+    }
+
     fn linearised<T>(
         &mut self,
         body: impl FnOnce(&mut Self) -> Result<T, AnalogError>,
