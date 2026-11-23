@@ -150,11 +150,47 @@ fn mcp9808_temp_tracks_channel_with_noise() {
     dev.set_component_id("mcp".into());
     dev.set_input("temperature", 25.0).unwrap();
     let ideal = 25.0_f64 * 16.0; // 400 = 0x0190
-    let reads: Vec<u16> = (0..8).map(|_| read_reg16(&mut dev, 0x00)).collect();
+    let reads: Vec<u16> = (0..8).map(|_| read_reg16(&mut dev, 0x05)).collect();
     for &r in &reads {
         let delta = (r as f64 - ideal).abs();
         assert!(delta < 16.0, "reading {r:#06x} too far from {ideal}"); // <1 °C
     }
+}
+
+/// DS20005095B Table 5-1: T_A is pointer 0x05 and RESOLUTION 0x08. Register
+/// 5-4: bits 12:0 are a 13-bit two's-complement count of 0.0625 °C, so
+/// -10.125 °C reads 0x1F5E. With `noise_sigma: 0` and no µs source (no lag)
+/// the read is exact.
+#[test]
+fn mcp9808_ta_is_pointer_5_and_signed_13_bit() {
+    let mut dev = build_mcp9808();
+    dev.set_component_id("mcp".into());
+    dev.set_channel_noise_sigma("temperature", 0.0);
+    dev.set_input("temperature", -10.125).unwrap();
+    assert_eq!(read_reg16(&mut dev, 0x05), 0x1F5E, "T_A at -10.125 °C");
+    dev.set_input("temperature", 25.0625).unwrap();
+    assert_eq!(read_reg16(&mut dev, 0x05), 0x0191, "T_A at 25.0625 °C");
+    dev.set_input("temperature", -40.0).unwrap();
+    assert_eq!(read_reg16(&mut dev, 0x05), 0x1D80, "T_A at -40 °C");
+    // RESOLUTION is one byte at 0x08, POR 0x03 (0.0625 °C).
+    dev.start();
+    dev.write(0x08);
+    dev.start();
+    assert_eq!(dev.read(), 0x03, "RESOLUTION");
+    dev.stop();
+}
+
+/// Register 5-3: the limit registers keep bit 12 (sign) and bits 11:2; the
+/// unimplemented bits 15:13 and 1:0 read 0.
+#[test]
+fn mcp9808_limit_registers_drop_unimplemented_bits() {
+    let mut dev = build_mcp9808();
+    dev.start();
+    dev.write(0x02); // pointer = T_UPPER
+    dev.write(0xFF);
+    dev.write(0xFF);
+    dev.stop();
+    assert_eq!(read_reg16(&mut dev, 0x02), 0x1FFC);
 }
 
 #[test]
@@ -176,7 +212,7 @@ fn mcp9808_noise_replays_per_component() {
     b.set_component_id("mcp".into());
     a.set_input("temperature", 25.0).unwrap();
     b.set_input("temperature", 25.0).unwrap();
-    let ra: Vec<u16> = (0..6).map(|_| read_reg16(&mut a, 0x00)).collect();
-    let rb: Vec<u16> = (0..6).map(|_| read_reg16(&mut b, 0x00)).collect();
+    let ra: Vec<u16> = (0..6).map(|_| read_reg16(&mut a, 0x05)).collect();
+    let rb: Vec<u16> = (0..6).map(|_| read_reg16(&mut b, 0x05)).collect();
     assert_eq!(ra, rb, "same component id must replay bit-identically");
 }
