@@ -165,7 +165,14 @@ peripherals:
     type: "timer"
     base_address: 0x40010000
     size: "1KB"
+    # TIM1_UP_TIM10 = 25; CC1..4 on TIM1_CC = 27 (RM0368/RM0383 vector
+    # table; Renode stm32f4.repl). BRK (24) and TRG/COM (26) route BIF and TIF/COMIF.
+    irq: 25
     config:
+      capture_compare_irq: 27
+      trigger_com_irq: 26
+      break_irq: 24
+      advanced: true
       input_capture: "stm32f4"
       debug_schema: "../peripherals/stm32f401/tim1.yaml"
   - id: "usart1"
@@ -230,6 +237,8 @@ peripherals:
     type: "timer"
     base_address: 0x40014000
     size: "1KB"
+    # TIM1_BRK_TIM9 = 24, shared with TIM1 break.
+    irq: 24
     config:
       input_capture: "stm32f4"
       debug_schema: "../peripherals/stm32f401/tim9.yaml"
@@ -237,6 +246,8 @@ peripherals:
     type: "timer"
     base_address: 0x40014400
     size: "1KB"
+    # TIM1_UP_TIM10 = 25, shared with TIM1 update.
+    irq: 25
     config:
       input_capture: "stm32f4"
       debug_schema: "../peripherals/stm32f401/tim10.yaml"
@@ -244,6 +255,8 @@ peripherals:
     type: "timer"
     base_address: 0x40014800
     size: "1KB"
+    # TIM1_TRG_COM_TIM11 = 26, shared with TIM1 trigger/commutation.
+    irq: 26
     config:
       input_capture: "stm32f4"
       debug_schema: "../peripherals/stm32f401/tim11.yaml"

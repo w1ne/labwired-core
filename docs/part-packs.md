@@ -107,6 +107,16 @@ file and replaces the entry with its contents, exactly as it already does for a
 filesystem in wasm, and a contract that only works on one of our three runtimes
 is not a contract.
 
+## Packs on the Flex path
+
+A Flex manifest (`labwired test` with `inputs.flex`) carries the same `parts:`
+list, inline. Flex resolves a bus device, a co-simulation model's
+`config.device_type` and a sink against it before the catalog, with the same
+`overrides:` rule. Flex runs the `i2c_device`, `spi_device`, `display`,
+`analog_source`, `gpio_device`, `onewire_device` and `led_strip` primitives;
+a pack of any other primitive is refused by name. See
+[the Flex test runner](ci_test_runner.md#part-packs-and-listen-only-devices).
+
 ## Resolution order
 
 For an `external_devices[].type`, in order:

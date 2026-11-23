@@ -1,0 +1,47 @@
+# `labwired test --script test-overtemp-alarm.yaml`. Once a second the
+# firmware reads U4 in millivolts on IO1, converts with the MCP9701A transfer
+# function and drives the IO48 LED. The test bench steps the ambient
+# 26 -> 42 -> 38 -> 36 °C. The indicator goes on at 42 °C, stays on at 38 °C
+# (hysteresis: on at 40.0 °C, off below 38.0 °C) and goes off at 36 °C.
+# `loop` returns (10,000 + T in tenths of °C) x 10 + LED.
+# All expected values were calculated before the first run from
+# V_out = 400 mV + 19.5 mV/°C (truncated to whole mV) and the firmware timing:
+# a step set at k s reaches the output at the next 1 ms boundary, where the
+# firmware samples it. Even temperatures give whole millivolts, so the
+# firmware recovers them exactly: 907, 1219, 1141, 1102 mV.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: sensor_mv }, { port: user_led_drive }] }
+  - set: { port: ambient_c, value: 26 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 42 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 38 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 36 }
+  - call: { export: loop }
+limits:
+  max_steps: 1000000
+  max_time_ns: 10000000000
+assertions:
+  - entry_result: { equals: 103600 }
+  - entry_result: { equals: 0, step: 0 }
+  - entry_result: { equals: 102600, step: 2 }
+  - entry_result: { equals: 104201, step: 4 }
+  - entry_result: { equals: 103801, step: 6 }
+  # Oscilloscope: 887 mV at the 25 °C default, then 907, 1219, 1141, 1102 mV.
+  - analog_sample: { port: sensor_mv, at_ns: 0, min: 887, max: 887 }
+  - analog_sample: { port: sensor_mv, at_ns: 1000000, min: 907, max: 907 }
+  - analog_sample: { port: sensor_mv, at_ns: 2001000000, min: 1141, max: 1141 }
+  - analog_window: { port: sensor_mv, min: 887, max: 1219 }
+  - analog_crossings: { port: sensor_mv, level: 1180, direction: rising, times_ns: [1001000000] }
+  - analog_crossings: { port: sensor_mv, level: 1120, direction: falling, times_ns: [3001000000] }
+  - digital_edges: { port: user_led_drive, times_ns: [1001000000, 3001000000] }
+  - digital_edges: { port: user_led_state, times_ns: [1001001000, 3001001000] }
+  - port_value: { port: user_led_state, equals: 0 }
+  - final_time_ns: { equals: 4000000000 }
+  - console_contains: "T=26.0 C\nT=42.0 C ALARM\nT=38.0 C ALARM\nT=36.0 C\n"

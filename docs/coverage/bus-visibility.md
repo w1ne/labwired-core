@@ -48,7 +48,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 * **cc2538sf53**
   * UART: no UART0 bring-up in this harness; bytes are proven by the cc2538dk survival smoke
 * **ch32l103c8t6**
-  * UART: no UART bring-up for the WCH L103 family in this harness yet; USART1 bytes are proven by ch32l103_compiled_firmware
+  * UART: no UART bring-up for the WCH L103 family in this harness yet; USART1 bytes are proven by ch32_compiled_firmware
 * **ch32v003a4m6**
   * UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware
 * **ch32v003f4p6**
@@ -58,13 +58,13 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 * **ch32v003j4m6**
   * UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware
 * **ch32v005f6p6**
-  * UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32v005_compiled_firmware
+  * UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32_compiled_firmware
 * **ch32v006k8u6**
-  * UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32v006_compiled_firmware
+  * UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32_compiled_firmware
 * **ch32v203c8t6**
-  * UART: no UART bring-up for the WCH V20x family in this harness yet; USART1 bytes are proven by ch32v203_compiled_firmware
+  * UART: no UART bring-up for the WCH V20x family in this harness yet; USART1 bytes are proven by ch32_compiled_firmware
 * **ch32x035c8t6**
-  * UART: no UART bring-up for the WCH X035 family in this harness yet; USART1 bytes are proven by ch32x035_compiled_firmware
+  * UART: no UART bring-up for the WCH X035 family in this harness yet; USART1 bytes are proven by ch32_compiled_firmware
 * **efr32mg26**
   * UART: the Efr32s2 layout models the console TX/RX byte path but captures no baud divisor (CLKDIV), so bit_time_cycles() is None and no wire waveform is narrated — there are no edges to decode
 * **esp32**
@@ -79,8 +79,12 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: no ESP32-H2 UART bring-up in this harness; bytes are proven by the esp32h2-devkitm-1-n4s board smoke
 * **esp32p4**
   * UART: esp32p4 UART0 is a TX FIFO/console model with no PadLines wire cell; bytes are proven by the esp32p4x-c5-function-ev-board smoke
+  * I2C: esp32p4_i2c publishes line names but no PadLines wire cell; the I2C transaction is proven by the esp32p4x-c5-function-ev-board BME280 smoke
 * **esp32s2**
   * UART: no ESP32-S2 UART bring-up in this harness; bytes are proven by the esp32s2-devkitc-1-n8r2 board smoke
+* **esp32s2-arduino**
+  * UART: no ESP32-S2 UART bring-up in this harness; console bytes are proven by esp32s2_arduino_boot
+  * I2C: esp32s2-arduino I2C0 is the classic ESP32 command-list engine with no PadLines wire cell; transactions are proven by esp32s2_arduino_i2c
 * **esp32s3**
   * I2C: esp32s3.yaml is an address-map stub; from_config has no S3 I2C model
   * SPI: esp32s3.yaml is an address-map stub; from_config has no S3 SPI model
@@ -105,6 +109,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: no edge bring-up path for Kinetis LPUART in this gate yet
 * **mpfs095t**
   * UART: no 16550 MMUART bring-up in this harness; bytes are proven by the mpfs_disco_kit_zephyr survival gate
+* **mspm0g3507**
+  * UART: mspm0g3507 UART0 is a TXDATA capture model with no pin routing; bytes are proven by the lp-mspm0g3507-launchpad io-smoke
 * **nrf51822**
   * I2C: no nRF51 legacy-TWI bring-up in this harness (the nRF52 arm drives TWIM)
   * UART: no nRF51 legacy-UART bring-up in this harness (the nRF52 arm drives UARTE EasyDMA); bytes are proven by the microbit-v1 survival smoke
@@ -147,6 +153,10 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: no USART1 bring-up in this harness; bytes are proven by the sam-e70-xplained survival smoke
 * **stm32f072**
   * UART: no USART1 bring-up in this harness; bytes are proven by the stm32f072b-disco survival smoke
+* **stm32f103c6**
+  * UART: low-density F103: USART3 is absent (RM0008/DS5936), and USART1/2 TX are pad-gated on PA9/PA2 until firmware selects the F1 alternate-function output in CRL/CRH, which this harness does not program; no exact-part UART byte is asserted (validation/bus_proof)
+* **stm32f103r6**
+  * UART: low-density F103: USART3 is absent (RM0008/DS5936), and USART1/2 TX are pad-gated on PA9/PA2 until firmware selects the F1 alternate-function output in CRL/CRH, which this harness does not program; no exact-part UART byte is asserted (validation/bus_proof)
 * **stm32f103rb-nucleo-bme280-smoke**
   * UART: this profile exposes only USART2 (the NUCLEO VCP); the F1 harness          produces no analyzer edges on pad-gated USART2 (parent stm32f103          passes on USART3, which this YAML does not include). Bytes are          proven by the boards.yml nucleo-f103rb-bme280 cell          (NUCLEO_F103RB_BME280_OK over USART2)
 * **stm32l552**
@@ -200,13 +210,14 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | esp32-devkitc-32e-uart1 | — | — | ✓ |
 | esp32c2 | — | — | — |
 | esp32c3 | ✓ | ✓ | ✓ |
-| esp32c5 | — | — | — |
+| esp32c5 | ✓ | — | — |
 | esp32c6 | ✓ | ✓ | ✓ |
-| esp32c61 | — | — | — |
+| esp32c61 | ✓ | — | — |
 | esp32c6fh4 | ✓ | ✓ | ✓ |
 | esp32h2 | — | — | — |
 | esp32p4 | — | — | — |
 | esp32s2 | — | — | — |
+| esp32s2-arduino | — | — | — |
 | esp32s3 | — | — | — |
 | esp32s3-devkitc-1-n16r8-adc | — | — | — |
 | esp32s3-zero | — | — | — |
@@ -217,6 +228,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | mk64f12 | — | — | — |
 | mkw41z4 | — | — | — |
 | mpfs095t | — | — | — |
+| mspm0g3507 | — | — | — |
 | nrf51822 | — | — | — |
 | nrf52832 | ✓ | ✓ | ✓ |
 | nrf52833 | ✓ | ✓ | ✓ |
@@ -252,10 +264,10 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32f072 | ✓ | ✓ | — |
 | stm32f103 | ✓ | ✓ | ✓ |
 | stm32f103c4 | ✓ | ✓ | ✓ |
-| stm32f103c6 | ✓ | ✓ | ✓ |
+| stm32f103c6 | ✓ | ✓ | — |
 | stm32f103r4 | ✓ | ✓ | ✓ |
 | stm32f103r4h | ✓ | ✓ | ✓ |
-| stm32f103r6 | ✓ | ✓ | ✓ |
+| stm32f103r6 | ✓ | ✓ | — |
 | stm32f103r6h | ✓ | ✓ | ✓ |
 | stm32f103r8 | ✓ | ✓ | ✓ |
 | stm32f103rb | ✓ | ✓ | ✓ |
@@ -293,10 +305,12 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32g0b1re | ✓ | ✓ | ✓ |
 | stm32g431rb | ✓ | ✓ | ✓ |
 | stm32g474re | ✓ | ✓ | ✓ |
+| stm32h533re | ✓ | — | ✓ |
 | stm32h563 | ✓ | ✓ | ✓ |
 | stm32h723zg | ✓ | ✓ | ✓ |
 | stm32h735 | ✓ | ✓ | ✓ |
 | stm32h753zi | ✓ | ✓ | ✓ |
+| stm32l031k6 | ✓ | ✓ | ✓ |
 | stm32l073 | ✓ | ✓ | ✓ |
 | stm32l432kc | ✓ | ✓ | ✓ |
 | stm32l476 | ✓ | ✓ | ✓ |

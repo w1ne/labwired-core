@@ -1,6 +1,9 @@
 # ST UM1724 Nucleo-64 board signals.
 name: "nucleo-f446re"
 chip: "../chips/stm32f446re.yaml"
+# ST-LINK VCP = USART2 PA2/PA3 (UM1724 §6.8). Without this line every run tapped all UARTs
+# into one console, so Serial1 traffic spliced into the Serial pane.
+debug_uart: "uart2"
 external_devices: []
 board_io:
   - { id: "led2_pa5", kind: "led", peripheral: "gpioa", pin: 5, signal: "output", active_high: true }

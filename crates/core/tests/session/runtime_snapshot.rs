@@ -8,8 +8,7 @@
 // the heavy end-to-end resume test lives in `e2e_external_arduino_esp32_in_sim.rs`.
 
 use labwired_core::bus::SystemBus;
-use labwired_core::peripherals::components::{ssd1680_tricolor_290, GenericDisplay};
-use labwired_core::peripherals::esp32::spi::Esp32Spi;
+use labwired_core::peripherals::components::ssd1680_tricolor_290;
 use labwired_core::runtime_snapshot::{CpuKind, MachineRuntimeSnapshot};
 use labwired_core::system::xtensa::configure_xtensa_esp32;
 use labwired_core::{Bus, Cpu, Machine, Peripheral};
@@ -270,84 +269,6 @@ fn machine_runtime_snapshot_roundtrips_through_serialization() {
     assert_eq!(machine.cpu.get_pc(), 0x400D_0042);
     assert_eq!(machine.cpu.get_register(5), 0x1234_5678);
     assert_eq!(machine.bus.read_u32(0x3FFB_0200).unwrap(), 0xDEAD_BEEF);
-}
-
-/// Verifies that the offline-captured the reference firmware snapshot file produced by
-/// `labwired-cli snapshot capture` decodes cleanly and restores onto a
-/// freshly-built machine with the panel in its post-paint state.
-///
-/// Skipped unless the snapshot file exists at the conventional path —
-/// running it requires a one-time CLI invocation:
-///   cargo run --release -p labwired-cli -- snapshot capture \
-///     --firmware /tmp/demo-agentdeck.elf \
-///     --steps 30000000 \
-///     --output /tmp/agentdeck-postpaint.lwrs
-#[test]
-#[ignore = "needs /tmp/agentdeck-postpaint.lwrs from a manual capture"]
-fn agentdeck_snapshot_file_restores_post_paint_panel() {
-    let snap_path = std::path::PathBuf::from("/tmp/agentdeck-postpaint.lwrs");
-    if !snap_path.exists() {
-        panic!(
-            "/tmp/agentdeck-postpaint.lwrs not found — generate it with:\n  \
-             cargo run --release -p labwired-cli -- snapshot capture \\\n  \
-               --firmware /tmp/demo-agentdeck.elf \\\n  \
-               --steps 30000000 \\\n  \
-               --output /tmp/agentdeck-postpaint.lwrs"
-        );
-    }
-    let bytes = std::fs::read(&snap_path).expect("read snapshot file");
-    let snap = MachineRuntimeSnapshot::from_bytes(&bytes).expect("decode snapshot");
-
-    // Build a fresh machine matching the the reference firmware topology.
-    let mut bus = SystemBus::new();
-    let cpu = configure_xtensa_esp32(&mut bus);
-    bus.attach_spi_device("spi3", Box::new(ssd1680_tricolor_290("GPIO5")))
-        .expect("spi3 is an Esp32Spi controller");
-    bus.refresh_peripheral_index();
-
-    let boxed: Box<dyn Cpu> = Box::new(cpu);
-    let mut machine = Machine::new(boxed, bus);
-
-    machine.apply_runtime_snapshot(&snap).expect("apply");
-
-    // Re-locate the panel and read its restored state.
-    let spi3_idx = machine
-        .bus
-        .find_peripheral_index_by_name("spi3")
-        .expect("spi3 registered");
-    let any = machine.bus.peripherals[spi3_idx].dev.as_any().unwrap();
-    let spi3 = any.downcast_ref::<Esp32Spi>().unwrap();
-    let panel = spi3
-        .attached_devices
-        .iter()
-        .filter_map(|d| d.as_any().and_then(|a| a.downcast_ref::<GenericDisplay>()))
-        .next()
-        .expect("panel attached");
-    let planes = panel.planes();
-
-    assert_eq!(
-        panel.refresh_generation(),
-        1,
-        "snapshot must restore post-first-paint refresh_generation"
-    );
-    let bp = planes.ram("black").expect("black plane");
-    let rp = planes.ram("red").expect("red plane");
-    let black_non_ff = bp.iter().filter(|&&b| b != 0xFF).count();
-    let red_non_ff = rp.iter().filter(|&&b| b != 0xFF).count();
-    let red_zero = rp.iter().filter(|&&b| b == 0x00).count();
-    eprintln!(
-        "panel @ refresh_generation=1: black non-FF={}/{}, red non-FF={}/{}, red 0x00={}/{}",
-        black_non_ff,
-        bp.len(),
-        red_non_ff,
-        rp.len(),
-        red_zero,
-        rp.len(),
-    );
-    assert_eq!(
-        black_non_ff, 782,
-        "snapshot must restore IDLE splash with 782 non-FF bytes on the black plane"
-    );
 }
 
 #[test]

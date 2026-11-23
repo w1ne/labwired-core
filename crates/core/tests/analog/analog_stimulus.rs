@@ -239,19 +239,20 @@ fn c3_gp2y0a21_attaches_and_distance_drives_apb_saradc() {
         "distance channel missing: {inputs:?}"
     );
 
-    // 100 mm → datasheet 3100 mV → ~3847 counts on 12-bit / 3.3 V.
+    // 100 mm → Sharp typical 2300 mV → 2854 counts on 12-bit / 3.3 V.
     bus.set_input(Some("vlA"), "distance", 100.0)
         .expect("set near");
     let near = adc_channel_count(&mut bus, "apb_saradc", 1);
-    assert!(
-        near > 3500,
-        "near distance should be high counts, got {near}"
+    assert_eq!(
+        near,
+        (2300u32 * 4095 / 3300) as u16,
+        "10 cm should use the datasheet typical point"
     );
 
     bus.set_input(Some("vlA"), "distance", 800.0)
         .expect("set far");
     let far = adc_channel_count(&mut bus, "apb_saradc", 1);
-    assert!(far < 1000, "far distance should be low counts, got {far}");
+    assert_eq!(far, (400u32 * 4095 / 3300) as u16);
     assert!(near > far, "near={near} must exceed far={far}");
 }
 

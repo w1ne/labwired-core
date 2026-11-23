@@ -1,0 +1,20 @@
+# `labwired test --script test-uno-idle.yaml`. Negative control on the one-LED board contract.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: arduino-uno.yaml
+  firmware: firmware.wasm
+entry:
+  export: run
+  args:
+    - { port: drive }
+    - { port: led_state }
+    - { number: 4294967295 }
+    - { number: 1 }
+limits:
+  max_steps: 100000
+  max_time_ns: 10000
+assertions:
+  - entry_result: { equals: 0 }
+  - digital_edges: { port: drive, count: 0 }
+  - digital_edges: { port: led_state, count: 0 }

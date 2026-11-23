@@ -7,9 +7,10 @@
 #include <Arduino.h>
 
 #ifndef LW_PWM_PIN
-  // Nucleo-G474RE LED is PA5 = DAC1_OUT2 — analogWrite prefers DAC and the
-  // twin has no DAC window → memory_violation. Use TIM2_CH1 PA0.
-#  if defined(ARDUINO_NUCLEO_G474RE) || defined(ARDUINO_NUCLEO_G474RE_P)
+  // Nucleo-G474RE/G431RB LED is PA5 = DAC1_OUT2 — analogWrite prefers DAC and
+  // the twin has no DAC window → memory_violation. Use TIM2_CH1 PA0.
+#  if defined(ARDUINO_NUCLEO_G474RE) || defined(ARDUINO_NUCLEO_G474RE_P) || \
+      defined(ARDUINO_NUCLEO_G431RB)
 #    define LW_PWM_PIN PA0
 #  elif defined(ARDUINO_NUCLEO_G071RB)
 // NUCLEO-G071RB LD4 is PA5 = DAC1_OUT2 too, and the twin models DAC1, so
@@ -54,6 +55,10 @@
 #  elif defined(ARDUINO_BLUEPILL_F103C8)
 // Blue Pill LED is PC13, which has no timer channel on F103, so analogWrite
 // would fall back to digitalWrite. Use TIM2_CH1 on PA0 (no remap).
+#    define LW_PWM_PIN PA0
+#  elif defined(ARDUINO_NUCLEO_F103RB)
+// NUCLEO-F103RB LD2 is PA5, which has no timer channel on F103 either
+// (SPI1_SCK / ADC12_IN5 only). Use TIM2_CH1 on PA0 (no remap).
 #    define LW_PWM_PIN PA0
 #  elif defined(ARDUINO_ARCH_AVR) && defined(__AVR_ATmega328P__)
 // Uno/Nano LED_BUILTIN is D13 = PB5, which has no timer output on the

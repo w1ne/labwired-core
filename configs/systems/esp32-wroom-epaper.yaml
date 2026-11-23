@@ -24,6 +24,7 @@
 # of the `*_tricolor_290` family.
 name: "esp32-wroom-epaper"
 chip: "../chips/esp32.yaml"
+debug_uart: "uart0"
 external_devices:
   - id: "epaper"
     type: "ssd1680_tricolor_290"

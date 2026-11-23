@@ -1,0 +1,22 @@
+# `labwired test --script test-far.yaml`. Negative control. Target at 300 mm: the output stays below the threshold.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+entry:
+  export: run
+  args:
+    - { port: distance_mm }
+    - { port: distance_mv }
+    - { port: near_drive }
+    - { number: 300 }
+limits:
+  max_steps: 100000
+  max_time_ns: 10000
+assertions:
+  - entry_result: { equals: 930 }
+  - port_value: { port: distance_mv, equals: 930 }
+  - port_value: { port: near_led, equals: 0 }
+  - digital_edges: { port: near_drive, count: 0 }
+  - digital_edges: { port: near_led, count: 0 }

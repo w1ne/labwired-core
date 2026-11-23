@@ -1,5 +1,6 @@
 # Cortex-M33 WBA52 smoke against the exact imported generic STM32WBA52 system.
-# Assertions cover only the modeled RCC, GPIOA/GPIOB and USART1 paths.
+# Assertions cover only the modeled RCC, GPIOA/GPIOB and USART1 paths,
+# including USART1 TCIE on NVIC line 46.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-wba52cg-demo"
@@ -8,6 +9,7 @@ limits:
   max_steps: 4000000
 assertions:
   - uart_contains: "NUCLEO-WBA52CG ready"
+  - uart_contains: "usart1 tcie ispr40=40 rel=00 ok"
   - uart_ordered:
       - "hb=0 ld1=on"
       - "hb=1 ld1=off"

@@ -1,0 +1,524 @@
+{
+  "status": "passed",
+  "runtime": "compiled-wasm",
+  "firmware_bytes": 330,
+  "cpu_emulation": false,
+  "model_instances": [
+    {
+      "id": "left-sensor",
+      "model_type": "gp2y0a21"
+    },
+    {
+      "id": "right-sensor",
+      "model_type": "gp2y0a21"
+    }
+  ],
+  "observations": [
+    {
+      "left_distance_mm": 100,
+      "left_distance_mv": 2300,
+      "left_near_led": true,
+      "right_distance_mm": 800,
+      "right_distance_mv": 400,
+      "right_near_led": false
+    },
+    {
+      "left_distance_mm": 800,
+      "left_distance_mv": 400,
+      "left_near_led": false,
+      "right_distance_mm": 100,
+      "right_distance_mv": 2300,
+      "right_near_led": true
+    },
+    {
+      "left_distance_mm": 700,
+      "left_distance_mv": 440,
+      "left_near_led": false,
+      "right_distance_mm": 200,
+      "right_distance_mv": 1300,
+      "right_near_led": false
+    }
+  ],
+  "time_ns": 6000,
+  "traces": {
+    "analog": {
+      "time_unit": "ns",
+      "channels": [
+        {
+          "name": "left-sensor.voltage_mv",
+          "port_names": [
+            "left_distance_mv"
+          ],
+          "unit": "mV"
+        },
+        {
+          "name": "right-sensor.voltage_mv",
+          "port_names": [
+            "right_distance_mv"
+          ],
+          "unit": "mV"
+        }
+      ],
+      "dropped": 0,
+      "samples": [
+        {
+          "cycle": 0,
+          "time_ns": 0,
+          "values": [
+            2300,
+            400
+          ]
+        },
+        {
+          "cycle": 1,
+          "time_ns": 1000,
+          "values": [
+            2300,
+            400
+          ]
+        },
+        {
+          "cycle": 1,
+          "time_ns": 1000,
+          "values": [
+            2300,
+            400
+          ]
+        },
+        {
+          "cycle": 2,
+          "time_ns": 2000,
+          "values": [
+            2300,
+            400
+          ]
+        },
+        {
+          "cycle": 2,
+          "time_ns": 2000,
+          "values": [
+            2300,
+            400
+          ]
+        },
+        {
+          "cycle": 3,
+          "time_ns": 3000,
+          "values": [
+            400,
+            400
+          ]
+        },
+        {
+          "cycle": 3,
+          "time_ns": 3000,
+          "values": [
+            400,
+            2300
+          ]
+        },
+        {
+          "cycle": 4,
+          "time_ns": 4000,
+          "values": [
+            400,
+            2300
+          ]
+        },
+        {
+          "cycle": 4,
+          "time_ns": 4000,
+          "values": [
+            400,
+            2300
+          ]
+        },
+        {
+          "cycle": 5,
+          "time_ns": 5000,
+          "values": [
+            440,
+            2300
+          ]
+        },
+        {
+          "cycle": 5,
+          "time_ns": 5000,
+          "values": [
+            440,
+            1300
+          ]
+        },
+        {
+          "cycle": 6,
+          "time_ns": 6000,
+          "values": [
+            440,
+            1300
+          ]
+        },
+        {
+          "cycle": 6,
+          "time_ns": 6000,
+          "values": [
+            440,
+            1300
+          ]
+        }
+      ]
+    },
+    "digital": {
+      "time_unit": "ns",
+      "channels": [
+        {
+          "id": 0,
+          "initial": false,
+          "port_names": [
+            "left_near_drive"
+          ],
+          "signal": "indicator.left_drive"
+        },
+        {
+          "id": 1,
+          "initial": false,
+          "port_names": [
+            "left_near_led"
+          ],
+          "signal": "indicator.left_state"
+        },
+        {
+          "id": 2,
+          "initial": false,
+          "port_names": [
+            "right_near_drive"
+          ],
+          "signal": "indicator.right_drive"
+        },
+        {
+          "id": 3,
+          "initial": false,
+          "port_names": [
+            "right_near_led"
+          ],
+          "signal": "indicator.right_state"
+        }
+      ],
+      "dropped": 0,
+      "edges": [
+        {
+          "ch": 0,
+          "time_ns": 1000,
+          "value": 1
+        },
+        {
+          "ch": 1,
+          "time_ns": 2000,
+          "value": 1
+        },
+        {
+          "ch": 0,
+          "time_ns": 3000,
+          "value": 0
+        },
+        {
+          "ch": 2,
+          "time_ns": 3000,
+          "value": 1
+        },
+        {
+          "ch": 1,
+          "time_ns": 4000,
+          "value": 0
+        },
+        {
+          "ch": 3,
+          "time_ns": 4000,
+          "value": 1
+        },
+        {
+          "ch": 2,
+          "time_ns": 5000,
+          "value": 0
+        },
+        {
+          "ch": 3,
+          "time_ns": 6000,
+          "value": 0
+        }
+      ]
+    }
+  },
+  "run_report": {
+    "assumptions": [
+      "Source: Sharp GP2Y0A21YK0F datasheet, Fig. 2, typical white-paper output at 5 V and 90% reflectance: https://global.sharp/products/device/lineup/data/pdf/datasheet/gp2y0a21yk_e.pdf. Both sensor instances reuse the catalog's rounded graph read-offs.",
+      "Portable firmware samples both catalog outputs at 1 us model boundaries and uses a 1500 mV threshold."
+    ],
+    "execution_path": "flex_portable_wasm",
+    "execution_scope": {
+      "chip_parity": "not_established",
+      "detailed_target_execution_selected": false,
+      "firmware": "portable_behavior",
+      "full_board_coverage": "not_established",
+      "original_target_firmware_executed": false
+    },
+    "manifest_sha256": "7b5b6c8fc206501329393c0e368077d3f93d825aada770b19c360292d38c524b",
+    "model_name": "Dual Sharp GP2Y0A21 range indicators",
+    "models": [
+      {
+        "adapter": "behavior",
+        "config": {
+          "device_type": "gp2y0a21"
+        },
+        "id": "left-sensor",
+        "inputs": [
+          {
+            "name": "distance",
+            "signal": "environment.left_distance_mm"
+          }
+        ],
+        "model_type": "gp2y0a21",
+        "outputs": [
+          {
+            "name": "voltage_mv",
+            "signal": "sensor.left.output_mv"
+          }
+        ],
+        "step_ns": 1000
+      },
+      {
+        "adapter": "behavior",
+        "config": {
+          "device_type": "gp2y0a21"
+        },
+        "id": "right-sensor",
+        "inputs": [
+          {
+            "name": "distance",
+            "signal": "environment.right_distance_mm"
+          }
+        ],
+        "model_type": "gp2y0a21",
+        "outputs": [
+          {
+            "name": "voltage_mv",
+            "signal": "sensor.right.output_mv"
+          }
+        ],
+        "step_ns": 1000
+      },
+      {
+        "adapter": "behavior",
+        "config": {
+          "behavior": {
+            "outputs": [
+              "state"
+            ],
+            "pin_defaults": {
+              "state": false
+            },
+            "primitive": "gpio_device",
+            "rules": [
+              {
+                "do": [
+                  {
+                    "goto": "on"
+                  },
+                  {
+                    "level": 1,
+                    "pin": "state"
+                  }
+                ],
+                "on": {
+                  "input": "drive"
+                },
+                "when": "input(drive) != 0"
+              },
+              {
+                "do": [
+                  {
+                    "goto": "off"
+                  },
+                  {
+                    "level": 0,
+                    "pin": "state"
+                  }
+                ],
+                "on": {
+                  "input": "drive"
+                },
+                "when": "input(drive) == 0"
+              }
+            ],
+            "states": [
+              "off",
+              "on"
+            ]
+          }
+        },
+        "id": "left-indicator",
+        "inputs": [
+          {
+            "name": "drive",
+            "signal": "indicator.left_drive"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "state",
+            "signal": "indicator.left_state"
+          }
+        ],
+        "step_ns": 1000
+      },
+      {
+        "adapter": "behavior",
+        "config": {
+          "behavior": {
+            "outputs": [
+              "state"
+            ],
+            "pin_defaults": {
+              "state": false
+            },
+            "primitive": "gpio_device",
+            "rules": [
+              {
+                "do": [
+                  {
+                    "goto": "on"
+                  },
+                  {
+                    "level": 1,
+                    "pin": "state"
+                  }
+                ],
+                "on": {
+                  "input": "drive"
+                },
+                "when": "input(drive) != 0"
+              },
+              {
+                "do": [
+                  {
+                    "goto": "off"
+                  },
+                  {
+                    "level": 0,
+                    "pin": "state"
+                  }
+                ],
+                "on": {
+                  "input": "drive"
+                },
+                "when": "input(drive) == 0"
+              }
+            ],
+            "states": [
+              "off",
+              "on"
+            ]
+          }
+        },
+        "id": "right-indicator",
+        "inputs": [
+          {
+            "name": "drive",
+            "signal": "indicator.right_drive"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "state",
+            "signal": "indicator.right_state"
+          }
+        ],
+        "step_ns": 1000
+      }
+    ],
+    "ports": [
+      {
+        "access": "write",
+        "initial": 100,
+        "kind": "number",
+        "name": "left_distance_mm",
+        "signal": "environment.left_distance_mm",
+        "unit": "mm"
+      },
+      {
+        "access": "read",
+        "kind": "number",
+        "name": "left_distance_mv",
+        "signal": "sensor.left.output_mv",
+        "unit": "mV"
+      },
+      {
+        "access": "write",
+        "initial": 0,
+        "kind": "bool",
+        "name": "left_near_drive",
+        "signal": "indicator.left_drive"
+      },
+      {
+        "access": "read",
+        "kind": "bool",
+        "name": "left_near_led",
+        "signal": "indicator.left_state"
+      },
+      {
+        "access": "write",
+        "initial": 800,
+        "kind": "number",
+        "name": "right_distance_mm",
+        "signal": "environment.right_distance_mm",
+        "unit": "mm"
+      },
+      {
+        "access": "read",
+        "kind": "number",
+        "name": "right_distance_mv",
+        "signal": "sensor.right.output_mv",
+        "unit": "mV"
+      },
+      {
+        "access": "write",
+        "initial": 0,
+        "kind": "bool",
+        "name": "right_near_drive",
+        "signal": "indicator.right_drive"
+      },
+      {
+        "access": "read",
+        "kind": "bool",
+        "name": "right_near_led",
+        "signal": "indicator.right_state"
+      }
+    ],
+    "schema_version": 1,
+    "scope_notes_complete": true,
+    "target_cpu_emulated": false,
+    "time_unit": "ns",
+    "unsupported_checks": [
+      "Reflector color, angle, optical geometry, ambient light, unit-to-unit tolerance, noise, ADC calibration, and sensor cross-talk are not modeled.",
+      "The approximately 38 ms measurement interval and up-to-5 ms output delay are not modeled; each output is available at its declared model boundary.",
+      "Below-range and beyond-range clamping are model assumptions, not claims about physical behavior outside the 10-80 cm measuring range.",
+      "Original target firmware, MCU instruction execution, ADC peripheral fidelity, and physical measurement are not modeled."
+    ]
+  },
+  "native_model_equality": true,
+  "checks": [
+    "portable-firmware-execution",
+    "same-model-independent-instances",
+    "named-ports-and-traces",
+    "nanosecond-instruments",
+    "source-and-scope-report",
+    "positive-and-negative-controls",
+    "native-model-equality"
+  ],
+  "measured_browser_ms": 402.1,
+  "browser": "156.0.8078.79",
+  "browser_driver": "Playwright",
+  "core_commit": "ddd1adebe4bf99b599006f840fc7955056d813bb",
+  "firmware_sha256": "17ed9b4ba5f5010c52a47ccdd851091806b7300e7e6e6b6dffb8e9e5d91099ec",
+  "firmware_source_sha256": "b3ca8a6a1a9d8e14b0024f81dd6b02d4f1a0af5aa1d567f4ec0d97b67be14715",
+  "system_sha256": "7b5b6c8fc206501329393c0e368077d3f93d825aada770b19c360292d38c524b"
+}

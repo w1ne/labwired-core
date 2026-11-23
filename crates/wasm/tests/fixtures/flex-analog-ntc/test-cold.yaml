@@ -1,0 +1,22 @@
+# `labwired test --script test-cold.yaml`. Negative control. 0 °C: no alarm.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+entry:
+  export: run
+  args:
+    - { port: temperature_c }
+    - { port: temperature_mv }
+    - { port: hot_alarm_drive }
+    - { number: 0 }
+limits:
+  max_steps: 100000
+  max_time_ns: 10000
+assertions:
+  - entry_result: { equals: 756 }
+  - port_value: { port: temperature_mv, equals: 756 }
+  - port_value: { port: hot_alarm_state, equals: 0 }
+  - digital_edges: { port: hot_alarm_drive, count: 0 }
+  - digital_edges: { port: hot_alarm_state, count: 0 }

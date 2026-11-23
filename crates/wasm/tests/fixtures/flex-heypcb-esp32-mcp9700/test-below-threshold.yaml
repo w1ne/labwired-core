@@ -1,0 +1,31 @@
+# `labwired test --script test-below-threshold.yaml`. Negative control. The
+# test bench steps the ambient 25 -> 35 -> 39.99 °C. 39.99 °C gives 899.9 mV,
+# truncated to 899 mV, one millivolt under the 900 mV (40.0 °C) threshold, so
+# the indicator must stay off: no LED edge and no 900 mV crossing.
+# `loop` returns (10,000 + T in tenths of °C) x 10 + LED.
+# All expected values were calculated before the first run.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: sensor_mv }, { port: user_led_drive }] }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 35 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 39.99 }
+  - call: { export: loop }
+limits:
+  max_steps: 1000000
+  max_time_ns: 10000000000
+assertions:
+  - entry_result: { equals: 103990 }
+  - entry_result: { equals: 102500, step: 1 }
+  - entry_result: { equals: 103500, step: 3 }
+  - analog_window: { port: sensor_mv, min: 750, max: 899 }
+  - analog_crossings: { port: sensor_mv, level: 900, direction: rising, count: 0 }
+  - digital_edges: { port: user_led_drive, count: 0 }
+  - digital_edges: { port: user_led_state, count: 0 }
+  - final_time_ns: { equals: 3000000000 }
+  - console_contains: "T=25.0 C\nT=35.0 C\nT=39.9 C\n"

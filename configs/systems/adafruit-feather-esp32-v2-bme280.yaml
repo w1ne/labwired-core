@@ -6,6 +6,7 @@
 # GPIO2 high to enable the STEMMA QT rail.
 name: "adafruit-feather-esp32-v2-bme280"
 chip: "../chips/esp32.yaml"
+debug_uart: "uart0"
 external_devices:
   - id: "bme280"
     type: "bme280"

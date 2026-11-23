@@ -54,6 +54,17 @@ pub trait PeripheralKit: Send + Sync {
     /// `ExternalDevice` config from system.yaml plus typed accessors that
     /// handle the connection lookup / downcast / config-parsing boilerplate.
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()>;
+
+    /// Build this kit's analog stimulus model for an in-process co-simulation
+    /// adapter, when the kit is backed by the existing `analog_source`
+    /// primitive. Other kits keep the default and remain unavailable through
+    /// this path.
+    fn build_analog_source(
+        &self,
+        _channel: u8,
+    ) -> Result<Option<Box<dyn crate::bus::sim_inputs::AnalogSource>>> {
+        Ok(None)
+    }
 }
 
 /// Pure-data peripheral description. Serialised verbatim into

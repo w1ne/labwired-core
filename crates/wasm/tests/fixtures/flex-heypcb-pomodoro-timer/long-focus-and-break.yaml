@@ -1,0 +1,45 @@
+# `labwired test --script long-focus-and-break.yaml`. One whole Pomodoro at the
+# durations of the original firmware: 25 minutes of focus, the three-note
+# chirp, 5 minutes of break, the two-note chirp, idle. 30 minutes of virtual
+# time and 84.4 million main-loop passes.
+#
+# The name does not start with `test-`: the fixture matrix test runs the debug
+# CLI and does not run this script. Run it with a release build; see README.md.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: min0 }, { port: leaf }, { port: buzz }, { port: touch }] }
+  - call: { export: loop, repeat: 2344 }       # 50 ms idle
+  - set: { port: touch_contact, value: 1 }
+  - call: { export: loop, repeat: 2344 }
+  - set: { port: touch_contact, value: 0 }
+  - call: { export: loop, repeat: 84402344 }   # the tap, then about 1801 s
+limits:
+  max_steps: 100000000000
+  max_time_ns: 1900000000000
+assertions:
+  - entry_result: { equals: 16 }               # idle, 1 focus session done
+  - final_time_ns: { equals: 1801552783656 }
+  # Piezo: start-up chirp, three notes at the end of focus, two at the end of
+  # the break, and silence between them.
+  - digital_edges: { port: buzz, count: 3260 }
+  - digital_edges: { port: buzz, count: 474, to_ns: 149586000 }
+  - digital_edges: { port: buzz, count: 0, from_ns: 149586001, to_ns: 1500269015600 }
+  - digital_edges: { port: buzz, count: 1748, from_ns: 1500269015601, to_ns: 1500717737601 }
+  - digital_edges: { port: buzz, count: 0, from_ns: 1500717737602, to_ns: 1800269003705 }
+  - digital_edges: { port: buzz, count: 1038, from_ns: 1800269003706, to_ns: 1800568265706 }
+  # Leaf LEDs: off until the break, breathing during it, off after it. One
+  # soft-PWM period is 682,656 ns: 299.55 s of break is at most 877,600 edges.
+  - digital_edges: { port: leaf, times_ns: [1500717737601], to_ns: 1500717737601 }
+  - digital_edges: { port: leaf, count: 877385, from_ns: 1500717737602, to_ns: 1800269003706 }
+  - digital_edges: { port: leaf, count: 0, from_ns: 1800269003707 }
+  # Minute LED 11 lights at the tap and stays on until it is the last one.
+  - digital_edges: { port: min11, times_ns: [269008134], to_ns: 1375269006089 }
+  # It breathes for the last 125 s of focus: at most 366,216 edges.
+  - digital_edges: { port: min11, count: 365989, from_ns: 1375269006090, to_ns: 1500269015601 }
+  - port_value: { port: d14, equals: 0 }
+  - port_value: { port: d1, equals: 0 }
+  - port_value: { port: bz1, equals: 0 }

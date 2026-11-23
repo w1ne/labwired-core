@@ -50,6 +50,12 @@ bincode = "1.3"
 # image-hash verification). Used only by the esp32s3 SHA peripheral.
 sha2 = { workspace = true, features = ["compress"] }
 sha1 = "0.10"
+# Interpreter for portable Flex firmware (feature `flex-script`). An
+# interpreter needs no native code generator and also builds for the browser;
+# the optional `jit` wasmtime path is unrelated. `auto-dispatch` is needed:
+# without it wasmi always uses its tail-call dispatch, which a dev build does
+# not compile to tail calls, and one long firmware call overflows the host stack.
+wasmi = { version = "2.0.2", default-features = false, features = ["std", "validate", "auto-dispatch"], optional = true }
 md-5 = "0.10"
 hmac = "0.12"
 aes = "0.8"
@@ -86,6 +92,9 @@ unicorn-engine = { version = "=2.1.5", optional = true, default-features = false
 
 [features]
 default = []
+# Runner for Flex test scripts (`flex_script`): portable firmware in the wasmi
+# interpreter. `labwired test` and the browser binding enable it.
+flex-script = ["dep:wasmi"]
 # Experimental embedded Cortex-A7 CPU. See docs/qemu-arm-core.md for scope.
 qemu-arm = ["dep:unicorn-engine"]
 qemu-arm-system = ["dep:labwired-arm-system", "labwired-arm-system/native"]
@@ -190,8 +199,6 @@ required-features = ["qemu-arm"]
 #     (`no_vacuous_test_targets.rs::grouped_modules_are_never_feature_gated`);
 #   * files that change process-global state, which would leak into the other
 #     tests of a shared process:
-#       diag_esp32s3_boot: sets LABWIRED_ESP32S3_FASTBOOT (process env)
-#       diag_esp32s3_l2: sets LABWIRED_ESP32S3_FASTBOOT (process env)
 #       register_coverage: chdir into configs/chips (process cwd)
 #       rp2040_bootrom_lookup: chdir + sets/removes bootrom env and CARGO_MANIFEST_DIR
 #       rp2040_i2c_irq_delivery: sets LABWIRED_RP2040_BOOTROM

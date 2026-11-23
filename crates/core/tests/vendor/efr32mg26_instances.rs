@@ -121,6 +121,23 @@ fn every_timer_declares_the_counter_width_its_instance_actually_has() {
     }
 }
 
+/// `TIMERn_IRQn = 4 + n` (`efr32mg26b510f3200im48.h`; Renode `efr32xg26.repl`
+/// `-> nvic@4..13`). TIMER2..9 were once inserted between TIMER1's `size` and
+/// `irq` lines, which moved line 5 onto TIMER9 and left TIMER1..8 with none.
+#[test]
+fn every_timer_is_wired_to_its_own_nvic_line() {
+    let chip = descriptor();
+    for i in 0..COUNTER_BITS.len() {
+        let id = format!("timer{i}");
+        let p = chip
+            .peripherals
+            .iter()
+            .find(|p| p.id == id)
+            .unwrap_or_else(|| panic!("{id} is not declared"));
+        assert_eq!(p.irq, Some(4 + i as u32), "{id} irq");
+    }
+}
+
 /// ⚠️ The guard on this file: a table nobody compares against the tree is a
 /// list of intentions. If the descriptor grows an instance these tables do not
 /// name, this fails rather than silently covering less than it claims.

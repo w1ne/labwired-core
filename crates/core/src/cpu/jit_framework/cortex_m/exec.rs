@@ -127,6 +127,7 @@ pub struct CompiledBlock {
     iter_instr_count: Option<u32>,
     ram_len: usize,
     has_store: bool,
+    has_vfp: bool,
 }
 
 impl CompiledBlock {
@@ -302,9 +303,9 @@ impl CortexMWasmJit {
                 fpscr: 0,
             },
         );
-        let (ram_len, has_store) = match binding {
-            Some(b) => (b.ram_len, b.has_store),
-            None => (0usize, false),
+        let (ram_len, has_store, has_vfp) = match binding {
+            Some(b) => (b.ram_len, b.has_store, b.has_vfp),
+            None => (0usize, false, false),
         };
         let regs = Memory::new(&mut store, MemoryType::new(1, None)).ok()?;
         let instance = if binding.is_some() {
@@ -339,6 +340,7 @@ impl CortexMWasmJit {
             iter_instr_count: plan.iter_instr_count,
             ram_len,
             has_store,
+            has_vfp,
         })
     }
 }
@@ -428,6 +430,12 @@ impl CortexMJitEngine {
         ram: &mut [u8],
         cap: Option<u32>,
     ) -> (u32, Pc, bool, bool) {
+        // Check every execution, including a cached block reached by chaining.
+        // Only the interpreter can fault denied FP access, initialize FPCA /
+        // FPSCR, or preserve lazy state before the first FP register write.
+        if self.cache.peek(pc).is_some_and(|block| block.has_vfp) && cpu.fp_context_pending() {
+            return (0, pc, false, true);
+        }
         let block = self.cache.run_artifact(pc).expect("run_ready on a hot PC");
         let mut x = [0u32; 16];
         pack_regs(cpu, &mut x);
@@ -501,29 +509,13 @@ impl CortexMJitEngine {
         let pc = machine.cpu.pc as Pc;
         match self.cache.observe(pc) {
             Lookup::Ready => {
-                let Some(block) = self.cache.run_artifact(pc) else {
-                    return self.interpret_one(machine);
-                };
-                let mut x = [0u32; 16];
-                pack_regs(&machine.cpu, &mut x);
-                block.set_fpscr(machine.cpu.fpscr);
-                let (exit, n, clear_exclusive, it_state, _iters_done) = block.run(
-                    &mut x,
-                    &mut machine.bus.ram.data,
-                    &mut machine.cpu.fpu_s,
-                    None,
-                );
-                unpack_regs(&mut machine.cpu, &x);
-                if let Some(it) = it_state {
-                    machine.cpu.it_state = it;
-                }
+                let (n, next_pc, clear_exclusive, needs_interpreter) =
+                    self.run_ready(pc, &mut machine.cpu, &mut machine.bus.ram.data, None);
                 if clear_exclusive {
                     machine.cpu.clear_exclusive_monitor();
                 }
-                self.stats.block_runs += 1;
-                self.stats.block_instrs += n as u64;
-                machine.cpu.pc = exit.continuation_pc() as u32;
-                if n == 0 && exit.needs_interpreter() {
+                machine.cpu.pc = next_pc as u32;
+                if n == 0 && needs_interpreter {
                     return self.interpret_one(machine);
                 }
                 n

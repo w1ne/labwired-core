@@ -1393,3 +1393,70 @@ fn system_manifest_tick_cap_is_optional_and_strictly_positive() {
         );
     }
 }
+
+#[test]
+fn board_io_emission_reports_declared_colour_when_active_and_black_when_not() {
+    let yaml = r##"
+name: "emission-smoke"
+chip: "inline"
+board_io:
+  - id: "lamp"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    emission:
+      color: "#FF3A1F"
+  - id: "plain"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 6
+"##;
+    let manifest: SystemManifest = serde_yaml::from_str(yaml).unwrap();
+    let lamp = &manifest.board_io[0];
+    assert_eq!(lamp.emitted_rgb(true).as_deref(), Some("#ff3a1f"));
+    assert_eq!(lamp.emitted_rgb(false).as_deref(), Some("#000000"));
+    assert_eq!(manifest.board_io[1].emitted_rgb(true), None);
+    // Round-trips in canonical lowercase form.
+    let out = serde_yaml::to_string(&manifest.board_io[0]).unwrap();
+    assert!(
+        out.contains("'#ff3a1f'") || out.contains("\"#ff3a1f\""),
+        "{out}"
+    );
+}
+
+#[test]
+fn board_io_emission_rejects_a_colour_that_is_not_rrggbb() {
+    for bad in ["red", "#fff", "#12345g", "ff3a1f"] {
+        let yaml = format!(
+            "name: x\nchip: inline\nboard_io:\n  - id: a\n    kind: led\n    peripheral: gpioa\n    pin: 1\n    emission:\n      color: \"{bad}\"\n"
+        );
+        let err = serde_yaml::from_str::<SystemManifest>(&yaml)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("#rrggbb"), "{bad}: {err}");
+    }
+}
+
+#[test]
+fn board_io_state_json_carries_emission_only_when_declared() {
+    let yaml = r##"
+name: "emission-state"
+chip: "inline"
+board_io:
+  - { id: "a", kind: "led", peripheral: "gpioa", pin: 1, emission: { color: "#00ff00" } }
+  - { id: "b", kind: "button", peripheral: "gpioa", pin: 2, signal: "input" }
+"##;
+    let manifest: SystemManifest = serde_yaml::from_str(yaml).unwrap();
+    assert_eq!(
+        manifest.board_io[0].state_json(true),
+        serde_json::json!({ "id": "a", "active": true, "emission": "#00ff00" })
+    );
+    assert_eq!(
+        manifest.board_io[0].state_json(false),
+        serde_json::json!({ "id": "a", "active": false, "emission": "#000000" })
+    );
+    assert_eq!(
+        manifest.board_io[1].state_json(true),
+        serde_json::json!({ "id": "b", "active": true })
+    );
+}

@@ -1,0 +1,49 @@
+# `labwired test --script test-co2-alarm.yaml`. The firmware stops any running
+# measurement of U4 at 0x62, reads its serial number and starts periodic
+# measurement. Each `loop` waits the 5 s measurement interval, polls the
+# data-ready status and reads CO2, temperature and humidity. The test bench
+# steps CO2 450 -> 1200 -> 900 -> 700 -> 700 ppm. The indicator goes on at
+# 1000 ppm, stays on at 900 ppm (hysteresis) and goes off below 800 ppm.
+# `loop` returns CO2 in ppm times 10 plus the indicator state.
+# All expected values were calculated from the SCD41 model encoding and the
+# firmware arithmetic before the first run.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ bus: sensor_i2c }, { port: user_led_drive }, { number: 0x62 }, { number: 5000 }] }
+  - call: { export: loop }
+  - set: { port: co2_ppm, value: 1200 }
+  - call: { export: loop }
+  - set: { port: co2_ppm, value: 900 }
+  - call: { export: loop }
+  - set: { port: co2_ppm, value: 700 }
+  - call: { export: loop, repeat: 2 }
+  - call: { export: climate }
+limits:
+  max_steps: 10000000
+  max_time_ns: 30000000000
+assertions:
+  # (25.00 °C + 100.00) x 100,000 + 50.00 %RH.
+  - entry_result: { equals: 1250005000 }
+  - entry_result: { equals: 0, step: 0 }
+  - entry_result: { equals: 4500, step: 1 }
+  - entry_result: { equals: 12001, step: 3 }
+  - entry_result: { equals: 9001, step: 5 }
+  - entry_result: { equals: 7000, step: 7 }
+  # Stop, serial command, serial read and start in `setup`; status command,
+  # status read, measurement command and measurement read in each `loop`.
+  - i2c_transfers: { bus: sensor_i2c, address: 0x62, ack: true, equals: 24 }
+  - i2c_transfers: { bus: sensor_i2c, ack: false, equals: 0 }
+  - port_value: { port: user_led_state, equals: 0 }
+  # `setup` takes 502.79 ms: 290 µs per 2-byte command, 500 ms after stop,
+  # 1 ms wait and 920 µs serial read. Each `loop` takes 5003.88 ms: 5 s
+  # interval, two commands, two 1 ms waits, 380 µs status read and 920 µs
+  # measurement read. The drive changes at the end of the loop that reads
+  # 1200 ppm and of the one that reads 700 ppm; D1 follows 1 µs later.
+  - digital_edges: { port: user_led_drive, times_ns: [10510550000, 20518310000] }
+  - digital_edges: { port: user_led_state, times_ns: [10510551000, 20518311000] }
+  - final_time_ns: { equals: 25522190000 }
+  - console_contains: "SCD41 serial 0x4c454f310041 at 0x62\nCO2=450 ppm T=25.00 C RH=50.00 %\nCO2=1200 ppm T=25.00 C RH=50.00 % HIGH\nCO2=900 ppm T=25.00 C RH=50.00 % HIGH\nCO2=700 ppm T=25.00 C RH=50.00 %\nCO2=700 ppm T=25.00 C RH=50.00 %\n"

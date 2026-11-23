@@ -1,0 +1,32 @@
+# `labwired test --script test-cold-water.yaml`. The water is at the system's
+# 18.5 °C: the DS18B20 converts it (750 ms at 12 bits), the heater relay
+# switches on, and every display shows the reading.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+entry:
+  export: run
+  args:
+    - { port: dq_drive }
+    - { port: dq }
+    - { port: heater_drive }
+    - { port: led_data }
+    - { port: tm_clk }
+    - { port: tm_dio }
+    - { bus: i2c0 }
+limits:
+  max_steps: 50000000
+  max_time_ns: 2000000000
+assertions:
+  # 18.5 °C in 1/16 °C counts, read back through the scratchpad CRC.
+  - entry_result: { equals: 296 }
+  - port_value: { port: heater_on, equals: 1 }
+  - device_state: { device: probe, key: last_function, equals: READ_SCRATCHPAD }
+  - device_state: { device: lcd, key: text, contains: "Water 18.50C" }
+  - device_state: { device: lcd, key: text, contains: "Heater ON" }
+  - device_state: { device: display, key: text, equals: "1850" }
+  - device_state: { device: display, key: display_on, equals: true }
+  - device_state: { device: ring, key: lit_pixels, equals: 3 }
+  - device_state: { device: ring, key: frame_history_dropped, equals: 0 }
+  - console_contains: "water 18.50 C heater on"

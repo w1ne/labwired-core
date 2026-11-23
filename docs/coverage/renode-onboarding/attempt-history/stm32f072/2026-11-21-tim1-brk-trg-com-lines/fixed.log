@@ -1,0 +1,4 @@
+guard[]: test stm32_advanced_timer_irq_lines::a_low_peer_keeps_a_shared_line_pended ... ok
+guard[]: test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 184 filtered out; finished in 0.51s
+guard[--features event-scheduler]: test stm32_advanced_timer_irq_lines::a_low_peer_keeps_a_shared_line_pended ... ok
+guard[--features event-scheduler]: test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 184 filtered out; finished in 0.55s

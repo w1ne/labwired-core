@@ -49,6 +49,32 @@ pub enum FpAssist {
     Addexpm,
 }
 
+/// Which 16-bit halves of `as` / `at` a MAC16 AA multiply uses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mac16Half {
+    /// Low × low.
+    Ll,
+    /// High × low.
+    Hl,
+    /// Low × high.
+    Lh,
+    /// High × high.
+    Hh,
+}
+
+/// MAC16 AA operation (Xtensa ISA RM, MAC16 option).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mac16Op {
+    /// Unsigned 16×16 into the 40-bit accumulator (UMUL.AA.*).
+    Umul,
+    /// Signed 16×16, replace the accumulator (MUL.AA.*).
+    Mul,
+    /// Signed 16×16, add to the accumulator (MULA.AA.*).
+    Mula,
+    /// Signed 16×16, subtract from the accumulator (MULS.AA.*).
+    Muls,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Instruction {
     // -- ALU reg-reg (RRR) --
@@ -850,6 +876,17 @@ pub enum Instruction {
         fr: u8,
         as_: u8,
         at: u8,
+    },
+    /// MAC16 AA family: `{umul,mul,mula,muls}.aa.{ll,hl,lh,hh} as, at`.
+    ///
+    /// 16×16 → 40-bit accumulator (`ACCHI:ACCLO`). Encoding: op0=4, op2=7, r=0,
+    /// op1 selects the operation and halfword pair (verified with
+    /// xtensa-esp32-elf-as).
+    Mac16Aa {
+        as_: u8,
+        at: u8,
+        half: Mac16Half,
+        op: Mac16Op,
     },
     Unknown(u32),
 }
@@ -1830,6 +1867,35 @@ fn decode_lsci(w: u32) -> Instruction {
     }
 }
 fn decode_mac16(w: u32) -> Instruction {
+    let op1 = ((w >> 16) & 0xF) as u8;
+    let op2 = ((w >> 20) & 0xF) as u8;
+    let r = ((w >> 12) & 0xF) as u8;
+    let s = ((w >> 8) & 0xF) as u8;
+    let t = ((w >> 4) & 0xF) as u8;
+    // AA family (register × register, no MW/MR operand): op2=7, r=0.
+    // op1[1:0] is the halfword pair; op1[3:2] is the operation.
+    if op2 == 7 && r == 0 {
+        let half = match op1 & 0x3 {
+            0 => Mac16Half::Ll,
+            1 => Mac16Half::Hl,
+            2 => Mac16Half::Lh,
+            3 => Mac16Half::Hh,
+            _ => unreachable!(),
+        };
+        let op = match op1 >> 2 {
+            0 => Mac16Op::Umul,
+            1 => Mac16Op::Mul,
+            2 => Mac16Op::Mula,
+            3 => Mac16Op::Muls,
+            _ => unreachable!(),
+        };
+        return Instruction::Mac16Aa {
+            as_: s,
+            at: t,
+            half,
+            op,
+        };
+    }
     Instruction::Unknown(w)
 }
 
@@ -2349,6 +2415,7 @@ impl Instruction {
             | Lsxu { as_, at, .. }
             | Ssx { as_, at, .. }
             | Ssxu { as_, at, .. } => as_.max(at),
+            Mac16Aa { as_, at, .. } => as_.max(at),
             Unknown(_) => 0,
         }
     }

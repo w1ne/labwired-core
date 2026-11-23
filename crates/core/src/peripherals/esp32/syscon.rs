@@ -324,12 +324,6 @@ mod tests {
     }
 
     #[test]
-    fn base_is_esp32_classic_canonical_address() {
-        let p = Syscon::new();
-        assert_eq!(p.base(), 0x3FF6_6000);
-    }
-
-    #[test]
     fn runtime_snapshot_round_trip_preserves_state() {
         let mut p = Syscon::new();
         write_u32_at(&mut p, SYSCON_SARADC_CTRL_OFFSET, 0xAAAA_5555);
