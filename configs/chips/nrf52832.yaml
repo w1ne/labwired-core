@@ -65,6 +65,7 @@ peripherals:
     size: "4KB"
     irq: 8
     config:
+      peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
       debug_schema: "../peripherals/nrf52832/timer0.yaml"
   # SPIM0/TWIM0 share 0x40003000 — Zephyr arduino_i2c / i2c0 (and TWIM overlay).
   - id: "i2c0"

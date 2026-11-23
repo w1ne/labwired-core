@@ -1367,9 +1367,13 @@ pub fn try_build(
                     .and_then(|v| v.as_u64())
                     .map(|n| n as usize)
                     .unwrap_or(4);
-                Box::new(crate::peripherals::nrf52::timer::Nrf52Timer::new_with_cc(
-                    num_cc,
-                ))
+                let mut timer = crate::peripherals::nrf52::timer::Nrf52Timer::new_with_cc(num_cc);
+                // ⚠️ The TIMER base clock is 16 MHz on nRF52, not `cpu_hz`
+                // (64 MHz). Absent key = CPU clock; see the model's header.
+                if let Some(hz) = p_cfg.config.get("peripheral_hz").and_then(|v| v.as_u64()) {
+                    timer.set_peripheral_hz(hz);
+                }
+                Box::new(timer)
             } else {
                 // Width selector for 32-bit TIM2/TIM5 (STM32L4 etc).
                 // YAML: `config: { width: 32 }`. Defaults to 16 for

@@ -194,6 +194,7 @@ peripherals:
     size: "4KB"
     irq: 8
     config:
+      peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
       debug_schema: "../peripherals/nrf52840/timer0.yaml"
   - id: "timer1"
     type: "nrf52840_timer"
@@ -201,6 +202,7 @@ peripherals:
     size: "4KB"
     irq: 9
     config:
+      peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
       debug_schema: "../peripherals/nrf52840/timer1.yaml"
   - id: "timer2"
     type: "nrf52840_timer"
@@ -208,6 +210,7 @@ peripherals:
     size: "4KB"
     irq: 10
     config:
+      peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
       debug_schema: "../peripherals/nrf52840/timer2.yaml"
   - id: "timer3"
     type: "nrf52840_timer"
@@ -215,6 +218,7 @@ peripherals:
     size: "4KB"
     irq: 26
     config:
+      peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
       debug_schema: "../peripherals/nrf52840/timer3.yaml"
       num_cc: 6
   - id: "timer4"
@@ -223,6 +227,7 @@ peripherals:
     size: "4KB"
     irq: 27
     config:
+      peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
       debug_schema: "../peripherals/nrf52840/timer4.yaml"
       num_cc: 6
   - id: "i2s"

@@ -14,8 +14,8 @@
 - pass_depth_unknown: `0/231`
 - pass_claimed_peripherals_total: `1711`
 - pass_claimed_peripherals_median: `4`
-- median_elapsed_ms: `1902`
-- median_elapsed_seconds: `1.902`
+- median_elapsed_ms: `1897`
+- median_elapsed_seconds: `1.897`
 - threshold_seconds: `3600`
 - threshold_met: `231/231`
 
@@ -139,8 +139,8 @@
 | `mspsim-msp430f5437` | `pass` | `True` | `yes` | `yes` | `186380` | `186.38` | `True` | `observable` | `7` | `uart_ordered`, `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `murax_vexriscv` | `pass` | `True` | `yes` | `yes` | `3037` | `3.037` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `murax_vexriscv_verilated_uart` | `pass` | `True` | `yes` | `yes` | `2455` | `2.455` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `nrf52840` | `pass` | `True` | `yes` | `yes` | `121387` | `121.387` | `True` | `observable` | `51` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `nrf52840dk_nrf52840` | `pass` | `True` | `yes` | `yes` | `3746` | `3.746` | `True` | `observable` | `51` | `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
+| `nrf52840` | `pass` | `True` | `yes` | `yes` | `1601` | `1.601` | `True` | `observable` | `51` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `nrf52840dk_nrf52840` | `pass` | `True` | `yes` | `yes` | `235918` | `235.918` | `True` | `observable` | `51` | `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `nucleo_f767zi` | `pass` | `True` | `yes` | `yes` | `2379` | `2.379` | `True` | `observable` | `53` | `uart_regex`, `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `nucleo_h753zi` | `pass` | `True` | `yes` | `yes` | `2273` | `2.273` | `True` | `observable` | `5` | `uart_regex`, `uart_contains`, `uart_ordered`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `nucleo_wba52cg` | `pass` | `True` | `yes` | `yes` | `4782` | `4.782` | `True` | `observable` | `4` | `uart_contains`, `uart_ordered`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
