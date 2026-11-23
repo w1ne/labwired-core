@@ -4488,7 +4488,7 @@
       "device_type": "ds18b20",
       "label": "DS18B20 1-Wire thermometer",
       "summary": "Maxim DS18B20 digital thermometer on a 1-Wire bus (9-12 bit, -55 to +125 °C).",
-      "detail": "One open-drain DQ line. Reset/presence, write and read slots and the ROM commands (READ, MATCH, SKIP, SEARCH ROM) are modelled; CONVERT T takes the datasheet conversion time for the configured resolution and only then updates the scratchpad, READ SCRATCHPAD returns nine bytes with the CRC-8, WRITE/COPY SCRATCHPAD and RECALL E2 move TH, TL and the configuration. Externally powered. Not modelled: parasite power, alarm search, self-heating and accuracy error.",
+      "detail": "One open-drain DQ line. Reset/presence, write and read slots and the ROM commands (READ, MATCH, SKIP, SEARCH ROM) are modelled; CONVERT T takes the datasheet conversion time for the configured resolution and only then updates the scratchpad, READ SCRATCHPAD returns nine bytes with the CRC-8, WRITE/COPY SCRATCHPAD and RECALL E2 move TH, TL and the configuration. Externally powered. The connected input (default 1) drops the part off the bus at 0: no presence pulse, DQ released. Not modelled: parasite power, alarm search, self-heating and accuracy error.",
       "transport": "gpio_group",
       "category": "gpio",
       "config_keys": [
@@ -4506,6 +4506,11 @@
           "name": "temperature_c",
           "ty": "float",
           "doc": "Initial temperature in °C. Default 25."
+        },
+        {
+          "name": "connected",
+          "ty": "float",
+          "doc": "1 while the probe is on the bus, 0 when disconnected. Default 1."
         }
       ],
       "labs": [],
@@ -4517,6 +4522,14 @@
           "min": -55.0,
           "max": 125.0,
           "default": 25.0
+        },
+        {
+          "key": "connected",
+          "label": "Connected",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 1.0
         }
       ]
     },
