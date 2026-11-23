@@ -4929,7 +4929,11 @@ Renode's
   claimed. Polled only: <code>INT_SC1FLAG</code>/<code>INT_SC1CFG</code> (<code>0x4000A808</code>) are not
   mapped and no IRQ is declared.</li>
 <li><strong>TIM1/TIM2</strong> at <code>0x4000E000</code> / <code>0x4000F000</code> (Renode <code>STM32_Timer</code>), on the
-  generic STM32 timer counter path (CR1/EGR/CNT/PSC/ARR, 16-bit). The
+  generic STM32 timer counter path (CR1/EGR/CNT/PSC/ARR, 16-bit). PSC[3:0]
+  is an exponent on this part (CK_CNT = PCLK / 2^PSC; Contiki
+  <code>cpu/stm32w108/rtimer-arch.h</code> sets PSC=12 for PCLK/4096), so both timers
+  declare <code>prescaler: power_of_two</code>. Renode's <code>STM32_Timer</code> uses the linear
+  PSC+1 divider here. The
   update/compare flags and interrupt enables live in the separate <code>INT_TIMx</code>
   block at <code>0x4000A800</code>, which is not mapped, so no timer IRQ is claimed.</li>
 </ul>
@@ -4949,7 +4953,7 @@ touched an STM32W108 peripheral and is withdrawn.</p>
 (<code>thumbv7m-none-eabi</code>) writes <code>SC1_MODE</code> = 1 (UART), <code>SC1_UARTCFG</code> and
 <code>SC1_UARTPER</code>, stores the idle <code>SC1_UARTSTAT</code>, prints <code>STM32W108 SC1 SMOKE</code>
 polled on <code>SC_UARTTXFREE</code>, and waits for <code>SC_UARTTXIDLE</code>. Then it runs the
-timer checks: reset values, stopped hold, CEN count, PSC=7 ratio, ARR=99
+timer checks: reset values, stopped hold, CEN count, PSC=3 (divide by 8) ratio, ARR=99
 bound and wrap, and CEN-clear freeze. The firmware does not program GPIO
 alternate functions or the clock tree. Firmware for real silicon must program
 both.</p>
