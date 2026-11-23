@@ -246,7 +246,7 @@
 | `stm32l072` | `pass` | `True` | `yes` | `yes` | `5917` | `5.917` | `True` | `observable` | `30` | `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `stm32l151` | `pass` | `True` | `yes` | `yes` | `3780` | `3.78` | `True` | `observable` | `27` | `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `stm32l552` | `pass` | `True` | `yes` | `yes` | `1450` | `1.45` | `True` | `observable` | `8` | `uart_regex`, `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
-| `stm32w108` | `pass` | `True` | `yes` | `yes` | `2020` | `2.02` | `True` | `observable` | `3` | `memory_value`, `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `stm32w108` | `pass` | `True` | `yes` | `yes` | `600477` | `600.477` | `True` | `observable` | `3` | `memory_value`, `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `stm32wba52` | `pass` | `True` | `yes` | `yes` | `547784` | `547.784` | `True` | `observable` | `4` | `uart_contains`, `uart_ordered`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `tegra2` | `pass` | `True` | `yes` | `yes` | `1079` | `1.079` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `tegra3` | `pass` | `True` | `yes` | `yes` | `1531` | `1.531` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
