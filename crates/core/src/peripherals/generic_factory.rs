@@ -1436,6 +1436,19 @@ pub fn try_build(
                 // overflow/trigger/hall IRQ13, channel IRQ14),
                 // `trigger_com_irq: N` for TIF/COMIF and `break_irq: N` for
                 // BIF (STM32F1/F4 TIM1_TRG_COM / TIM1_BRK).
+                // `prescaler: power_of_two` — PSC[3:0] is an exponent, the
+                // counter clock is the kernel clock / 2^PSC (STM32W108).
+                let psc_power_of_two = match p_cfg.config.get("prescaler").and_then(|v| v.as_str())
+                {
+                    None | Some("linear") => false,
+                    Some("power_of_two") => true,
+                    Some(other) => {
+                        return Err(anyhow::anyhow!(
+                        "timer '{}': unknown prescaler '{other}' (supported: linear, power_of_two)",
+                        p_cfg.id
+                    ))
+                    }
+                };
                 let split_irq = |key: &str| {
                     p_cfg
                         .config
@@ -1457,7 +1470,8 @@ pub fn try_build(
                         .capture_compare_irq(split_irq("capture_compare_irq")?)
                         .trigger_com_irq(split_irq("trigger_com_irq")?)
                         .break_irq(split_irq("break_irq")?)
-                        .pad_map(pad_map),
+                        .pad_map(pad_map)
+                        .psc_power_of_two(psc_power_of_two),
                 )
             }
         }

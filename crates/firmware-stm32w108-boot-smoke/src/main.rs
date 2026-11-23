@@ -96,10 +96,12 @@ fn main() -> ! {
         bits |= 1 << 2;
     }
 
-    // TIM2 with PSC=7 (loaded by UG) runs about 8x slower than TIM1.
+    // TIM2 with PSC=3 (loaded by UG) runs 2^3 = 8x slower than TIM1: the
+    // W108 PSC is an exponent (CK_CNT = PCLK / 2^PSC). A linear PSC+1
+    // divider would give 4x and miss the 6x..10x window below.
     wr(TIM1, CR1, 0);
     wr(TIM1, EGR, 1);
-    wr(TIM2, PSC, 7);
+    wr(TIM2, PSC, 3);
     wr(TIM2, EGR, 1);
     wr(TIM1, CR1, 1);
     wr(TIM2, CR1, 1);
