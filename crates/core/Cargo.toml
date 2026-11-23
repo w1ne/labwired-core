@@ -199,8 +199,6 @@ required-features = ["qemu-arm"]
 #     (`no_vacuous_test_targets.rs::grouped_modules_are_never_feature_gated`);
 #   * files that change process-global state, which would leak into the other
 #     tests of a shared process:
-#       diag_esp32s3_boot: sets LABWIRED_ESP32S3_FASTBOOT (process env)
-#       diag_esp32s3_l2: sets LABWIRED_ESP32S3_FASTBOOT (process env)
 #       register_coverage: chdir into configs/chips (process cwd)
 #       rp2040_bootrom_lookup: chdir + sets/removes bootrom env and CARGO_MANIFEST_DIR
 #       rp2040_i2c_irq_delivery: sets LABWIRED_RP2040_BOOTROM

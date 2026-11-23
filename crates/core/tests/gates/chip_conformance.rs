@@ -1251,7 +1251,7 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/ch32l103c8t6.yaml",
         reset_oracle: None,
         behavior_gate: Some(
-            "ch32l103_compiled_firmware::ch32l103_compiled_rv32imac_firmware_toggles_pc13",
+            "ch32_compiled_firmware::every_ch32_compiled_blink_toggles_its_pin_and_only_its_pin",
         ),
     },
     // CH32V005F6P6 (QingKe V2C, RV32EmC). SIM-DERIVED: no silicon capture,
@@ -1261,7 +1261,7 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/ch32v005f6p6.yaml",
         reset_oracle: None,
         behavior_gate: Some(
-            "ch32v005_compiled_firmware::ch32v005_compiled_rv32e_firmware_toggles_pc0",
+            "ch32_compiled_firmware::every_ch32_compiled_blink_toggles_its_pin_and_only_its_pin",
         ),
     },
     // CH32X035C8T6 (QingKe V4C, RV32IMAC). SIM-DERIVED: no silicon capture,
@@ -1271,7 +1271,7 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/ch32x035c8t6.yaml",
         reset_oracle: None,
         behavior_gate: Some(
-            "ch32x035_compiled_firmware::ch32x035_compiled_rv32imac_firmware_toggles_pb12",
+            "ch32_compiled_firmware::every_ch32_compiled_blink_toggles_its_pin_and_only_its_pin",
         ),
     },
     // CH32V006K8U6 (QingKe V2C, RV32EmC). SIM-DERIVED: no silicon capture,
@@ -1281,7 +1281,7 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/ch32v006k8u6.yaml",
         reset_oracle: None,
         behavior_gate: Some(
-            "ch32v006_compiled_firmware::ch32v006_compiled_rv32e_firmware_toggles_pb0",
+            "ch32_compiled_firmware::every_ch32_compiled_blink_toggles_its_pin_and_only_its_pin",
         ),
     },
     // CH32V203C8T6 (QingKe V4B, RV32IMAC). SIM-DERIVED: no silicon capture,
@@ -1291,7 +1291,7 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/ch32v203c8t6.yaml",
         reset_oracle: None,
         behavior_gate: Some(
-            "ch32v203_compiled_firmware::ch32v203_compiled_rv32imac_firmware_toggles_pc13",
+            "ch32_compiled_firmware::every_ch32_compiled_blink_toggles_its_pin_and_only_its_pin",
         ),
     },
     // CH32V003 package variants (QFN20 F4U6, SOP16 A4M6, SOP8 J4M6). Same

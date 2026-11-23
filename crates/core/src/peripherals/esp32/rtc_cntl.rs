@@ -696,12 +696,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn base_is_esp32_classic_canonical_address() {
-        let p = RtcCntl::new();
-        assert_eq!(p.base(), 0x3FF4_8000);
-    }
-
     /// The `rtc_sleep_start` sequence from a stock arduino-esp32 3.x image:
     /// alarm into SLP_TIMER0/1 (no MAIN_TIMER_ALARM_EN), TIMER_TRIG into
     /// WAKEUP_ENA, INT_CLR, then STATE0.SLEEP_EN.

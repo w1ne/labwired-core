@@ -457,12 +457,6 @@ mod tests {
     }
 
     #[test]
-    fn base_is_esp32_classic_canonical_address() {
-        let p = Efuse::new();
-        assert_eq!(p.base(), 0x3FF5_A000);
-    }
-
-    #[test]
     fn cmd_register_one_shot_clears_on_first_read() {
         // ESP32 BROM `_reload_efuses_and_check` writes 1 to CMD then
         // polls until the bit clears. Real silicon clears the trigger

@@ -151,3 +151,50 @@ fn pic24_console_accepts_internal_uart1_and_rejects_unsupported_routes() {
     assert!(usb_error.contains("USB-Serial-JTAG"));
     assert!(usb_error.contains("uart1"));
 }
+
+/// The browser board IO state carries the emission colour the YAML declares,
+/// driven by the real firmware's GPIO level: the declared colour while the
+/// output is asserted, black while it is not. Two bindings of different kinds
+/// on the same pad show the field is not tied to one kind of part.
+#[test]
+fn browser_board_io_state_reports_declared_emission_from_firmware_level() {
+    let (mut system, chip, firmware) = xc16_m0_inputs();
+    system = system.replace(
+        "    active_high: true\n",
+        "    active_high: true\n    emission: { color: \"#2bff4a\" }\n  - id: \"rb0-lamp\"\n    kind: \"pwm_output\"\n    peripheral: \"gpiob\"\n    pin: 0\n    signal: \"output\"\n    active_high: true\n    emission: { color: \"#ffd21a\" }\n",
+    );
+    let mut sim =
+        WasmSimulator::new_from_config(&system, &chip, &firmware, wasm_bindgen::JsValue::NULL)
+            .expect("construct PIC24 browser simulator");
+    sim.step_batch(300).expect("step XC16 PIC24 firmware");
+
+    let states = |sim: &WasmSimulator| -> Vec<serde_json::Value> {
+        let machine = sim.machine.as_ref().expect("PIC24 machine");
+        sim.board_io
+            .iter()
+            .map(|b| b.state_json(sim.read_board_io_state(machine, b)))
+            .collect()
+    };
+    let mut seen = std::collections::BTreeSet::new();
+    for _ in 0..24 {
+        for state in states(&sim) {
+            seen.insert((
+                state["id"].as_str().unwrap().to_owned(),
+                state["active"].as_bool().unwrap(),
+                state["emission"].as_str().unwrap().to_owned(),
+            ));
+        }
+        sim.step_single().expect("step PIC24 GPIO loop");
+    }
+    for expected in [
+        ("rb0-led", true, "#2bff4a"),
+        ("rb0-led", false, "#000000"),
+        ("rb0-lamp", true, "#ffd21a"),
+        ("rb0-lamp", false, "#000000"),
+    ] {
+        assert!(
+            seen.contains(&(expected.0.to_owned(), expected.1, expected.2.to_owned())),
+            "missing {expected:?} in {seen:?}"
+        );
+    }
+}

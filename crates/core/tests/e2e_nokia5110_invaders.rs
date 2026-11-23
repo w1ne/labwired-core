@@ -111,31 +111,6 @@ fn step_frames(machine: &mut Cm, steps: u64) {
     }
 }
 
-/// Dump the sim's PCD8544 panel framebuffer (what the modeled panel received
-/// over SPI) as little-endian 32-bit words, in the same layout `mdw` prints,
-/// so it can be diffed byte-for-byte against a capture read off real silicon
-/// (the firmware's static FB at 0x20000000). Proves the sim's SPI+D/C path
-/// delivers exactly the bytes the firmware emits.
-#[test]
-#[ignore = "prints the sim splash framebuffer for HW diff"]
-fn dump_splash_framebuffer() {
-    let elf = ensure_firmware_built();
-    let mut machine = build_machine(&elf);
-    // Step into the splash hold (after init + render + the 504-byte push,
-    // well before the 8M-cycle delay ends).
-    step_frames(&mut machine, 800_000);
-    let fb = framebuffer(&machine);
-    assert_eq!(fb.len(), 504);
-    for (i, chunk) in fb.chunks(4).enumerate() {
-        let w = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
-        print!("{w:08x} ");
-        if i % 8 == 7 {
-            println!();
-        }
-    }
-    println!();
-}
-
 // Builds the firmware and steps several million cycles in the sim (~90 s), so
 // it's gated behind --ignored rather than run in the default suite. Requires
 // the example to be a workspace member (examples/nokia5110-invaders-lab):
@@ -196,8 +171,9 @@ fn splash_framebuffer_matches_across_tick_intervals() {
         let mut machine = build_machine(&elf);
         machine.config.peripheral_tick_interval = interval;
         machine.bus.config.peripheral_tick_interval = interval;
-        // Into the splash hold via the batched run loop (see
-        // dump_splash_framebuffer for the budget rationale).
+        // Into the splash hold via the batched run loop: 800k cycles is past
+        // init + render + the 504-byte push, well before the 8M-cycle delay
+        // ends.
         while machine.total_cycles < 800_000 {
             let remaining = (800_000 - machine.total_cycles).min(u32::MAX as u64) as u32;
             machine.run(Some(remaining)).expect("run");

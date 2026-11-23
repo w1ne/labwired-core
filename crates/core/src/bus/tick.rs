@@ -85,6 +85,48 @@ fn pend_nvic(
 }
 
 impl SystemBus {
+    /// [`reconcile_nvic_level`] for a source that may share its NVIC line.
+    /// Silicon ORs every source wired to one vector (STM32 TIM1_UP_TIM16,
+    /// TIM1_UP_TIM10, ADC1_2): a low source must not drop the pend that
+    /// another source on the same line still holds. The peer scan runs only
+    /// when a level-marked pend would be dropped, so the common path is the
+    /// free function unchanged.
+    #[inline]
+    pub(crate) fn reconcile_line_level(&self, idx: usize, irq: u32, level: bool) {
+        if !level && self.level_pend_marked(irq) && self.line_held_elsewhere(idx, irq) {
+            return;
+        }
+        reconcile_nvic_level(&self.nvic, irq, level);
+    }
+
+    #[inline]
+    fn level_pend_marked(&self, irq: u32) -> bool {
+        let Some(nvic) = self.nvic.as_ref() else {
+            return false;
+        };
+        let word = (irq / 32) as usize;
+        word < 8
+            && nvic.level_pended[word].load(std::sync::atomic::Ordering::SeqCst) & (1 << (irq % 32))
+                != 0
+    }
+
+    /// True when a peripheral other than `idx` holds `irq` asserted, through
+    /// its configured line or one of its multi-line levels.
+    fn line_held_elsewhere(&self, idx: usize, irq: u32) -> bool {
+        self.peripherals.iter().enumerate().any(|(i, p)| {
+            if i == idx {
+                return false;
+            }
+            if p.irq == Some(irq) && p.dev.irq_line_level() == Some(true) {
+                return true;
+            }
+            let mut held = false;
+            p.dev
+                .irq_line_levels(&mut |line, level| held |= line == irq && level);
+            held
+        })
+    }
+
     /// Reconcile every NVIC line peripheral `idx` reports through
     /// [`Peripheral::irq_line_levels`] (multi-line level sources: the STM32
     /// EXTI). One call per choke: the walk and the event path after they
@@ -102,7 +144,7 @@ impl SystemBus {
                 if level && sync == LevelSync::DropOnly {
                     return;
                 }
-                reconcile_nvic_level(&self.nvic, irq, level);
+                self.reconcile_line_level(idx, irq, level);
             });
     }
 
@@ -179,7 +221,7 @@ impl SystemBus {
         if let Some(irq_line) = self.peripherals[idx].irq {
             if let Some(level) = self.peripherals[idx].dev.irq_line_level() {
                 if !self.route_irq_input_level(idx, irq_line, level) {
-                    reconcile_nvic_level(&self.nvic, irq_line, level);
+                    self.reconcile_line_level(idx, irq_line, level);
                 }
             }
         }
@@ -629,7 +671,7 @@ impl SystemBus {
             // way the walk and the MMIO write path do.
             if let Some(irq_line) = self.peripherals[i].irq {
                 if let Some(level) = self.peripherals[i].dev.irq_line_level() {
-                    reconcile_nvic_level(&self.nvic, irq_line, level);
+                    self.reconcile_line_level(i, irq_line, level);
                 }
             }
             let still_needs_bus_tick = self.refresh_bus_tick_index(i);
@@ -1040,7 +1082,7 @@ impl SystemBus {
                 (Some(level), Some(irq)) => {
                     let routed = self.route_irq_input_level(peripheral_index, irq, level);
                     if !routed {
-                        reconcile_nvic_level(&self.nvic, irq, level);
+                        self.reconcile_line_level(peripheral_index, irq, level);
                     }
                     if res.irq && self.nvic.is_none() && !routed {
                         interrupts.push(irq);
@@ -2082,21 +2124,21 @@ mod nrf_spim_gpio_cs_scheduling_tests;
 #[path = "tick_walk_free_campaign.rs"]
 mod walk_free_campaign;
 
-/// Walk-free C3 SYSTIMER batch — the interrupt-matrix ROUTING identity.
+/// Walk-free C3 level peripheral batches (`spi2`, `apb_saradc`, SYSTIMER, LEDC,
+/// WiFi-MAC) — the interrupt-matrix ROUTING identity.
 ///
-/// A SYSTIMER migrated off the per-cycle walk delivers its alarm as a scheduled
-/// event; the C3 routing arm (`Machine::apply_event_result` → this module's
-/// `refresh_esp32c3_sched_sources` + `recompute_esp32c3_irq_lines`) must route
-/// that level to `irq_fabric.esp32c3.irq_lines` EXACTLY as the legacy walk did when the
-/// SYSTIMER re-emitted source 37 every tick (`aggregate_esp32c3_irqs`). This
-/// pins that equivalence at the bus level (the OLED-lab gate proves it
-/// end-to-end through the real FreeRTOS tick).
-#[cfg(all(test, feature = "event-scheduler"))]
-#[path = "tick_c3_systimer_matrix_routing.rs"]
-mod c3_systimer_matrix_routing;
-
-/// Walk-free C3 level-only peripheral batch (`spi2` + `apb_saradc`) — the
-/// interrupt-matrix ROUTING identity.
+/// SYSTIMER: a migrated alarm is delivered as a scheduled event; the C3 routing
+/// arm (`refresh_esp32c3_sched_sources` + `recompute_esp32c3_irq_lines`) must
+/// route it to `irq_fabric.esp32c3.irq_lines` EXACTLY as the legacy walk did
+/// when the SYSTIMER re-emitted source 37 every tick (`aggregate_esp32c3_irqs`).
+/// LEDC is a TIME-driven pinner (its LSTIMERx_OVF latches on counter wrap) and
+/// the OLED lab never configures it. WiFi-MAC was the LAST walk pinner on the
+/// OLED rom-boot bus: its level is exported through `matrix_irq_sources`, and on
+/// a walk-DELETED bus the `EVENT_CLR` acknowledge is re-routed at the MMIO WRITE
+/// CHOKE (`sync_esp32c3_irq_cache_write`). The WiFi-MAC descriptor-ring PUMP is
+/// covered by the `c3_wifi_mac_walk_differential` module below.
+///
+/// `spi2` + `apb_saradc`:
 ///
 /// Both are one-shot LEVEL re-emitters: `int_raw` is write-armed by a
 /// transaction / conversion (no free-running counter), and the model re-asserts
@@ -2111,22 +2153,6 @@ mod c3_systimer_matrix_routing;
 #[cfg(all(test, feature = "event-scheduler"))]
 #[path = "tick_c3_level_peripheral_matrix_routing.rs"]
 mod c3_level_peripheral_matrix_routing;
-
-/// Walk-free C3 LEDC timer-port batch — the interrupt-matrix ROUTING identity.
-///
-/// Unlike the level-only pair (`spi2`/`apb_saradc`, write-armed), LEDC is a
-/// TIME-driven pinner: its four low-speed timers advance as up-counters and
-/// latch `LSTIMERx_OVF` on wrap. Migrated off the walk, that overflow is
-/// materialised by a scheduled event and the level is exported through
-/// `matrix_irq_sources` (re-derived by the bus); on the legacy walk the same
-/// level is re-emitted every tick via `tick()`'s `explicit_irqs`. This gate
-/// proves the two paths route the LEDC OVF interrupt to the SAME CPU line, and
-/// that INT_CLR de-asserts it — the same bus-level equivalence
-/// `c3_systimer_matrix_routing` pins for the SYSTIMER (the OLED lab can't
-/// exercise it: the demo never configures LEDC).
-#[cfg(all(test, feature = "event-scheduler"))]
-#[path = "tick_c3_ledc_matrix_routing.rs"]
-mod c3_ledc_matrix_routing;
 
 /// ESP32-C6 interrupt-matrix routing through the split INTPRI block.
 ///
@@ -2148,30 +2174,6 @@ mod c6_intpri_matrix_routing;
 #[cfg(test)]
 #[path = "tick_c6_pcr_gate.rs"]
 mod c6_pcr_gate;
-
-/// Walk-free C3 WiFi-MAC batch — the LAST walk pinner on the OLED rom-boot bus.
-///
-/// `wifi_mac` pinned the walk on TWO axes; both are migrated here with NO new
-/// event machinery:
-///
-///   * the interrupt LEVEL (matrix source 0, asserted while a MAC event is
-///     pending) — was re-emitted every walk tick by `tick()`; now exported
-///     through `matrix_irq_sources` and re-derived by the bus. On a walk-DELETED
-///     bus there is no walk tick to re-derive it, so a write-armed level change
-///     (the `EVENT_CLR` acknowledge) is re-routed at the MMIO WRITE CHOKE
-///     (`sync_esp32c3_irq_cache_write`). This module proves both: the scheduler
-///     and walk paths route the MAC level to the SAME CPU line, and the
-///     write-choke de-asserts it on a fully walk-deleted bus.
-///
-///   * the descriptor-ring PUMP (`tick_with_bus`) — was pinned by an
-///     unconditional `needs_bus_tick() == true`; now honestly gated so it only
-///     ticks while WiFi is up (`rx_ring != 0` / a pending TX / medium mode). The
-///     companion `c3_wifi_mac_walk_differential` module drives a real TX + RX
-///     session and proves the pump's ring writeback + IRQ delivery are
-///     byte-identical walk-vs-scheduler at interval 1 AND 64.
-#[cfg(all(test, feature = "event-scheduler"))]
-#[path = "tick_c3_wifi_mac_matrix_routing.rs"]
-mod c3_wifi_mac_matrix_routing;
 
 /// Walk-free C3 WiFi-MAC PUMP fidelity — the WiFi-EXERCISING byte-identity
 /// differential. Drives a real descriptor-ring session (RX ring delivery + a TX

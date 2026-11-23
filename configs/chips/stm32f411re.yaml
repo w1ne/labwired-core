@@ -185,10 +185,13 @@ peripherals:
     base_address: 0x40010000
     size: "1KB"
     # TIM1_UP_TIM10 = 25; CC1..4 on TIM1_CC = 27 (RM0368/RM0383 vector
-    # table; Renode stm32f4.repl). BRK (24) and TRG/COM (26) are not routed.
+    # table; Renode stm32f4.repl). BRK (24) and TRG/COM (26) route BIF and TIF/COMIF.
     irq: 25
     config:
       capture_compare_irq: 27
+      trigger_com_irq: 26
+      break_irq: 24
+      advanced: true
       input_capture: "stm32f4"
       debug_schema: "../peripherals/stm32f411/tim1.yaml"
   - id: "usart1"

@@ -178,13 +178,17 @@ use std::path::{Path, PathBuf};
 /// read-only reaches and one mutable reach. This is a one-time assembly path,
 /// not a per-cycle access; a reusable capability belongs in a separate
 /// peripheral-interface change.
-const MAX_AS_ANY: usize = 200;
+/// 200 → 198: two test-only `as_any()` reaches left with the per-chip C3
+/// matrix-routing files when they became rows of the shared harness.
+const MAX_AS_ANY: usize = 198;
 // GPIO schedule migration removes four concrete sensor downcasts.
 // 195 → 196: `tests/session/sim_input_reachability.rs` reads the ADXL345 back out of
 // `Rp2040I2c` by downcast, the same independent-witness reach every other
 // controller row in that table already pays (the walk under test cannot be
 // its own witness). Test-only; no production path gained a reach.
-const MAX_DOWNCAST_REF: usize = 200;
+// 200 → 198: the per-chip C3 matrix-routing test files folded into the shared
+// harness.
+const MAX_DOWNCAST_REF: usize = 198;
 
 /// The MUTABLE half of the same reach, counted from the day it started being
 /// counted. Until then the scan matched only `as_any()` and `downcast_ref`,
@@ -270,7 +274,7 @@ const MAX_DOWNCAST_REF: usize = 200;
 // it, rather than adding an unused general trait for one binding today.
 // 276 → 273: ESP GPIO observers now use the `Peripheral` capability, so C3
 // support shares the classic ESP32/S3 registration path without new downcasts.
-const MAX_AS_ANY_MUT: usize = 274;
+const MAX_AS_ANY_MUT: usize = 272;
 // 341 → 342 (`downcast_mut` only): `attach_uart_tx_sink` hands the console
 // sink to the i.MX RT USB1 device controller, whose bulk IN endpoint carries
 // Teensy 4.x `Serial` (USB CDC) — the same one-time attach arm the RP2040 USB
@@ -278,7 +282,9 @@ const MAX_AS_ANY_MUT: usize = 274;
 // not claim `as_uart_stream_host` (cross-links would bind to it).
 // 342 → 340: the three ESP GPIO observer downcasts moved behind the
 // `Peripheral::register_esp_gpio_observer` capability.
-const MAX_DOWNCAST_MUT: usize = 341;
+// 341 → 339 (and `as_any_mut` 274 → 272): the per-chip C3 matrix-routing
+// test files folded into the shared harness.
+const MAX_DOWNCAST_MUT: usize = 339;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

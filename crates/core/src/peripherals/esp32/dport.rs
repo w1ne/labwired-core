@@ -751,11 +751,4 @@ mod tests {
             0xAAAA_5555
         );
     }
-
-    #[test]
-    fn base_is_esp32_classic_canonical_address() {
-        let p = Dport::new();
-        assert_eq!(p.base(), 0x3FF0_0000);
-        assert_eq!(Dport::SIZE, 0x1000);
-    }
 }

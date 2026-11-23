@@ -1997,7 +1997,15 @@ impl World {
             &self.marker_pins,
             &configs,
         )? {
-            Some(gpio) => self.gpio = Some(gpio),
+            Some(gpio) => {
+                self.gpio = Some(gpio);
+                // Match the normal single-machine and timed-CAN run policy.
+                // Watches are installed first, so polled pads still clamp the
+                // safe interval; idle skips retain every scheduler/net deadline.
+                for machine in self.machines.values_mut() {
+                    machine.use_widest_safe_tick();
+                }
+            }
             None => {
                 for (node, pins) in &self.marker_pins {
                     self.machines

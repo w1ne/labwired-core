@@ -413,10 +413,6 @@ const XTENSA: ArchCoverage = ArchCoverage {
         ("Lsx", "FPU indexed load, not translated"),
         ("Lsxu", "FPU indexed load with update, not translated"),
         (
-            "Mac16Aa",
-            "MAC16 AA 16×16 multiply-accumulate, not in the JIT hot-block op set",
-        ),
-        (
             "MaddS",
             "FPU (single-precision) fused multiply-add, not translated",
         ),
