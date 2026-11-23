@@ -5048,11 +5048,11 @@ hardware-validated</strong> — no F767 board has been on the bench.</p>
 </table>
 <h2 id="modeled-from-chip-yaml">Modeled (from chip yaml)</h2>
 <p>RCC (F4 profile), GPIO A–K, USART1/2/3/6, I2C1–4 (v2/<code>stm32l4</code> profile),
-SPI1–3, TIM1/TIM2, ADC1, DMA1/2, EXTI (24 lines), RTC, IWDG, flash, PWR,
+SPI1–3, TIM1/TIM2, ADC1, bxCAN1 (F4 <code>bxcan</code> model), DMA1/2, EXTI (24 lines), RTC, IWDG, flash, PWR,
 DBGMCU (IDCODE <code>0x10006451</code>), SysTick, NVIC.</p>
 <h2 id="explicitly-not-modeled">Explicitly not modeled</h2>
 <p>F7-only RCC registers (PLLSAICFGR, DCKCFGR1/2 — peripheral clock muxing),
-Ethernet, LTDC/DMA2D, CAN, USB OTG FS/HS, SAI, QSPI, MDIOS, JPEG, DFSDM,
+Ethernet, LTDC/DMA2D, CAN2/CAN3, USB OTG FS/HS, SAI, QSPI, MDIOS, JPEG, DFSDM,
 FMC, SDMMC, ART accelerator reconfiguration. Sim86's own Nucleo-F767ZI page
 lists several of these as "present but nothing attached" — we declare
 nothing we do not model.</p>
