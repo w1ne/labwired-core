@@ -9,7 +9,8 @@
 //! that need to chain software events to hardware actions.
 //!
 //! tick() drains pending triggers, emitting fired_events so PPI routes
-//! them and pending the configured NVIC IRQ when INTEN is set.
+//! them. The interrupt line follows the latched events and INTEN mask,
+//! including when interrupts are enabled after an event has occurred.
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 
@@ -106,6 +107,17 @@ impl Peripheral for Nrf52Egu {
         Ok(())
     }
 
+    // Nordic peripheral interface: an enabled, latched event holds IRQ high.
+    // PPI delivery is independent of software clearing the event register.
+    fn irq_line_level(&self) -> Option<bool> {
+        Some(
+            self.events_triggered
+                .iter()
+                .enumerate()
+                .any(|(i, event)| *event != 0 && self.inten & (1 << i) != 0),
+        )
+    }
+
     fn tick(&mut self) -> PeripheralTickResult {
         // Feature-off / walk path. Scheduler mode skips this via uses_scheduler.
         self.drain_pending()
@@ -161,7 +173,7 @@ impl Nrf52Egu {
                 fired.push(OFF_EVENTS_TRIGGERED_0 as u32 + 4 * i);
             }
         }
-        let irq = pending & self.inten != 0;
+        let irq = self.irq_line_level() == Some(true);
         PeripheralTickResult {
             irq,
             cycles: 1,
@@ -190,5 +202,110 @@ mod tests {
         e.write_u32(OFF_INTENSET, 1).unwrap();
         e.write_u32(OFF_TASKS_TRIGGER_0, 1).unwrap();
         assert!(e.tick().irq);
+    }
+
+    #[test]
+    fn each_latched_channel_asserts_on_enable_and_deasserts_on_clear() {
+        for i in 0..16u64 {
+            let mut e = Nrf52Egu::new();
+            let bit = 1 << i;
+            e.write_u32(4 * i, 1).unwrap();
+            assert!(!e.tick().irq);
+            assert_eq!(e.irq_line_level(), Some(false));
+            e.write_u32(OFF_INTENSET, bit).unwrap();
+            assert_eq!(e.irq_line_level(), Some(true), "channel {i}");
+            // No new task or scheduler callback is needed to assert the line.
+            assert!(e.take_scheduled_events().is_empty());
+            e.write_u32(OFF_INTENCLR, bit).unwrap();
+            assert_eq!(e.irq_line_level(), Some(false));
+            assert_eq!(e.read_u32(0x100 + 4 * i).unwrap(), 1);
+            e.write_u32(OFF_INTEN, bit).unwrap();
+            assert_eq!(e.irq_line_level(), Some(true));
+            e.write_u32(0x100 + 4 * i, 0).unwrap();
+            assert_eq!(e.irq_line_level(), Some(false));
+        }
+    }
+
+    #[test]
+    fn unrelated_masks_and_reserved_bits_do_not_assert_irq() {
+        for i in 0..16u64 {
+            let mut e = Nrf52Egu::new();
+            e.write_u32(4 * i, 1).unwrap();
+            e.write_u32(OFF_INTENSET, !(1 << i)).unwrap();
+            assert_eq!(e.irq_line_level(), Some(false));
+            assert!(!e.tick().irq);
+            e.write_u32(OFF_INTENSET, 1 << i).unwrap();
+            assert_eq!(e.irq_line_level(), Some(true));
+            e.write_u32(OFF_INTEN, 0xffff_0000).unwrap();
+            assert_eq!(e.read_u32(OFF_INTEN).unwrap(), 0);
+            assert_eq!(e.irq_line_level(), Some(false));
+        }
+    }
+
+    #[test]
+    fn clearing_one_event_preserves_another_enabled_source() {
+        let mut e = Nrf52Egu::new();
+        e.write_u32(0, 1).unwrap();
+        e.write_u32(0x3c, 1).unwrap();
+        e.write_u32(OFF_INTENSET, 0x8001).unwrap();
+        e.write_u32(0x100, 0).unwrap();
+        assert_eq!(e.irq_line_level(), Some(true));
+        e.write_u32(0x13c, 1).unwrap(); // software cannot set/clear with 1
+        assert_eq!(e.irq_line_level(), Some(true));
+        e.write_u32(0x13c, 0).unwrap();
+        assert_eq!(e.irq_line_level(), Some(false));
+    }
+
+    #[test]
+    fn clear_before_walk_drain_keeps_ppi_event_without_stale_irq() {
+        let mut e = Nrf52Egu::new();
+        e.write_u32(OFF_INTENSET, 1).unwrap();
+        e.write_u32(0, 1).unwrap();
+        e.write_u32(0x100, 0).unwrap();
+        let result = e.tick();
+        assert!(!result.irq);
+        assert_eq!(result.fired_events, vec![0x100]);
+        assert!(e.tick().fired_events.is_empty());
+    }
+
+    #[test]
+    fn scheduled_drain_preserves_ppi_and_uses_current_event_latches() {
+        struct NoIo(crate::SimulationConfig);
+        impl crate::Bus for NoIo {
+            fn read_u8(&self, _: u64) -> SimResult<u8> {
+                panic!("unexpected bus read")
+            }
+            fn write_u8(&mut self, _: u64, _: u8) -> SimResult<()> {
+                panic!("unexpected bus write")
+            }
+            fn tick_peripherals(&mut self) -> Vec<u32> {
+                panic!("unexpected bus tick")
+            }
+            fn execute_dma(&mut self, _: &[crate::DmaRequest]) -> SimResult<()> {
+                panic!("unexpected DMA")
+            }
+            fn config(&self) -> &crate::SimulationConfig {
+                &self.0
+            }
+        }
+        for clear in [false, true] {
+            let mut e = Nrf52Egu::new();
+            let mut sched = crate::sched::EventScheduler::new();
+            let mut bus = NoIo(crate::SimulationConfig::default());
+            e.write_u32(0x3c, 1).unwrap();
+            assert_eq!(e.take_scheduled_events(), vec![(0, 0)]);
+            assert!(e.take_scheduled_events().is_empty());
+            e.write_u32(OFF_INTENSET, 0x8000).unwrap();
+            if clear {
+                e.write_u32(0x13c, 0).unwrap();
+            }
+            let result = e.on_event(0, &mut sched, &mut bus);
+            assert_eq!(result.raise_own_irq, !clear);
+            assert_eq!(result.fired_events, vec![0x13c]);
+            assert_eq!(result.reschedule_delay, None);
+            assert!(e.take_scheduled_events().is_empty());
+            assert!(e.on_event(0, &mut sched, &mut bus).fired_events.is_empty());
+            assert_eq!(e.irq_line_level(), Some(!clear));
+        }
     }
 }

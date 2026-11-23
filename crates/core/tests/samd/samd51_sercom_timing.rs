@@ -131,6 +131,175 @@ fn spi_byte_time_scales_with_the_core_clock_ratio() {
     assert!(delta.abs() <= 8, "half-rate byte {half} vs {same}");
 }
 
+#[derive(Clone, Copy, Debug)]
+enum SpiClockChange {
+    Sercom,
+    Cpu,
+}
+
+/// Change the SERCOM or CPU generator's divider while a byte is in flight.
+/// This exercises the real board bus and controller; MMIO is host-driven and
+/// the attached device sees byte completions, not physical SCK edges.
+fn spi_mid_byte_clock_switch(
+    from_div: u32,
+    to_div: u32,
+    force_walk: bool,
+    target: SpiClockChange,
+) -> (u64, u64, Vec<u8>) {
+    let (chip, manifest) = load("atsamd51-pybadge.yaml", "pybadge.yaml");
+    let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    if force_walk {
+        assert!(bus
+            .peripherals
+            .iter_mut()
+            .find(|p| p.name == "sercom4")
+            .unwrap()
+            .dev
+            .force_legacy_walk());
+        bus.recompute_walk_deletable();
+        bus.refresh_peripheral_index();
+    }
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    bus.attach_spi_device("sercom4", Box::new(Probe(seen.clone())))
+        .unwrap();
+    let (cpu_div, sercom_div, changed_genctrl) = match target {
+        SpiClockChange::Sercom => (1, from_div, GCLK + 0x28),
+        SpiClockChange::Cpu => (from_div, 1, GCLK + 0x20),
+    };
+    bus.write_u32(GCLK + 0x20, 6 | 1 << 8 | cpu_div << 16)
+        .unwrap();
+    bus.write_u32(GCLK + 0x28, 6 | 1 << 8 | sercom_div << 16)
+        .unwrap();
+    bus.write_u32(0x40000820, 1).unwrap();
+    bus.write_u32(GCLK + 0x80 + 34 * 4, 2 | 1 << 6).unwrap();
+    bus.write_u8(PORTB + 0x30 + 6, 0x20).unwrap();
+    bus.write_u8(PORTB + 0x30 + 7, 0x20).unwrap();
+    bus.write_u8(PORTB + 0x40 + 13, 1).unwrap();
+    bus.write_u8(PORTB + 0x40 + 15, 1).unwrap();
+    bus.write_u32(PORTB, 1 << 7).unwrap();
+    let master = (3 << 2) | (2 << 16);
+    bus.write_u32(SPI, master).unwrap();
+    bus.write_u32(SPI + 4, 1 << 17).unwrap();
+    bus.write_u8(SPI + 0x0c, 3).unwrap(); // 64 SERCOM clocks per byte
+    bus.write_u32(SPI, master | 2).unwrap();
+    let mut machine = idle_machine(bus);
+    machine.config.peripheral_tick_interval = 1;
+    machine.bus.config.peripheral_tick_interval = 1;
+    machine.bus.write_u8(SPI + 0x28, 0xa5).unwrap();
+    let start = machine.total_cycles;
+    // Half a byte is 32 SERCOM clocks. A divided CPU executes fewer CPU
+    // cycles in that physical interval; dividing SERCOM does the opposite.
+    let switch_at = match target {
+        SpiClockChange::Sercom => 32 * u64::from(from_div),
+        SpiClockChange::Cpu => 32 / u64::from(from_div),
+    };
+    assert_eq!(
+        labwired_core::peripherals::sam::clock_tree::cpu_hz(&machine.bus),
+        Some(48_000_000 / u64::from(cpu_div))
+    );
+    assert_eq!(
+        labwired_core::peripherals::sam::clock_tree::peripheral_hz(&machine.bus, 34),
+        Some(48_000_000 / u64::from(sercom_div))
+    );
+    while machine.total_cycles - start < switch_at {
+        machine.step().unwrap();
+    }
+    let switched = machine.total_cycles - start;
+    assert!(
+        seen.lock().unwrap().is_empty(),
+        "byte completed before clock switch"
+    );
+    machine
+        .bus
+        .write_u32(changed_genctrl, 6 | 1 << 8 | to_div << 16)
+        .unwrap();
+    assert_eq!(
+        machine.bus.read_u32(changed_genctrl).unwrap(),
+        6 | 1 << 8 | to_div << 16
+    );
+    if matches!(target, SpiClockChange::Cpu) {
+        assert_eq!(
+            labwired_core::peripherals::sam::clock_tree::cpu_hz(&machine.bus),
+            Some(48_000_000 / u64::from(to_div))
+        );
+        assert_eq!(
+            labwired_core::peripherals::sam::clock_tree::peripheral_hz(&machine.bus, 34),
+            Some(48_000_000),
+            "changing CPU GEN0 must not change SERCOM's independent GEN2"
+        );
+    }
+    for _ in 0..1024 {
+        machine.step().unwrap();
+        if !seen.lock().unwrap().is_empty() {
+            let elapsed = machine.total_cycles - start;
+            for _ in 0..16 {
+                machine.step().unwrap();
+            }
+            return (switched, elapsed, seen.lock().unwrap().clone());
+        }
+    }
+    panic!("SPI did not complete after divider {from_div}->{to_div}; walk={force_walk}");
+}
+
+#[test]
+fn spi_mid_byte_clock_changes_adjust_remaining_transfer_time() {
+    let mut results = Vec::new();
+    for force_walk in [true, false] {
+        if !force_walk && !labwired_core::cycle_clock::event_scheduler_enabled() {
+            continue;
+        }
+        for (from_div, to_div) in [(1, 2), (2, 1)] {
+            let (switched, elapsed, bytes) =
+                spi_mid_byte_clock_switch(from_div, to_div, force_walk, SpiClockChange::Sercom);
+            println!("P2_CLOCK_SWITCH walk={force_walk} divider={from_div}->{to_div} switched={switched} elapsed={elapsed} byte_count={}", bytes.len());
+            results.push((force_walk, from_div, to_div, switched, elapsed, bytes));
+        }
+    }
+    for (walk, from_div, to_div, switched, elapsed, bytes) in results {
+        assert_eq!(
+            bytes,
+            [0xa5],
+            "one byte only; walk={walk} divider={from_div}->{to_div}"
+        );
+        // 32 of 64 SERCOM clocks before switching: 32+64 or 64+32 CPU cycles.
+        // Allow the existing <=8-cycle bus-service boundary used by the static
+        // ratio test; this does not assert physical pin-edge timing.
+        assert!(switched.abs_diff(32 * u64::from(from_div)) <= 2);
+        assert!(elapsed.abs_diff(96) <= 8, "walk={walk} divider={from_div}->{to_div}: elapsed={elapsed}, expected about 96 CPU cycles");
+    }
+}
+
+/// GEN0 supplies the CPU; independent GEN2 keeps SERCOM at 48 MHz. BAUD=3
+/// needs 64 SERCOM clocks per byte. After 32 clocks, changing the CPU from
+/// 48 to 24 MHz gives 32 + 16 CPU cycles; the reverse gives 16 + 32.
+/// Thus both transfers take 48 CPU cycles, independently of the controller's
+/// internal work units or rescaling algorithm.
+#[test]
+fn spi_mid_byte_cpu_clock_changes_preserve_remaining_transfer_work() {
+    for force_walk in [true, false] {
+        if !force_walk && !labwired_core::cycle_clock::event_scheduler_enabled() {
+            continue;
+        }
+        for (from_div, to_div) in [(1, 2), (2, 1)] {
+            let (switched, elapsed, bytes) =
+                spi_mid_byte_clock_switch(from_div, to_div, force_walk, SpiClockChange::Cpu);
+            assert_eq!(
+                bytes,
+                [0xa5],
+                "one byte only; walk={force_walk} CPU divider={from_div}->{to_div}"
+            );
+            assert!(switched.abs_diff(32 / u64::from(from_div)) <= 2);
+            // Match the existing eight-cycle bus-service tolerance. With no
+            // CPU-rate rescale these paths finish near 64 or 32 cycles, so
+            // either missing direction falls outside the accepted interval.
+            assert!(
+                elapsed.abs_diff(48) <= 8,
+                "walk={force_walk} CPU divider={from_div}->{to_div}: elapsed={elapsed}, expected about 48 CPU cycles"
+            );
+        }
+    }
+}
+
 #[test]
 fn paced_usart_frame_follows_the_baud_on_the_clock_tree() {
     let (mut chip, manifest) = load("atsamd51-pybadge.yaml", "pybadge.yaml");
@@ -186,4 +355,103 @@ fn paced_usart_frame_follows_the_baud_on_the_clock_tree() {
         machine.step().unwrap();
     }
     assert!(sink.lock().unwrap().contains(&b'U'), "frame ended at 2560");
+}
+
+/// Gating the peripheral clock must pause an in-flight byte and its TXC IRQ.
+#[test]
+fn spi_mid_byte_gclk_gate_pauses_transfer_and_txc_irq() {
+    for force_walk in [true, false] {
+        if !force_walk && !labwired_core::cycle_clock::event_scheduler_enabled() {
+            continue;
+        }
+        let (chip, manifest) = load("atsamd51-pybadge.yaml", "pybadge.yaml");
+        let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        if force_walk {
+            assert!(bus
+                .peripherals
+                .iter_mut()
+                .find(|p| p.name == "sercom4")
+                .unwrap()
+                .dev
+                .force_legacy_walk());
+            bus.recompute_walk_deletable();
+            bus.refresh_peripheral_index();
+        }
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        bus.attach_spi_device("sercom4", Box::new(Probe(seen.clone())))
+            .unwrap();
+        bus.write_u32(GCLK + 0x20, 6 | 1 << 8).unwrap();
+        bus.write_u32(GCLK + 0x28, 6 | 1 << 8 | 1 << 16).unwrap();
+        bus.write_u32(0x40000820, 1).unwrap();
+        bus.write_u32(GCLK + 0x80 + 34 * 4, 2 | 1 << 6).unwrap();
+        bus.write_u8(PORTB + 0x30 + 6, 0x20).unwrap();
+        bus.write_u8(PORTB + 0x30 + 7, 0x20).unwrap();
+        bus.write_u8(PORTB + 0x40 + 13, 1).unwrap();
+        bus.write_u8(PORTB + 0x40 + 15, 1).unwrap();
+        bus.write_u32(PORTB, 1 << 7).unwrap();
+        let master = (3 << 2) | (2 << 16);
+        bus.write_u32(SPI, master).unwrap();
+        bus.write_u32(SPI + 4, 1 << 17).unwrap();
+        bus.write_u8(SPI + 0x0c, 3).unwrap();
+        bus.write_u32(SPI, master | 2).unwrap();
+        bus.write_u8(SPI + 0x16, 2).unwrap(); // TXC interrupt only
+        let mut machine = idle_machine(bus);
+        // Observe the peripheral IRQ line without entering an absent guest vector.
+        machine.cpu.primask = true;
+        machine.config.peripheral_tick_interval = 1;
+        machine.bus.config.peripheral_tick_interval = 1;
+        machine.bus.write_u8(SPI + 0x28, 0xa5).unwrap();
+        let start = machine.total_cycles;
+        while machine.total_cycles - start < 32 {
+            machine.step().unwrap();
+        }
+        assert!(seen.lock().unwrap().is_empty());
+        machine.bus.write_u32(GCLK + 0x80 + 34 * 4, 2).unwrap();
+        for _ in 0..200 {
+            machine.step().unwrap();
+        }
+        assert!(
+            seen.lock().unwrap().is_empty(),
+            "completion while clock gated"
+        );
+        let idx = machine
+            .bus
+            .peripherals
+            .iter()
+            .position(|p| p.name == "sercom4")
+            .unwrap();
+        let mut txc_irq = false;
+        machine.bus.peripherals[idx]
+            .dev
+            .irq_line_levels(&mut |irq, level| {
+                if irq == 63 {
+                    txc_irq = level;
+                }
+            });
+        assert!(!txc_irq, "TXC IRQ while gated");
+        machine
+            .bus
+            .write_u32(GCLK + 0x80 + 34 * 4, 2 | 1 << 6)
+            .unwrap();
+        for _ in 0..256 {
+            machine.step().unwrap();
+            if !seen.lock().unwrap().is_empty() {
+                break;
+            }
+        }
+        assert_eq!(*seen.lock().unwrap(), [0xa5], "one byte after resume");
+        for _ in 0..16 {
+            machine.step().unwrap();
+        }
+        assert_eq!(*seen.lock().unwrap(), [0xa5], "no duplicate byte");
+        machine.bus.peripherals[idx]
+            .dev
+            .irq_line_levels(&mut |irq, level| {
+                if irq == 63 {
+                    txc_irq = level;
+                }
+            });
+        assert!(txc_irq, "TXC IRQ after completion");
+        println!("P2_GATE walk={force_walk} gated_steps=200 bytes=1 txc_irq_after=true");
+    }
 }

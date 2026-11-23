@@ -89,13 +89,14 @@ impl Peripheral for Nrf52Temp {
                 self.events_datardy = 1;
             }
             OFF_TASKS_STOP if value & 1 != 0 => {
-                // TASKS_STOP clears the pending measurement.
-                self.events_datardy = 0;
+                // Conversion completes synchronously in this model, so there
+                // is no in-flight work to stop. STOP does not acknowledge an
+                // already-latched DATARDY event; firmware must clear it.
             }
             OFF_EVENTS_DATARDY => self.events_datardy = value & 1,
             OFF_INTENSET => self.inten |= value,
             OFF_INTENCLR => self.inten &= !value,
-            OFF_TEMP => self.temp = value,
+            OFF_TEMP => {} // Read-only measurement result.
             OFF_CAL_FIRST..=OFF_CAL_LAST if offset.is_multiple_of(4) => {
                 self.cal[((offset - OFF_CAL_FIRST) / 4) as usize] = value;
             }
@@ -112,10 +113,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn temp_register_round_trips() {
+    fn temp_register_is_read_only_before_and_after_measurement() {
         let mut t = Nrf52Temp::new();
-        t.write_u32(OFF_TEMP, 100).unwrap(); // 25.0 °C in 0.25 steps
-        assert_eq!(t.read_u32(OFF_TEMP).unwrap(), 100);
+        for value in [100, u32::MAX, 0] {
+            t.write_u32(OFF_TEMP, value).unwrap();
+            assert_eq!(t.read_u32(OFF_TEMP).unwrap(), 0);
+        }
+        t.write_u32(OFF_TASKS_START, 1).unwrap();
+        for value in [0, u32::MAX, 101] {
+            t.write_u32(OFF_TEMP, value).unwrap();
+            assert_eq!(t.read_u32(OFF_TEMP).unwrap(), 100);
+            assert_eq!(t.read_u32(OFF_EVENTS_DATARDY).unwrap(), 1);
+        }
     }
 
     #[test]
@@ -135,12 +144,55 @@ mod tests {
     }
 
     #[test]
-    fn tasks_stop_clears_datardy() {
+    fn tasks_stop_preserves_datardy_until_explicit_clear() {
         let mut t = Nrf52Temp::new();
         t.write_u32(OFF_TASKS_START, 1).unwrap();
         assert_eq!(t.read_u32(OFF_EVENTS_DATARDY).unwrap(), 1);
-        // TASKS_STOP clears the event.
         t.write_u32(OFF_TASKS_STOP, 1).unwrap();
+        assert_eq!(t.read_u32(OFF_EVENTS_DATARDY).unwrap(), 1);
+        assert_eq!(t.read_u32(OFF_TEMP).unwrap(), 100);
+        t.write_u32(OFF_EVENTS_DATARDY, 0).unwrap();
+        assert_eq!(t.read_u32(OFF_EVENTS_DATARDY).unwrap(), 0);
+        assert_eq!(t.read_u32(OFF_TEMP).unwrap(), 100);
+        t.write_u32(OFF_TASKS_START, 1).unwrap();
+        assert_eq!(t.read_u32(OFF_EVENTS_DATARDY).unwrap(), 1);
+    }
+
+    #[test]
+    fn stop_before_start_does_not_generate_data() {
+        let mut t = Nrf52Temp::new();
+        t.write_u32(OFF_TASKS_STOP, 1).unwrap();
+        assert_eq!(t.read_u32(OFF_EVENTS_DATARDY).unwrap(), 0);
+        assert_eq!(t.read_u32(OFF_TEMP).unwrap(), 0);
+    }
+
+    #[test]
+    fn task_zero_writes_do_not_start_or_acknowledge() {
+        let mut t = Nrf52Temp::new();
+        t.write_u32(OFF_TASKS_START, 0).unwrap();
+        assert_eq!(t.read_u32(OFF_EVENTS_DATARDY).unwrap(), 0);
+        t.write_u32(OFF_TASKS_START, 1).unwrap();
+        t.write_u32(OFF_TASKS_STOP, 0).unwrap();
+        assert_eq!(t.read_u32(OFF_EVENTS_DATARDY).unwrap(), 1);
+        assert_eq!(t.read_u32(OFF_TASKS_START).unwrap(), 0);
+        assert_eq!(t.read_u32(OFF_TASKS_STOP).unwrap(), 0);
+    }
+
+    #[test]
+    fn stop_and_event_clear_preserve_interrupt_configuration() {
+        let mut t = Nrf52Temp::new();
+        t.write_u32(OFF_INTENSET, 1).unwrap();
+        t.write_u32(OFF_TASKS_START, 1).unwrap();
+        t.write_u32(OFF_TASKS_STOP, 1).unwrap();
+        assert_eq!(t.read_u32(OFF_INTENSET).unwrap(), 1);
+        assert_eq!(t.read_u32(OFF_INTENCLR).unwrap(), 1);
+        assert_eq!(t.read_u32(OFF_EVENTS_DATARDY).unwrap(), 1);
+        t.write_u32(OFF_INTENCLR, 1).unwrap();
+        assert_eq!(t.read_u32(OFF_INTENSET).unwrap(), 0);
+        assert_eq!(t.read_u32(OFF_EVENTS_DATARDY).unwrap(), 1);
+        t.write_u32(OFF_INTENSET, 1).unwrap();
+        t.write_u32(OFF_EVENTS_DATARDY, 0).unwrap();
+        assert_eq!(t.read_u32(OFF_INTENCLR).unwrap(), 1);
         assert_eq!(t.read_u32(OFF_EVENTS_DATARDY).unwrap(), 0);
     }
 }

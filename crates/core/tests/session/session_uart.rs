@@ -93,3 +93,24 @@ fn run_for_advances_exactly_cycles_over_hz() {
     // if the machine halts earlier this fixture is wrong for the test
     assert_eq!(dc, hz / 100, "10 ms at the board clock");
 }
+
+#[test]
+fn zero_duration_preserves_execution_and_uart_like_zero_cycles() {
+    let Some((mut s, _, _)) = open_fixture() else {
+        return;
+    };
+    let cycles = s.cycles();
+    let transcript = s.uart_transcript();
+    let zero_cycles = s.run_cycles(0).unwrap();
+    let zero_duration = s.run_for(Duration::ZERO).unwrap();
+    assert_eq!(zero_duration, zero_cycles);
+    assert_eq!(s.cycles(), cycles);
+    assert_eq!(s.uart_transcript(), transcript);
+
+    // Both no-op calls remain in the journal and must replay as no-ops.
+    let snapshot = s.snapshot();
+    s.run_for(Duration::from_millis(1)).unwrap();
+    s.restore(&snapshot).unwrap();
+    assert_eq!(s.cycles(), cycles);
+    assert_eq!(s.uart_transcript(), transcript);
+}

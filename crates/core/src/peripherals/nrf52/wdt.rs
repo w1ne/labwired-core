@@ -69,8 +69,8 @@ impl Default for Nrf52Wdt {
             runstatus: 0,
             reqstatus_pending: 0,
             crv: 0xFFFF_FFFF, // nRF52840 PS §6.34: CRV reset value
-            rren: 0,
-            config: 0,
+            rren: 1,          // RR0 is enabled after reset.
+            config: 1,        // Run during sleep; pause while halted by the debugger.
             counter: 0,
             bitten: false,
             clock: None,
@@ -286,6 +286,96 @@ impl Nrf52Wdt {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reset_enables_rr0_and_sleep_run() {
+        // nRF52840 PS WDT RREN/CONFIG and the peripheral descriptors reset to 1.
+        let w = Nrf52Wdt::new();
+        assert_eq!(w.read_u32(OFF_RREN).unwrap(), 1);
+        assert_eq!(w.read_u32(OFF_REQSTATUS).unwrap(), 1);
+        assert_eq!(w.read_u32(OFF_CONFIG).unwrap(), 1);
+        assert_eq!(w.read_u32(OFF_RUNSTATUS).unwrap(), 0);
+    }
+
+    #[test]
+    fn reset_rr0_feed_reloads_then_missing_feed_times_out() {
+        let mut w = Nrf52Wdt::new();
+        w.write_u32(OFF_CRV, 16).unwrap();
+        w.write_u32(OFF_INTENSET, 1).unwrap();
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        for _ in 0..12 {
+            assert!(!w.tick().irq);
+        }
+        // No RREN write: reset-enabled RR0 must accept this feed.
+        w.write_u32(OFF_RR0, RR_RELOAD_KEY).unwrap();
+        for _ in 0..15 {
+            assert!(!w.tick().irq);
+        }
+        assert_eq!(w.read_u32(OFF_EVENTS_TIMEOUT).unwrap(), 0);
+        let timeout = w.tick();
+        assert!(timeout.irq);
+        assert_eq!(timeout.fired_events, vec![OFF_EVENTS_TIMEOUT as u32]);
+        assert_eq!(w.read_u32(OFF_EVENTS_TIMEOUT).unwrap(), 1);
+        assert!(!w.tick().irq);
+    }
+
+    #[test]
+    fn reset_rr0_ignores_disabled_rr1_feed() {
+        let mut w = Nrf52Wdt::new();
+        w.write_u32(OFF_CRV, 16).unwrap();
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        for _ in 0..12 {
+            w.tick();
+        }
+        w.write_u32(OFF_RR0 + 4, RR_RELOAD_KEY).unwrap();
+        assert_eq!(w.read_u32(OFF_REQSTATUS).unwrap(), 1);
+        for _ in 0..4 {
+            w.tick();
+        }
+        assert_eq!(w.read_u32(OFF_EVENTS_TIMEOUT).unwrap(), 1);
+    }
+
+    #[test]
+    fn explicit_configuration_overrides_defaults_and_locks_on_start() {
+        let mut w = Nrf52Wdt::new();
+        w.write_u32(OFF_RREN, 0b10).unwrap();
+        w.write_u32(OFF_CONFIG, 0b1000).unwrap();
+        w.write_u32(OFF_CRV, 16).unwrap();
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        w.write_u32(OFF_RREN, 1).unwrap();
+        w.write_u32(OFF_CONFIG, 1).unwrap();
+        assert_eq!(w.read_u32(OFF_RREN).unwrap(), 0b10);
+        assert_eq!(w.read_u32(OFF_REQSTATUS).unwrap(), 0b10);
+        assert_eq!(w.read_u32(OFF_CONFIG).unwrap(), 0b1000);
+        for _ in 0..12 {
+            w.tick();
+        }
+        w.write_u32(OFF_RR0 + 4, RR_RELOAD_KEY).unwrap();
+        for _ in 0..15 {
+            w.tick();
+        }
+        assert_eq!(w.read_u32(OFF_EVENTS_TIMEOUT).unwrap(), 0);
+        w.tick();
+        assert_eq!(w.read_u32(OFF_EVENTS_TIMEOUT).unwrap(), 1);
+    }
+
+    #[test]
+    fn scheduled_default_rr0_feed_extends_deadline() {
+        let mut w = Nrf52Wdt::new();
+        w.attach_cycle_clock(CycleClock::default());
+        w.write_u32(OFF_CRV, 16).unwrap();
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        assert_eq!(w.take_scheduled_events()[0].0, 15);
+        w.sync_to(12);
+        assert_eq!(w.take_scheduled_events()[0].0, 3);
+        w.write_u32(OFF_RR0, RR_RELOAD_KEY).unwrap();
+        assert_eq!(w.take_scheduled_events()[0].0, 15);
+        w.sync_to(27);
+        assert_eq!(w.read_u32(OFF_EVENTS_TIMEOUT).unwrap(), 0);
+        w.sync_to(28);
+        assert_eq!(w.read_u32(OFF_EVENTS_TIMEOUT).unwrap(), 1);
+        assert!(w.take_scheduled_events().is_empty());
+    }
 
     #[test]
     fn crv_starts_at_reset_value() {

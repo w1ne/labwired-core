@@ -1311,6 +1311,9 @@ fn steady_state_empty_scheduler_skips_each_cpu_window_drain() {
     assert_eq!(report.primary_steps, 4);
     assert_eq!(report.fuel_consumed, 4);
     assert_eq!(machine.total_cycles, 5);
+    if crate::cycle_clock::event_scheduler_enabled() {
+        assert_eq!(machine.sched.now(), machine.total_cycles);
+    }
     assert_eq!(
         crate::profile::snapshot().sched_calls,
         0,
