@@ -82,6 +82,26 @@ cargo run -q -p labwired-cli -- test \
 That path needs three QingKe V2 parts of the model: the `INTSYSCR` CSR
 (0x804, accepted and discarded), the WCH XW compressed byte/halfword loads
 and stores (`-march=rv32ecxw`), and the `STK` system timer (`qingke_stk`)
-that `Delay_Ms` polls. The PFIC is still not modelled, so firmware that
-needs a SysTick or USART interrupt (the Arduino core's `millis()`) does not
-run yet.
+that `Delay_Ms` polls. Interrupts go through the QingKe PFIC
+(`cpu/qingke_pfic.rs`): STK raises vector 12 and USART1 raises vector 32.
+
+## Official openwch Arduino core
+
+`tests/fixtures/ch32v003f4p6-arduino-openwch.elf` is an Arduino sketch built
+by PlatformIO with the official openwch core (`framework = arduino`,
+`board_build.core = openwch`) from `tests/fixtures/ch32v003f4p6-arduino-openwch/`,
+with no change for the simulator. It uses `Serial`, `pinMode`,
+`digitalWrite`, `digitalRead` and `delay()`/`millis()`. The core counts
+milliseconds in a `WCH-Interrupt-fast` SysTick handler, so the sketch needs
+the PFIC and the hardware register save (HPE). It prints
+`CH32V003_ARDUINO_PASS` only when `millis()` measures four `delay(10)` calls
+as 40..42 ms:
+
+```sh
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v003f4p6/arduino-openwch-smoke.yaml \
+  --output-dir out/boards/ch32v003f4p6/arduino-openwch-smoke
+```
+
+This is a local CLI result. It is not a hosted `model_verified` result or
+hardware confirmation.

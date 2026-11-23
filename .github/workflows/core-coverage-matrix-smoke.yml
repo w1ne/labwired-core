@@ -631,6 +631,11 @@ jobs:
           - id: ch32v003f4p6-noneos-sdk
             script: examples/ch32v003f4p6/noneos-sdk-smoke.yaml
             system: examples/ch32v003f4p6/system.yaml
+          # Same chip, official openwch Arduino core sketch (Serial, digitalRead,
+          # delay()/millis() on the SysTick interrupt through the PFIC).
+          - id: ch32v003f4p6-arduino-openwch
+            script: examples/ch32v003f4p6/arduino-openwch-smoke.yaml
+            system: examples/ch32v003f4p6/system.yaml
           # CH32L103C8T6 (LQFP48, RV32IMAC): blinks PC13 through GPIOC_CFGHR.
           - id: ch32l103c8t6-blink
             script: examples/ch32l103c8t6/io-smoke.yaml

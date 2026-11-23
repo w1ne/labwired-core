@@ -439,3 +439,47 @@ fn ch32v003_usart1_rx_interrupt_never_enters_without_the_irq_line() {
     assert_eq!(out, "USART_IRQ_BOOT\r\n");
     assert_eq!(mcause, 0, "no trap");
 }
+
+const ARDUINO_FIXTURE: &str = "ch32v003f4p6-arduino-openwch.elf";
+
+#[test]
+fn ch32v003_official_openwch_arduino_sketch_runs_unmodified() {
+    // Stock openwch arduino_core_ch32 build: Serial on USART1, pinMode /
+    // digitalWrite / digitalRead on PC0, and delay()/millis() counted by the
+    // core's `WCH-Interrupt-fast` SysTick_Handler through the PFIC. The
+    // sketch prints PASS only when millis() measures 4 x delay(10) as
+    // 40..42 ms.
+    let chip = load_chip("ch32v003f4p6");
+    let (out, steps, mcause) = run_sdk_fixture(&chip, ARDUINO_FIXTURE, 4_000_000);
+    assert_eq!(
+        out,
+        "CH32V003_ARDUINO_BOOT\r\n\
+         tick 0 pc0=0\r\ntick 1 pc0=1\r\ntick 2 pc0=0\r\ntick 3 pc0=1\r\n\
+         elapsed_ms=40\r\nCH32V003_ARDUINO_PASS\r\nCH32V003_ARDUINO_DONE\r\n",
+        "USART1 TX stream"
+    );
+    assert_eq!(mcause, 0x8000_000C, "last trap was SysTick_IRQn");
+    // Four 10 ms delays at 48 MHz are 1,920,000 cycles.
+    assert!(
+        (1_920_000..2_200_000).contains(&steps),
+        "4 x delay(10) took {steps} steps"
+    );
+}
+
+#[test]
+fn ch32v003_arduino_delay_never_returns_without_the_stk_irq_line() {
+    // Negative control: drop `irq: 12` from the STK. msTick never advances,
+    // so the first delay(10) spins for ever after the boot line.
+    let mut yaml = chip_yaml("ch32v003f4p6");
+    let stk = yaml["peripherals"]
+        .as_sequence_mut()
+        .expect("peripherals list")
+        .iter_mut()
+        .find(|p| p["id"].as_str() == Some("stk"))
+        .expect("stk block");
+    stk.as_mapping_mut().unwrap().remove("irq");
+    let chip: ChipDescriptor = serde_yaml::from_value(yaml).expect("descriptor without irq");
+    let (out, _, mcause) = run_sdk_fixture(&chip, ARDUINO_FIXTURE, 1_000_000);
+    assert_eq!(out, "CH32V003_ARDUINO_BOOT\r\n");
+    assert_eq!(mcause, 0, "no trap");
+}
