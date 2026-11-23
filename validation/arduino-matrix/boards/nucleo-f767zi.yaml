@@ -1,0 +1,16 @@
+id: nucleo-f767zi
+chip: stm32f767
+system: systems/nucleo-f767zi.yaml
+# Pinned like the other STM32 rows (ststm32 20.0.0 makes SPI.begin() a no-op).
+pio: { platform: ststm32@19.7.1, board: nucleo_f767zi, framework: arduino }
+max_steps: 10000000
+budget_reason: "NUCLEO-F767ZI 216 MHz, measured 2026-11-21: L0 0.23M, L2 0.67M, L5 0.25M, L8 0.24M, L6 6.71M, L3 7.61M (Wire.begin timing setup)"
+# LD1 = PB0 (UM1974 §6.5).
+led_watch: "gpiob:0"
+led_min_edges: 2
+# L6 drives TIM2_CH1 on PA0 (AF1): LD1/PB0's first PinMap_TIM entry is
+# TIM1_CH2N, a complementary output the twin does not generate.
+pwm_watch: "gpioa:0"
+pwm_min_edges: 20
+family: stm32
+notes: "Stock stm32duino NUCLEO_F767ZI (HSE bypass 8 MHz from ST-LINK MCO, PLL 216 MHz + over-drive)"

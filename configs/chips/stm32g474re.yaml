@@ -14,9 +14,11 @@ ram:
   base: 0x20000000
   size: "128KB"
 
-# PA8 is TIM1_CH1/AF6 and is exposed as Arduino D7 on CN9 (ST UM2505).
-pins:
-  PA8: { gpio: "gpioa", bit: 8 }
+# No `pins:` map. A non-empty map is the complete pad list in
+# `SystemBus::resolve_pin_odr`, so a PA8-only map refused every other pad
+# as a GPIO output. Without a map the STM32 label parse resolves all
+# PA..PD pads. TIM1_CH1 reaches PA8 (AF6, Arduino D7 on CN9, ST UM2505)
+# through `STM32G4_TIMER_PADS` in `bus/attach.rs`, not through this map.
 
 # SRAMCAN (stm32g474xx.h SRAMCAN_BASE) sits at 0x4000A400, 0x4000 above
 # FDCAN1's registers, while the shared `fdcan` model serves its message RAM at
