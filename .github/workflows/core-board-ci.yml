@@ -77,7 +77,9 @@ jobs:
           # A scoped push may select no board (board_matrix.py exits 0 with
           # {"include": []}). GitHub Actions rejects a matrix with an empty
           # include list and fails the run, so `board` is gated on has_boards.
-          # Unscoped gate events still fail closed inside board_matrix.py.
+          # board_matrix.py still fails closed on every gate event, scoped
+          # push included, when the manifest has no `gate: true` board, and
+          # on an unscoped gate event that selects no board.
           has_boards="$(printf '%s' "$matrix" | python -c 'import json, sys; print("true" if json.load(sys.stdin)["include"] else "false")')"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           echo "has_boards=$has_boards" >> "$GITHUB_OUTPUT"
