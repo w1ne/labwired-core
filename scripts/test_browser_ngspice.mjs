@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: MIT
 // Run `adapter: ngspice` in a real browser: the web build of labwired-wasm,
 // a real ngspice WASM build and the host's JavaScript exchange callback. Both
-// browser constructors are exercised with the committed LDR example:
-//   machine: WasmSimulator.new_from_config_with_ngspice_callback (F401 blinky)
-//   flex:    WasmFlexRuntime.new_from_yaml_with_ngspice_callback
+// browser constructors are exercised with the committed LDR example, and the
+// browser `labwired test` runner with the portable mixed-signal firmware:
+//   machine:    WasmSimulator.new_from_config_with_ngspice_callback (F401 blinky)
+//   flex:       WasmFlexRuntime.new_from_yaml_with_ngspice_callback
+//   flex test:  WasmFlexTestRun.run_with_ngspice_callback
+//               (crates/wasm/tests/fixtures/flex-mixed-signal, system-ngspice.yaml)
 // Every dependency is explicit; a missing one fails, it is never skipped.
 //
 //   wasm-pack build crates/wasm --target web --dev --out-dir pkg-flex-web
@@ -13,8 +16,9 @@
 //   LABWIRED_NGSPICE_WASM_DIR=/abs/dir/with/ngspice.mjs+ngspice.wasm \
 //     node scripts/test_browser_ngspice.mjs
 //
-// The host module must export `createBrowserNgspiceExchange(models, factory)`
-// and `loadNgspiceFactory(glueUrl, wasmUrl)` (the LabWired app's
+// The host module must export `createBrowserNgspiceExchange(models, factory)`,
+// `prepareBrowserFlexNgspiceModels(flexYaml, netlists)` and
+// `loadNgspiceFactory(glueUrl, wasmUrl)` (the LabWired app's
 // packages/board-config/src/ngspice-runtime.ts, bundled as an ES module).
 // Exit status is non-zero when any case fails.
 import { readFileSync, existsSync } from 'node:fs';
@@ -43,6 +47,7 @@ const routes = {
   '/pkg/': pkg,
   '/ngspice/': wasmDir,
   '/example/': resolve(root, 'examples/cosim-ngspice-ldr'),
+  '/mixed/': resolve(root, 'crates/wasm/tests/fixtures/flex-mixed-signal'),
 };
 const files = {
   '/host.mjs': hostModule,
@@ -190,11 +195,9 @@ async function runCases() {
 
   // Flex: the same manifest semantics with flat signal names, host-stepped.
   await run('flex: LDR divider, unpowered then bright then dark', async () => {
-    const exchange = await host.createBrowserNgspiceExchange([model(netlist,
-      { supply: 'fw.ldr_enable', lux: 'bench.lux' },
-      { v_out: 'ldr.out_volts', dark: 'ldr.dark' },
-      { v_out: { node: 'out', scale: 1, offset: 0 },
-        dark: { node: 'out', scale: 1, offset: 0, threshold: 1.65 } })], factory);
+    // The app's own Flex model preparation reads the manifest's config.
+    const exchange = await host.createBrowserNgspiceExchange(
+      host.prepareBrowserFlexNgspiceModels(flexYaml, { './ldr.cir': netlist }), factory);
     let flex;
     try {
       flex = wasm.WasmFlexRuntime.new_from_yaml_with_ngspice_callback(flexYaml, exchange.exchange);
@@ -213,6 +216,117 @@ async function runCases() {
       check(flex.read(port('dark')) === 1, 'dark threshold output did not flip');
       return { bright_v: bright, dark_v: dark };
     } finally { flex?.free(); exchange.dispose(); }
+  });
+
+  // Flex test scripts: the committed portable firmware (firmware.rs) runs in
+  // the package's wasmi runner against the ngspice RC of system-ngspice.yaml,
+  // through the app's own Flex model preparation and exchange.
+  const [rcYaml, rcNetlist, enableScript, disabledScript, rcFirmware] = await Promise.all([
+    fetch('/mixed/system-ngspice.yaml').then((r) => r.text()),
+    fetch('/mixed/rc.cir').then((r) => r.text()),
+    fetch('/mixed/ngspice-enable.yaml').then((r) => r.text()),
+    fetch('/mixed/ngspice-disabled.yaml').then((r) => r.text()),
+    fetch('/mixed/firmware.wasm').then((r) => r.arrayBuffer()),
+  ]);
+  const rcModels = () => host.prepareBrowserFlexNgspiceModels(rcYaml, { './rc.cir': rcNetlist });
+  // rc.cir: tau = 10 kOhm * 100 nF. Under `input_sampling: previous_boundary`
+  // the drive set at 1 us is latched at the 25 us boundary and applied from it.
+  const RC_TAU_NS = 1_000_000;
+  const RC_DRIVE_FROM_NS = 25_000;
+  const rcVolts = (timeNs) => 3.3 * (1 - Math.exp(-Math.max(timeNs - RC_DRIVE_FROM_NS, 0) / RC_TAU_NS));
+  const RC_TOLERANCE_V = 1e-5;
+  const testRun = (name, script, callback) => {
+    const run = wasm.WasmFlexTestRun.run_with_ngspice_callback(
+      name, script, rcYaml, new Uint8Array(rcFirmware), callback);
+    try {
+      const result = JSON.parse(run.result_json());
+      let samples = null;
+      if (result.stop_reason !== 'config_error') {
+        const runtime = run.take_runtime();
+        try {
+          const batch = runtime.analog_trace_snapshot(0);
+          check(batch.channels.length === 1 && batch.channels[0].name === 'rc.v_out'
+            && batch.channels[0].unit === 'V', `scope channels ${JSON.stringify(batch.channels)}`);
+          samples = batch.samples.map((s) => ({ time_ns: Number(s.time_ns), v: s.values[0] }));
+        } finally { runtime.free(); }
+      }
+      return { result, samples };
+    } finally { run.free(); }
+  };
+  const failedAssertions = (result) => result.assertions.filter((a) => !a.passed);
+  const sampleAt = (samples, timeNs) => samples.find((s) => s.time_ns === timeNs)?.v;
+
+  await run('flex test: firmware enables the ngspice RC', async () => {
+    const exchange = await host.createBrowserNgspiceExchange(rcModels(), factory);
+    try {
+      const { result, samples } = testRun('ngspice-enable.yaml', enableScript, exchange.exchange);
+      check(result.status === 'pass' && result.stop_reason === 'completed',
+        `${result.status}/${result.stop_reason}: ${result.message} ${JSON.stringify(failedAssertions(result))}`);
+      let worst = 0;
+      for (const s of samples) worst = Math.max(worst, Math.abs(s.v - rcVolts(s.time_ns)));
+      check(worst < RC_TOLERANCE_V, `ngspice RC departs from the analytic curve by ${worst} V`);
+      return { entry_result: result.entry_result, time_ns: result.time_ns,
+        v_at_1000000_ns: sampleAt(samples, 1_000_000), v_at_1025000_ns: sampleAt(samples, 1_025_000),
+        analytic_v_at_1025000_ns: rcVolts(1_025_000), worst_abs_error_v: worst,
+        scope_samples: samples.length, assertions: result.assertions.length };
+    } finally { exchange.dispose(); }
+  });
+
+  await run('flex test: wrong firmware command leaves the ngspice RC low', async () => {
+    const exchange = await host.createBrowserNgspiceExchange(rcModels(), factory);
+    try {
+      const { result, samples } = testRun('ngspice-disabled.yaml', disabledScript, exchange.exchange);
+      check(result.status === 'pass' && result.stop_reason === 'completed',
+        `${result.status}/${result.stop_reason}: ${result.message} ${JSON.stringify(failedAssertions(result))}`);
+      check(result.entry_result === 0, `entry_result ${result.entry_result}`);
+      const peak = Math.max(...samples.map((s) => Math.abs(s.v)));
+      check(peak === 0, `the undriven circuit moved to ${peak} V`);
+      return { entry_result: result.entry_result, time_ns: result.time_ns, peak_v: peak,
+        scope_samples: samples.length };
+    } finally { exchange.dispose(); }
+  });
+
+  // Controls: a callback that throws, or answers without a declared output,
+  // mid-run. Each must end the script as a model error, never as a pass.
+  const faulty = (label, answer) => run(`flex test: ${label} is a model error`, async () => {
+    const exchange = await host.createBrowserNgspiceExchange(rcModels(), factory);
+    try {
+      let calls = 0;
+      const callback = (request) => {
+        calls += 1;
+        // Exchange 1 is the (0, 0) priming step; fail at the 40th boundary.
+        return calls < 40 ? exchange.exchange(request) : answer(request);
+      };
+      const { result } = testRun('ngspice-enable.yaml', enableScript, callback);
+      check(result.status === 'error' && result.stop_reason === 'model_error',
+        `${result.status}/${result.stop_reason}: ${result.message}`);
+      return { stop_reason: result.stop_reason, message: result.message, time_ns: result.time_ns };
+    } finally { exchange.dispose(); }
+  });
+  await faulty('a throwing ngspice callback', () => { throw new Error('solver host crashed'); });
+  await faulty('a callback response without v_out', () => '{}');
+  await faulty('a callback response that is not JSON', () => 'not json');
+
+  await run('flex test: a non-function callback is refused', async () => {
+    try {
+      wasm.WasmFlexTestRun.run_with_ngspice_callback(
+        'ngspice-enable.yaml', enableScript, rcYaml, new Uint8Array(rcFirmware), 'exchange');
+    } catch (error) {
+      const message = String(error?.message ?? error);
+      check(message.includes('must be a function'), message);
+      return { refused: message };
+    }
+    throw new Error('a non-function callback must be refused');
+  });
+
+  await run('flex test: plain run() refuses the ngspice manifest', async () => {
+    const run = wasm.WasmFlexTestRun.run('ngspice-enable.yaml', enableScript, rcYaml, new Uint8Array(rcFirmware));
+    try {
+      const result = JSON.parse(run.result_json());
+      check(result.status === 'error' && result.stop_reason === 'config_error', `${result.status}/${result.stop_reason}`);
+      check(result.message.includes('needs an ngspice callback'), result.message);
+      return { stop_reason: result.stop_reason, message: result.message };
+    } finally { run.free(); }
   });
   return { cases };
 }

@@ -607,3 +607,217 @@ fn firmware_switches_the_ngspice_ldr_divider_into_pa0() {
         machine.total_cycles
     );
 }
+
+// ---------------------------------------------------------------------------
+// Flex test scripts: the portable firmware of `flex-mixed-signal` through
+// `run_script`, with its RC solved by native ngspice.
+
+// Needs the `flex-script` feature (the wasmi runner):
+// `cargo test -p labwired-core --features flex-script --test cosim cosim_ngspice::`.
+#[cfg(feature = "flex-script")]
+mod flex_script_runs {
+    use super::*;
+
+    /// rc.cir: 10 kOhm * 100 nF.
+    const FLEX_RC_TAU_S: f64 = 1e-3;
+    /// `previous_boundary`: the drive written at 1 us is latched at 25 us.
+    const FLEX_RC_DRIVE_FROM_NS: u64 = 25_000;
+
+    fn flex_rc_volts(time_ns: u64) -> f64 {
+        let t = time_ns.saturating_sub(FLEX_RC_DRIVE_FROM_NS) as f64 * 1e-9;
+        VDD * (1.0 - (-t / FLEX_RC_TAU_S).exp())
+    }
+
+    fn run_flex_rc_script(name: &str) -> labwired_core::flex_script::FlexScriptRun {
+        run_flex_rc_script_with(name, |manifest| manifest)
+    }
+
+    /// Run a `flex-mixed-signal` script on system-ngspice.yaml, after `edit`.
+    fn run_flex_rc_script_with(
+        name: &str,
+        edit: impl FnOnce(String) -> String,
+    ) -> labwired_core::flex_script::FlexScriptRun {
+        use labwired_core::flex_script::{run_script, FlexResultConfig};
+        let dir = root("crates/wasm/tests/fixtures/flex-mixed-signal");
+        let netlist = dir.join("rc.cir").canonicalize().unwrap();
+        let manifest = edit(
+            std::fs::read_to_string(dir.join("system-ngspice.yaml"))
+                .unwrap()
+                .replace("model: ./rc.cir", &format!("model: {}", netlist.display())),
+        );
+        let firmware = std::fs::read(dir.join("firmware.wasm")).unwrap();
+        let script: labwired_config::FlexTestScript =
+            serde_yaml::from_str(&std::fs::read_to_string(dir.join(name)).unwrap()).unwrap();
+        script.validate().unwrap();
+        let config = FlexResultConfig {
+            script: name.into(),
+            flex: script.inputs.flex.clone().into(),
+            firmware: script.inputs.firmware.clone().into(),
+            firmware_sha256: None,
+            sequence: script.steps(),
+            limits: labwired_config::FlexTestLimits {
+                max_steps: script.limits.max_steps,
+                max_time_ns: script.limits.max_time_ns,
+            },
+        };
+        run_script(&script, config, &manifest, &firmware)
+    }
+
+    fn flex_rc_samples(run: &labwired_core::flex_script::FlexScriptRun) -> Vec<(u64, f64)> {
+        let batch = run.runtime.as_ref().unwrap().analog_trace_snapshot(0);
+        assert_eq!(batch.channels.len(), 1);
+        assert_eq!(batch.channels[0].name, "rc.v_out");
+        assert_eq!(batch.channels[0].unit, "V");
+        assert_eq!(batch.dropped, 0);
+        batch
+            .samples
+            .iter()
+            .map(|sample| (sample.time_ns, f64::from(sample.values[0])))
+            .collect()
+    }
+
+    /// Positive control: firmware mode 0 enables the RC; the run passes every
+    /// assertion of `ngspice-enable.yaml` and the ngspice node follows the
+    /// analytic previous-boundary response at every 25 us boundary.
+    #[test]
+    fn flex_script_firmware_enables_the_ngspice_rc() {
+        if !ngspice_ready() {
+            return;
+        }
+        let run = run_flex_rc_script("ngspice-enable.yaml");
+        let result = &run.result;
+        assert_eq!(
+            (result.status, result.message.as_deref()),
+            ("pass", None),
+            "{:#?}",
+            result
+                .assertions
+                .iter()
+                .filter(|a| !a.passed)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(result.entry_result, Some(1025));
+        assert_eq!(result.time_ns, 1_025_000);
+        assert!(result.assertions.iter().all(|a| a.passed));
+        let samples = flex_rc_samples(&run);
+        assert_eq!(samples.len(), 42, "priming row plus 41 boundaries");
+        let mut worst = 0.0f64;
+        for &(time_ns, volts) in &samples {
+            worst = worst.max((volts - flex_rc_volts(time_ns)).abs());
+        }
+        // The scope stores f32 (about 2.4e-7 V resolution near 2 V).
+        assert!(
+            worst < 1e-5,
+            "ngspice RC departs from the analytic curve by {worst} V"
+        );
+        let at = |time_ns| samples.iter().find(|s| s.0 == time_ns).unwrap().1;
+        assert_eq!(
+            at(25_000),
+            0.0,
+            "the drive must not reach the circuit before it is latched"
+        );
+        eprintln!(
+            "Flex ngspice RC: entry_result {:?}, v(1000 us) {:.6} V (analytic {:.6}), v(1025 us) {:.6} V (analytic {:.6}), worst |error| {worst:.3e} V over {} samples",
+            result.entry_result,
+            at(1_000_000),
+            flex_rc_volts(1_000_000),
+            at(1_025_000),
+            flex_rc_volts(1_025_000),
+            samples.len()
+        );
+    }
+
+    /// Negative control: firmware mode 1 submits the wrong command; the ngspice
+    /// RC stays at exactly 0 V and the firmware times out.
+    #[test]
+    fn flex_script_wrong_command_leaves_the_ngspice_rc_low() {
+        if !ngspice_ready() {
+            return;
+        }
+        let run = run_flex_rc_script("ngspice-disabled.yaml");
+        let result = &run.result;
+        assert_eq!(result.status, "pass", "{:?}", result.message);
+        assert_eq!(result.entry_result, Some(0));
+        assert_eq!(result.time_ns, 4_000_000);
+        let samples = flex_rc_samples(&run);
+        assert_eq!(samples.len(), 161);
+        assert!(samples.iter().all(|&(_, volts)| volts == 0.0));
+    }
+
+    /// A broken source mapping fails while the models are built: a config
+    /// error with ngspice's reason, and no firmware step.
+    #[test]
+    fn flex_script_with_a_broken_ngspice_model_is_a_config_error() {
+        if !ngspice_ready() {
+            return;
+        }
+        use labwired_core::flex_script::FlexStopReason;
+        let run = run_flex_rc_script_with("ngspice-enable.yaml", |manifest| {
+            manifest.replace("element: Vdrive", "element: Vmissing")
+        });
+        assert_eq!(run.result.status, "error");
+        assert!(matches!(
+            run.result.stop_reason,
+            FlexStopReason::ConfigError
+        ));
+        assert_eq!(run.result.steps_executed, 0);
+        let message = run.result.message.unwrap();
+        assert!(message.contains("vmissing"), "{message}");
+    }
+}
+
+/// No solver: `previous_boundary` hands each boundary the inputs latched at
+/// the previous one, needs the (0, 0) step first, and rejects other values.
+#[test]
+fn ngspice_previous_boundary_latch_delays_inputs_by_one_boundary() {
+    use labwired_core::cosim::ngspice::NgspiceInputLatch;
+    let config = |sampling: &str| {
+        model(&format!(
+            "id: rc\nadapter: ngspice\nmodel: ./rc.cir\nstep_ns: 1000\ninputs: {{ gpio: fw.drive }}\noutputs: {{ v_out: fw.v }}\nconfig: {{ input_sampling: {sampling} }}\n"
+        ))
+    };
+    let high = CosimSignalValue::Bool(true);
+    let low = CosimSignalValue::Bool(false);
+    let mut latch = NgspiceInputLatch::new(&config("previous_boundary")).unwrap();
+    let seen = |step: CosimStep| step.inputs["gpio"].clone();
+    assert_eq!(
+        seen(latch.sample(step(0, 0, &[("gpio", low.clone())])).unwrap()),
+        low
+    );
+    assert_eq!(
+        seen(
+            latch
+                .sample(step(1000, 1000, &[("gpio", high.clone())]))
+                .unwrap()
+        ),
+        low
+    );
+    assert_eq!(
+        seen(
+            latch
+                .sample(step(2000, 1000, &[("gpio", high.clone())]))
+                .unwrap()
+        ),
+        high
+    );
+
+    let mut unprimed = NgspiceInputLatch::new(&config("previous_boundary")).unwrap();
+    let err = unprimed
+        .sample(step(1000, 1000, &[("gpio", high.clone())]))
+        .unwrap_err();
+    assert!(err.contains("initialization step"), "{err}");
+
+    let mut current = NgspiceInputLatch::new(&config("current_boundary")).unwrap();
+    assert_eq!(
+        seen(
+            current
+                .sample(step(1000, 1000, &[("gpio", high.clone())]))
+                .unwrap()
+        ),
+        high
+    );
+    let Err(err) = NgspiceInputLatch::new(&config("sometimes")) else {
+        panic!("an unknown input_sampling must be rejected");
+    };
+    assert!(err.contains("config.input_sampling"), "{err}");
+}

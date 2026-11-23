@@ -620,3 +620,71 @@ fn analog_trace_records_the_session_waveform() {
         "the node should have settled near 3.3 V: {last}"
     );
 }
+
+/// Whether python3 can load libngspice. Without it the caller skips, unless
+/// `LABWIRED_REQUIRE_NGSPICE` is set, as in
+/// `crates/core/tests/cosim/cosim_ngspice.rs`.
+fn ngspice_ready() -> bool {
+    let probe = Command::new("python3")
+        .arg("-c")
+        .arg(
+            "import ctypes, ctypes.util, os;\
+             ctypes.CDLL(os.environ.get('LABWIRED_NGSPICE_LIB') or \
+             ctypes.util.find_library('ngspice') or 'libngspice.so.0')",
+        )
+        .output();
+    let ready = matches!(probe, Ok(output) if output.status.success());
+    if !ready {
+        assert!(
+            std::env::var_os("LABWIRED_REQUIRE_NGSPICE").is_none(),
+            "LABWIRED_REQUIRE_NGSPICE is set, but python3 cannot load libngspice"
+        );
+        eprintln!(
+            "SKIP: python3 cannot load libngspice (apt install libngspice0, or set \
+             LABWIRED_NGSPICE_LIB); the labwired test ngspice run did not run"
+        );
+    }
+    ready
+}
+
+/// `labwired test --script` on the committed Flex ngspice scripts, run from a
+/// working directory that is not the fixture's: `model: ./rc.cir` resolves
+/// from the directory of `system-ngspice.yaml`. The enable run reaches 63.2 %
+/// at 1025 µs; the disabled run is the negative control and stays at 0 V.
+#[test]
+fn labwired_test_runs_flex_ngspice_scripts_from_any_working_directory() {
+    if !ngspice_ready() {
+        return;
+    }
+    let fixture = workspace_root().join("crates/wasm/tests/fixtures/flex-mixed-signal");
+    for (script, entry_result) in [("ngspice-enable.yaml", 1025), ("ngspice-disabled.yaml", 0)] {
+        let temp_dir =
+            labwired_cli::test_support::unique_temp_dir(&format!("labwired-flex-{script}"));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_labwired"))
+            .current_dir(&temp_dir)
+            .arg("test")
+            .arg("--script")
+            .arg(fixture.join(script))
+            .arg("--output-dir")
+            .arg(&temp_dir)
+            .arg("--no-uart-stdout")
+            .output()
+            .expect("failed to run labwired");
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let result: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(temp_dir.join("result.json"))
+                .unwrap_or_else(|error| panic!("{script}: no result.json ({error})\n{stderr}")),
+        )
+        .unwrap();
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{script}: {result:#}\n{stderr}"
+        );
+        assert_eq!(result["status"], "pass", "{script}: {result:#}");
+        assert_eq!(result["stop_reason"], "completed", "{script}: {result:#}");
+        assert_eq!(result["entry_result"], entry_result, "{script}: {result:#}");
+    }
+}

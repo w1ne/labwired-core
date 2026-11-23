@@ -149,6 +149,75 @@ pub fn expected_outputs(config: &CosimModelConfig) -> Vec<String> {
     names
 }
 
+/// `config.input_sampling` of an `adapter: ngspice` model: which inputs the
+/// solver integrates the interval ending at `time_ns` with. Applied here, in
+/// front of either host, so the browser exchange and the native host receive
+/// the same frames.
+///
+/// - `current_boundary` (default): the inputs routed at this boundary, held
+///   over the whole interval that ends at it.
+/// - `previous_boundary`: the inputs latched at the previous boundary, as the
+///   analog adapter's mode of the same name. An input written mid-interval
+///   reaches the circuit from the next boundary on. Requires the runner's
+///   `(time_ns = 0, dt_ns = 0)` initialization step first (Flex sends it).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum NgspiceInputSampling {
+    #[default]
+    CurrentBoundary,
+    PreviousBoundary,
+}
+
+impl NgspiceInputSampling {
+    pub fn from_config(config: &CosimModelConfig) -> Result<Self, String> {
+        match config.config.get("input_sampling") {
+            None => Ok(Self::CurrentBoundary),
+            Some(Yaml::String(value)) if value == "current_boundary" => Ok(Self::CurrentBoundary),
+            Some(Yaml::String(value)) if value == "previous_boundary" => {
+                Ok(Self::PreviousBoundary)
+            }
+            Some(_) => Err(format!(
+                "ngspice model '{}' config.input_sampling must be `current_boundary` or `previous_boundary`",
+                config.id
+            )),
+        }
+    }
+}
+
+/// Rewrites each boundary's inputs by [`NgspiceInputSampling`].
+pub struct NgspiceInputLatch {
+    model_id: String,
+    sampling: NgspiceInputSampling,
+    held: Option<CosimSignals>,
+}
+
+impl NgspiceInputLatch {
+    pub fn new(config: &CosimModelConfig) -> Result<Self, String> {
+        Ok(Self {
+            model_id: config.id.clone(),
+            sampling: NgspiceInputSampling::from_config(config)?,
+            held: None,
+        })
+    }
+
+    pub fn sample(&mut self, step: CosimStep) -> Result<CosimStep, String> {
+        if self.sampling == NgspiceInputSampling::CurrentBoundary {
+            return Ok(step);
+        }
+        let inputs = match self.held.replace(step.inputs.clone()) {
+            Some(held) => held,
+            // The initialization step applies its own (initial) inputs.
+            None if step.time_ns == 0 && step.dt_ns == 0 => step.inputs,
+            None => {
+                return Err(format!(
+                    "ngspice model '{}' previous_boundary sampling requires the (time_ns = 0, dt_ns = 0) initialization step first",
+                    self.model_id
+                ))
+            }
+        };
+        Ok(CosimStep { inputs, ..step })
+    }
+}
+
 /// Voltage routes are already expressed in volts by the manifest contract.
 /// Boolean and unitless routes are deliberately not presented as scope volts.
 pub struct NgspiceTrace {
@@ -263,6 +332,8 @@ pub struct NgspiceModelSpec {
     pub step_ns: u64,
     pub inputs: BTreeMap<String, NgspiceInputSource>,
     pub outputs: BTreeMap<String, NgspiceOutputNode>,
+    /// Applied by the adapter before the host sees a frame.
+    pub input_sampling: NgspiceInputSampling,
 }
 
 impl NgspiceModelSpec {
@@ -409,6 +480,7 @@ impl NgspiceModelSpec {
             step_ns: config.step_ns,
             inputs,
             outputs,
+            input_sampling: NgspiceInputSampling::from_config(config)?,
         })
     }
 
@@ -546,6 +618,7 @@ fn check_netlist(netlist: &str) -> Result<(), String> {
 /// `external_process` transport, with the shared output and trace checks.
 pub struct NativeNgspiceAdapter {
     process: ExternalProcessCosimAdapter,
+    latch: NgspiceInputLatch,
     model_id: String,
     expected_outputs: Vec<String>,
     trace: NgspiceTrace,
@@ -553,6 +626,7 @@ pub struct NativeNgspiceAdapter {
 
 impl CosimAdapter for NativeNgspiceAdapter {
     fn step(&mut self, step: CosimStep) -> SimResult<CosimStepResult> {
+        let step = self.latch.sample(step).map_err(SimulationError::Other)?;
         // The same input checks as the browser request, before the frame
         // leaves the process.
         request_json(&self.model_id, &step).map_err(SimulationError::Other)?;
@@ -595,6 +669,7 @@ pub fn build_native_adapter(
     base_dir: &Path,
 ) -> SimResult<Box<dyn CosimAdapter>> {
     let spec = NgspiceModelSpec::from_config(config, base_dir).map_err(SimulationError::Other)?;
+    let latch = NgspiceInputLatch::new(config).map_err(SimulationError::Other)?;
     let spec_json = spec.host_json();
     let process = ExternalProcessCosimAdapter::spawn_with_options(
         "python3",
@@ -607,6 +682,7 @@ pub fn build_native_adapter(
     .map_err(|err| SimulationError::Other(format!("ngspice model '{}': {err}", config.id)))?;
     Ok(Box::new(NativeNgspiceAdapter {
         process,
+        latch,
         model_id: config.id.clone(),
         expected_outputs: expected_outputs(config),
         trace: NgspiceTrace::new(config),

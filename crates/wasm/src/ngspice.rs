@@ -5,7 +5,8 @@
 
 use js_sys::Function;
 pub(crate) use labwired_core::cosim::ngspice::{
-    expected_outputs, parse_response, request_json, require_outputs, NgspiceTrace,
+    expected_outputs, parse_response, request_json, require_outputs, NgspiceInputLatch,
+    NgspiceTrace,
 };
 use labwired_core::cosim::{CosimAdapter, CosimStep, CosimStepResult};
 use labwired_core::{SimResult, SimulationError};
@@ -22,6 +23,7 @@ static NEXT_NGSPICE_CALLBACK_ID: AtomicU64 = AtomicU64::new(1);
 
 struct NgspiceCallbackAdapter {
     callback_id: u64,
+    latch: NgspiceInputLatch,
     model_id: String,
     expected_outputs: Vec<String>,
     trace: NgspiceTrace,
@@ -29,6 +31,7 @@ struct NgspiceCallbackAdapter {
 
 impl CosimAdapter for NgspiceCallbackAdapter {
     fn step(&mut self, step: CosimStep) -> SimResult<CosimStepResult> {
+        let step = self.latch.sample(step).map_err(SimulationError::Other)?;
         let request = request_json(&self.model_id, &step).map_err(SimulationError::Other)?;
         let callback =
             NGSPICE_CALLBACKS.with(|callbacks| callbacks.borrow().get(&self.callback_id).cloned());
@@ -90,13 +93,15 @@ impl Drop for NgspiceCallbackAdapter {
 pub(crate) fn adapter(
     config: &labwired_config::CosimModelConfig,
     callback: &Function,
-) -> Box<dyn CosimAdapter> {
-    Box::new(NgspiceCallbackAdapter {
+) -> SimResult<Box<dyn CosimAdapter>> {
+    let latch = NgspiceInputLatch::new(config).map_err(SimulationError::Other)?;
+    Ok(Box::new(NgspiceCallbackAdapter {
         callback_id: register_ngspice_callback(callback.clone()),
+        latch,
         model_id: config.id.clone(),
         expected_outputs: expected_outputs(config),
         trace: NgspiceTrace::new(config),
-    })
+    }))
 }
 
 /// The browser adapter factory shared by `WasmSimulator` and
@@ -114,7 +119,7 @@ pub(crate) fn browser_adapter(
                 config.id
             ))
         })?;
-        Ok(adapter(config, callback))
+        adapter(config, callback)
     } else {
         labwired_core::cosim::build_cosim_adapter_with_base(config, std::path::Path::new("."))
     }
