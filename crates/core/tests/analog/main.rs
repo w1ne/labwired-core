@@ -24,6 +24,7 @@ mod analog_coil_series;
 mod analog_copper_capacity;
 mod analog_devices;
 mod analog_diode_current;
+mod analog_diode_series_conditioning;
 mod analog_linear_golden;
 mod analog_macros;
 mod analog_motor_circuit;
