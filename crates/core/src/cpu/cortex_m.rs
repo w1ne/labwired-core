@@ -2117,12 +2117,12 @@ impl CortexM {
         Ok(())
     }
 
-    /// The JIT does not run `ExecuteFPCheck`, so while a context could still
-    /// create its FP state (ASPEN set, FPCA clear) or a lazy save is pending,
-    /// the core stays on the interpreter.
+    /// An FP block does not run `ExecuteFPCheck`. Interpret it while access
+    /// is denied, a context needs initialization (ASPEN set, FPCA clear), or
+    /// a lazy save is pending. Integer blocks do not change FP context.
     #[cfg(feature = "jit")]
     #[inline]
-    fn fp_context_pending(&self) -> bool {
+    pub(crate) fn fp_context_pending(&self) -> bool {
         self.fp_ctx.as_ref().is_some_and(|fp| {
             !self.fp_access_allowed() || fp.lspact() || (self.control & 0x4 == 0 && fp.aspen())
         })
@@ -3006,7 +3006,7 @@ impl CortexM {
                 }
                 self.step(bus, observers, config)?;
                 engine.note_interpreted();
-            } else if self.it_state != 0 || self.waiting_for_event || self.fp_context_pending() {
+            } else if self.it_state != 0 || self.waiting_for_event {
                 self.step(bus, observers, config)?;
                 engine.note_interpreted();
             } else {
@@ -5595,3 +5595,7 @@ mod t16_discovery_tests;
 #[cfg(test)]
 #[path = "cortex_m/t16_countdown_tests.rs"]
 mod t16_countdown_tests;
+
+#[cfg(all(test, feature = "jit"))]
+#[path = "cortex_m/jit_fp_context_tests.rs"]
+mod jit_fp_context_tests;
