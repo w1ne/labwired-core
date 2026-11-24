@@ -1,0 +1,34 @@
+# Flex test script on system-ngspice.yaml: test-enable.yaml with the RC solved
+# by ngspice. The firmware enables the RC network and returns the time, in µs,
+# at which the voltage reaches 63.2 % of 3.3 V.
+#
+# Analytic response: the drive set at 1 µs is latched at the 25 µs boundary
+# (previous_boundary), so v(t) = 3.3 V * (1 - exp(-(t - 25 µs) / 1 ms)). It
+# crosses 2.0856 V at 1024.67 µs: 2.05527 V at 1000 µs, 2.08600 V at 1025 µs.
+# The in-core analog engine (test-enable.yaml) lags that curve by one sample.
+#
+# Not named test-*.yaml: those run in gates that have no ngspice host. Runs
+# natively in crates/core/tests/cosim/cosim_ngspice.rs and in the browser in
+# scripts/test_browser_ngspice.mjs.
+schema_version: "1.0"
+inputs:
+  flex: system-ngspice.yaml
+  firmware: firmware.wasm
+entry:
+  export: run
+  args:
+    - { port: command }
+    - { port: voltage }
+    - { number: 0 }
+limits:
+  max_steps: 100000
+  max_time_ns: 4000000
+assertions:
+  - entry_result: { equals: 1025 }
+  - port_value: { port: voltage, min: 2.0856, max: 3.3 }
+  - digital_edges: { port: command, count: 1 }
+  - digital_edges: { signal: device.ready, times_ns: [1000] }
+  - analog_sample: { port: voltage, at_ns: 25000, equals: 0 }
+  - analog_sample: { port: voltage, at_ns: 1000000, max: 2.0856 }
+  - analog_sample: { port: voltage, at_ns: 1025000, min: 2.0856 }
+  - final_time_ns: { equals: 1025000 }

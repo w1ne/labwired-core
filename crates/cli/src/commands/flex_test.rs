@@ -18,7 +18,7 @@ use labwired_core::flex::{FlexAnalogTraceBatch, FlexDigitalTraceBatch, FlexRunti
 use labwired_core::flex_console::FlexConsoleCapture;
 use labwired_core::flex_i2c::FlexI2cTraceBatch;
 use labwired_core::flex_script::{
-    run_script, FlexResultConfig, FlexScriptRun, FlexStopReason, FlexTestResult,
+    run_script_with_factory, FlexResultConfig, FlexScriptRun, FlexStopReason, FlexTestResult,
 };
 use labwired_core::flex_spi::FlexSpiTraceBatch;
 use serde::Serialize;
@@ -357,7 +357,14 @@ pub(crate) fn run_flex_test(args: &TestArgs, script: FlexTestScript) -> FlexRunO
         result,
         mut runtime,
     } = match inputs {
-        Ok((manifest, firmware)) => run_script(&script, config, &manifest, &firmware),
+        Ok((manifest, firmware)) => {
+            // A relative co-sim `model:` resolves from the manifest's
+            // directory, not the working directory.
+            let flex_dir = flex_path.parent().unwrap_or_else(|| Path::new("."));
+            run_script_with_factory(&script, config, &manifest, &firmware, |model| {
+                labwired_core::cosim::build_cosim_adapter_with_base(model, flex_dir)
+            })
+        }
         Err(message) => FlexScriptRun {
             result: FlexTestResult::config_error(config, message),
             runtime: None,

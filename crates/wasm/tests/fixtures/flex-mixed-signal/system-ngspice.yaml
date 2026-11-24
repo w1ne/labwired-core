@@ -1,0 +1,47 @@
+# The system.yaml contract with the RC solved by ngspice (`rc.cir`) instead
+# of the in-core analog engine. The control rule block and the ports are
+# unchanged. Synthetic device contract, not a fidelity claim for any chip.
+#
+# `labwired test --script` resolves `model:` from this file's directory.
+# FlexRuntime::from_yaml resolves it from the process working directory, as
+# for examples/cosim-ngspice-ldr/flex-ldr.yaml, so the core test substitutes
+# an absolute path. The browser host receives the netlist text by this name.
+schema_version: 1
+name: flex-portable-rc-ngspice
+ports:
+  - { name: command, signal: control.enable, access: write, kind: bool, initial: 0 }
+  - { name: voltage, signal: circuit.voltage, access: read, kind: number, unit: V }
+cosim_models:
+  - id: control
+    adapter: behavior
+    step_ns: 1000
+    inputs: { enable: control.enable }
+    outputs: { ready: device.ready }
+    config:
+      behavior:
+        primitive: gpio_device
+        states: [idle, ready]
+        outputs: [ready]
+        pin_defaults: { ready: false }
+        rules:
+          - on: { input: enable }
+            when: 'input(enable) != 0'
+            do: [{ goto: ready }, { pin: ready, level: 1 }]
+          - on: { input: enable }
+            when: 'input(enable) == 0'
+            do: [{ goto: idle }, { pin: ready, level: 0 }]
+  - id: rc
+    adapter: ngspice
+    model: ./rc.cir
+    step_ns: 25000
+    inputs: { drive: device.ready }
+    outputs: { v_out: circuit.voltage }
+    config:
+      # Integrate the completed interval before latching this boundary's drive,
+      # as the analog model in system.yaml does.
+      input_sampling: previous_boundary
+      input_sources:
+        drive: { element: Vdrive, scale: 3.3, offset: 0 }
+      output_nodes:
+        v_out: { node: out, scale: 1, offset: 0 }
+      trace_volts: [v_out]
