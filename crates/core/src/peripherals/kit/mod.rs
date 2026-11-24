@@ -32,6 +32,7 @@
 
 mod ctx;
 pub mod declarative;
+pub mod manifest;
 pub mod registry;
 
 pub use ctx::AttachCtx;
