@@ -211,6 +211,23 @@ pub fn fast_boot(
     let mut ps = crate::cpu::xtensa_regs::Ps::from_raw(1 << 18);
     ps.set_callinc(1);
     cpu.ps = ps;
+    // Window overflow/underflow must run the FIRMWARE's own
+    // `_WindowOverflow{4,8,12}` / `_WindowUnderflow{4,8,12}` handlers, the way
+    // the S3 fast boot does (`boot::esp32s3::prime_faithful_windows`). The
+    // frame primed just above (window 0 caller, PS.CALLINC = 1) is exactly what
+    // those handlers need.
+    //
+    // The sim-level shadow-window mode this replaces saves only a0..a3 of a
+    // displaced window, so a call chain that wraps the 64-register file loses
+    // the caller's a4..a7. Measured on the stock Arduino-ESP32 S2 matrix row
+    // (espressif32 8.0.0, 2026-11-24): `setup()` in the L7 sketch keeps
+    // `micros()` in a7 across `delay(1)`, and re-reads it as 5000 after a
+    // correct 4507 — the sketch then prints `LW_L7_FAIL`, while at the
+    // breakpoint right after that micros() call the value is still 4507. The
+    // same corruption produced the L3 `Memory access violation at 0xffffffff`
+    // (a pointer in a4..a7) and the L6 no-marker timeout. With the firmware's
+    // own handlers all three cells pass.
+    cpu.faithful_windows = true;
     Ok(BootSummary {
         entry,
         stack,

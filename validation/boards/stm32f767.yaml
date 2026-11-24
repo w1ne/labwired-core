@@ -11,6 +11,13 @@ models:
   - crates/core/src/cpu/cortex_m.rs
   - crates/core/src/decoder/arm.rs
   - configs/chips/stm32f767.yaml
+  # 2026-11-24, model_paths_drift_gate: the F767 bxCAN1 registration
+  # (2026-11-23, Arduino L8 loopback) reached `crates/core/src/peripherals/
+  # bxcan.rs` while this list kept omitting it, so its source stayed invisible
+  # to the drift digest. Same as the earlier batches: this board records no
+  # silicon capture, so there is no "silicon-verified" claim to invalidate and
+  # no ack is implied.
+  - crates/core/src/peripherals/bxcan.rs
   # 2026-09-22, model_paths_drift_gate: models this board REGISTERS that
   # its list omitted, so they were invisible to the drift digest. This
   # board records no silicon capture, so there is no "silicon-verified"
