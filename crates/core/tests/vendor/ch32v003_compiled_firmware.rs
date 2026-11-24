@@ -607,6 +607,73 @@ fn ch32v003_attach_interrupt_misses_pd3_with_the_stm32f1_afio_mux() {
 
 const ADC_FIXTURE: &str = "ch32v003f4p6-arduino-openwch-adc.elf";
 
+const ADC_IRQ_FIXTURE: &str = "ch32v003f4p6-noneos-sdk-adc-irq.elf";
+
+/// Run the noneos-sdk `ADC1_IRQHandler` fixture with PA2 (ADC1_IN0) held at
+/// 1650 mV against the 3.3 V reference. The handler is the only reader of
+/// STATR: if the ADC never raises ADC_IRQn (29) through the PFIC, `eoc_count`
+/// stays 0 and the firmware prints `ADC_IRQ_EOC 0 code 0` after its 2 ms wait.
+fn run_adc_irq_fixture(with_irq_line: bool) -> String {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut yaml = chip_yaml("ch32v003f4p6");
+    if !with_irq_line {
+        let adc = yaml["peripherals"]
+            .as_sequence_mut()
+            .expect("peripherals list")
+            .iter_mut()
+            .find(|p| p["id"].as_str() == Some("adc1"))
+            .expect("adc1 block");
+        adc.as_mapping_mut().expect("adc block").remove("irq");
+    }
+    let chip: ChipDescriptor = serde_yaml::from_value(yaml).expect("descriptor");
+    let mut bus = SystemBus::from_config(&chip, &SystemManifest::default())
+        .expect("CH32V003 peripherals and clock gates");
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+    assert!(bus.set_analog_pad_mv("PA2", 1650), "PA2 drives ADC1_IN0");
+    let image = labwired_loader::load_elf(&root.join("tests/fixtures").join(ADC_IRQ_FIXTURE))
+        .expect("noneos-sdk ADC IRQ ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load CH32V003 ELF");
+    let text = |sink: &std::sync::Mutex<Vec<u8>>| {
+        String::from_utf8_lossy(&sink.lock().unwrap()).into_owned()
+    };
+    for step in 1..=2_000_000u64 {
+        if machine.step().is_err() {
+            break;
+        }
+        if step % 20_000 == 0 {
+            let out = text(&sink);
+            if out.contains("ADC_IRQ_DONE") {
+                break;
+            }
+        }
+    }
+    text(&sink)
+}
+
+/// Stock noneos-sdk `ADC_SoftwareStartConvCmd` + `ADC_IT_EOC`: STATR.EOC must
+/// raise ADC_IRQn (29) through the PFIC, and `NVIC_DisableIRQ` must stop it.
+/// The firmware (ip `docs/audits/ch32v003-adc-irq/main.c`) never polls STATR.
+#[test]
+fn ch32v003_adc_eoc_interrupt_enters_the_handler() {
+    let out = run_adc_irq_fixture(true);
+    assert_eq!(
+        out, "ADC_IRQ_BOOT\r\nADC_IRQ_EOC 1 code 511\r\nADC_IRQ_MASKED ok\r\nADC_IRQ_DONE\r\n",
+        "USART1 TX stream"
+    );
+}
+
+#[test]
+fn ch32v003_adc_eoc_interrupt_never_enters_without_the_irq_line() {
+    let out = run_adc_irq_fixture(false);
+    assert_eq!(
+        out, "ADC_IRQ_BOOT\r\nADC_IRQ_EOC 0 code 0\r\nADC_IRQ_MASKED ok\r\nADC_IRQ_DONE\r\n",
+        "without adc1 irq the handler never runs: count 0 after the 2 ms wait"
+    );
+}
+
 /// Run the openwch `analogRead` fixture with PA2 (ADC1_IN0) held at 1650 mV
 /// and PD4 (ADC1_IN7) at 3000 mV against the 3.3 V reference.
 fn run_adc_fixture(chip: &ChipDescriptor) -> String {
