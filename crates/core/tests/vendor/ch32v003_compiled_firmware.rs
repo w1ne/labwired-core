@@ -169,8 +169,8 @@ fn gpioc_edges(chip: &ChipDescriptor, fixture: &str, bit: u8) -> (u32, u32) {
 }
 
 /// The descriptor's `profile: wch_v00x` must reach the model: 10 channels
-/// (IN0..IN9, DS0 Table 3-2), not the STM32F1's 19. A conversion of IN16 must
-/// not answer with the STM32F1 temperature sensor.
+/// (IN0..IN9, DS0 Table 3-2), not the STM32F1's 19. The IN16 answer is covered
+/// by `peripherals::adc::tests::wch_v00x_adc_has_no_f1_internal_channels`.
 #[test]
 fn ch32v003_adc1_is_the_ten_channel_wch_layout() {
     let chip = load_chip("ch32v003f4p6");
