@@ -612,7 +612,7 @@ const ADC_IRQ_FIXTURE: &str = "ch32v003f4p6-noneos-sdk-adc-irq.elf";
 /// Run the noneos-sdk `ADC1_IRQHandler` fixture with PA2 (ADC1_IN0) held at
 /// 1650 mV against the 3.3 V reference. The handler is the only reader of
 /// STATR: if the ADC never raises ADC_IRQn (29) through the PFIC, `eoc_count`
-/// stays 0 and the firmware prints `ADC_IRQ_EOC 0`.
+/// stays 0 and the firmware prints `ADC_IRQ_EOC 0 code 0` after its 2 ms wait.
 fn run_adc_irq_fixture(with_irq_line: bool) -> String {
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut yaml = chip_yaml("ch32v003f4p6");
@@ -655,8 +655,7 @@ fn run_adc_irq_fixture(with_irq_line: bool) -> String {
 
 /// Stock noneos-sdk `ADC_SoftwareStartConvCmd` + `ADC_IT_EOC`: STATR.EOC must
 /// raise ADC_IRQn (29) through the PFIC, and `NVIC_DisableIRQ` must stop it.
-/// Nothing in the firmware polls STATR, so a run without the line prints only
-/// the boot line.
+/// The firmware (ip `docs/audits/ch32v003-adc-irq/main.c`) never polls STATR.
 #[test]
 fn ch32v003_adc_eoc_interrupt_enters_the_handler() {
     let out = run_adc_irq_fixture(true);
@@ -670,8 +669,8 @@ fn ch32v003_adc_eoc_interrupt_enters_the_handler() {
 fn ch32v003_adc_eoc_interrupt_never_enters_without_the_irq_line() {
     let out = run_adc_irq_fixture(false);
     assert_eq!(
-        out, "ADC_IRQ_BOOT\r\n",
-        "without adc1 irq: the handler never runs, so the firmware never prints          EOC or DONE"
+        out, "ADC_IRQ_BOOT\r\nADC_IRQ_EOC 0 code 0\r\nADC_IRQ_MASKED ok\r\nADC_IRQ_DONE\r\n",
+        "without adc1 irq the handler never runs: count 0 after the 2 ms wait"
     );
 }
 
