@@ -96,6 +96,33 @@ Worked example: [`examples/cosim-spice-rc`](../examples/cosim-spice-rc/README.md
 (Debian/Ubuntu: `apt install libngspice0`). Tests:
 `python3 -m pytest tools/cosim/test_labwired_ngspice.py`.
 
+### Pinning the circuit a Flex run solved
+
+A Flex manifest's `manifest_sha256` covers the manifest bytes. It cannot cover
+an external netlist, so `run_report()` carries one `source` pin per model whose
+adapter loaded such a source:
+
+```json
+"source": {
+  "kind": "spice_netlist",
+  "origin": "file",
+  "bytes": 231,
+  "sha256": "…",
+  "path": "./rc.cir"
+}
+```
+
+- `origin: file`: an `adapter: ngspice` netlist named by `model:` and read by
+  the native host. `path` is the manifest's declared path.
+- `origin: inline`: an `adapter: analog` `netlist_text`. The digest names the
+  exact text the solver parsed.
+- A model with no external source reports no pin. The browser ngspice host also
+  reports none: the page supplies the netlist text, not the runtime, so the
+  runtime does not claim a digest it did not compute.
+
+Editing the netlist changes `source.sha256` while `manifest_sha256` stays the
+same. Record both to reproduce a run.
+
 ## Shared analog in a multi-controller world
 
 An environment can own one inline `adapter: analog` model with instance-qualified

@@ -33,8 +33,60 @@ pub use routing::{
 };
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
+use serde::Serialize;
 use std::any::Any;
 use std::collections::BTreeMap;
+
+/// The exact source an adapter loaded for a model, so a run can be pinned to
+/// the circuit it actually solved.
+///
+/// The manifest hash covers the manifest text. An external netlist lives in a
+/// second file, and editing that file must change something a run records.
+/// Adapters that read a source report it here; adapters that own no external
+/// source leave [`CosimAdapter::source_pin`] at its `None` default.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CosimSourcePin {
+    /// What the source is. Today the only value is `spice_netlist`.
+    pub kind: &'static str,
+    /// Where the bytes came from: `file` or `inline`.
+    pub origin: &'static str,
+    /// The source's size in bytes.
+    pub bytes: usize,
+    /// SHA-256 of the exact bytes the adapter parsed.
+    pub sha256: String,
+    /// The path as the manifest declared it, for a file source. Absent inline.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+}
+
+impl CosimSourcePin {
+    /// A SPICE netlist read from a file the manifest names.
+    pub fn spice_netlist_file(path: impl Into<String>, netlist: &str) -> Self {
+        Self {
+            kind: "spice_netlist",
+            origin: "file",
+            bytes: netlist.len(),
+            sha256: netlist_sha256(netlist),
+            path: Some(path.into()),
+        }
+    }
+
+    /// A SPICE netlist carried inline in the manifest.
+    pub fn spice_netlist_inline(netlist: &str) -> Self {
+        Self {
+            kind: "spice_netlist",
+            origin: "inline",
+            bytes: netlist.len(),
+            sha256: netlist_sha256(netlist),
+            path: None,
+        }
+    }
+}
+
+fn netlist_sha256(netlist: &str) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(netlist.as_bytes()))
+}
 
 /// Scalar value exchanged at a co-simulation boundary.
 #[derive(Debug, Clone, PartialEq)]
@@ -145,6 +197,13 @@ pub trait CosimAdapter: Send {
     /// understand). See [`CosimInputKind`].
     fn input_kind(&self, name: &str) -> Option<CosimInputKind> {
         let _ = name;
+        None
+    }
+
+    /// The source bytes this adapter loaded, when it loaded any. A manifest's
+    /// hash cannot cover an external netlist, so a reproducibility report asks
+    /// the adapter that read it. Adapters with no such source return `None`.
+    fn source_pin(&self) -> Option<CosimSourcePin> {
         None
     }
 

@@ -168,6 +168,17 @@ fn committed_scripts_reproduce_the_pinned_native_reference() {
             result["config"]["firmware_sha256"],
             sha256(&fixture.join("firmware.wasm"))
         );
+        // The analog model's netlist is inline here, so it is also inside the
+        // manifest hash; the report still names it as the circuit that ran.
+        let analog = report["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|model| model["adapter"] == "analog")
+            .expect("analog model");
+        assert_eq!(analog["source"]["kind"], "spice_netlist");
+        assert_eq!(analog["source"]["origin"], "inline");
+        assert_eq!(analog["source"]["sha256"].as_str().unwrap().len(), 64);
         assert!(!report["assumptions"].as_array().unwrap().is_empty());
         assert!(!report["unsupported_checks"].as_array().unwrap().is_empty());
 
