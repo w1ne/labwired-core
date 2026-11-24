@@ -238,12 +238,18 @@ impl Nrf52Rtc {
     /// advance this cycle).
     #[inline]
     fn advance_lfclk(&self) -> bool {
-        let accum = self.lfclk_accum.get().wrapping_add(self.lfclk_inc);
-        if accum >= self.lfclk_period {
-            self.lfclk_accum.set(accum - self.lfclk_period);
+        // Widened to u64: `period + inc` can exceed u32::MAX for an accepted
+        // but absurd clock (odd cpu_hz near u32::MAX gives inc 32_768 and
+        // period cpu_hz), and `wrapping_add` would silently skip the edge.
+        let accum = u64::from(self.lfclk_accum.get()) + u64::from(self.lfclk_inc);
+        let period = u64::from(self.lfclk_period);
+        if accum >= period {
+            // `inc <= period` is an invariant of `set_lfclk_ratio`, so the
+            // residue is < period and fits in u32.
+            self.lfclk_accum.set((accum - period) as u32);
             true
         } else {
-            self.lfclk_accum.set(accum);
+            self.lfclk_accum.set(accum as u32);
             false
         }
     }
@@ -990,6 +996,25 @@ mod tests {
                  (core clock not applied to the LFCLK ratio?)"
             );
         }
+    }
+
+    #[test]
+    fn the_widest_accepted_clock_does_not_wrap_the_accumulator() {
+        // u32::MAX is odd, so nothing reduces: inc 32_768, period u32::MAX.
+        // 131_072 cycles x 32_768 = 2^32, exactly one LFCLK edge. A 32-bit
+        // wrapping add reaches 0 there and loses the edge silently.
+        let mut r = Nrf52Rtc::new();
+        r.attach_cpu_hz(u64::from(u32::MAX));
+        assert_eq!((r.lfclk_inc, r.lfclk_period), (32_768, u32::MAX));
+        r.write_u32(OFF_PRESCALER, 0).unwrap();
+        r.write_u32(OFF_TASKS_START, 1).unwrap();
+        r.tick_elapsed(131_072);
+        assert_eq!(
+            r.read_u32(OFF_COUNTER).unwrap(),
+            1,
+            "the accumulator wrapped past the one LFCLK edge"
+        );
+        assert!(r.lfclk_accum.get() < r.lfclk_period);
     }
 
     #[cfg(feature = "event-scheduler")]
