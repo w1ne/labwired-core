@@ -20,6 +20,9 @@
 //! The native host additionally takes a validated [`NgspiceModelSpec`]: the
 //! same `config.input_sources` / `config.output_nodes` / `config.trace_volts`
 //! keys the browser runtime reads, checked before any process starts.
+//! `config.input_ranges` is checked by [`NgspiceInputLatch`], which both hosts
+//! build, so a deck that is only valid over a declared input domain stops on
+//! either host instead of extrapolating.
 //!
 //! Confinement of the native host, as in the browser: `model:` must name a
 //! file inside the manifest directory; the netlist may not contain `.control`,
@@ -221,10 +224,162 @@ pub fn machine_sampling_refusal(config: &CosimModelConfig) -> Option<String> {
     })
 }
 
-/// Rewrites each boundary's inputs by [`NgspiceInputSampling`].
+/// One `config.input_ranges` entry: the declared numeric domain of an input.
+///
+/// A deck is only an electrical model over the range its parameters were
+/// extracted from. A photoresistor law read off a datasheet's 1-100 lx row, or
+/// a beta curve read off one temperature column, extrapolates silently outside
+/// it. The in-core analog engine refuses such a value (its `min_lux`/`max_lux`
+/// say so); this entry gives an `adapter: ngspice` deck the same explicit stop
+/// instead of a plausible-looking voltage. Bounds are inclusive.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NgspiceInputRange {
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+    /// Printed in the error and the run report; not converted, not compared.
+    pub unit: Option<String>,
+}
+
+impl NgspiceInputRange {
+    /// `1..100 lx`, `>= 1 lx` or `<= 100 lx`.
+    fn render(&self) -> String {
+        let bounds = match (self.min, self.max) {
+            (Some(min), Some(max)) => format!("{min}..{max}"),
+            (Some(min), None) => format!(">= {min}"),
+            (None, Some(max)) => format!("<= {max}"),
+            // Rejected at parse time; kept total for the type.
+            (None, None) => "declared".to_string(),
+        };
+        match &self.unit {
+            Some(unit) => format!("{bounds} {unit}"),
+            None => bounds,
+        }
+    }
+}
+
+/// Every `config.input_ranges` entry of a model, validated against its routes.
+fn input_ranges_from_config(
+    config: &CosimModelConfig,
+) -> Result<BTreeMap<String, NgspiceInputRange>, String> {
+    let fail = |message: String| format!("ngspice model '{}' {message}", config.id);
+    let Some(entries) = mapping(config, "input_ranges")? else {
+        return Ok(BTreeMap::new());
+    };
+    let mut ranges = BTreeMap::new();
+    for (name, entry) in entries {
+        let name = name
+            .as_str()
+            .ok_or_else(|| fail("config.input_ranges keys must be declared input names".into()))?;
+        let route = config.inputs.get(name).ok_or_else(|| {
+            fail(format!(
+                "config.input_ranges.{name} has no matching declared route"
+            ))
+        })?;
+        if route.starts_with("board.gpio") {
+            return Err(fail(format!(
+                "config.input_ranges.{name} applies to a logic input; declare a numeric route"
+            )));
+        }
+        let entry = entry
+            .as_mapping()
+            .ok_or_else(|| fail(format!("config.input_ranges.{name} must be a mapping")))?;
+        if let Some(unknown) = entry
+            .keys()
+            .filter_map(Yaml::as_str)
+            .find(|key| !matches!(*key, "min" | "max" | "unit"))
+        {
+            return Err(fail(format!(
+                "config.input_ranges.{name}.{unknown} is not a range key (min, max, unit)"
+            )));
+        }
+        let bound = |key: &str| -> Result<Option<f64>, String> {
+            match entry.get(key) {
+                None => Ok(None),
+                Some(value) => value
+                    .as_f64()
+                    .filter(|value| value.is_finite())
+                    .map(Some)
+                    .ok_or_else(|| {
+                        fail(format!(
+                            "config.input_ranges.{name}.{key} must be a finite number"
+                        ))
+                    }),
+            }
+        };
+        let (min, max) = (bound("min")?, bound("max")?);
+        if min.is_none() && max.is_none() {
+            return Err(fail(format!(
+                "config.input_ranges.{name} needs min, max or both"
+            )));
+        }
+        if let (Some(min), Some(max)) = (min, max) {
+            if min > max {
+                return Err(fail(format!(
+                    "config.input_ranges.{name} min {min} is greater than max {max}"
+                )));
+            }
+        }
+        let unit = match entry.get("unit") {
+            None => None,
+            Some(value) => Some(
+                value
+                    .as_str()
+                    .filter(|unit| !unit.trim().is_empty() && unit.chars().count() <= 16)
+                    .ok_or_else(|| {
+                        fail(format!(
+                            "config.input_ranges.{name}.unit must be 1-16 visible characters"
+                        ))
+                    })?
+                    .to_string(),
+            ),
+        };
+        ranges.insert(name.to_string(), NgspiceInputRange { min, max, unit });
+    }
+    Ok(ranges)
+}
+
+/// Refuse a boundary whose input leaves the model's declared domain. Values
+/// absent from `inputs` are left to the host's `default_value`; non-finite
+/// numbers keep [`request_json`]'s own message.
+fn check_input_ranges(
+    model_id: &str,
+    ranges: &BTreeMap<String, NgspiceInputRange>,
+    inputs: &CosimSignals,
+) -> Result<(), String> {
+    for (name, range) in ranges {
+        let Some(value) = inputs.get(name) else {
+            continue;
+        };
+        let number = match value {
+            CosimSignalValue::I64(value) => *value as f64,
+            CosimSignalValue::F64(value) => *value,
+            CosimSignalValue::Bool(_) | CosimSignalValue::Text(_) => {
+                return Err(format!(
+                    "ngspice model '{model_id}' input '{name}' is not a number; config.input_ranges declares a numeric domain"
+                ))
+            }
+        };
+        if !number.is_finite() {
+            continue;
+        }
+        let below = range.min.is_some_and(|min| number < min);
+        let above = range.max.is_some_and(|max| number > max);
+        if below || above {
+            return Err(format!(
+                "ngspice model '{model_id}' input '{name}' is {number}, outside the declared {} range",
+                range.render()
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Rewrites each boundary's inputs by [`NgspiceInputSampling`], then refuses a
+/// value outside the model's declared [`NgspiceInputRange`] domain.
 pub struct NgspiceInputLatch {
     model_id: String,
     sampling: NgspiceInputSampling,
+    ranges: BTreeMap<String, NgspiceInputRange>,
     held: Option<CosimSignals>,
 }
 
@@ -233,11 +388,20 @@ impl NgspiceInputLatch {
         Ok(Self {
             model_id: config.id.clone(),
             sampling: NgspiceInputSampling::from_config(config)?,
+            ranges: input_ranges_from_config(config)?,
             held: None,
         })
     }
 
     pub fn sample(&mut self, step: CosimStep) -> Result<CosimStep, String> {
+        let step = self.latched(step)?;
+        check_input_ranges(&self.model_id, &self.ranges, &step.inputs)?;
+        Ok(step)
+    }
+
+    /// The inputs the solver integrates the interval ending at this boundary
+    /// with, before the declared-range check.
+    fn latched(&mut self, step: CosimStep) -> Result<CosimStep, String> {
         if self.sampling == NgspiceInputSampling::CurrentBoundary {
             return Ok(step);
         }
@@ -373,6 +537,9 @@ pub struct NgspiceModelSpec {
     pub step_ns: u64,
     pub inputs: BTreeMap<String, NgspiceInputSource>,
     pub outputs: BTreeMap<String, NgspiceOutputNode>,
+    /// Declared input domains; the adapter refuses a boundary outside them
+    /// before the host sees a frame.
+    pub input_ranges: BTreeMap<String, NgspiceInputRange>,
     /// Applied by the adapter before the host sees a frame.
     pub input_sampling: NgspiceInputSampling,
 }
@@ -517,6 +684,7 @@ impl NgspiceModelSpec {
             step_ns: config.step_ns,
             inputs,
             outputs,
+            input_ranges: input_ranges_from_config(config)?,
             input_sampling: NgspiceInputSampling::from_config(config)?,
         })
     }

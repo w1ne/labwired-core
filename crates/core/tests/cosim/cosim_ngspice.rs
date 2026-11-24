@@ -19,7 +19,7 @@ use common::root;
 use labwired_config::{ChipDescriptor, CosimModelConfig, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cosim::ngspice::{
-    runtime_snapshot_refusal, validate_ngspice_models, NgspiceModelSpec,
+    runtime_snapshot_refusal, validate_ngspice_models, NgspiceInputLatch, NgspiceModelSpec,
 };
 use labwired_core::cosim::{
     build_cosim_adapter_with_base, AnalogCosimAdapter, CosimSession, CosimSignalValue,
@@ -146,6 +146,14 @@ fn the_committed_ldr_manifests_pass_the_ngspice_contract() {
         spec.inputs["lux"].default_value,
         Some(CosimSignalValue::F64(100.0))
     );
+    assert_eq!(
+        spec.input_ranges["lux"],
+        labwired_core::cosim::ngspice::NgspiceInputRange {
+            min: Some(1.0),
+            max: Some(100.0),
+            unit: Some("lx".to_string()),
+        }
+    );
     let host: serde_json::Value = serde_json::from_str(&spec.host_json()).unwrap();
     assert_eq!(host["inputs"]["supply"]["element"], "Vsup");
     assert_eq!(host["outputs"]["v_out"]["node"], "out");
@@ -210,6 +218,148 @@ fn the_contract_rejects_what_the_browser_runtime_rejects() {
         panic!("the factory must refuse a gpio_in output without a threshold");
     };
     assert!(err.to_string().contains("threshold is required"), "{err}");
+}
+
+/// `config.input_ranges` declares the numeric domain a deck was extracted for.
+/// The shared [`NgspiceInputLatch`] refuses a boundary outside it on both
+/// hosts, which is what lets an in-core bounded element (a photoresistor's
+/// `min_lux..max_lux`, a thermistor's temperature range) move to an ngspice
+/// behavioural deck without losing its explicit stop.
+#[test]
+fn input_ranges_are_validated_before_a_solver_starts() {
+    let dir = scratch("ranges");
+    std::fs::write(dir.join("rc.cir"), RC_NETLIST).unwrap();
+    let ranging = |inputs: &str, ranges: &str| {
+        model(&format!(
+            "id: rc\nadapter: ngspice\nmodel: ./rc.cir\nstep_ns: 1000\ninputs: {inputs}\noutputs: {{ v_out: board.analog.pa0_volts }}\nconfig:\n  input_sources: {{ lux: {{ element: Vlux, scale: 1, offset: 0 }} }}\n  output_nodes: {{ v_out: {{ node: out, scale: 1, offset: 0 }} }}\n  input_ranges: {ranges}\n"
+        ))
+    };
+    let lux = "{ lux: bench.lux }";
+
+    // Positive control: two bounds and a unit.
+    let spec = NgspiceModelSpec::from_config(
+        &ranging(lux, "{ lux: { min: 1, max: 100, unit: lx } }"),
+        &dir,
+    )
+    .unwrap();
+    assert_eq!(spec.input_ranges["lux"].min, Some(1.0));
+    assert_eq!(spec.input_ranges["lux"].max, Some(100.0));
+    assert_eq!(spec.input_ranges["lux"].unit.as_deref(), Some("lx"));
+    // One bound is allowed; no bound is not.
+    for ranges in ["{ lux: { min: 1 } }", "{ lux: { max: 100 } }"] {
+        NgspiceModelSpec::from_config(&ranging(lux, ranges), &dir).unwrap();
+    }
+
+    for (inputs, ranges, needle) in [
+        (lux, "{ lux: { minimum: 1 } }", "is not a range key"),
+        (
+            lux,
+            "{ nothing: { min: 1 } }",
+            "has no matching declared route",
+        ),
+        (lux, "{ lux: { min: 10, max: 1 } }", "greater than max"),
+        (lux, "{ lux: {} }", "needs min, max or both"),
+        (lux, "{ lux: { min: .nan } }", "must be a finite number"),
+        (lux, "{ lux: { min: .inf } }", "must be a finite number"),
+        (lux, "{ lux: [1] }", "must be a mapping"),
+        (
+            lux,
+            "{ lux: { min: 1, unit: \"\" } }",
+            "1-16 visible characters",
+        ),
+        (
+            lux,
+            "{ lux: { min: 1, unit: \"kilolux-per-square-metre\" } }",
+            "1-16 visible characters",
+        ),
+    ] {
+        let err = NgspiceModelSpec::from_config(&ranging(inputs, ranges), &dir).unwrap_err();
+        assert!(err.contains(needle), "expected '{needle}' in: {err}");
+        assert!(err.contains("ngspice model 'rc'"), "{err}");
+    }
+    // A logic route has no numeric domain to bound.
+    let gpio = model(
+        "id: rc\nadapter: ngspice\nmodel: ./rc.cir\nstep_ns: 1000\ninputs: { gpio: board.gpio.pa5 }\noutputs: { v_out: board.analog.pa0_volts }\nconfig:\n  input_sources: { gpio: { element: Vgpio, scale: 3.3, offset: 0 } }\n  output_nodes: { v_out: { node: out, scale: 1, offset: 0 } }\n  input_ranges: { gpio: { min: 0, max: 1 } }\n",
+    );
+    let err = NgspiceModelSpec::from_config(&gpio, &dir).unwrap_err();
+    assert!(err.contains("applies to a logic input"), "{err}");
+    // A non-mapping entry list is refused by the same shared reader.
+    let err = NgspiceModelSpec::from_config(&ranging(lux, "[]"), &dir).unwrap_err();
+    assert!(
+        err.contains("config.input_ranges must be a mapping"),
+        "{err}"
+    );
+
+    // `validate_ngspice_models` reports it too, before any host starts.
+    let issues = validate_ngspice_models(
+        std::slice::from_ref(&ranging(lux, "{ lux: { min: 10, max: 1 } }")),
+        &dir,
+    );
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert!(issues[0].contains("greater than max"), "{}", issues[0]);
+}
+
+/// The latch refuses an out-of-domain value before the boundary reaches either
+/// host, so the two engines agree on *whether* to run, not only on the voltage.
+#[test]
+fn the_latch_refuses_an_input_outside_its_declared_range() {
+    let dir = scratch("range-latch");
+    std::fs::write(dir.join("rc.cir"), RC_NETLIST).unwrap();
+    let config = model(
+        "id: ldr\nadapter: ngspice\nmodel: ./rc.cir\nstep_ns: 1000\ninputs: { lux: bench.lux }\noutputs: { v_out: board.analog.pa0_volts }\nconfig:\n  input_sources: { lux: { element: Vlux, scale: 1, offset: 0 } }\n  output_nodes: { v_out: { node: out, scale: 1, offset: 0 } }\n  input_ranges: { lux: { min: 1, max: 100, unit: lx } }\n",
+    );
+    let mut latch = NgspiceInputLatch::new(&config).unwrap();
+    for value in [1.0, 50.0, 100.0] {
+        latch
+            .sample(step(1000, 1000, &[("lux", CosimSignalValue::F64(value))]))
+            .unwrap_or_else(|err| panic!("{value} lx is inside 1..100: {err}"));
+    }
+    for value in [0.0, 0.9, 100.1, 150.0] {
+        let err = latch
+            .sample(step(2000, 1000, &[("lux", CosimSignalValue::F64(value))]))
+            .expect_err("outside 1..100 lx");
+        assert_eq!(
+            err,
+            format!(
+                "ngspice model 'ldr' input 'lux' is {value}, outside the declared 1..100 lx range"
+            )
+        );
+    }
+    // A value absent from the boundary is left to the host's default_value.
+    latch.sample(step(3000, 1000, &[])).unwrap();
+    // A boolean or text value is not a declared numeric domain.
+    let err = latch
+        .sample(step(4000, 1000, &[("lux", CosimSignalValue::Bool(true))]))
+        .expect_err("a bool is not a number");
+    assert!(err.contains("is not a number"), "{err}");
+    // One-sided ranges render as a comparison in the message.
+    let mut upper = config.clone();
+    upper.config.insert(
+        "input_ranges".into(),
+        serde_yaml::from_str("{ lux: { max: 100 } }").unwrap(),
+    );
+    let err = NgspiceInputLatch::new(&upper)
+        .unwrap()
+        .sample(step(1000, 1000, &[("lux", CosimSignalValue::F64(101.0))]))
+        .expect_err("above the upper bound");
+    assert!(err.ends_with("outside the declared <= 100 range"), "{err}");
+    // `previous_boundary` scores the *held* value: a bad write is refused at
+    // the boundary where it would first drive the circuit, not when written.
+    let mut previous = config.clone();
+    previous
+        .config
+        .insert("input_sampling".into(), "previous_boundary".into());
+    let mut latch = NgspiceInputLatch::new(&previous).unwrap();
+    latch
+        .sample(step(0, 0, &[("lux", CosimSignalValue::F64(10.0))]))
+        .expect("prime with an in-range value");
+    latch
+        .sample(step(1000, 1000, &[("lux", CosimSignalValue::F64(150.0))]))
+        .expect("the held 10 lx still drives this interval");
+    let err = latch
+        .sample(step(2000, 1000, &[("lux", CosimSignalValue::F64(10.0))]))
+        .expect_err("the held 150 lx drives the next interval");
+    assert!(err.contains("is 150, outside the declared"), "{err}");
 }
 
 /// An included file could carry a `.control` block with a `shell` command or
@@ -514,6 +664,106 @@ fn native_ngspice_matches_the_in_core_solver_on_a_shared_rc() {
     );
 }
 
+/// Parity on the part the in-core engine had to itself: a bounded
+/// photoresistor curve. `ldr.cir` writes the GL5528 law as a behavioural
+/// current (`B` source), which the in-core engine cannot parse; the in-core
+/// engine offers the same curve as a `photoresistors` entry. Both are the same
+/// divider, the same 15 kOhm reference at 10 lx, the same 0.6 slope and the
+/// same 1..100 lx domain, so the two engines must agree on the voltage *and*
+/// on refusing a value outside that domain. This is the coverage evidence that
+/// lets a bounded-curve Flex fixture move to ngspice.
+#[test]
+fn a_photoresistor_deck_matches_the_in_core_curve_within_its_range() {
+    if !ngspice_ready() {
+        return;
+    }
+    let dir = scratch("photoresistor");
+    std::fs::write(
+        dir.join("ldr.cir"),
+        "* GL5528 divider, 15 kOhm at 10 lx, gamma 0.6, per the Flex fixture.\n\
+         V3V3 3v3 0 dc 3.3\n\
+         Vlux lux 0 dc 10\n\
+         Bldr 3v3 sns_an1 I = V(3v3,sns_an1) / (15k * pow(max(V(lux), 0.01) / 10, -0.6))\n\
+         R6 sns_an1 0 10k\n\
+         C7 sns_an1 0 100n\n\
+         .tran 10u 1 uic\n\
+         .end\n",
+    )
+    .unwrap();
+    let spiced = model(
+        "id: ldr\nadapter: ngspice\nmodel: ./ldr.cir\nstep_ns: 50000\ninputs: { lux: bench.lux }\noutputs: { voltage: ldr.out_volts }\nconfig:\n  input_sources: { lux: { element: Vlux, scale: 1, offset: 0 } }\n  output_nodes: { voltage: { node: sns_an1, scale: 1, offset: 0 } }\n  input_ranges: { lux: { min: 1, max: 100, unit: lx } }\n  trace_volts: [voltage]\n",
+    );
+    let in_core = model(
+        "id: ldr\nadapter: analog\nstep_ns: 50000\ninputs: { lux: bench.lux }\noutputs: { voltage: ldr.out_volts }\nconfig:\n  netlist_text: |\n    V3V3 3v3 0 dc 3.3\n    RU4 3v3 sns_an1 15k\n    R6 sns_an1 0 10k\n    C7 sns_an1 0 100n\n  vdd: 3.3\n  probes: { voltage: \"v(sns_an1)\" }\n  photoresistors:\n    lux: { resistor: RU4, r_ref_ohms: 15000, reference_lux: 10, gamma: 0.6, min_lux: 1, max_lux: 100 }\n",
+    );
+    assert_eq!(
+        validate_ngspice_models(std::slice::from_ref(&spiced), &dir),
+        Vec::<String>::new()
+    );
+    let mut native = build_cosim_adapter_with_base(&spiced, &dir).unwrap();
+    let mut analog = build_cosim_adapter_with_base(&in_core, &dir).unwrap();
+    // 10 ms is more than ten time constants at both ends of the range, so both
+    // engines report the divider's settled value rather than an integrator's
+    // residue.
+    const STEP_NS: u64 = 50_000;
+    const SETTLE: u64 = 200;
+    // One monotonic timeline for both engines: the host refuses a repeated or
+    // earlier boundary, so each light level gets its own settle window.
+    let mut t_ns = 0;
+    for lux in [1.0f64, 10.0, 100.0] {
+        let expected = VDD * R_FIXED / (R_FIXED + 15_000.0 * (lux / 10.0).powf(-0.6));
+        let mut spiced_v = f64::NAN;
+        let mut analog_v = f64::NAN;
+        for _ in 0..SETTLE {
+            t_ns += STEP_NS;
+            let s = step(t_ns, STEP_NS, &[("lux", CosimSignalValue::F64(lux))]);
+            spiced_v = volts(&native.step(s.clone()).unwrap().outputs, "voltage");
+            analog_v = volts(&analog.step(s).unwrap().outputs, "voltage");
+        }
+        assert!(
+            (spiced_v - expected).abs() < 2e-3,
+            "{lux} lx: ngspice {spiced_v} V vs {expected} V"
+        );
+        assert!(
+            (analog_v - expected).abs() < 2e-3,
+            "{lux} lx: in-core {analog_v} V vs {expected} V"
+        );
+        assert!(
+            (spiced_v - analog_v).abs() < 2e-3,
+            "{lux} lx: ngspice {spiced_v} V vs in-core {analog_v} V"
+        );
+        eprintln!(
+            "{lux} lx: ngspice {spiced_v:.6} V, in-core {analog_v:.6} V, analytic {expected:.6} V"
+        );
+    }
+    // Outside the declared domain both stop, with their own wording.
+    let err = analog
+        .step(step(
+            99_000_000,
+            STEP_NS,
+            &[("lux", CosimSignalValue::F64(150.0))],
+        ))
+        .expect_err("the in-core curve is bounded");
+    assert!(
+        err.to_string()
+            .contains("photoresistor illuminance must be within 1..100 lx"),
+        "{err}"
+    );
+    let mut spiced = build_cosim_adapter_with_base(&spiced, &dir).unwrap();
+    let err = spiced
+        .step(step(
+            STEP_NS,
+            STEP_NS,
+            &[("lux", CosimSignalValue::F64(150.0))],
+        ))
+        .expect_err("the declared ngspice domain is bounded");
+    assert!(
+        err.to_string()
+            .contains("input 'lux' is 150, outside the declared 1..100 lx range"),
+        "{err}"
+    );
+}
+
 /// Continuity across the runner's `(0, 0)` priming step: the primed value is
 /// where the `uic` transient starts (C uncharged), and the next boundaries
 /// follow the RC curve from it. A DC operating point here would report
@@ -718,6 +968,18 @@ fn flex_ldr_divider_runs_on_native_ngspice() {
         ldr_volts(100.0),
         ldr_volts(1.0),
         batch.samples.len()
+    );
+
+    // The declared domain is the deck's, and a value outside it stops the run
+    // instead of extrapolating the curve.
+    flex.write(light, 150.0).unwrap();
+    let err = flex
+        .advance_ns(100_000)
+        .expect_err("150 lx is outside the deck's declared range");
+    assert!(
+        err.to_string()
+            .contains("input 'lux' is 150, outside the declared 1..100 lx range"),
+        "{err}"
     );
 
     // A broken source mapping (negative control) fails at construction.

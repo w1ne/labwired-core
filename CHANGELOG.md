@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- ngspice models declare their input domain: `config.input_ranges` (`min`, `max`, `unit`) on an `adapter: ngspice` model. The shared latch refuses a boundary outside it on both the native host and the browser callback, so a deck taken from one datasheet row no longer extrapolates. The committed LDR example declares 1-100 lx, and `cosim_ngspice::a_photoresistor_deck_matches_the_in_core_curve_within_its_range` proves the behavioural deck matches the in-core `photoresistors` curve at 1, 10 and 100 lx and refuses 150 lx on both engines.
 - Flex run reports pin the circuit they solved: each model whose adapter loaded a SPICE netlist carries `source.kind`, `origin`, `bytes`, `sha256` and, for a file, `path`. Editing an `adapter: ngspice` `model:` file now changes the report even when the manifest is unchanged.
 
 ### Changed

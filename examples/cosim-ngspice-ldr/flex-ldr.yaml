@@ -27,3 +27,7 @@ cosim_models:
         v_out: { node: out, scale: 1, offset: 0 }
         dark: { node: out, scale: 1, offset: 0, threshold: 1.65 }
       trace_volts: [v_out]
+      # The deck's curve is stated for 1-100 lx; a value outside it stops the
+      # run with the declared range instead of a plausible extrapolation.
+      input_ranges:
+        lux: { min: 1, max: 100, unit: lx }

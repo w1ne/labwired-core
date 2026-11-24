@@ -13,6 +13,19 @@ cannot parse. This circuit therefore needs ngspice.
 
 Expected settled node voltage: 0.548914 V at 100 lx, 2.751086 V at 1 lx.
 
+The deck's curve is stated for 1-100 lx, so both manifests declare that domain
+with `config.input_ranges.lux` (min 1, max 100, unit `lx`). A light level
+outside it stops the run:
+
+    ngspice model 'ldr' input 'lux' is 150, outside the declared 1..100 lx range
+
+The deck keeps `max(V(lux), 0.01)` so the solver stays finite, but the run no
+longer reports a plausible voltage for an input the model was not fitted to.
+`cosim_ngspice::a_photoresistor_deck_matches_the_in_core_curve_within_its_range`
+is the differential evidence for this: the same GL5528 curve as the in-core
+`photoresistors` entry agrees at 1, 10 and 100 lx, and both engines refuse
+150 lx.
+
 Native requirements: `python3` and libngspice (`apt install libngspice0`).
 The browser runs `system.yaml` through
 `WasmSimulator::new_from_config_with_ngspice_callback` with the netlist
