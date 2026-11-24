@@ -2331,6 +2331,7 @@ pub fn try_build(
                     let mut adc = crate::peripherals::adc::Adc::new_with_layout(layout);
                     if wch_v00x {
                         adc.set_f1_resolution_bits(10);
+                        adc.set_f1_internal_channels(false);
                     }
                     // Board-level static channel voltages: `input_mv: { <ch>: <mV> }`.
                     if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
