@@ -1147,6 +1147,105 @@ C1 out 0 100n $ dollar comment
         parse_netlist("V1 a 0 PULSE(0 5 0 1u 1u 8u 10u)\n").expect("exactly fitting is fine");
     }
 
+    /// The corner test the solver's trapezoidal restart hangs on: a corner is
+    /// a slope change, and a waveform that only changes value has none.
+    #[test]
+    fn a_waveform_reports_its_corners_and_nothing_else() {
+        let sine = Waveform::Sin {
+            offset: 0.0,
+            amplitude: 1.0,
+            frequency: 1e3,
+            delay: 1e-3,
+            theta: 0.0,
+        };
+        assert!(
+            !sine.has_corner_between(0.0, 0.5e-3),
+            "still flat before delay"
+        );
+        assert!(
+            sine.has_corner_between(0.5e-3, 1.5e-3),
+            "the delayed sine starts inside this step"
+        );
+        assert!(
+            !sine.has_corner_between(1.5e-3, 2.5e-3),
+            "a running sine is smooth; a new value is not a corner"
+        );
+        let silent = Waveform::Sin {
+            offset: 0.0,
+            amplitude: 0.0,
+            frequency: 1e3,
+            delay: 1e-3,
+            theta: 0.0,
+        };
+        assert!(
+            !silent.has_corner_between(0.5e-3, 1.5e-3),
+            "no amplitude, no corner"
+        );
+
+        // 0 V -> 3.3 V at 10 us, 10 ns edges, 5 us flat, 10 us period.
+        let pulse = Waveform::Pulse {
+            v1: 0.0,
+            v2: 3.3,
+            delay: 10e-6,
+            rise: 10e-9,
+            fall: 10e-9,
+            width: 5e-6,
+            period: 10e-6,
+        };
+        assert!(
+            !pulse.has_corner_between(0.0, 9e-6),
+            "the delay is not a corner"
+        );
+        assert!(
+            pulse.has_corner_between(9.9e-6, 10.1e-6),
+            "the rising edge is"
+        );
+        assert!(
+            !pulse.has_corner_between(1.1e-6, 2.1e-6),
+            "the flat bottom has no corner"
+        );
+        assert!(
+            !pulse.has_corner_between(10.2e-6, 14e-6),
+            "the flat top has no corner"
+        );
+        assert!(
+            pulse.has_corner_between(15e-6, 16e-6),
+            "the falling edge at 15.01 us is in this step"
+        );
+        assert!(
+            pulse.has_corner_between(19.9e-6, 20.1e-6),
+            "the next period's rising edge is in this step"
+        );
+        // Two levels that are equal are a constant, however the edges are drawn.
+        let flat = Waveform::Pulse {
+            v1: 0.0,
+            v2: 0.0,
+            delay: 10e-6,
+            rise: 10e-9,
+            fall: 10e-9,
+            width: 5e-6,
+            period: 10e-6,
+        };
+        assert!(!flat.has_corner_between(9.9e-6, 10.1e-6));
+        // A one-shot pulse has its four corners and no repeats.
+        let once = Waveform::Pulse {
+            v1: 0.0,
+            v2: 3.3,
+            delay: 10e-6,
+            rise: 10e-9,
+            fall: 10e-9,
+            width: 5e-6,
+            period: 0.0,
+        };
+        assert!(once.has_corner_between(9.9e-6, 10.1e-6));
+        assert!(
+            !once.has_corner_between(20e-6, 30e-6),
+            "a one-shot pulse does not repeat"
+        );
+        let dc = parse_netlist("V1 a 0 dc 1\n").expect("dc netlist parses");
+        assert!(!dc.voltage_sources[0].wave.has_corner_between(0.0, 1.0));
+    }
+
     // -----------------------------------------------------------------------
     // Analysis cards
     // -----------------------------------------------------------------------

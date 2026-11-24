@@ -525,6 +525,60 @@ impl Waveform {
     pub fn is_constant(&self) -> bool {
         matches!(self, Self::Dc(_))
     }
+
+    /// True when this waveform's slope changes somewhere in `(from, to]`.
+    ///
+    /// The solver carries the reactive elements' derivative from the previous
+    /// step. That derivative is still consistent across a step of a smooth
+    /// waveform, but not across a corner: a pulse edge, or the moment a
+    /// delayed sine starts. [`Solver::advance`](super::mna::Solver) restarts
+    /// trapezoidal integration with backward Euler on exactly those steps (see
+    /// the `mna` module docs), and a waveform that merely changes value every
+    /// step must not be mistaken for one of them.
+    ///
+    /// A pulse whose two levels are equal, and a sine of zero amplitude, are
+    /// constant and have no corners.
+    pub fn has_corner_between(&self, from: f64, to: f64) -> bool {
+        if !matches!(from.partial_cmp(&to), Some(std::cmp::Ordering::Less)) {
+            return false;
+        }
+        match *self {
+            Self::Dc(_) => false,
+            Self::Sin {
+                amplitude, delay, ..
+            } => amplitude != 0.0 && from <= delay && to > delay,
+            Self::Pulse {
+                v1,
+                v2,
+                delay,
+                rise,
+                fall,
+                width,
+                period,
+            } => {
+                if v1 == v2 {
+                    return false;
+                }
+                // Corners within one period: the start of the rise, the end of
+                // it, the start of the fall and the end of it. `at` wraps the
+                // phase into `[0, period)`, so the corners repeat there.
+                for offset in [0.0, rise, rise + width, rise + width + fall] {
+                    let corner = if period > 0.0 {
+                        // First repeat of this corner strictly after `from`,
+                        // never before `delay`.
+                        let cycles = ((from - delay - offset) / period).floor() + 1.0;
+                        delay + cycles.max(0.0) * period + offset
+                    } else {
+                        delay + offset
+                    };
+                    if corner > from && corner <= to {
+                        return true;
+                    }
+                }
+                false
+            }
+        }
+    }
 }
 
 /// `V<name> n+ n- <source>`.

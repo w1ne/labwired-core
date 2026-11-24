@@ -1076,12 +1076,21 @@ mod analog {
         );
     }
 
-    const OPAMP_HASH: u64 = 0x434d_e1ed_0fe0_c115;
+    // Re-pinned when the trapezoidal restart stopped treating a waveform that
+    // merely changes value as a discontinuity. Both decks below are driven by
+    // a `SIN`/`PULSE` source through a capacitor, so before that fix they ran
+    // at backward Euler for their whole length; the zener deck has no reactive
+    // element and its hash did not move. The swap is measured, not assumed:
+    // against the committed ngspice references (`analog_ngspice_macros`) the
+    // inverting amplifier's worst sample went from 2.2e-2 % to 1.2e-4 % of
+    // full scale, and the Schmitt's from 4.2e-4 % to 1.6e-6 %, its worst edge
+    // from 0.62 ns to 0.027 ns.
+    const OPAMP_HASH: u64 = 0x0e75_d246_fb9b_4b3e;
     const ZENER_HASH: u64 = 0x272a_2e74_684b_dc23;
-    // The comparator's open-collector MOSFET now includes its reverse-biased
+    // The comparator's open-collector MOSFET includes its reverse-biased
     // bulk-drain junction, so the Schmitt output trajectory includes that
-    // junction's IS + GMIN leakage. The op-amp and zener hashes are unchanged.
-    const SCHMITT_HASH: u64 = 0xbad1_3c95_8766_f606;
+    // junction's IS + GMIN leakage.
+    const SCHMITT_HASH: u64 = 0x89bc_fdca_a977_8201;
 
     // -----------------------------------------------------------------------
     // Regulators
