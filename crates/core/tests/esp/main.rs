@@ -46,6 +46,7 @@ mod esp32s2_arduino_i2c;
 mod esp32s2_arduino_ledc;
 mod esp32s2_arduino_rmt;
 mod esp32s2_arduino_spi;
+mod esp32s2_arduino_timer;
 mod esp32s2_arduino_twai;
 mod esp32s3_gdma_oracle;
 mod esp32s3_gpspi_oracle;
