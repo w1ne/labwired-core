@@ -1,0 +1,44 @@
+# `labwired test --script test-frost-alarm.yaml`. The firmware reads the
+# manufacturer and device IDs of U4 at 0x18, stores -5.00 °C in T_LOWER and
+# -4.50 °C in T_UPPER, reads T_LOWER back, writes and reads back RESOLUTION,
+# then reads T_A once per 250 ms conversion. The test bench steps the
+# temperature 25 -> -10.125 -> 0 °C. The catalog thermal lag (1 s) makes T_A
+# approach each step. The indicator goes on at the first reading below
+# -5.00 °C, stays on at -4.5000 °C (hysteresis) and goes off above -4.50 °C.
+# `loop` returns the temperature in 1/10,000 °C plus 1,000,000.
+# All expected values were calculated from the MCP9808 model (lag update at
+# each register read, round(°C x 16) as 13-bit two's complement) and the bus
+# timing before the first run.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ bus: sensor_i2c }, { port: user_led_drive }, { number: 0x18 }] }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: -10.125 }
+  - call: { export: loop, repeat: 16 }
+  - set: { port: ambient_c, value: 0 }
+  - call: { export: loop, repeat: 16 }
+limits:
+  max_steps: 1000000
+  max_time_ns: 10000000000
+assertions:
+  - entry_result: { equals: 998125 }
+  - entry_result: { equals: 0, step: 0 }
+  - entry_result: { equals: 1250000, step: 1 }
+  - entry_result: { equals: 905000, step: 3 }
+  # Two ID reads, two limit writes, the T_LOWER read-back, the RESOLUTION
+  # write and read-back in `setup`; one T_A read in each of 33 `loop` calls.
+  - i2c_transfers: { bus: sensor_i2c, address: 0x18, ack: true, equals: 40 }
+  - i2c_transfers: { bus: sensor_i2c, ack: false, equals: 0 }
+  - port_value: { port: user_led_state, equals: 0 }
+  # `setup` takes 2.88 ms (480 + 480 + 380 + 380 + 480 + 290 + 390 µs); each
+  # `loop` 250.48 ms (one 480 µs read and the 250 ms conversion). The drive
+  # changes at the end of the read that gives -5.3750 °C and of the one that
+  # gives -3.5000 °C; D1 follows 1 µs later.
+  - digital_edges: { port: user_led_drive, times_ns: [2007200000, 5012960000] }
+  - digital_edges: { port: user_led_state, times_ns: [2007201000, 5012961000] }
+  - final_time_ns: { equals: 8268720000 }
+  - console_contains: "MCP9808 0x0054/0x0400 at 0x18 frost below -5.0000 C\nT=25.0000 C\nT=17.1875 C\nT=11.1875 C\nT=6.4375 C\nT=2.7500 C\nT=-0.0625 C\nT=-2.3125 C\nT=-4.0625 C\nT=-5.3750 C\nT=-6.4375 C\nT=-7.2500 C\nT=-7.8750 C\nT=-8.3750 C\nT=-8.7500 C\nT=-9.0625 C\nT=-9.3125 C\nT=-9.5000 C\nT=-7.3750 C\nT=-5.7500 C\nT=-4.5000 C\nT=-3.5000 C\nT=-2.6875 C\nT=-2.1250 C\nT=-1.6250 C\nT=-1.2500 C\nT=-1.0000 C\nT=-0.7500 C\nT=-0.6250 C\nT=-0.5000 C\nT=-0.3750 C\nT=-0.3125 C\nT=-0.2500 C\nT=-0.1875 C\n"

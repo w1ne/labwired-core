@@ -1,0 +1,37 @@
+# `labwired test --script test-sub-zero-range.yaml`. T_A is a 13-bit two's
+# complement count of 0.0625 °C. The bench holds -40 °C (the bottom of the
+# MCP9808 operating range) from before `setup`, so the first reading is exact:
+# -640 counts, 0x1D80, -40.0000 °C. It then holds -0.0625 °C (one count below
+# zero, 0x1FFF) and 125 °C (2000 counts, the top of the range) for 40
+# conversions each, long enough for the 1 s thermal lag to settle to the
+# last count. The indicator goes on at -40 °C and off during the second hold.
+# All expected values were calculated from the MCP9808 model and the bus
+# timing before the first run.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - set: { port: ambient_c, value: -40 }
+  - call: { export: setup, args: [{ bus: sensor_i2c }, { port: user_led_drive }, { number: 0x18 }] }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: -0.0625 }
+  - call: { export: loop, repeat: 40 }
+  - set: { port: ambient_c, value: 125 }
+  - call: { export: loop, repeat: 40 }
+limits:
+  max_steps: 1000000
+  max_time_ns: 25000000000
+assertions:
+  - entry_result: { equals: 2250000 }
+  - entry_result: { equals: 0, step: 1 }
+  - entry_result: { equals: 600000, step: 2 }
+  - entry_result: { equals: 999375, step: 4 }
+  - i2c_transfers: { bus: sensor_i2c, address: 0x18, ack: true, equals: 88 }
+  - digital_edges: { port: user_led_drive, times_ns: [3360000, 2257680000] }
+  - port_value: { port: user_led_state, equals: 0 }
+  - final_time_ns: { equals: 20291760000 }
+  - console_contains: "frost below -5.0000 C\nT=-40.0000 C\nT=-31.1250 C\n"
+  # The last -0.0625 °C reading, then the lag toward 125 °C.
+  - console_contains: "T=-0.0625 C\nT=27.6250 C\nT=49.1875 C\n"

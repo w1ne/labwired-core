@@ -1,0 +1,24 @@
+# `labwired test --script test-wrong-family.yaml`. Negative control. The
+# firmware expects family code 0x10 (DS18S20). U4 answers READ ROM with family
+# 0x28, so `setup` returns 3, `loop` has no sample and the indicator stays off.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: dq_drive }, { port: dq }, { port: user_led_drive }, { number: 0x10 }, { number: 12 }] }
+  - set: { port: probe_c, value: 40 }
+  - call: { export: loop }
+limits:
+  max_steps: 1000000
+  max_time_ns: 100000000
+assertions:
+  - entry_result: { equals: 32768 }
+  - entry_result: { equals: 3, step: 0 }
+  # READ ROM is engine ROM layer, not a function: U4 ran no function command.
+  - device_state: { device: source-u4-ds18b20, key: functions_run, equals: 0 }
+  - digital_edges: { port: user_led_drive, count: 0 }
+  # One 960 µs reset, READ ROM and 8 bytes: 6 ms.
+  - final_time_ns: { equals: 6000000 }
+  - console_contains: "ROM 28 01 00 00 00 00 00 29\nfamily 28, expected 10\n"

@@ -2430,6 +2430,46 @@ fn check_heypcb_tmp117(
         .any(|check| check.as_str().unwrap().contains("SNS_INT")));
 }
 
+/// The MCP9808 fixture is an I2C board of the same pinned repository, with
+/// no Flex code of its own: U4 on the bus nets of the pinned PCB, A0-A2 on
+/// GND for 0x18, the placement noise set to 0 and stated as an assumption,
+/// and the ALERT net reported as unsupported.
+fn check_heypcb_mcp9808(
+    source_map: &serde_json::Value,
+    yaml: &serde_yaml::Value,
+    report: &labwired_core::flex::FlexRunReport,
+) {
+    let u4 = &source_map["sensor_bus"]["elements"][0];
+    assert_eq!(u4["source_ref"], "U4");
+    assert_eq!(u4["source_part"], "MCP9808T-E/MS");
+    assert_eq!(u4["pads"]["1"], "I2C_SDA");
+    assert_eq!(u4["pads"]["2"], "I2C_SCL");
+    assert_eq!(u4["pads"]["3"], "SNS_INT");
+    for pad in ["5", "6", "7"] {
+        assert_eq!(u4["pads"][pad], "GND", "A0-A2 on GND is address 0x18");
+    }
+
+    let bus = &yaml["i2c_buses"][0];
+    let binding = &source_map["runtime_bindings"];
+    assert_eq!(bus["name"], binding["bus"]["name"].as_str().unwrap());
+    let device = &bus["devices"][0];
+    assert_eq!(device["id"], binding["device"]["id"].as_str().unwrap());
+    assert_eq!(device["type"], "mcp9808");
+    assert_eq!(device["config"]["i2c_address"], 0x18);
+    assert_eq!(device["config"]["noise_sigma"], 0);
+
+    assert_eq!(report.i2c_buses[0].devices[0].address, 0x18);
+    let listed = |key: &str, needle: &str| {
+        yaml[key]
+            .as_sequence()
+            .unwrap()
+            .iter()
+            .any(|entry| entry.as_str().unwrap().contains(needle))
+    };
+    assert!(listed("assumptions", "`noise_sigma` to 0"));
+    assert!(listed("unsupported_checks", "SNS_INT"));
+}
+
 /// The SCD41 fixture is a fourth I2C board of the same pinned repository,
 /// with no Flex code of its own: U4 on the bus nets of the pinned PCB at its
 /// fixed address, and the always-ready data status reported as unsupported.
@@ -2459,6 +2499,76 @@ fn check_heypcb_scd41(
         .unwrap()
         .iter()
         .any(|check| check.as_str().unwrap().contains("5 s periodic")));
+}
+
+/// The DS18B20 fixture is a 1-Wire board of the same pinned repository:
+/// U4 is the catalog `ds18b20` model on the `onewire_device` primitive, its
+/// DQ role on the SNS_IO1 net of the pinned PCB, with the R6 pull-up.
+#[test]
+fn flex_heypcb_ds18b20_line_matches_the_pinned_source_nets() {
+    const SOURCE_MAP: &str =
+        include_str!("../tests/fixtures/flex-heypcb-esp32-ds18b20/source-map.json");
+    const SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-esp32-ds18b20/system.yaml");
+
+    let source_map: serde_json::Value = serde_json::from_str(SOURCE_MAP).unwrap();
+    let sibling: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
+    for key in ["repository", "revision", "license_spdx"] {
+        assert_eq!(source_map["source"][key], sibling["source"][key], "{key}");
+    }
+    assert_eq!(
+        source_map["source"]["files"]["license"],
+        sibling["source"]["files"]["license"]
+    );
+    assert_eq!(
+        source_map["source"]["asset"],
+        "boards/ds18b20/kicad/esp32_ds18b20"
+    );
+    for file in ["schematic", "pcb", "bom", "board_json", "board_readme"] {
+        let entry = &source_map["source"]["files"][file];
+        assert!(entry["path"]
+            .as_str()
+            .unwrap()
+            .starts_with("boards/ds18b20/"));
+        assert_eq!(entry["git_blob"].as_str().unwrap().len(), 40, "{file}");
+    }
+
+    let elements = &source_map["sensor_line"]["elements"];
+    assert_eq!(elements[0]["source_ref"], "U4");
+    assert_eq!(elements[0]["pads"]["2"], "SNS_IO1");
+    assert_eq!(elements[0]["pads"]["3"], "3V3");
+    assert_eq!(elements[1]["source_ref"], "R6");
+    assert_eq!(elements[1]["pads"]["2"], "SNS_IO1");
+    assert_eq!(
+        source_map["sensor_line"]["controller"]["endpoints"]["SNS_IO1"],
+        "U3 pad 4 (IO4)"
+    );
+
+    let yaml: serde_yaml::Value = serde_yaml::from_str(SYSTEM).unwrap();
+    let model = &yaml["cosim_models"][0];
+    let binding = &source_map["runtime_bindings"];
+    assert_eq!(model["id"], binding["model"]["id"].as_str().unwrap());
+    assert_eq!(model["config"]["device_type"], "ds18b20");
+    assert_eq!(model["inputs"]["DQ"], "source.U3.GPIO4");
+    assert_eq!(model["outputs"]["DQ"], "source.SNS_IO1");
+
+    let runtime = FlexRuntime::from_yaml(SYSTEM).unwrap();
+    let report = runtime.run_report();
+    assert!(report.scope_notes_complete);
+    assert!(!report.execution_scope.original_target_firmware_executed);
+    assert_eq!(report.execution_scope.chip_parity, "not_established");
+    // The catalog model has no alarm search; the manifest must say so.
+    assert!(yaml["unsupported_checks"]
+        .as_sequence()
+        .unwrap()
+        .iter()
+        .any(|check| check.as_str().unwrap().contains("ALARM SEARCH")));
+    for port in binding["ports"].as_object().unwrap().keys() {
+        runtime.port_id(port).unwrap();
+    }
+    assert_eq!(
+        report.ports.len(),
+        binding["ports"].as_object().unwrap().len()
+    );
 }
 
 /// The DHT11 fixture is a single-wire board of the same pinned repository:
@@ -2675,6 +2785,11 @@ const HEYPCB_FIXTURES: &[HeypcbFixture] = &[
         "tmp117",
         Some("boards/tmp117/kicad/esp32_tmp117"),
         check_heypcb_tmp117
+    ),
+    heypcb_fixture!(
+        "mcp9808",
+        Some("boards/mcp9808/kicad/esp32_mcp9808"),
+        check_heypcb_mcp9808
     ),
     heypcb_fixture!(
         "scd41",

@@ -4319,7 +4319,7 @@
       "device_type": "mcp9808",
       "label": "Microchip MCP9808",
       "summary": "±0.25 °C I²C temperature sensor with seeded noise + thermal lag.",
-      "detail": "Microchip MCP9808 at 0x18 (A2:A0 straps to 0x1F). TA register sourced from the temperature channel with σ=0.0625 °C Gaussian noise and τ≈1 s thermal lag. Alert/limit interrupts and resolution-timed conversions are not modelled; input range is positive-only pending signed-encode verification.",
+      "detail": "Microchip MCP9808 at 0x18 (A2:A0 straps to 0x1F). T_A (pointer 0x05) is the 13-bit two's-complement temperature from the temperature channel with σ=0.0625 °C Gaussian noise (placement `noise_sigma` overrides it) and τ≈1 s thermal lag. Alert output, T_A comparator flags and resolution-timed conversions are not modelled.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -4327,6 +4327,11 @@
           "name": "i2c_address",
           "ty": "int",
           "doc": "7-bit slave address. Defaults to 0x18; A2:A0 straps select 0x18–0x1F."
+        },
+        {
+          "name": "noise_sigma",
+          "ty": "float",
+          "doc": "Optional Gaussian noise sigma on the temperature channel in °C, seeded and replay-safe. Absent = the datasheet 0.0625 °C; 0 = no noise (the thermal lag stays)."
         }
       ],
       "labs": [],
@@ -4335,7 +4340,7 @@
           "key": "temperature",
           "label": "Temperature",
           "unit": "°C",
-          "min": 0.0,
+          "min": -40.0,
           "max": 125.0,
           "default": 25.0
         }
