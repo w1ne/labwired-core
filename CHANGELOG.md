@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Flex run reports pin the circuit they solved: each model whose adapter loaded an external SPICE netlist carries `source.kind`, `origin`, `bytes`, `sha256` and, for a file, `path`. Editing an `adapter: ngspice` `model:` file now changes the report even when the manifest is unchanged.
+
 ### Changed
 - **BMP280 is drivable**: `pressure` (hPa) and `temperature` (°C) SimInput channels. The raw ADC words are the exact inverse of Bosch's integer compensation at the part's calibration block (same derived-program path as BME280), so firmware running the standard Bosch math reads the stimulus back. Defaults 25 °C / 1013.25 hPa (was the constant raw word 0x80000).
 

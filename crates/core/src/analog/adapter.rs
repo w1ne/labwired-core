@@ -90,7 +90,8 @@ use std::sync::{Arc, Mutex};
 use serde_yaml::Value;
 
 use crate::cosim::{
-    CosimAdapter, CosimInputKind, CosimSignalValue, CosimSignals, CosimStep, CosimStepResult,
+    CosimAdapter, CosimInputKind, CosimSignalValue, CosimSignals, CosimSourcePin, CosimStep,
+    CosimStepResult,
 };
 use crate::{SimResult, SimulationError};
 
@@ -419,6 +420,8 @@ pub struct AnalogCosimAdapter {
     time_ns: u64,
     step_index: u64,
     sample_scratch: Vec<f64>,
+    /// The netlist bytes this adapter parsed, for the run report.
+    source_pin: Option<CosimSourcePin>,
 }
 
 impl AnalogCosimAdapter {
@@ -571,6 +574,7 @@ impl AnalogCosimAdapter {
             time_ns: 0,
             step_index: 0,
             sample_scratch: vec![0.0; sample_width],
+            source_pin: Some(CosimSourcePin::spice_netlist_inline(netlist)),
         };
         adapter.register_channels();
         adapter.record_sample();
@@ -593,6 +597,17 @@ impl AnalogCosimAdapter {
             ));
         }
         let mut adapter = Self::from_netlist(&netlist, &cfg)?;
+        adapter.source_pin = Some(match config.config.get("netlist_text") {
+            Some(_) => CosimSourcePin::spice_netlist_inline(&netlist),
+            None => CosimSourcePin::spice_netlist_file(
+                config
+                    .config
+                    .get("netlist")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or_default(),
+                &netlist,
+            ),
+        });
         adapter.input_sampling = input_sampling;
         if input_sampling == InputSampling::PreviousBoundary {
             if !cfg.vdd.is_finite() || cfg.vdd <= 0.0 {
@@ -913,6 +928,10 @@ fn numeric(vdd: f64, name: &str, value: &CosimSignalValue, unit: &str) -> SimRes
 }
 
 impl CosimAdapter for AnalogCosimAdapter {
+    fn source_pin(&self) -> Option<CosimSourcePin> {
+        self.source_pin.clone()
+    }
+
     fn step(&mut self, step: CosimStep) -> SimResult<CosimStepResult> {
         let mut outputs = BTreeMap::new();
         self.step_into(step.time_ns, step.dt_ns, &step.inputs, &mut outputs)?;

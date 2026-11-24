@@ -885,6 +885,34 @@ mod flex_script_runs {
             .collect()
     }
 
+    /// The netlist is a second file. The run report must name it and hash its
+    /// exact bytes, because the manifest hash cannot.
+    #[test]
+    fn flex_script_pins_the_ngspice_netlist() {
+        if !ngspice_ready() {
+            return;
+        }
+        use sha2::{Digest, Sha256};
+        let run = run_flex_rc_script("ngspice-enable.yaml");
+        let report = run.result.run_report.as_ref().expect("run report");
+        let model = report
+            .models
+            .iter()
+            .find(|model| model.id == "rc")
+            .expect("rc model");
+        let pin = model
+            .source
+            .as_ref()
+            .expect("the ngspice netlist is pinned");
+        assert_eq!(pin.kind, "spice_netlist");
+        assert_eq!(pin.origin, "file");
+        assert_eq!(pin.path.as_deref(), Some("./rc.cir"));
+        let dir = root("crates/wasm/tests/fixtures/flex-mixed-signal");
+        let bytes = std::fs::read(dir.join("rc.cir")).unwrap();
+        assert_eq!(pin.bytes, bytes.len());
+        assert_eq!(pin.sha256, format!("{:x}", Sha256::digest(&bytes)));
+    }
+
     /// Positive control: firmware mode 0 enables the RC; the run passes every
     /// assertion of `ngspice-enable.yaml` and the ngspice node follows the
     /// analytic previous-boundary response at every 25 us boundary.

@@ -32,8 +32,9 @@
 //! refused for an ngspice session, not approximated.
 
 use crate::cosim::{
-    AnalogChannel, AnalogTraceHandle, CosimAdapter, CosimSignalValue, CosimSignals, CosimStep,
-    CosimStepResult, ExternalProcessCosimAdapter, ExternalProcessCosimOptions, SignalPath,
+    AnalogChannel, AnalogTraceHandle, CosimAdapter, CosimSignalValue, CosimSignals, CosimSourcePin,
+    CosimStep, CosimStepResult, ExternalProcessCosimAdapter, ExternalProcessCosimOptions,
+    SignalPath,
 };
 use crate::{SimResult, SimulationError};
 use labwired_config::CosimModelConfig;
@@ -693,9 +694,15 @@ pub struct NativeNgspiceAdapter {
     model_id: String,
     expected_outputs: Vec<String>,
     trace: NgspiceTrace,
+    /// The netlist bytes the host received, for the run report.
+    source_pin: CosimSourcePin,
 }
 
 impl CosimAdapter for NativeNgspiceAdapter {
+    fn source_pin(&self) -> Option<CosimSourcePin> {
+        Some(self.source_pin.clone())
+    }
+
     fn step(&mut self, step: CosimStep) -> SimResult<CosimStepResult> {
         let step = self.latch.sample(step).map_err(SimulationError::Other)?;
         // The same input checks as the browser request, before the frame
@@ -740,6 +747,10 @@ pub fn build_native_adapter(
     base_dir: &Path,
 ) -> SimResult<Box<dyn CosimAdapter>> {
     let spec = NgspiceModelSpec::from_config(config, base_dir).map_err(SimulationError::Other)?;
+    let source_pin = CosimSourcePin::spice_netlist_file(
+        config.model.as_deref().unwrap_or_default(),
+        &spec.netlist,
+    );
     let latch = NgspiceInputLatch::new(config).map_err(SimulationError::Other)?;
     let spec_json = spec.host_json();
     let process = ExternalProcessCosimAdapter::spawn_with_options(
@@ -757,6 +768,7 @@ pub fn build_native_adapter(
         model_id: config.id.clone(),
         expected_outputs: expected_outputs(config),
         trace: NgspiceTrace::new(config),
+        source_pin,
     }))
 }
 
