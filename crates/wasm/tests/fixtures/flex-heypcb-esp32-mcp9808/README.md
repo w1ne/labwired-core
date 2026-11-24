@@ -57,7 +57,7 @@ Time at 100 kHz: a word read (pointer write, repeated START, 2 bytes) is 48 bits
 
 - Logic analyzer: `user_led_state` follows each drive edge 1,000 ns later.
 - Console, first script: `MCP9808 0x0054/0x0400 at 0x18 frost below -5.0000 C`, then 33 readings from `T=25.0000 C` through `T=-9.5000 C` (lag toward -10.125 °C) and back to `T=-0.1875 C`.
-- The first script runs 8.27 s of virtual time in 1.58 s wall time; the second 20.29 s in 5.03 s (debug CLI, 2026-11-23). The browser receipt's native figures (1.40 s and 3.50 s) come from a later run, so the two sets are not the same measurement.
+- The first script runs 8.27 s of virtual time in 1.58 s wall time; the second 20.29 s in 5.03 s (debug CLI, 2026-11-23). The browser receipt's native figures (1.40 s and 3.50 s) come from a different run (core commit 6e33374), so the two sets are not the same measurement.
 
 Negative controls, on `/tmp` copies:
 
