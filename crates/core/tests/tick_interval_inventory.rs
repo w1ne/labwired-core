@@ -387,6 +387,14 @@ fn esp32_classic_is_walk_free_and_reaches_recommended_interval() {
 /// When migration is partial this test still fails with the remaining forcer
 /// list — pin that set as EXPECTED only if the campaign cannot finish empty
 /// in one PR (see docs/performance inventory).
+/// The USBD (d98a280eec) is a dynamic legacy-walk model: it serves the
+/// scripted USB host and POWER supply timing from the walk, but holds it only
+/// while USB is running (`legacy_tick_active`), so at reset the walk is still
+/// derived away. Pinned rather than exempted: any other forcer, or USBD
+/// active before firmware enables it, fails here.
+#[allow(dead_code)] // read only under event-scheduler
+const NRF52840_EXPECTED_FORCERS: &[&str] = &["usbd"];
+
 #[test]
 fn nrf52840_dk_is_walk_free_and_reaches_recommended_interval() {
     let bus = bus_nrf52840();
@@ -396,9 +404,13 @@ fn nrf52840_dk_is_walk_free_and_reaches_recommended_interval() {
     #[cfg(feature = "event-scheduler")]
     {
         let forcing: Vec<&str> = inv.forcers.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(
+            forcing, NRF52840_EXPECTED_FORCERS,
+            "nrf52840-dk walk-forcers under event-scheduler changed"
+        );
         assert!(
-            forcing.is_empty(),
-            "nrf52840-dk still has walk-forcers under event-scheduler: {forcing:?}"
+            inv.forcers.iter().all(|f| !f.legacy_tick_active),
+            "nrf52840-dk: a pinned forcer is active at reset"
         );
         assert!(
             inv.legacy_walk_disabled,
@@ -648,9 +660,18 @@ fn tick_interval_inventory_all_families() {
                 .iter()
                 .find(|i| i.chip == name)
                 .expect("family present");
+            let expected: &[&str] = if name == "nrf52840" {
+                NRF52840_EXPECTED_FORCERS
+            } else {
+                &[]
+            };
             assert!(
-                inv.forcers.is_empty(),
-                "{name} should have no walk-forcers, got {:?}",
+                inv.forcers
+                    .iter()
+                    .map(|f| f.name.as_str())
+                    .eq(expected.iter().copied())
+                    && inv.forcers.iter().all(|f| !f.legacy_tick_active),
+                "{name} should have only idle walk-forcers {expected:?}, got {:?}",
                 inv.forcers
                     .iter()
                     .map(|f| f.name.as_str())
