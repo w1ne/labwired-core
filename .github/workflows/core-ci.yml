@@ -639,6 +639,7 @@ jobs:
             scripts/perf/test_board_perf.py \
             scripts/perf/test_board_rtx.py \
             scripts/perf/test_workload_perf.py \
+            scripts/ci/test_artifact_retention_policy.py \
             scripts/ci/test_board_matrix.py \
             scripts/ci/test_chip_coverage.py \
             scripts/ci/test_part_coverage.py \
@@ -836,6 +837,7 @@ jobs:
       - name: Upload timing reports
         uses: actions/upload-artifact@v4
         with:
+          retention-days: 7
           name: core-build-timings
           path: target/cargo-timings/
           if-no-files-found: error

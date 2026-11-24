@@ -130,5 +130,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          retention-days: 14
           name: core-coverage
           path: out/coverage/
