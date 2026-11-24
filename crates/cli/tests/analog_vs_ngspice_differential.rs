@@ -273,12 +273,13 @@ fn an_unsupported_element_fails_manifest_validation() {
 /// **5e-4 (0.05 %), not the 2 % a differential like this is usually written
 /// with.** 2 % was measured to be vacuous here. The decks below actually
 /// agree with ngspice to 2.5e-3 % (rectifier), 4.0e-5 % (common emitter),
-/// 1.0e-6 % (NMOS inverter), 1.1e-3 % (RL low-pass) and 6.1e-5 % (JFET
-/// follower) of full scale, and perturbing the engine's thermal voltage by
+/// 1.0e-6 % (NMOS inverter), 1.1e-3 % (RL low-pass), 6.1e-5 % (JFET
+/// follower), 1.2e-3 % (pulsed sag into an RC) and 7.3e-3 % (pulsed sag into a
+/// bypassed load) of full scale, and perturbing the engine's thermal voltage by
 /// 1 % — a wrong physical constant, the exact class of bug this test exists
 /// to catch — moves the rectifier by 0.13 % and the amplifier by 0.24 %. At
 /// 2 % that sabotage passes. At 0.05 % it fails with 2.5x margin, while still
-/// leaving 20x headroom over the worst honest disagreement, which is the
+/// leaving 7x headroom over the worst honest disagreement, which is the
 /// fixed-step-versus-adaptive-step difference between the two integrators.
 /// The common-emitter deck is sine-driven: it used to restart trapezoidal on
 /// every sample, so its 2.6e-5 % was measured under backward Euler; with the
@@ -287,6 +288,13 @@ fn an_unsupported_element_fails_manifest_validation() {
 /// The RL deck's 1.1e-3 % is the start-up sample, where one backward-Euler
 /// step follows the initial operating point; after the first 200 samples it is
 /// 2.0e-4 %.
+///
+/// The two pulsed-sag decks are the pulse-driven pair, and they are the ones
+/// that hold the corner rule: restarting backward Euler wherever a source
+/// changes value — the rule before it — measured 6.5e-2 % and 9.8e-2 % on
+/// them, both over the tolerance. Trapezoidal across the same ramps measures
+/// 1.2e-3 % and 7.3e-3 %, and that is the direction the browser's
+/// `analog-regulator/native.json` moved when it was regenerated.
 ///
 /// The MOSFET deck is the weak one and is named as such: a level-1 FET has no
 /// thermal voltage, so that sabotage moves it by 1e-6 %. Its guard is the
@@ -413,6 +421,47 @@ const DIFFERENTIALS: &[Differential] = &[
         full_scale: 12.0,
         minimum_swing: 0.5,
         nonlinear: true,
+    },
+    Differential {
+        name: "pulsed sag into an RC",
+        // The drive the regulator browser fixture records: a 9 V rail that
+        // steps to 3.6 V and back once a millisecond, with 50 µs edges — ten
+        // steps, so each edge is a ramp and not a corner — into a 200 µs RC.
+        // The trapezoidal rule carries the ramp's derivative across it. A
+        // solver that restarted backward Euler on every value change measured
+        // 6.5e-2 % here, over the tolerance; this deck is what holds the
+        // corner rule.
+        deck: "* sagged 9 V rail into a 200 us RC: PULSE + R + C\n\
+               Vin in 0 PULSE(9 3.6 200u 50u 50u 500u 1m)\n\
+               R1 in out 20\n\
+               C1 out 0 10u\n\
+               R2 out 0 330\n",
+        node: "out",
+        sample: 5e-6,
+        substeps: 10,
+        samples: 800,
+        full_scale: 9.0,
+        minimum_swing: 4.0,
+        nonlinear: false,
+    },
+    Differential {
+        name: "pulsed sag into a bypassed load",
+        // The same drive into the 11 µs corner a 22 µF bypass and a 0.5 Ω
+        // feed make. This is the shape whose inrush current the regulator
+        // fixture records, and the stiffer corner is where a first-order rule
+        // loses the most: backward Euler measured 9.8e-2 % here.
+        deck: "* sagged 9 V rail into a bypassed load: PULSE + R + C\n\
+               Vin in 0 PULSE(9 3.6 200u 50u 50u 500u 1m)\n\
+               R1 in out 0.5\n\
+               C1 out 0 22u\n\
+               R2 out 0 5\n",
+        node: "out",
+        sample: 5e-6,
+        substeps: 10,
+        samples: 800,
+        full_scale: 9.0,
+        minimum_swing: 4.0,
+        nonlinear: false,
     },
 ];
 

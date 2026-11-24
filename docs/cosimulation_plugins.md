@@ -714,9 +714,13 @@ nodes count against the 128-unknown ceiling and can be probed.
 - Agreement with ngspice on nonlinear and reactive decks is measured, not
   asserted: `crates/cli/tests/analog_vs_ngspice_differential.rs` hands the same
   SPICE text to both engines for a half-wave rectifier, a common-emitter
-  amplifier, an NMOS inverter, an RL low-pass at its corner and a JFET source
-  follower, and compares every sample. Measured worst disagreement: 2.5e-3 %,
-  4.0e-5 %, 1.0e-6 %, 1.1e-3 % and 6.1e-5 % of full scale.
+  amplifier, an NMOS inverter, an RL low-pass at its corner, a JFET source
+  follower, and two pulsed-sag decks in the shape the regulator fixture
+  records, and compares every sample. Measured worst disagreement: 2.5e-3 %,
+  4.0e-5 %, 1.0e-6 %, 1.1e-3 %, 6.1e-5 %, 1.2e-3 % and 7.3e-3 % of full scale.
+  The pulsed-sag pair is what holds the trapezoidal restart rule: restarting
+  backward Euler wherever a source value changes measured 6.5e-2 % and 9.8e-2 %
+  on the same decks, over the 0.05 % tolerance.
 - Deterministic: `f64` only, `Vec` indices in the hot path, `BTreeMap` for
   names, no threads and no wall clock.
 
