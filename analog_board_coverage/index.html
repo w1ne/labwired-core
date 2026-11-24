@@ -1,0 +1,7534 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
+      
+      
+      
+        <link rel="canonical" href="https://docs.labwired.com/analog_board_coverage/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
+    
+    
+      
+        <title>End-to-end mixed-signal board coverage - LabWired docs</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/chip-list.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    <meta property="og:type" content="website">
+  <meta property="og:site_name" content="LabWired docs">
+  <meta property="og:title" content="End-to-end mixed-signal board coverage - LabWired docs">
+  <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
+  <meta property="og:url" content="https://docs.labwired.com/analog_board_coverage/">
+  <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="End-to-end mixed-signal board coverage - LabWired docs">
+  <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
+  <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#end-to-end-mixed-signal-board-coverage" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="LabWired docs" class="md-header__button md-logo" aria-label="LabWired docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LabWired docs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              End-to-end mixed-signal board coverage
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="LabWired docs" class="md-nav__button md-logo" aria-label="LabWired docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    LabWired docs
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fidelity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fidelity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../golden_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware-Sim Parity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Agent
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent/mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect MCP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent/tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent/first-run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First agent run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing (engine agents)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/playground/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Playground first run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting_started_firmware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run firmware (CLI)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/i2c_sensor_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C sensor example (TMP102)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/dma_exti_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA & Interrupts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/integrated_test_walkthrough/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrated Test Walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-To Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-To Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/onboard-hardware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboard hardware
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/onboard-part/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboard a part (I2C/SPI/actuators)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../board_onboarding_playbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Board onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target support levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/multi-node/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-node worlds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/timed-uart-network/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Timed UART networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/gpio-nets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPIO nets between machines
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/segger-rtt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SEGGER RTT logging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/firmware-coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware coverage (lines, branches, CI)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ci_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peripheral modeling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware_interaction_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Interaction Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vscode_debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging with VS Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gdb_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GDB Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../platformio_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PlatformIO Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cosimulation_plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Co-simulation Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../integration-templates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI Integration Templates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_20" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_20" id="__nav_7_20_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extend LabWired
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Extend LabWired
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/extend/add-a-peripheral/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a peripheral block (YAML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/extend/python-device/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add an I2C sensor (data + Python)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/extend/add-a-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a board (chip + manifest)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/extend/hooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hook surfaces (device, host, Rust)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration (YAML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../declarative_registers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Declarative Registers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../python-sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ci_test_runner/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Script Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference_client_flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../isa_coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ISA Coverage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schema_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../catalog_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Catalog Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target support levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Boards
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Boards
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/arduino-uno/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Arduino Uno R3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/esp32c3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-C3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/esp32c6-devkitc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-C6
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/esp32s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nrf52840/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52840
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/microbit-v1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    micro:bit V1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/microbit-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    micro:bit v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/seeed-xiao-nrf52840-sense/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    XIAO nRF52840 Sense
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/rp2040/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2040
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/rp2350/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2350
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/rp2350-zero/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2350-Zero
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f103/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F103
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f401/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F401
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f405/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F405
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f407/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F407
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f411/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F411
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f767/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F767
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nucleo-l476rg/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L476RG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nucleo-l073rz/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L073RZ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nucleo-g071rb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-G071RB
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32g0b1re/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32G0B1RE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32h563/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H563
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32h735/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H735
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32u575/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32U575
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nucleo-u545re/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-U545RE-Q
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32wba52/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32WBA52
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nrf52832/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52832
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nrf5340/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF5340
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nrf54l15/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF54L15
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/atsamd21g18a/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ATSAMD21G18A
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/atsamd21-variants/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ATSAMD21 A-variants
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Parts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/mcp9808/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP9808
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/mma8451q/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MMA8451Q
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/mpu6050/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MPU-6050
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/bmp280/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BMP280
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/ssd1306/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSD1306 OLED
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/lcd1602/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LCD1602
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/apa102/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    APA102
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/servo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Servo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/button/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Button
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/limit-switch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Limit switch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/joystick/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analog joystick
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/acs712/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACS712 current sensor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/buzzer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Buzzer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/seven-segment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Seven-segment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/segment-display-mux/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplexed segment display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/led-matrix-mux/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplexed LED matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/74hc4051/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    74HC4051
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/max485/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MAX485
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/tiol112/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TIOL112
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/xy-md02/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    XY-MD02
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/sht40/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SHT40
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/bme680/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BME680
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/icm42688/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ICM-42688-P
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/icm20948/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ICM-20948
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/sgp40/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SGP40
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/tsl2591/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TSL2591
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/dht20/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DHT20
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/pmsa003i/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PMSA003I
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/ina226/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    INA226
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/st7735/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ST7735R TFT
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/gc9a01/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GC9A01 round TFT
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/ssd1309/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSD1309 OLED
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/ina260/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    INA260
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/ina3221/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    INA3221
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/mpu9250/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MPU-9250
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/ens160/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ENS160
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/mcp23017/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP23017
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/pcf8575/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCF8575
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/ads1015/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADS1015
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/uln2803/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ULN2803A
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/rfm95/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFM95W
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/sx1276/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SX1276
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/sx1262/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SX1262
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/sk6812/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SK6812 RGBW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/mcp3008/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP3008
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/ads1256/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADS1256
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/bmi160/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BMI160
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/bmm150/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BMM150
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/veml6075/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VEML6075
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/ht16k33/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HT16K33
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/tm1638/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TM1638
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Strategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../RELEASE_DETERMINISM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Determinism
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labwired_audit_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verification Audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage_scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coverage Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/chips/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chip list (all models)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/chip-conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chip Conformance (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/tier1-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier-1 Matrix (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/arduino-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Arduino Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/zephyr-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Zephyr Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../engineering/test_harness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Harness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../limits/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run Limits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../case_study_stm32/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Case Study (STM32)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explanation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Explanation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture_overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../simulation_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulation Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#next-queue-not-covered-adc-pads-already-routable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next queue: not covered, ADC pads already routable
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#not-covered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not covered
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#covered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Covered
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-add-a-board" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to add a board
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="end-to-end-mixed-signal-board-coverage">End-to-end mixed-signal board coverage</h1>
+<p>Generated by <code>scripts/analog_board_coverage.py</code>. Do not edit by hand; rerun
+the script after adding or removing a board test.</p>
+<p>A profile is <strong>covered</strong> only when an integration test loads that profile (or
+one of its <code>examples/&lt;dir&gt;/analog-*.yaml</code> fixtures) and routes a solved
+<code>board.analog.&lt;pad&gt;_volts</code> signal to a board endpoint. The endpoint may be an
+ADC conversion or a voltage-thresholded digital input. Device-only unit tests,
+ADC register tests with no netlist, and helper tests do not count: they prove
+the model, not the board.</p>
+<ul>
+<li>Profiles in <code>configs/systems/</code>: <strong>439</strong></li>
+<li>Covered end to end: <strong>3</strong></li>
+<li>Not covered: <strong>436</strong></li>
+<li>Not covered but with ADC-routable pads: <strong>56</strong> (these are the
+  boards the generic NTC and diode decks can reach next; the rest need an
+  <code>analog_pins:</code> map, an ADC model, or a digital endpoint first)</li>
+</ul>
+<h2 id="next-queue-not-covered-adc-pads-already-routable">Next queue: not covered, ADC pads already routable</h2>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>Chip</th>
+<th style="text-align: right;">Analog pads</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>adxl345-sensor-lab</code></td>
+<td><code>stm32f103</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>at32f421g8u7</code></td>
+<td><code>at32f421g8u7</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>feather-f405</code></td>
+<td><code>stm32f405</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>labwired-demo-board</code></td>
+<td><code>stm32f103</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>nucleo-f103rb-epaper</code></td>
+<td><code>stm32f103rb</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>nucleo-f401re</code></td>
+<td><code>stm32f401</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>nucleo-f407</code></td>
+<td><code>stm32f407</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>nucleo-f411re</code></td>
+<td><code>stm32f411re</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>nucleo-f446re</code></td>
+<td><code>stm32f446re</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f103</code></td>
+<td><code>stm32f103</code></td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td><code>stm32f4</code></td>
+<td><code>stm32f4</code></td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td><code>stm32f412</code></td>
+<td><code>stm32f412</code></td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td><code>stm32f429</code></td>
+<td><code>stm32f429</code></td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td><code>stm32f4_discovery-kit</code></td>
+<td><code>stm32f4_discovery-kit</code></td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td><code>stm32f4_discovery</code></td>
+<td><code>stm32f4_discovery</code></td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td><code>stm32f746</code></td>
+<td><code>stm32f746</code></td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td><code>stm32h7</code></td>
+<td><code>stm32h7</code></td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td><code>stm32h743</code></td>
+<td><code>stm32h743</code></td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td><code>stm32h747-disco</code></td>
+<td><code>stm32h747-disco</code></td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td><code>stm32h747</code></td>
+<td><code>stm32h747</code></td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td><code>stm32h753</code></td>
+<td><code>stm32h753</code></td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td><code>stm32f103c4-smoke</code></td>
+<td><code>stm32f103c4</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f103c6-smoke</code></td>
+<td><code>stm32f103c6</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f103r4-smoke</code></td>
+<td><code>stm32f103r4</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f103r4h-smoke</code></td>
+<td><code>stm32f103r4h</code></td>
+<td style="text-align: right;">15</td>
+</tr>
+<tr>
+<td><code>stm32f103r6-smoke</code></td>
+<td><code>stm32f103r6</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f103r6h-smoke</code></td>
+<td><code>stm32f103r6h</code></td>
+<td style="text-align: right;">15</td>
+</tr>
+<tr>
+<td><code>stm32f103r8-smoke</code></td>
+<td><code>stm32f103r8</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f103t4-smoke</code></td>
+<td><code>stm32f103t4</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f103t6-smoke</code></td>
+<td><code>stm32f103t6</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f401cb-smoke</code></td>
+<td><code>stm32f401cb</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f401cc-smoke</code></td>
+<td><code>stm32f401cc</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f401cd-smoke</code></td>
+<td><code>stm32f401cd</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f401ce-smoke</code></td>
+<td><code>stm32f401ce</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f401rb-smoke</code></td>
+<td><code>stm32f401rb</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f401rc-smoke</code></td>
+<td><code>stm32f401rc</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f401rd-smoke</code></td>
+<td><code>stm32f401rd</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f401re-smoke</code></td>
+<td><code>stm32f401re</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f401vb-smoke</code></td>
+<td><code>stm32f401vb</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f401vc-smoke</code></td>
+<td><code>stm32f401vc</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f401vd-smoke</code></td>
+<td><code>stm32f401vd</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f401ve-smoke</code></td>
+<td><code>stm32f401ve</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f407ie-smoke</code></td>
+<td><code>stm32f407ie</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f407ig-smoke</code></td>
+<td><code>stm32f407ig</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f407ve-smoke</code></td>
+<td><code>stm32f407ve</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f407vg-smoke</code></td>
+<td><code>stm32f407vg</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f407ze-smoke</code></td>
+<td><code>stm32f407ze</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f407zg-smoke</code></td>
+<td><code>stm32f407zg</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f103-bare</code></td>
+<td><code>stm32f103</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f103-blue-pill-bme280</code></td>
+<td><code>stm32f103</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f103-blue-pill</code></td>
+<td><code>stm32f103</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f4-discovery</code></td>
+<td><code>stm32f407vg</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f401cdu6-blackpill</code></td>
+<td><code>stm32f401cdu6</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f401cdu6</code></td>
+<td><code>stm32f401cdu6</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f411ceu6-blackpill</code></td>
+<td><code>stm32f411ceu6</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>wch-ch32v003evt</code></td>
+<td><code>ch32v003f4p6</code></td>
+<td style="text-align: right;">8</td>
+</tr>
+</tbody>
+</table>
+<h2 id="not-covered">Not covered</h2>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>Chip</th>
+<th style="text-align: right;">Analog pads</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>adafruit-feather-esp32-v2-bme280</code></td>
+<td><code>esp32</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>adafruit-feather-rp2040-bme280</code></td>
+<td><code>rp2040-feather</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>adafruit-feather-rp2040</code></td>
+<td><code>rp2040-feather</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>adafruit-feather-rp2350</code></td>
+<td><code>rp2350-feather</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>adxl345-sensor-lab</code></td>
+<td><code>stm32f103</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>apollo4p-evb</code></td>
+<td><code>amap42kp</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arduino-leonardo</code></td>
+<td><code>atmega32u4</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arduino-mega-2560</code></td>
+<td><code>atmega2560</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arduino-nano-33-ble-bme280</code></td>
+<td><code>nrf52840</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arduino-nano-33-ble</code></td>
+<td><code>nrf52840</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arduino-nano-33-iot-bme280</code></td>
+<td><code>atsamd21g18a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arduino-nano-esp32-bme280</code></td>
+<td><code>esp32s3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arduino-nano-esp32</code></td>
+<td><code>esp32s3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arduino-nano-every-bme280</code></td>
+<td><code>atmega4809</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arduino-nano-every-max31855</code></td>
+<td><code>atmega4809</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arduino-nano-every</code></td>
+<td><code>atmega4809</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arduino-nano</code></td>
+<td><code>atmega328p</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arduino-uno-r4-minima-bme280</code></td>
+<td><code>ra4m1</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arduino-uno-r4-minima</code></td>
+<td><code>ra4m1</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arduino-uno</code></td>
+<td><code>atmega328p</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arduino-zero</code></td>
+<td><code>atsamd21g18a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arty-litex-vexriscv</code></td>
+<td><code>arty-litex-vexriscv</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>at32f421g8u7</code></td>
+<td><code>at32f421g8u7</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>atmega1281</code></td>
+<td><code>atmega1281</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>atmega2561</code></td>
+<td><code>atmega2561</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>brd2709a</code></td>
+<td><code>efr32mg26</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>calliope-mini-v1</code></td>
+<td><code>nrf51822</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>cc2538dk</code></td>
+<td><code>cc2538sf53</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>ci-fixture-l476-readonly</code></td>
+<td><code>ci-fixture-stm32l476-readonly</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>ci-fixture-riscv-uart1</code></td>
+<td><code>ci-fixture-riscv</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>ci-fixture-uart1</code></td>
+<td><code>ci-fixture-cortex-m3-uart1</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>ci-fixture-unknown-arch</code></td>
+<td><code>ci-fixture-unknown-arch</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>controllino-mini</code></td>
+<td><code>atmega328p</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>curiosity-pic32mz-ef</code></td>
+<td><code>pic32mz2048efm144</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>dspic33fj32mc202-demo</code></td>
+<td><code>dspic33fj32mc202</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>dspic33fj32mc204-demo</code></td>
+<td><code>dspic33fj32mc204</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>ek-ra6m5</code></td>
+<td><code>r7fa6m5bh</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>ek-ra8m1</code></td>
+<td><code>r7fa8m1ah</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>ek-rx261</code></td>
+<td><code>r5f52618bgfp</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32-devkitc-32e-gpio-smoke</code></td>
+<td><code>esp32-devkitc-32e-gpio-smoke</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32-devkitc-32e-uart1</code></td>
+<td><code>esp32-devkitc-32e-uart1</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32-devkitm-1-bme280</code></td>
+<td><code>esp32</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32-devkitm-1</code></td>
+<td><code>esp32</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32-s3-devkitc-1-n16r8-adc</code></td>
+<td><code>esp32s3-devkitc-1-n16r8-adc</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32-wroom-32</code></td>
+<td><code>esp32</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32-wroom-epaper</code></td>
+<td><code>esp32</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32c3-ble-pong</code></td>
+<td><code>esp32c3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32c3-devkit</code></td>
+<td><code>esp32c3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32c3-devkitm-1-n4x</code></td>
+<td><code>esp32c3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32c3-epaper-workshop</code></td>
+<td><code>esp32c3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32c3-jtag-watch</code></td>
+<td><code>esp32c3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32c3-mlx90640-thermal</code></td>
+<td><code>esp32c3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32c3-nokia5110-workshop</code></td>
+<td><code>esp32c3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32c3-oled-128x32-workshop</code></td>
+<td><code>esp32c3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32c3-oled-demo</code></td>
+<td><code>esp32c3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32c3-tm1637-clock-workshop</code></td>
+<td><code>esp32c3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32c5-devkitc-1-n8r8-bme280</code></td>
+<td><code>esp32c5</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32c5-devkitc-1-n8r8</code></td>
+<td><code>esp32c5</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32c6-devkitc-1-n8-bme280</code></td>
+<td><code>esp32c6</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32c6-devkitc-bme280</code></td>
+<td><code>esp32c6</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32c6-devkitc</code></td>
+<td><code>esp32c6</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32c6-zero-m-bme280</code></td>
+<td><code>esp32c6fh4</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32c61-devkitc-1-n8r2-bme280</code></td>
+<td><code>esp32c61</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32c61-devkitc-1-n8r2</code></td>
+<td><code>esp32c61</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32h2-devkitm-1-n4s</code></td>
+<td><code>esp32h2</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32p4x-c5-function-ev-board</code></td>
+<td><code>esp32p4</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32s2-devkitc-1-n8r2</code></td>
+<td><code>esp32s2</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32s3-devkitc-1-n16r8-bme280</code></td>
+<td><code>esp32s3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32s3-devkitc-1-v1.1-rgb</code></td>
+<td><code>esp32s3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32s3-devkitc-1-v1.1</code></td>
+<td><code>esp32s3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32s3-lcd-ev-board-v1-5-touch</code></td>
+<td><code>esp32s3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32s3-oled-demo</code></td>
+<td><code>esp32s3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32s3-zero</code></td>
+<td><code>esp32s3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp32s3</code></td>
+<td><code>esp32s3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>esp8684-devkitm-1-h4x</code></td>
+<td><code>esp32c2</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>feather-f405</code></td>
+<td><code>stm32f405</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>frdm-k64f</code></td>
+<td><code>mk64f12</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>frdm-kw41z-lcd</code></td>
+<td><code>mkw41z4</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>frdm-kw41z</code></td>
+<td><code>mkw41z4</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>iolink-multiport-demo</code></td>
+<td><code>stm32l476</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>iolinki-g0-startup</code></td>
+<td><code>stm32g0b1re</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>kv260-r5</code></td>
+<td><code>xck26-rpu</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>labwired-demo-board</code></td>
+<td><code>stm32f103</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>litex-vexriscv</code></td>
+<td><code>litex-vexriscv</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>lp-mspm0g3507</code></td>
+<td><code>mspm0g3507</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>luckfox-pico-mini-a</code></td>
+<td><code>rv1103</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>mb1355c</code></td>
+<td><code>stm32wb55</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>metro-m4</code></td>
+<td><code>atsamd51</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>microbit-v1</code></td>
+<td><code>nrf51822</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>microbit-v2</code></td>
+<td><code>nrf52833</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>mimxrt1062-teensy41</code></td>
+<td><code>mimxrt1062-teensy41</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>mimxrt595-evk</code></td>
+<td><code>mimxrt595s</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>mpfs-disco-kit</code></td>
+<td><code>mpfs095t</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nano-33-iot</code></td>
+<td><code>atsamd21</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nrf52-dk</code></td>
+<td><code>nrf52832</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nrf52840-dk</code></td>
+<td><code>nrf52840</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nrf5340dk</code></td>
+<td><code>nrf5340</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nrf54l05-sim</code></td>
+<td><code>nrf54l05</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nrf54l10-sim</code></td>
+<td><code>nrf54l10</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nrf54l15dk</code></td>
+<td><code>nrf54l15</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nrf54lm20dk</code></td>
+<td><code>nrf54lm20a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo-c031c6</code></td>
+<td><code>stm32c031c6</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo-f103rb-bme280</code></td>
+<td><code>stm32f103rb-nucleo-bme280-smoke</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo-f103rb-epaper</code></td>
+<td><code>stm32f103rb</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>nucleo-f401re</code></td>
+<td><code>stm32f401</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>nucleo-f407</code></td>
+<td><code>stm32f407</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>nucleo-f411re</code></td>
+<td><code>stm32f411re</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>nucleo-f446re</code></td>
+<td><code>stm32f446re</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>nucleo-g071rb</code></td>
+<td><code>stm32g071</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo-g0b1re</code></td>
+<td><code>stm32g0b1re</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo-g431rb</code></td>
+<td><code>stm32g431rb</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo-h533re-bme280</code></td>
+<td><code>stm32h533re</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo-h533re</code></td>
+<td><code>stm32h533re</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo-h563zi-demo</code></td>
+<td><code>stm32h563</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo-h723zg</code></td>
+<td><code>stm32h723zg</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo-h753zi</code></td>
+<td><code>stm32h753zi</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo-l031k6</code></td>
+<td><code>stm32l031k6</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo-l073rz</code></td>
+<td><code>stm32l073</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo-l432kc</code></td>
+<td><code>stm32l432kc</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo-l476rg</code></td>
+<td><code>stm32l476</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo-l552ze-q</code></td>
+<td><code>stm32l552</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo-u545re</code></td>
+<td><code>stm32u545</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo-u575zi</code></td>
+<td><code>stm32u575</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo-u5a5zj</code></td>
+<td><code>stm32u5a5zj</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo_g474re</code></td>
+<td><code>stm32g474re</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo_wba52cg</code></td>
+<td><code>stm32wba52</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>A2_CV32E40P</code></td>
+<td><code>A2_CV32E40P</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>a20</code></td>
+<td><code>a20</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>acrn_x86_64</code></td>
+<td><code>acrn_x86_64</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>alif_ae822fa0e5597bs0</code></td>
+<td><code>alif_ae822fa0e5597bs0</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>ambiq-apollo4</code></td>
+<td><code>ambiq-apollo4</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>andes_ae350_n25</code></td>
+<td><code>andes_ae350_n25</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arduino_101-shield</code></td>
+<td><code>arduino_101-shield</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arduino_nano_33_ble</code></td>
+<td><code>arduino_nano_33_ble</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arduino_uno_r4_minima</code></td>
+<td><code>arduino_uno_r4_minima</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arty_litex_vexriscv</code></td>
+<td><code>arty_litex_vexriscv</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>arvsom</code></td>
+<td><code>arvsom</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>at91rm9200</code></td>
+<td><code>at91rm9200</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>atsamd21j17d-aft</code></td>
+<td><code>atsamd21j17d-aft</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>atsamd51g19a</code></td>
+<td><code>atsamd51g19a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>beaglev-fire</code></td>
+<td><code>beaglev-fire</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>beaglev_starlight</code></td>
+<td><code>beaglev_starlight</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>brd4116a</code></td>
+<td><code>brd4116a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>brd4117a</code></td>
+<td><code>brd4117a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>brd4118a</code></td>
+<td><code>brd4118a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>brd4120a</code></td>
+<td><code>brd4120a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>brd4121a</code></td>
+<td><code>brd4121a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>brd4162a</code></td>
+<td><code>brd4162a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>brd4186c</code></td>
+<td><code>brd4186c</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>brd4402a</code></td>
+<td><code>brd4402a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>cc2538</code></td>
+<td><code>cc2538sf53</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>colibri-vf61</code></td>
+<td><code>colibri-vf61</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>core-v-mcu</code></td>
+<td><code>core-v-mcu</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>cortex-a53-gicv2</code></td>
+<td><code>cortex-a53-gicv2</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>cortex-a53-gicv3</code></td>
+<td><code>cortex-a53-gicv3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>cortex-a53-gicv3_smp</code></td>
+<td><code>cortex-a53-gicv3_smp</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>cortex-a78</code></td>
+<td><code>cortex-a78</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>cortex-r52</code></td>
+<td><code>cortex-r52</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>cortex-r52_smp</code></td>
+<td><code>cortex-r52_smp</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>cortex-r52_smp_4</code></td>
+<td><code>cortex-r52_smp_4</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>cortex_a53_console</code></td>
+<td><code>cortex_a53_console</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>cortex_a53_virtio</code></td>
+<td><code>cortex_a53_virtio</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>crosslink-nx-evn</code></td>
+<td><code>crosslink-nx-evn</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efm32g210</code></td>
+<td><code>efm32g210</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efm32g222</code></td>
+<td><code>efm32g222</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efm32g232</code></td>
+<td><code>efm32g232</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efm32g842</code></td>
+<td><code>efm32g842</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efm32g890</code></td>
+<td><code>efm32g890</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efm32gg942</code></td>
+<td><code>efm32gg942</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efm32gg995</code></td>
+<td><code>efm32gg995</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efm32hg350</code></td>
+<td><code>efm32hg350</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efm32jg1</code></td>
+<td><code>efm32jg1</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efm32jg12</code></td>
+<td><code>efm32jg12</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efm32lg942</code></td>
+<td><code>efm32lg942</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efm32lg995</code></td>
+<td><code>efm32lg995</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efm32pg1</code></td>
+<td><code>efm32pg1</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efm32pg12</code></td>
+<td><code>efm32pg12</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efm32tg840</code></td>
+<td><code>efm32tg840</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efm32wg995</code></td>
+<td><code>efm32wg995</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efm32zg222</code></td>
+<td><code>efm32zg222</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efr32mg1</code></td>
+<td><code>efr32mg1</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efr32mg12</code></td>
+<td><code>efr32mg12</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efr32mg13</code></td>
+<td><code>efr32mg13</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efr32mg24</code></td>
+<td><code>efr32mg24</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efr32mg26</code></td>
+<td><code>efr32mg26</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>efr32xg22</code></td>
+<td><code>efr32xg22</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>egis_et171</code></td>
+<td><code>egis_et171</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>eos-s3-qomu</code></td>
+<td><code>eos-s3-qomu</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>eos-s3-quickfeather</code></td>
+<td><code>eos-s3-quickfeather</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>eos-s3</code></td>
+<td><code>eos-s3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>ezr32hg320</code></td>
+<td><code>ezr32hg320</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>ezr32lg330</code></td>
+<td><code>ezr32lg330</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>ezr32wg330</code></td>
+<td><code>ezr32wg330</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>focaltech_ft9001</code></td>
+<td><code>focaltech_ft9001</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>fomu</code></td>
+<td><code>fomu</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>fsl_lx2160ardb</code></td>
+<td><code>fsl_lx2160ardb</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>gr712rc</code></td>
+<td><code>gr712rc</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>gr716-devboard</code></td>
+<td><code>gr716-devboard</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>gr716</code></td>
+<td><code>gr716</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>ice40up5k-mdp-evn</code></td>
+<td><code>ice40up5k-mdp-evn</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>imxrt1064</code></td>
+<td><code>imxrt1064</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>imxrt500</code></td>
+<td><code>imxrt500</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>kendryte_k210</code></td>
+<td><code>kendryte_k210</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>leon3</code></td>
+<td><code>leon3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>litex_common</code></td>
+<td><code>litex_common</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>litex_ibex</code></td>
+<td><code>litex_ibex</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>litex_linux_vexriscv_sdcard</code></td>
+<td><code>litex_linux_vexriscv_sdcard</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>litex_microwatt</code></td>
+<td><code>litex_microwatt</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>litex_minerva</code></td>
+<td><code>litex_minerva</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>litex_nexys_video_vexriscv_linux</code></td>
+<td><code>litex_nexys_video_vexriscv_linux</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>litex_picorv32</code></td>
+<td><code>litex_picorv32</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>litex_tock</code></td>
+<td><code>litex_tock</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>litex_vexriscv</code></td>
+<td><code>litex_vexriscv</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>litex_vexriscv_linux</code></td>
+<td><code>litex_vexriscv_linux</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>litex_vexriscv_micropython</code></td>
+<td><code>litex_vexriscv_micropython</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>litex_vexriscv_smp</code></td>
+<td><code>litex_vexriscv_smp</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>litex_vexriscv_tftp</code></td>
+<td><code>litex_vexriscv_tftp</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>litex_vexriscv_verilated_cfu</code></td>
+<td><code>litex_vexriscv_verilated_cfu</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>litex_vexriscv_verilated_liteuart</code></td>
+<td><code>litex_vexriscv_verilated_liteuart</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>litex_vexriscv_zephyr</code></td>
+<td><code>litex_vexriscv_zephyr</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>litex_zephyr_vexriscv_i2s</code></td>
+<td><code>litex_zephyr_vexriscv_i2s</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>lpc2294</code></td>
+<td><code>lpc2294</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>mars_zx3</code></td>
+<td><code>mars_zx3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>max32652-evkit</code></td>
+<td><code>max32652-evkit</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>max32652</code></td>
+<td><code>max32652</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>microwatt</code></td>
+<td><code>microwatt</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>mimxrt1064_evk</code></td>
+<td><code>mimxrt1064_evk</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>mimxrt700_evk</code></td>
+<td><code>mimxrt700_evk</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>mimxrt798s</code></td>
+<td><code>mimxrt798s</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>miv-board-additional-uarts</code></td>
+<td><code>miv-board-additional-uarts</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>miv-board</code></td>
+<td><code>miv-board</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>miv</code></td>
+<td><code>miv</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>miv_rv32</code></td>
+<td><code>miv_rv32</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>mpc5567</code></td>
+<td><code>mpc5567</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>mpfs-icicle-kit</code></td>
+<td><code>mpfs-icicle-kit</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>msp430f2619</code></td>
+<td><code>msp430f2619</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>mspsim-msp430f149</code></td>
+<td><code>mspsim-msp430f149</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>mspsim-msp430f1611</code></td>
+<td><code>mspsim-msp430f1611</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>mspsim-msp430f2617</code></td>
+<td><code>mspsim-msp430f2617</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>mspsim-msp430f5437</code></td>
+<td><code>mspsim-msp430f5437</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>murax_vexriscv</code></td>
+<td><code>murax_vexriscv</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>murax_vexriscv_verilated_uart</code></td>
+<td><code>murax_vexriscv_verilated_uart</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nrf52840</code></td>
+<td><code>nrf52840</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nrf52840dk_nrf52840</code></td>
+<td><code>nrf52840dk_nrf52840</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo_f767zi</code></td>
+<td><code>nucleo_f767zi</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo_h753zi</code></td>
+<td><code>nucleo_h753zi</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nucleo_wba52cg</code></td>
+<td><code>nucleo_wba52cg</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nuvoton_npcx9</code></td>
+<td><code>nuvoton_npcx9</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nuvoton_npcx9m6fb_evb</code></td>
+<td><code>nuvoton_npcx9m6fb_evb</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nxp-frdm-imx8mplus</code></td>
+<td><code>nxp-frdm-imx8mplus</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nxp-k6xf</code></td>
+<td><code>nxp-k6xf</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nxp-mimx8ml</code></td>
+<td><code>nxp-mimx8ml</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nxp-s32k388</code></td>
+<td><code>nxp-s32k388</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>nxp-s32k388evb</code></td>
+<td><code>nxp-s32k388evb</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>opentitan-earlgrey-cw310</code></td>
+<td><code>opentitan-earlgrey-cw310</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>opentitan-earlgrey</code></td>
+<td><code>opentitan-earlgrey</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>picosoc</code></td>
+<td><code>picosoc</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>polarfire-soc</code></td>
+<td><code>polarfire-soc</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>quark-c1000</code></td>
+<td><code>quark-c1000</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>quark_c1000-cc2520</code></td>
+<td><code>quark_c1000-cc2520</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>ramn</code></td>
+<td><code>ramn</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>renesas-ck_ra6m5</code></td>
+<td><code>renesas-ck_ra6m5</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>renesas-da14592</code></td>
+<td><code>renesas-da14592</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>renesas-ek_ra2e1</code></td>
+<td><code>renesas-ek_ra2e1</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>renesas-ek_ra8m1</code></td>
+<td><code>renesas-ek_ra8m1</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>renesas-r7fa2e1a9</code></td>
+<td><code>renesas-r7fa2e1a9</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>renesas-r7fa2l1a</code></td>
+<td><code>renesas-r7fa2l1a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>renesas-r7fa4m1a</code></td>
+<td><code>renesas-r7fa4m1a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>renesas-r7fa6m5b</code></td>
+<td><code>renesas-r7fa6m5b</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>renesas-r7fa8m1a</code></td>
+<td><code>renesas-r7fa8m1a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>renesas-rz_t2m_rsk</code></td>
+<td><code>renesas-rz_t2m_rsk</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>renesas_rz_g2l</code></td>
+<td><code>renesas_rz_g2l</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>renesas_rz_t2m</code></td>
+<td><code>renesas_rz_t2m</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>ri5cy</code></td>
+<td><code>ri5cy</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>riscv_verilated_uartlite</code></td>
+<td><code>riscv_verilated_uartlite</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>riscv_virt</code></td>
+<td><code>riscv_virt</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>s32k118</code></td>
+<td><code>s32k118</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>sam4s</code></td>
+<td><code>sam4s</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>sam4s16c</code></td>
+<td><code>sam4s16c</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>sam4s8b</code></td>
+<td><code>sam4s8b</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>sam4s_xplained</code></td>
+<td><code>sam4s_xplained</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>sam_e70</code></td>
+<td><code>sam_e70</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>sifive-fe310</code></td>
+<td><code>sifive-fe310</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>sifive-fu540</code></td>
+<td><code>sifive-fu540</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>sifive-fu740</code></td>
+<td><code>sifive-fu740</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-at90usb162</code></td>
+<td><code>simavr-at90usb162</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega128</code></td>
+<td><code>simavr-atmega128</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega1280</code></td>
+<td><code>simavr-atmega1280</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega1281</code></td>
+<td><code>simavr-atmega1281</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega1284p</code></td>
+<td><code>simavr-atmega1284p</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega128rfa1</code></td>
+<td><code>simavr-atmega128rfa1</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega128rfr2</code></td>
+<td><code>simavr-atmega128rfr2</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega16</code></td>
+<td><code>simavr-atmega16</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega164</code></td>
+<td><code>simavr-atmega164</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega168</code></td>
+<td><code>simavr-atmega168</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega169p</code></td>
+<td><code>simavr-atmega169p</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega16m1</code></td>
+<td><code>simavr-atmega16m1</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega2560</code></td>
+<td><code>simavr-atmega2560</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega32</code></td>
+<td><code>simavr-atmega32</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega324</code></td>
+<td><code>simavr-atmega324</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega328</code></td>
+<td><code>simavr-atmega328</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega328pb</code></td>
+<td><code>simavr-atmega328pb</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega32u4</code></td>
+<td><code>simavr-atmega32u4</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega48</code></td>
+<td><code>simavr-atmega48</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega644</code></td>
+<td><code>simavr-atmega644</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega64m1</code></td>
+<td><code>simavr-atmega64m1</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega8</code></td>
+<td><code>simavr-atmega8</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-atmega88</code></td>
+<td><code>simavr-atmega88</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-attiny13</code></td>
+<td><code>simavr-attiny13</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-attiny1634</code></td>
+<td><code>simavr-attiny1634</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-attiny2313</code></td>
+<td><code>simavr-attiny2313</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-attiny2313a</code></td>
+<td><code>simavr-attiny2313a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-attiny24</code></td>
+<td><code>simavr-attiny24</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-attiny25</code></td>
+<td><code>simavr-attiny25</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-attiny4313</code></td>
+<td><code>simavr-attiny4313</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-attiny44</code></td>
+<td><code>simavr-attiny44</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-attiny45</code></td>
+<td><code>simavr-attiny45</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-attiny84</code></td>
+<td><code>simavr-attiny84</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simavr-attiny85</code></td>
+<td><code>simavr-attiny85</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>sltb001a</code></td>
+<td><code>sltb001a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>sltb004a</code></td>
+<td><code>sltb004a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>slwstk6220a</code></td>
+<td><code>slwstk6220a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>starfive-jh7100</code></td>
+<td><code>starfive-jh7100</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stk3200</code></td>
+<td><code>stk3200</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stk3600</code></td>
+<td><code>stk3600</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stk3700</code></td>
+<td><code>stk3700</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stk3800</code></td>
+<td><code>stk3800</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stm32f042</code></td>
+<td><code>stm32f042</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stm32f072</code></td>
+<td><code>stm32f072</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stm32f072b_discovery</code></td>
+<td><code>stm32f072b_discovery</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stm32f103</code></td>
+<td><code>stm32f103</code></td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td><code>stm32f4</code></td>
+<td><code>stm32f4</code></td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td><code>stm32f401cdu6-blackpill</code></td>
+<td><code>stm32f401cdu6-blackpill</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stm32f412</code></td>
+<td><code>stm32f412</code></td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td><code>stm32f429</code></td>
+<td><code>stm32f429</code></td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td><code>stm32f4_discovery-kit</code></td>
+<td><code>stm32f4_discovery-kit</code></td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td><code>stm32f4_discovery</code></td>
+<td><code>stm32f4_discovery</code></td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td><code>stm32f746</code></td>
+<td><code>stm32f746</code></td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td><code>stm32f777</code></td>
+<td><code>stm32f777</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stm32f7_discovery-bb</code></td>
+<td><code>stm32f7_discovery-bb</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stm32h7</code></td>
+<td><code>stm32h7</code></td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td><code>stm32h743</code></td>
+<td><code>stm32h743</code></td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td><code>stm32h747-disco</code></td>
+<td><code>stm32h747-disco</code></td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td><code>stm32h747</code></td>
+<td><code>stm32h747</code></td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td><code>stm32h753</code></td>
+<td><code>stm32h753</code></td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td><code>stm32l071</code></td>
+<td><code>stm32l071</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stm32l072</code></td>
+<td><code>stm32l072</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stm32l151</code></td>
+<td><code>stm32l151</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stm32l552</code></td>
+<td><code>stm32l552</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stm32w108</code></td>
+<td><code>stm32w108</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stm32wba52</code></td>
+<td><code>stm32wba52</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>tegra2</code></td>
+<td><code>tegra2</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>tegra3</code></td>
+<td><code>tegra3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>tock_veer_el2_sim</code></td>
+<td><code>tock_veer_el2_sim</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>up_squared_x86_64</code></td>
+<td><code>up_squared_x86_64</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>ut32m0r500</code></td>
+<td><code>ut32m0r500</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>vegaboard_ri5cy</code></td>
+<td><code>vegaboard_ri5cy</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>verilated_ibex</code></td>
+<td><code>verilated_ibex</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>versatile</code></td>
+<td><code>versatile</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>vexpress</code></td>
+<td><code>vexpress</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>vybrid</code></td>
+<td><code>vybrid</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>x86</code></td>
+<td><code>x86</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>xtensa-sample-controller</code></td>
+<td><code>xtensa-sample-controller</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>zedboard</code></td>
+<td><code>zedboard</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>zolertia-firefly</code></td>
+<td><code>zolertia-firefly</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>zynq-7000</code></td>
+<td><code>zynq-7000</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>zynqmp-zcu102-revA</code></td>
+<td><code>zynqmp-zcu102-revA</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>zynqmp-zcu102-revB</code></td>
+<td><code>zynqmp-zcu102-revB</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>zynqmp-zcu104</code></td>
+<td><code>zynqmp-zcu104</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>zynqmp-zcu106-vcu</code></td>
+<td><code>zynqmp-zcu106-vcu</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>zynqmp</code></td>
+<td><code>zynqmp</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>pic16f1829-curiosity</code></td>
+<td><code>pic16f1829</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>pic16f877a-demo</code></td>
+<td><code>pic16f877a</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>pic18f4520-demo</code></td>
+<td><code>pic18f4520</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>pico-bme280</code></td>
+<td><code>rp2040</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>pico-selftest</code></td>
+<td><code>rp2040</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>pico-w-bme280</code></td>
+<td><code>rp2040</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>pico</code></td>
+<td><code>rp2040</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>pico2-bme280</code></td>
+<td><code>rp2350</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>pico2</code></td>
+<td><code>rp2350</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>pybadge</code></td>
+<td><code>atsamd51-pybadge</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>rp2040-pico</code></td>
+<td><code>rp2040</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>rp2350-zero</code></td>
+<td><code>rp2350</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>rpi-pico-2-w-bme280</code></td>
+<td><code>rp2350</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>rpi-pico-2-w</code></td>
+<td><code>rp2350</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>s32k388-evb</code></td>
+<td><code>s32k388</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>sam-e70-xplained</code></td>
+<td><code>same70q21b</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>sam4s-xplained</code></td>
+<td><code>sam4s16c</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>seeed-xiao-esp32c3-bme280</code></td>
+<td><code>esp32c3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>seeed-xiao-esp32c6</code></td>
+<td><code>esp32c6fh4</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>seeed-xiao-esp32s3</code></td>
+<td><code>esp32s3</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>seeed-xiao-nrf52840-sense</code></td>
+<td><code>nrf52840</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>simctl-selftest</code></td>
+<td><code>ci-fixture-cortex-m3-uart1</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>sk-am62</code></td>
+<td><code>am6234</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>smart-ring</code></td>
+<td><code>nrf54l15</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stm32f103c4-smoke</code></td>
+<td><code>stm32f103c4</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f103c6-smoke</code></td>
+<td><code>stm32f103c6</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f103r4-smoke</code></td>
+<td><code>stm32f103r4</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f103r4h-smoke</code></td>
+<td><code>stm32f103r4h</code></td>
+<td style="text-align: right;">15</td>
+</tr>
+<tr>
+<td><code>stm32f103r6-smoke</code></td>
+<td><code>stm32f103r6</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f103r6h-smoke</code></td>
+<td><code>stm32f103r6h</code></td>
+<td style="text-align: right;">15</td>
+</tr>
+<tr>
+<td><code>stm32f103r8-smoke</code></td>
+<td><code>stm32f103r8</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f103t4-smoke</code></td>
+<td><code>stm32f103t4</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f103t6-smoke</code></td>
+<td><code>stm32f103t6</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f401cb-smoke</code></td>
+<td><code>stm32f401cb</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f401cc-smoke</code></td>
+<td><code>stm32f401cc</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f401cd-smoke</code></td>
+<td><code>stm32f401cd</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f401ce-smoke</code></td>
+<td><code>stm32f401ce</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f401rb-smoke</code></td>
+<td><code>stm32f401rb</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f401rc-smoke</code></td>
+<td><code>stm32f401rc</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f401rd-smoke</code></td>
+<td><code>stm32f401rd</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f401re-smoke</code></td>
+<td><code>stm32f401re</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f401vb-smoke</code></td>
+<td><code>stm32f401vb</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f401vc-smoke</code></td>
+<td><code>stm32f401vc</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f401vd-smoke</code></td>
+<td><code>stm32f401vd</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f401ve-smoke</code></td>
+<td><code>stm32f401ve</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f407ie-smoke</code></td>
+<td><code>stm32f407ie</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f407ig-smoke</code></td>
+<td><code>stm32f407ig</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f407ve-smoke</code></td>
+<td><code>stm32f407ve</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f407vg-smoke</code></td>
+<td><code>stm32f407vg</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f407ze-smoke</code></td>
+<td><code>stm32f407ze</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f407zg-smoke</code></td>
+<td><code>stm32f407zg</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f072b-disco</code></td>
+<td><code>stm32f072</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stm32f103-bare</code></td>
+<td><code>stm32f103</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f103-blue-pill-bme280</code></td>
+<td><code>stm32f103</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f103-blue-pill</code></td>
+<td><code>stm32f103</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f103-integrated-test</code></td>
+<td><code>-</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stm32f4-discovery</code></td>
+<td><code>stm32f407vg</code></td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td><code>stm32f401cdu6-blackpill</code></td>
+<td><code>stm32f401cdu6</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f401cdu6</code></td>
+<td><code>stm32f401cdu6</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f411ceu6-blackpill</code></td>
+<td><code>stm32f411ceu6</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>stm32f7-discovery</code></td>
+<td><code>stm32f746</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>stm32h735-smoke</code></td>
+<td><code>stm32h735</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>teensy-41</code></td>
+<td><code>imxrt1064</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>vegaboard-ri5cy</code></td>
+<td><code>vegaboard-ri5cy</code></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>wch-ch32v003evt</code></td>
+<td><code>ch32v003f4p6</code></td>
+<td style="text-align: right;">8</td>
+</tr>
+</tbody>
+</table>
+<h2 id="covered">Covered</h2>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>Chip</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>adafruit-feather-esp32-v2</code></td>
+<td><code>esp32</code></td>
+<td><code>crates/core/tests/analog/cosim_esp32_analog_diode.rs</code></td>
+</tr>
+<tr>
+<td><code>nucleo-f103rb</code></td>
+<td><code>stm32f103rb</code></td>
+<td><code>crates/core/tests/analog/cosim_nucleo_f103rb_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>nucleo-f767zi</code></td>
+<td><code>stm32f767</code></td>
+<td><code>crates/core/tests/analog/cosim_nucleo_f767zi_analog.rs</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="how-to-add-a-board">How to add a board</h2>
+<ol>
+<li>Add <code>examples/&lt;board&gt;/analog-ntc-diode-system.yaml</code> with the generic Beta NTC
+   divider and the Shockley diode load line, routing to <code>board.analog.&lt;pad&gt;_volts</code>.</li>
+<li>Add a test under <code>crates/core/tests/analog/</code> that loads the profile, solves
+   the netlists, compares each solved node against an independent closed form,
+   and asserts the firmware-visible endpoint (ADC data register or input level).</li>
+<li>Rerun this script and commit the regenerated document.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+        <script src="../assets/chip-list.js"></script>
+      
+    
+  </body>
+</html>
