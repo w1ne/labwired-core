@@ -28,7 +28,7 @@
 //! property (`nrf54l_05_10_15.dtsi`: TIMER00 -> hfpll, TIMER10 -> hfxo
 //! 32 MHz, TIMER2x -> PCLK16M), and nRF5340 PS v1.5 (TIMER counts PCLK16M).
 //!
-//! Two checks:
+//! Four checks:
 //! 1. Every `nrf52840_timer` instance in every nRF chip descriptor either
 //!    declares the expected `peripheral_hz`, or its base clock equals the core
 //!    clock so no key is needed. A new timer instance must make that choice.
@@ -37,6 +37,8 @@
 //!    (TASKS_CAPTURE[0] then CC[0]).
 //! 3. nRF5340 TIMER0..2 expose all six capture/compare channels, not the
 //!    model's default four.
+//! 4. The nRF54L full profiles declare every TIMER instance the vendor SVD
+//!    defines, at the SVD's base address and IRQ.
 
 use crate::common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
@@ -173,37 +175,118 @@ fn every_nrf_timer_declares_a_base_clock_when_it_differs_from_the_core() {
     }
 }
 
+/// Secure TIMER instances the vendor SVD defines: `(descriptor id, base, irq)`.
+///
+/// Parsed from the SVD so the expected instance list, base addresses and IRQs
+/// come from the vendor file, not from a table written next to the descriptor
+/// under test. Only `<peripheral>` names ending in `_S` are read; the `_NS`
+/// aliases sit at the same bases and the descriptors use the secure view.
+fn svd_secure_timers(svd: &std::path::Path) -> Vec<(String, u64, u32)> {
+    let text =
+        std::fs::read_to_string(svd).unwrap_or_else(|e| panic!("read {}: {e}", svd.display()));
+    let mut out = Vec::new();
+    let mut name: Option<String> = None;
+    let mut base: Option<u64> = None;
+    let mut irq: Option<u32> = None;
+    let mut in_interrupt = false;
+    for line in text.lines() {
+        let t = line.trim();
+        if t.starts_with("<peripheral") {
+            name = None;
+            base = None;
+            irq = None;
+            in_interrupt = false;
+        } else if let Some(v) = t
+            .strip_prefix("<name>")
+            .and_then(|s| s.strip_suffix("</name>"))
+        {
+            // The first <name> in the peripheral block is the instance name;
+            // later ones (registers, fields) must not overwrite it.
+            if name.is_none() {
+                name = Some(v.trim().to_string());
+            }
+        } else if let Some(v) = t
+            .strip_prefix("<baseAddress>")
+            .and_then(|s| s.strip_suffix("</baseAddress>"))
+        {
+            let v = v.trim();
+            let hex = v.strip_prefix("0x").or_else(|| v.strip_prefix("0X"));
+            base = u64::from_str_radix(hex.unwrap_or(v), 16).ok();
+        } else if t == "<interrupt>" {
+            in_interrupt = true;
+        } else if in_interrupt {
+            if let Some(v) = t
+                .strip_prefix("<value>")
+                .and_then(|s| s.strip_suffix("</value>"))
+            {
+                irq = v.trim().parse().ok();
+                in_interrupt = false;
+            }
+        } else if t == "</peripheral>" {
+            if let (Some(n), Some(b)) = (name.take(), base) {
+                if n.starts_with("GLOBAL_TIMER") && n.ends_with("_S") {
+                    let id = n
+                        .trim_start_matches("GLOBAL_")
+                        .trim_end_matches("_S")
+                        .to_ascii_lowercase();
+                    out.push((id, b, irq.expect("SVD TIMER without an interrupt value")));
+                }
+            }
+            in_interrupt = false;
+        }
+    }
+    out.sort();
+    out
+}
+
 /// Descriptor check: the nRF54L full profiles declare every TIMER instance the
-/// devicetree and the vendor SVD define.
+/// vendor SVD defines.
 ///
 /// `svd_conformance` only verifies the instances a descriptor already declares,
 /// so a MISSING TIMER is invisible to every other gate until firmware touches
 /// it and takes a `MemoryViolation`. `nrf54l_05_10_15.dtsi` and the vendored
 /// `nrf54l15.svd` both define seven on this part: TIMER00, TIMER10 and
 /// TIMER20..24. The L15 profile declared four of them until 2026-11-24.
+///
+/// The instance list, bases and IRQs are read from the SVD. `cc-num` is not
+/// expressible in an SVD (every instance derives from `GLOBAL_TIMER00_NS` with
+/// `<dim>8</dim>`), so it comes from the devicetree `cc-num` property below.
 #[test]
 fn nrf54l_profiles_declare_every_timer_the_devicetree_defines() {
-    // (id, secure base, irq, cc-num) — dtsi `reg` / `interrupts` / `cc-num`,
-    // all confirmed against the same instances in the vendor SVD.
-    const EXPECTED: &[(&str, u64, u32, u64)] = &[
-        ("timer00", 0x5005_5000, 85, 6),
-        ("timer10", 0x5008_5000, 133, 8),
-        ("timer20", 0x500C_A000, 202, 6),
-        ("timer21", 0x500C_B000, 203, 6),
-        ("timer22", 0x500C_C000, 204, 6),
-        ("timer23", 0x500C_D000, 205, 6),
-        ("timer24", 0x500C_E000, 206, 6),
+    // dtsi `cc-num`: TIMER10 has eight capture/compare channels, the rest six.
+    const EXPECTED_CC: &[(&str, u64)] = &[
+        ("timer00", 6),
+        ("timer10", 8),
+        ("timer20", 6),
+        ("timer21", 6),
+        ("timer22", 6),
+        ("timer23", 6),
+        ("timer24", 6),
     ];
 
-    for chip_file in ["nrf54l15.yaml", "nrf54lm20a.yaml"] {
+    for (chip_file, svd_file) in [
+        ("nrf54l15.yaml", "nrf54l15.svd"),
+        ("nrf54lm20a.yaml", "nrf54lm20a.svd"),
+    ] {
+        let svd = root(&format!("tests/fixtures/real_world/{svd_file}"));
+        let expected = svd_secure_timers(&svd);
+        assert_eq!(
+            expected.len(),
+            EXPECTED_CC.len(),
+            "{}: expected {} TIMER instances in the SVD, parsed {}",
+            svd.display(),
+            EXPECTED_CC.len(),
+            expected.len()
+        );
+
         let chip_path = root(&format!("configs/chips/{chip_file}"));
         let chip = ChipDescriptor::from_file(&chip_path)
             .unwrap_or_else(|e| panic!("load {chip_file}: {e}"));
 
         let mut findings: Vec<String> = Vec::new();
-        for (id, base, irq, num_cc) in EXPECTED {
+        for (id, base, irq) in &expected {
             let Some(p) = chip.peripherals.iter().find(|p| p.id == *id) else {
-                findings.push(format!("{id}: not declared; firmware using it bus-faults"));
+                findings.push(format!("{id}: not declared; SVD has it at {base:#X}"));
                 continue;
             };
             if p.r#type != "nrf52840_timer" {
@@ -214,16 +297,20 @@ fn nrf54l_profiles_declare_every_timer_the_devicetree_defines() {
             }
             if p.base_address != *base {
                 findings.push(format!(
-                    "{id}: base {:#X}, devicetree/SVD says {base:#X}",
+                    "{id}: base {:#X}, SVD says {base:#X}",
                     p.base_address
                 ));
             }
             if p.irq != Some(*irq) {
-                findings.push(format!("{id}: irq {:?}, devicetree/SVD says {irq}", p.irq));
+                findings.push(format!("{id}: irq {:?}, SVD says {irq}", p.irq));
             }
-            if p.config.get("num_cc").and_then(|v| v.as_u64()) != Some(*num_cc) {
+            let num_cc = EXPECTED_CC
+                .iter()
+                .find(|(cc_id, _)| cc_id == id)
+                .map(|(_, cc)| *cc);
+            if p.config.get("num_cc").and_then(|v| v.as_u64()) != num_cc {
                 findings.push(format!(
-                    "{id}: num_cc {:?}, devicetree says {num_cc}",
+                    "{id}: num_cc {:?}, devicetree says {num_cc:?}",
                     p.config.get("num_cc")
                 ));
             }
@@ -233,9 +320,9 @@ fn nrf54l_profiles_declare_every_timer_the_devicetree_defines() {
             .iter()
             .filter(|p| p.r#type == "nrf52840_timer")
         {
-            if !EXPECTED.iter().any(|(id, ..)| *id == p.id) {
+            if !expected.iter().any(|(id, ..)| *id == p.id) {
                 findings.push(format!(
-                    "{}: unexpected timer instance; extend EXPECTED with its dtsi row",
+                    "{}: unexpected timer instance; the SVD does not define it",
                     p.id
                 ));
             }
@@ -243,7 +330,7 @@ fn nrf54l_profiles_declare_every_timer_the_devicetree_defines() {
 
         assert!(
             findings.is_empty(),
-            "{chip_file} timer estate disagrees with nrf54l_05_10_15.dtsi:\n  {}",
+            "{chip_file} timer estate disagrees with {svd_file}:\n  {}",
             findings.join("\n  ")
         );
     }

@@ -53,3 +53,22 @@ write `BITMODE` before the fix.
 Same command, same binary: 4 passed, 0 failed. `nrf_timers_count_their_base_clock_not_the_core_clock`
 now also measures TIMER00 (640 counts in 640 CPU cycles, 1:1 with the core) and
 TIMER23 (80 counts in 640 cycles, 1:8) on `nrf54l15.yaml`.
+
+## Gate source: vendor SVD, not a local table
+
+The first revision of the gate carried its own `(id, base, irq, cc-num)` table.
+That made the check circular: the descriptor and the expectation could both be
+wrong in the same way. The gate now parses the secure `<peripheral>` blocks of
+`tests/fixtures/real_world/nrf54l15.svd` and `nrf54lm20a.svd` for instance
+names, base addresses and interrupt values, so the completeness claim is
+checked against the vendor file. Only `cc-num` stays a table entry: every SVD
+instance derives from `GLOBAL_TIMER00_NS` with `<dim>8</dim>`, so the SVD
+cannot express the per-instance channel count.
+
+Re-run negative control with the SVD-sourced gate (remove only the `timer24`
+declaration, same binary): `svd-sourced-gate.log`.
+
+```
+nrf54l15.yaml timer estate disagrees with nrf54l15.svd:
+  timer24: not declared; SVD has it at 0x500CE000
+```
