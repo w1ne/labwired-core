@@ -7,6 +7,11 @@
 //! 32.768 kHz LFCLK; 24-bit counter with a 12-bit prescaler:
 //! f_RTC = 32_768 / (PRESCALER + 1) Hz.
 //!
+//! The walk advances in CPU cycles, so the model needs the core clock to
+//! convert them into LFCLK edges. It takes that from
+//! [`Peripheral::attach_cpu_hz`] (the chip descriptor's `cpu_hz`); the 64 MHz
+//! default below is used only by a hand-built bus that never attaches one.
+//!
 //! Instance-specific CC count (PS §6.21, table 97):
 //!   RTC0       — 3 CC registers (CC[0..2])
 //!   RTC1, RTC2 — 4 CC registers (CC[0..3])
@@ -69,12 +74,23 @@ const EN_COMPARE_SHIFT: u32 = 16;
 const COUNTER_MASK: u32 = 0x00FF_FFFF;
 const PRESCALER_MASK: u32 = 0xFFF;
 
-/// CPU cycles per LFCLK base-clock tick (nRF52840: 64 MHz CPU, 32.768 kHz LFCLK).
-///
+/// LFCLK nominal frequency, Hz. Every nRF51/52/53/54 RTC counts this clock;
+/// the crystal fixes it and it does not follow the core clock.
+pub const LFCLK_HZ: u32 = 32_768;
+
+/// CPU cycles per LFCLK base-clock tick at the 64 MHz nRF52 core clock:
 /// 64_000_000 / 32_768 = 1953.125 exactly = 15625 / 8.
-/// We advance `lfclk_accum` by LFCLK_ACCUM_INC each `tick()` call (once per
-/// CPU cycle) and fire one LFCLK edge when it reaches LFCLK_ACCUM_PERIOD.
-/// This gives exactly 32768 Hz without accumulating rounding error.
+///
+/// We advance `lfclk_accum` by `lfclk_inc` each `tick()` call (once per CPU
+/// cycle) and fire one LFCLK edge when it reaches `lfclk_period`. This gives
+/// exactly 32768 Hz without accumulating rounding error.
+///
+/// These constants are only the fallback for a hand-built bus that never
+/// calls [`Peripheral::attach_cpu_hz`]. On a real machine the bus passes
+/// `ChipDescriptor::cpu_hz` and the ratio becomes `LFCLK_HZ : cpu_hz`. That
+/// matters because the same RTC model also runs on the 16 MHz nRF51 and the
+/// 128 MHz nRF5340, where the 64 MHz ratio makes the counter 4x slow or 2x
+/// fast.
 ///
 /// Unit tests that call tick() directly use `Nrf52Rtc::new_fast()` which sets
 /// both to 1, giving a 1:1 CPU:LFCLK ratio so small tick counts suffice.
@@ -176,6 +192,28 @@ impl Nrf52Rtc {
             lfclk_period: 1,
             ..Self::default()
         }
+    }
+
+    /// Set the LFCLK accumulator ratio to `LFCLK_HZ : cpu_hz`, reduced so the
+    /// fraction stays exact. A 64 MHz core yields 8/15625, byte-identical to
+    /// the historical default; 16 MHz yields 32/15625 and 128 MHz yields
+    /// 4/15625. Out-of-range or zero clocks keep the previous ratio.
+    fn set_lfclk_ratio(&mut self, cpu_hz: u64) {
+        if cpu_hz == 0 || cpu_hz > u64::from(u32::MAX) {
+            return;
+        }
+        fn gcd(a: u64, b: u64) -> u64 {
+            if b == 0 {
+                a
+            } else {
+                gcd(b, a % b)
+            }
+        }
+        let g = gcd(u64::from(LFCLK_HZ), cpu_hz).max(1);
+        // Both terms are <= u32::MAX (LFCLK_HZ is 2^15, cpu_hz is bounded
+        // above), so the casts cannot truncate.
+        self.lfclk_inc = (u64::from(LFCLK_HZ) / g) as u32;
+        self.lfclk_period = (cpu_hz / g) as u32;
     }
 
     crate::cycle_clock::scheduler_mode!();
@@ -563,6 +601,16 @@ impl Peripheral for Nrf52Rtc {
         self.clock = Some(clock);
     }
 
+    /// The counter counts LFCLK (32.768 kHz), and the legacy / forced walk
+    /// advances it one CPU cycle at a time. Without this the model assumes a
+    /// 64 MHz core, which is wrong on the nRF51 (16 MHz, counter 4x slow) and
+    /// the nRF5340 (128 MHz, counter 2x fast). The bus passes
+    /// `ChipDescriptor::cpu_hz` here, so the descriptor stays the single
+    /// source of the core clock.
+    fn attach_cpu_hz(&mut self, hz: u64) {
+        self.set_lfclk_ratio(hz);
+    }
+
     fn sync_to(&mut self, now_cycle: u64) {
         if !self.scheduler_mode() {
             return;
@@ -834,6 +882,73 @@ mod tests {
         assert!(r.read_u32(OFF_COUNTER).unwrap() >= 2);
         assert_eq!(r.read_u32(OFF_EVENTS_COMPARE0).unwrap(), 1);
         assert!(result.irq, "INTEN COMPARE0 must raise the RTC IRQ");
+    }
+
+    #[test]
+    fn attach_cpu_hz_keeps_the_64mhz_ratio_byte_identical() {
+        let mut r = Nrf52Rtc::new();
+        r.attach_cpu_hz(64_000_000);
+        assert_eq!(
+            (r.lfclk_inc, r.lfclk_period),
+            (LFCLK_ACCUM_INC_DEFAULT, LFCLK_ACCUM_PERIOD_DEFAULT),
+            "the 64 MHz core must reproduce the historical 8/15625 ratio exactly"
+        );
+    }
+
+    #[test]
+    fn attach_cpu_hz_reduces_to_an_exact_fraction() {
+        // CPU Hz from each nRF family descriptor, expected reduced ratio.
+        for (hz, inc, period) in [
+            (16_000_000u64, 32u32, 15_625u32), // nRF51
+            (32_000_000, 16, 15_625),          // hypothetical 32 MHz core
+            (64_000_000, 8, 15_625),           // nRF52
+            (128_000_000, 4, 15_625),          // nRF5340 / nRF54L
+            (48_000_000, 32, 46_875),          // 3x the historical divider
+            (25_000_000, 512, 390_625),        // RP2040-class, odd 5^n remainder
+            (32_768, 1, 1),                    // degenerate 1:1
+        ] {
+            let mut r = Nrf52Rtc::new();
+            r.attach_cpu_hz(hz);
+            assert_eq!(
+                (r.lfclk_inc, r.lfclk_period),
+                (inc, period),
+                "cpu_hz {hz}: expected {inc}/{period}"
+            );
+        }
+    }
+
+    #[test]
+    fn attach_cpu_hz_ignores_zero_and_keeps_the_previous_ratio() {
+        let mut r = Nrf52Rtc::new();
+        r.attach_cpu_hz(128_000_000);
+        r.attach_cpu_hz(0);
+        assert_eq!((r.lfclk_inc, r.lfclk_period), (4, 15_625));
+    }
+
+    /// PRESCALER 0: one COUNTER step per 32768 LFCLK edges, so after `cycles`
+    /// CPU cycles the counter is `cycles * 32768 / cpu_hz`.
+    #[test]
+    fn counter_counts_lfclk_not_cpu_cycles() {
+        for (hz, cycles) in [
+            (16_000_000u64, 15_625u64), // -> 32
+            (64_000_000, 62_500),       // -> 32
+            (128_000_000, 125_000),     // -> 32
+        ] {
+            let mut r = Nrf52Rtc::new();
+            r.attach_cpu_hz(hz);
+            r.write_u32(OFF_PRESCALER, 0).unwrap();
+            r.write_u32(OFF_TASKS_START, 1).unwrap();
+            let res = r.tick_elapsed(cycles);
+            assert!(!res.irq);
+            let expected = (u128::from(cycles) * u128::from(LFCLK_HZ) / u128::from(hz)) as u32;
+            assert_eq!(expected, 32, "test row math");
+            assert_eq!(
+                r.read_u32(OFF_COUNTER).unwrap(),
+                expected,
+                "cpu_hz {hz}: after {cycles} CPU cycles the counter is not {expected} \
+                 (core clock not applied to the LFCLK ratio?)"
+            );
+        }
     }
 
     #[cfg(feature = "event-scheduler")]
