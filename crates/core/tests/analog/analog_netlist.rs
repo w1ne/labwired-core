@@ -1246,6 +1246,99 @@ C1 out 0 100n $ dollar comment
         assert!(!dc.voltage_sources[0].wave.has_corner_between(0.0, 1.0));
     }
 
+    /// The step is half open, `(from, to]`: a corner on a step boundary
+    /// restarts the step that arrives at it, and the step after it does not
+    /// restart again for the same corner.
+    #[test]
+    fn a_corner_on_a_step_boundary_belongs_to_the_arriving_step() {
+        let pulse = Waveform::Pulse {
+            v1: 0.0,
+            v2: 3.3,
+            delay: 10e-6,
+            rise: 10e-9,
+            fall: 10e-9,
+            width: 5e-6,
+            period: 10e-6,
+        };
+        // The delay starts the rise. It belongs to the step ending there.
+        assert!(pulse.has_corner_between(9.999e-6, 10e-6));
+        assert!(
+            !pulse.has_corner_between(10e-6, 10.001e-6),
+            "the step after the corner resumes without a second restart"
+        );
+        // The end of the rise, 10 ns after the delay. The samples are binary
+        // fractions, so straddle the corner rather than land on it.
+        assert!(pulse.has_corner_between(10.002e-6, 10.012e-6));
+        assert!(!pulse.has_corner_between(10.02e-6, 10.03e-6));
+        // A step longer than a period crosses a wrap even when both phases
+        // look like the flat top.
+        assert!(pulse.has_corner_between(10e-6, 45e-6));
+        // Degenerate intervals and a negative delay.
+        assert!(!pulse.has_corner_between(20e-6, 20e-6));
+        assert!(!pulse.has_corner_between(20e-6, 10e-6));
+        let early = Waveform::Pulse {
+            v1: 0.0,
+            v2: 3.3,
+            delay: -5e-6,
+            rise: 10e-9,
+            fall: 10e-9,
+            width: 5e-6,
+            period: 10e-6,
+        };
+        assert!(
+            !early.has_corner_between(0.0, 1e-9),
+            "a pulse whose delay has already passed has no start corner"
+        );
+        // A square pulse has zero-time edges; its corners are jumps, and the
+        // flat top and bottom have none.
+        let square = Waveform::Pulse {
+            v1: 0.0,
+            v2: 5.0,
+            delay: 0.0,
+            rise: 0.0,
+            fall: 0.0,
+            width: 1e-6,
+            period: 2e-6,
+        };
+        assert!(!square.has_corner_between(0.1e-6, 0.9e-6));
+        assert!(square.has_corner_between(0.5e-6, 1.5e-6));
+        assert!(square.has_corner_between(1.5e-6, 2.5e-6));
+    }
+
+    /// The corner rule must use the same phase arithmetic as `at`. Deriving
+    /// the corner time from different arithmetic can place a zero-time edge
+    /// one rounding step past `to`, step over the jump under trapezoidal, and
+    /// ring. This is the sweep that found the old rule's misses.
+    #[test]
+    fn a_zero_time_edge_is_never_stepped_over() {
+        let pulse = Waveform::Pulse {
+            v1: 0.0,
+            v2: 3.3,
+            delay: 0.0,
+            rise: 0.0,
+            fall: 0.0,
+            width: 8.25e-6,
+            period: 3.3e-5,
+        };
+        let h = 3.3e-7;
+        let mut t = 0.0;
+        let mut jumps = 0;
+        for _ in 0..20_000 {
+            let next = t + h;
+            if pulse.at(t) != pulse.at(next) {
+                jumps += 1;
+                assert!(
+                    pulse.has_corner_between(t, next),
+                    "the pulse jumps from {} V to {} V in ({t}, {next}) but reports no corner",
+                    pulse.at(t),
+                    pulse.at(next)
+                );
+            }
+            t = next;
+        }
+        assert!(jumps > 300, "the sweep must cross many edges, saw {jumps}");
+    }
+
     // -----------------------------------------------------------------------
     // Analysis cards
     // -----------------------------------------------------------------------

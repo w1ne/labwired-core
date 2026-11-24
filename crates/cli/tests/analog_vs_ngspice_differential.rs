@@ -280,6 +280,10 @@ fn an_unsupported_element_fails_manifest_validation() {
 /// 2 % that sabotage passes. At 0.05 % it fails with 2.5x margin, while still
 /// leaving 20x headroom over the worst honest disagreement, which is the
 /// fixed-step-versus-adaptive-step difference between the two integrators.
+/// The common-emitter deck is sine-driven: it used to restart trapezoidal on
+/// every sample, so its 2.6e-5 % was measured under backward Euler; with the
+/// corner rule it keeps trapezoidal and measures 4.0e-5 %. The 1 %
+/// thermal-voltage sabotage still moves it by 0.24 %, 60x the tolerance.
 /// The RL deck's 1.1e-3 % is the start-up sample, where one backward-Euler
 /// step follows the initial operating point; after the first 200 samples it is
 /// 2.0e-4 %.

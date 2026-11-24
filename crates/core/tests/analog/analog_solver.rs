@@ -151,12 +151,15 @@ mod analog {
     #[test]
     fn a_pulse_edge_restarts_like_a_routed_input() {
         // The same 3.3 V step into 10 kΩ / 100 nF, delivered two ways: as a
-        // PULSE whose edge falls inside the first 10 us step, and through
-        // `set_voltage_source` as a routed input is. The corner rule must
-        // restart integration for the PULSE edge exactly as the setter does,
-        // so the two trajectories have to agree sample for sample.
+        // PULSE whose edge falls on the boundary after the fifth 10 us step,
+        // and through `set_voltage_source` as a routed input is. The corner
+        // rule must restart integration for the PULSE edge exactly as the
+        // setter does, so the two trajectories have to agree sample for
+        // sample. The edge is deliberately not in step 0: every solver starts
+        // with `restart`, so an edge inside the first step would pass even if
+        // the corner rule never fired.
         let pulse = parse_netlist(
-            "* rc pulse\nVgpio in 0 PULSE(0 3.3 5u 0 0 1 2)\nR1 in out 10k\nC1 out 0 100n\n",
+            "* rc pulse\nVgpio in 0 PULSE(0 3.3 60u 0 0 1 2)\nR1 in out 10k\nC1 out 0 100n\n",
         )
         .expect("pulse netlist parses");
         let mut pulsed = Solver::new(pulse, Integration::Trapezoidal).expect("solver builds");
@@ -166,10 +169,24 @@ mod analog {
             .expect("driven netlist parses");
         let mut stepped = Solver::new(driven, Integration::Trapezoidal).expect("solver builds");
         let source = stepped.voltage_source_index("Vgpio").expect("Vgpio exists");
-        stepped.set_voltage_source(source, 3.3);
         let stepped_node = stepped.circuit().node("out").expect("node out");
 
-        for step in 0..100 {
+        // Five steps at 0 V. The pulse edge is at 60 us, so the step that
+        // arrives there is step six.
+        for step in 0..5 {
+            pulsed.advance(10e-6).expect("pulse step solves");
+            stepped.advance(10e-6).expect("driven step solves");
+            let a = pulsed.node_voltage(pulsed_node);
+            let b = stepped.node_voltage(stepped_node);
+            assert_eq!(
+                a.to_bits(),
+                b.to_bits(),
+                "settling step {step}: {a} V vs {b} V"
+            );
+        }
+        stepped.set_voltage_source(source, 3.3);
+
+        for step in 5..100 {
             pulsed.advance(10e-6).expect("pulse step solves");
             stepped.advance(10e-6).expect("driven step solves");
             let a = pulsed.node_voltage(pulsed_node);

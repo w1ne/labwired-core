@@ -532,9 +532,14 @@ impl Waveform {
     /// step. That derivative is still consistent across a step of a smooth
     /// waveform, but not across a corner: a pulse edge, or the moment a
     /// delayed sine starts. [`Solver::advance`](super::mna::Solver) restarts
-    /// trapezoidal integration with backward Euler on exactly those steps (see
-    /// the `mna` module docs), and a waveform that merely changes value every
-    /// step must not be mistaken for one of them.
+    /// trapezoidal integration with backward Euler on the step that ends at
+    /// the corner (see the `mna` module docs). A waveform that merely changes
+    /// value every step is not a corner.
+    ///
+    /// The step is half open, `(from, to]`, so a corner exactly on a step
+    /// boundary restarts the step that arrives at it, and the next step
+    /// resumes trapezoidal from the consistent state backward Euler leaves.
+    /// That is the breakpoint rule SPICE uses.
     ///
     /// A pulse whose two levels are equal, and a sine of zero amplitude, are
     /// constant and have no corners.
@@ -546,7 +551,7 @@ impl Waveform {
             Self::Dc(_) => false,
             Self::Sin {
                 amplitude, delay, ..
-            } => amplitude != 0.0 && from <= delay && to > delay,
+            } => amplitude != 0.0 && from < delay && to >= delay,
             Self::Pulse {
                 v1,
                 v2,
@@ -559,24 +564,38 @@ impl Waveform {
                 if v1 == v2 {
                     return false;
                 }
-                // Corners within one period: the start of the rise, the end of
-                // it, the start of the fall and the end of it. `at` wraps the
-                // phase into `[0, period)`, so the corners repeat there.
-                for offset in [0.0, rise, rise + width, rise + width + fall] {
-                    let corner = if period > 0.0 {
-                        // First repeat of this corner strictly after `from`,
-                        // never before `delay`.
-                        let cycles = ((from - delay - offset) / period).floor() + 1.0;
-                        delay + cycles.max(0.0) * period + offset
-                    } else {
-                        delay + offset
-                    };
-                    if corner > from && corner <= to {
-                        return true;
-                    }
+                // The phase arithmetic must match `at` exactly: a corner is a
+                // segment boundary of the waveform `at` evaluates, so deriving
+                // the corner from different arithmetic can miss an edge that
+                // sits within one rounding step of `to`.
+                if from < delay {
+                    return to >= delay;
                 }
-                false
+                let (from_cycles, from_phase) = Self::pulse_phase(from, delay, period);
+                let (to_cycles, to_phase) = Self::pulse_phase(to, delay, period);
+                if from_cycles != to_cycles {
+                    return true;
+                }
+                // Segment boundaries inside one period: the end of the rise,
+                // the end of the top and the end of the fall. The start of the
+                // rise is phase 0, which only `from` or a wrap can reach here.
+                [rise, rise + width, rise + width + fall]
+                    .iter()
+                    .any(|&corner| from_phase < corner && corner <= to_phase)
             }
+        }
+    }
+
+    /// Splits `t` into whole periods after `delay` and the phase inside the
+    /// period, using the same arithmetic as [`Self::at`].
+    fn pulse_phase(t: f64, delay: f64, period: f64) -> (f64, f64) {
+        let mut phase = t - delay;
+        if period > 0.0 && phase >= period {
+            let cycles = libm::floor(phase / period);
+            phase -= cycles * period;
+            (cycles, phase)
+        } else {
+            (0.0, phase)
         }
     }
 }
