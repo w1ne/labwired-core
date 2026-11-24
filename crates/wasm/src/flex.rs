@@ -9,10 +9,14 @@
 //! `WasmFlexTestRun` runs a `labwired test` Flex script with the runner the
 //! CLI uses. There the firmware module runs in the `wasmi` interpreter inside
 //! this package, so fuel limits and `until_ns` suspension match the CLI.
+//! `WasmFlexTestRun::run_with_ngspice_callback` runs the same scripts with
+//! `adapter: ngspice` models solved by a host-owned callback.
 
 use labwired_config::{FlexTestLimits, FlexTestScript};
 use labwired_core::flex::FlexRuntime;
-use labwired_core::flex_script::{run_script, FlexResultConfig, FlexScriptRun, FlexTestResult};
+use labwired_core::flex_script::{
+    run_script_with_factory, FlexResultConfig, FlexScriptRun, FlexTestResult,
+};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -55,12 +59,48 @@ fn js_error(error: impl std::fmt::Display) -> JsValue {
 
 #[wasm_bindgen]
 impl WasmFlexRuntime {
+    /// An `adapter: ngspice` model is refused here (no solver callback); use
+    /// [`Self::new_from_yaml_with_ngspice_callback`].
     pub fn new_from_yaml(yaml: &str) -> Result<WasmFlexRuntime, JsValue> {
-        Ok(Self {
-            runtime: FlexRuntime::from_yaml(yaml).map_err(js_error)?,
-        })
+        Self::build(yaml, None).map_err(js_error)
     }
 
+    /// Construct a Flex runtime whose `adapter: ngspice` models call the
+    /// host-owned solver callback, as
+    /// `WasmSimulator::new_from_config_with_ngspice_callback` does. The first
+    /// exchange is the `(time_ns = 0, dt_ns = 0)` priming step.
+    pub fn new_from_yaml_with_ngspice_callback(
+        yaml: &str,
+        callback: JsValue,
+    ) -> Result<WasmFlexRuntime, JsValue> {
+        use wasm_bindgen::JsCast;
+        let callback = callback
+            .dyn_into::<js_sys::Function>()
+            .map_err(|_| JsValue::from_str("ngspice callback must be a function"))?;
+        Self::build(yaml, Some(&callback)).map_err(js_error)
+    }
+}
+
+impl WasmFlexRuntime {
+    #[cfg(test)]
+    pub(crate) fn build_for_test(yaml: &str) -> labwired_core::SimResult<WasmFlexRuntime> {
+        Self::build(yaml, None)
+    }
+
+    fn build(
+        yaml: &str,
+        callback: Option<&js_sys::Function>,
+    ) -> labwired_core::SimResult<WasmFlexRuntime> {
+        Ok(Self {
+            runtime: FlexRuntime::from_yaml_with_factory(yaml, |config| {
+                crate::ngspice::browser_adapter(config, callback)
+            })?,
+        })
+    }
+}
+
+#[wasm_bindgen]
+impl WasmFlexRuntime {
     pub fn port_id(&self, name: &str) -> Result<u32, JsValue> {
         self.runtime.port_id(name).map_err(js_error)
     }
@@ -184,13 +224,58 @@ impl WasmFlexRuntime {
 
 /// Parse and validate a Flex test script, then run it with the shared runner.
 /// The result names the script by `script_name` and its inputs as the script
-/// writes them.
+/// writes them. An `adapter: ngspice` model is a `config_error` here (no
+/// solver callback), as in `WasmFlexRuntime::new_from_yaml`.
 pub(crate) fn run_test_script(
     script_name: &str,
     script_yaml: &str,
     manifest_yaml: &str,
     firmware: &[u8],
 ) -> Result<FlexScriptRun, String> {
+    run_browser_test_script(script_name, script_yaml, manifest_yaml, firmware, None)
+}
+
+/// [`run_test_script`] with `adapter: ngspice` models that exchange each
+/// boundary with `callback`.
+pub(crate) fn run_test_script_with_ngspice_callback(
+    script_name: &str,
+    script_yaml: &str,
+    manifest_yaml: &str,
+    firmware: &[u8],
+    callback: &js_sys::Function,
+) -> Result<FlexScriptRun, String> {
+    run_browser_test_script(
+        script_name,
+        script_yaml,
+        manifest_yaml,
+        firmware,
+        Some(callback),
+    )
+}
+
+/// Both test-script entry points run on the browser adapter factory, so no
+/// script reaches the native ngspice host or a filesystem path.
+fn run_browser_test_script(
+    script_name: &str,
+    script_yaml: &str,
+    manifest_yaml: &str,
+    firmware: &[u8],
+    callback: Option<&js_sys::Function>,
+) -> Result<FlexScriptRun, String> {
+    let (script, config) = parse_test_script(script_name, script_yaml)?;
+    Ok(run_script_with_factory(
+        &script,
+        config,
+        manifest_yaml,
+        firmware,
+        |model| crate::ngspice::browser_adapter(model, callback),
+    ))
+}
+
+fn parse_test_script(
+    script_name: &str,
+    script_yaml: &str,
+) -> Result<(FlexTestScript, FlexResultConfig), String> {
     let script: FlexTestScript = serde_yaml::from_str(script_yaml)
         .map_err(|error| format!("Failed to parse Flex Test Script YAML: {error}"))?;
     script.validate().map_err(|error| error.to_string())?;
@@ -205,7 +290,7 @@ pub(crate) fn run_test_script(
             max_time_ns: script.limits.max_time_ns,
         },
     };
-    Ok(run_script(&script, config, manifest_yaml, firmware))
+    Ok((script, config))
 }
 
 /// One finished run of a Flex test script: the same `result.json` content
@@ -233,6 +318,38 @@ impl WasmFlexTestRun {
     ) -> Result<WasmFlexTestRun, JsValue> {
         let run =
             run_test_script(script_name, script_yaml, manifest_yaml, firmware).map_err(js_error)?;
+        Ok(Self {
+            result: run.result,
+            runtime: run.runtime,
+        })
+    }
+
+    /// [`Self::run`] with `adapter: ngspice` models solved by the host-owned
+    /// `callback`, as `WasmFlexRuntime::new_from_yaml_with_ngspice_callback`
+    /// builds them; its first exchange is the `(0, 0)` priming step. A
+    /// callback that throws or returns a malformed or incomplete response at
+    /// a boundary ends the run with `stop_reason: model_error`; one that fails
+    /// while the models are built is a `config_error`. A `callback` that is
+    /// not a function is an error here.
+    pub fn run_with_ngspice_callback(
+        script_name: &str,
+        script_yaml: &str,
+        manifest_yaml: &str,
+        firmware: &[u8],
+        callback: JsValue,
+    ) -> Result<WasmFlexTestRun, JsValue> {
+        use wasm_bindgen::JsCast;
+        let callback = callback
+            .dyn_into::<js_sys::Function>()
+            .map_err(|_| JsValue::from_str("ngspice callback must be a function"))?;
+        let run = run_test_script_with_ngspice_callback(
+            script_name,
+            script_yaml,
+            manifest_yaml,
+            firmware,
+            &callback,
+        )
+        .map_err(js_error)?;
         Ok(Self {
             result: run.result,
             runtime: run.runtime,

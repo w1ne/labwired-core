@@ -1,0 +1,7 @@
+* Flex portable RC for adapter: ngspice. The same network as system.yaml:
+* Vdrive (0 V or 3.3 V) -> 10 kOhm -> out, 100 nF to ground; tau = 1 ms.
+Vdrive in 0 dc 0
+R1 in out 10k
+C1 out 0 100n
+.tran 1u 10m 0 1u uic
+.end

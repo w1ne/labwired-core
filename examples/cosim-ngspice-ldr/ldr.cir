@@ -1,0 +1,13 @@
+* Light-dependent resistor divider for adapter: ngspice.
+* Vsup is the firmware-switched divider supply (a GPIO pin, 0 V / 3.3 V).
+* Vlux carries the bench light level in lux as volts (1 V = 1 lx).
+* The LDR follows R = R10 * (E / 10 lx)^-gamma with R10 = 10 kOhm and
+* gamma = 0.7, written as a behavioral current. The in-core analog engine
+* has no behavioral (B) source, so this circuit needs ngspice.
+Vsup sup 0 dc 0
+Vlux lux 0 dc 100
+Rfix sup out 10k
+Bldr out 0 I = V(out) / (10k * pow(max(V(lux), 0.01) / 10, -0.7))
+Cadc out 0 100n
+.tran 10u 10 uic
+.end
