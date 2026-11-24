@@ -212,8 +212,23 @@ impl Nrf52Rtc {
         let g = gcd(u64::from(LFCLK_HZ), cpu_hz).max(1);
         // Both terms are <= u32::MAX (LFCLK_HZ is 2^15, cpu_hz is bounded
         // above), so the casts cannot truncate.
-        self.lfclk_inc = (u64::from(LFCLK_HZ) / g) as u32;
-        self.lfclk_period = (cpu_hz / g) as u32;
+        let inc = (u64::from(LFCLK_HZ) / g) as u32;
+        let period = (cpu_hz / g) as u32;
+        // The walk fires at most one LFCLK edge per CPU cycle, so a core
+        // slower than LFCLK cannot be represented exactly. Saturate to 1:1
+        // rather than let the phase run past the period (which would make
+        // `advance_lfclk` subtract only one period per cycle and drift).
+        // Every supported nRF core is >= 16 MHz, so this only guards a
+        // hand-built bus.
+        self.lfclk_inc = inc;
+        self.lfclk_period = period.max(inc);
+        // A mid-run re-attach must not leave the leftover phase at or above
+        // the new period: `advance_to` and `cycles_until_next_event` both
+        // assume `lfclk_accum < lfclk_period`, and a smaller period would
+        // otherwise make the next edge fire late.
+        if self.lfclk_accum.get() >= self.lfclk_period {
+            self.lfclk_accum.set(0);
+        }
     }
 
     crate::cycle_clock::scheduler_mode!();
@@ -906,6 +921,7 @@ mod tests {
             (48_000_000, 32, 46_875),          // 3x the historical divider
             (25_000_000, 512, 390_625),        // RP2040-class, odd 5^n remainder
             (32_768, 1, 1),                    // degenerate 1:1
+            (24_576, 4, 4),                    // sub-LFCLK core saturates to 1:1
         ] {
             let mut r = Nrf52Rtc::new();
             r.attach_cpu_hz(hz);
@@ -923,6 +939,31 @@ mod tests {
         r.attach_cpu_hz(128_000_000);
         r.attach_cpu_hz(0);
         assert_eq!((r.lfclk_inc, r.lfclk_period), (4, 15_625));
+    }
+
+    #[test]
+    fn a_mid_run_clock_change_keeps_the_phase_inside_the_new_period() {
+        let mut r = Nrf52Rtc::new();
+        r.attach_cpu_hz(128_000_000); // 4/15625
+        r.write_u32(OFF_PRESCALER, 0).unwrap();
+        r.write_u32(OFF_TASKS_START, 1).unwrap();
+        r.tick_elapsed(15_600); // 62_400 accum units = 3 edges + 15_525 phase
+        assert_eq!(r.lfclk_accum.get(), 15_525);
+        // Re-attach to clocks whose reduced period is smaller than that
+        // leftover phase. Without a reset the phase sits at or above the new
+        // period and the next edge fires late.
+        for (hz, inc, period) in [(32_768u64, 1u32, 1u32), (24_576, 4, 4)] {
+            r.attach_cpu_hz(hz);
+            assert_eq!((r.lfclk_inc, r.lfclk_period), (inc, period));
+            assert_eq!(r.lfclk_accum.get(), 0, "cpu_hz {hz}: leftover phase kept");
+            r.tick_elapsed(3);
+            assert!(
+                r.lfclk_accum.get() < r.lfclk_period,
+                "cpu_hz {hz}: phase {} >= period {}",
+                r.lfclk_accum.get(),
+                r.lfclk_period
+            );
+        }
     }
 
     /// PRESCALER 0: one COUNTER step per 32768 LFCLK edges, so after `cycles`
@@ -954,6 +995,32 @@ mod tests {
     #[cfg(feature = "event-scheduler")]
     mod scheduler_mode {
         use super::*;
+
+        #[test]
+        fn scheduled_read_counts_lfclk_at_every_core_clock() {
+            // The scheduler path (anchor + published cycles) must use the
+            // same attached ratio as the legacy walk. PRESCALER 0: after
+            // `cpu_hz / 1024` cycles the counter is 32.
+            for (hz, cycles) in [
+                (16_000_000u64, 15_625u64), // -> 32
+                (64_000_000, 62_500),       // -> 32
+                (128_000_000, 125_000),     // -> 32
+            ] {
+                let clock = CycleClock::default();
+                let mut r = Nrf52Rtc::new();
+                r.attach_cpu_hz(hz);
+                r.attach_cycle_clock(clock.clone());
+                r.write_u32(OFF_PRESCALER, 0).unwrap();
+                r.write_u32(OFF_TASKS_START, 1).unwrap();
+                assert!(r.uses_scheduler());
+                clock.publish(cycles);
+                assert_eq!(
+                    r.read_u32(OFF_COUNTER).unwrap(),
+                    32,
+                    "cpu_hz {hz}: scheduled read did not count LFCLK"
+                );
+            }
+        }
 
         #[test]
         fn counter_read_syncs_from_cycle_clock() {
