@@ -164,6 +164,14 @@ const HARDCODED_BASE_ALLOWLIST: &[(&str, &str, &str)] = &[
          twin of the above (CORE_0_DRAM0_PMS_MONITOR_2[27:4] is stored relative \
          to 0x3C00_0000). Same reasoning.",
     ),
+    (
+        "peripherals/components/cyw43439.rs",
+        "CHIPCOMMON_BASE_ADDRESS",
+        "NOT AN MCU PERIPHERAL BASE. 0x1800_0000 is the CYW43439 external \
+         Wi-Fi chip's internal SiliconBackplane ChipCommon address accessed \
+         over gSPI Function 1 backplane windowing (`SDIO_BACKPLANE_ADDRESS_*`), \
+         not a host MCU MMIO window in any chip YAML.",
+    ),
     // ── models naming their own base ────────────────────────────────────────
     (
         "peripherals/esp32c3/apb_saradc.rs",

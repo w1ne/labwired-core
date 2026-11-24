@@ -37,6 +37,7 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
+use crate::peripherals::pad_lines::LineListener;
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 
 /// Number of pads IO_BANK0 controls (GP0..GP29).
@@ -165,6 +166,10 @@ const IRQSUMMARY_PROC0_SECURE0: u64 = 0x200;
 #[derive(Debug, Default)]
 pub struct BankIrq {
     state: Mutex<BankIrqState>,
+    /// Off-chip parts that follow a pad level (a CYW43439's chip select on
+    /// GP25), told after the state lock is released. Held weakly, so a
+    /// dropped part unsubscribes itself.
+    listeners: Mutex<Vec<(u8, std::sync::Weak<dyn LineListener>)>>,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -179,12 +184,54 @@ struct BankIrqState {
 impl BankIrq {
     /// Report the pads' input levels; every change latches its edge.
     pub fn set_levels(&self, level: u32) {
-        let mut s = self.state.lock().expect("RP2040 bank irq poisoned");
-        let rose = !s.level & level;
-        let fell = s.level & !level;
-        s.edge_high |= rose;
-        s.edge_low |= fell;
-        s.level = level;
+        let changed = {
+            let mut s = self.state.lock().expect("RP2040 bank irq poisoned");
+            let rose = !s.level & level;
+            let fell = s.level & !level;
+            s.edge_high |= rose;
+            s.edge_low |= fell;
+            s.level = level;
+            rose | fell
+        };
+        if changed != 0 {
+            self.notify(changed, level);
+        }
+    }
+
+    /// Subscribe `listener` to level changes of pad `pin` (`line_edge` gets
+    /// the pad number as `line`). The pad levels are `GPIO_IN`: a pad the
+    /// SIO drives reads its output, so this follows a chip select too.
+    pub fn add_listener(&self, pin: u8, listener: &std::sync::Arc<dyn LineListener>) {
+        self.listeners
+            .lock()
+            .expect("RP2040 bank irq listeners poisoned")
+            .push((pin, std::sync::Arc::downgrade(listener)));
+    }
+
+    /// Current level of pad `pin` as last reported.
+    pub fn level(&self, pin: u8) -> bool {
+        self.snapshot().level & (1 << pin) != 0
+    }
+
+    fn notify(&self, changed: u32, level: u32) {
+        let live: Vec<(u8, std::sync::Arc<dyn LineListener>)> = {
+            let mut listeners = self
+                .listeners
+                .lock()
+                .expect("RP2040 bank irq listeners poisoned");
+            if listeners.is_empty() {
+                return;
+            }
+            listeners.retain(|(_, l)| l.strong_count() > 0);
+            listeners
+                .iter()
+                .filter(|(pin, _)| changed & (1 << pin) != 0)
+                .filter_map(|(pin, l)| l.upgrade().map(|l| (*pin, l)))
+                .collect()
+        };
+        for (pin, listener) in live {
+            listener.line_edge(usize::from(pin), level & (1 << pin) != 0, None);
+        }
     }
 
     /// Seed the levels without latching anything (wiring time).

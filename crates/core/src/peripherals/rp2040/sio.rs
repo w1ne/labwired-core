@@ -88,6 +88,45 @@ pub enum SioLayout {
 /// never shows.
 const PAD_COUNT: u8 = 30;
 
+/// Pads an off-chip part holds from outside the bus tick — a part clocked by
+/// a peripheral's wire (the CYW43439 on a PIO gSPI bus answers its data pad
+/// from inside a PIO clock edge, where it cannot reach this model). `GPIO_IN`
+/// reads a held pad's level while the SIO does not drive it, like `ext_in`.
+/// GPIO interrupts see a held level change at the next SIO pad update.
+#[derive(Debug, Default)]
+pub struct HeldPads {
+    mask: std::sync::atomic::AtomicU32,
+    level: std::sync::atomic::AtomicU32,
+}
+
+impl HeldPads {
+    /// Hold `pin` at `level`.
+    pub fn hold(&self, pin: u8, level: bool) {
+        use std::sync::atomic::Ordering;
+        let bit = 1u32 << pin;
+        if level {
+            self.level.fetch_or(bit, Ordering::Relaxed);
+        } else {
+            self.level.fetch_and(!bit, Ordering::Relaxed);
+        }
+        self.mask.fetch_or(bit, Ordering::Relaxed);
+    }
+
+    /// Let go of `pin`.
+    pub fn release(&self, pin: u8) {
+        self.mask
+            .fetch_and(!(1u32 << pin), std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn get(&self) -> (u32, u32) {
+        use std::sync::atomic::Ordering;
+        (
+            self.mask.load(Ordering::Relaxed),
+            self.level.load(Ordering::Relaxed),
+        )
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Rp2040Sio {
     /// Register map variant (RP2040 or RP2350 GPIO offsets).
@@ -142,6 +181,9 @@ pub struct Rp2040Sio {
     /// Outside levels that reached a pad routed to a peripheral line since
     /// the bus last collected them (see `sync_wire_input`).
     wire_edges: Vec<crate::peripherals::pad_lines::WireInputEdge>,
+    /// Pads an off-chip part holds directly ([`HeldPads`]); `None` until a
+    /// part asks for it.
+    held: Option<std::sync::Arc<HeldPads>>,
 }
 
 impl Rp2040Sio {
@@ -195,8 +237,19 @@ impl Rp2040Sio {
     /// correctly wired board — the same rule the ESP32 model states at
     /// `pad_level_bank0`, so both families answer a button identically.
     fn gpio_in(&self) -> u32 {
-        let outside = self.ext_in | (self.pull_up & !self.ext_mask);
+        let mut outside = self.ext_in | (self.pull_up & !self.ext_mask);
+        if let Some(held) = &self.held {
+            let (mask, level) = held.get();
+            outside = (outside & !mask) | (level & mask);
+        }
         (self.gpio_out & self.gpio_oe) | (outside & !self.gpio_oe)
+    }
+
+    /// The shared [`HeldPads`] view, created on first use.
+    pub fn held_pads(&mut self) -> std::sync::Arc<HeldPads> {
+        self.held
+            .get_or_insert_with(|| std::sync::Arc::new(HeldPads::default()))
+            .clone()
     }
 
     /// The PADS_BANK0 pull on `pin`.

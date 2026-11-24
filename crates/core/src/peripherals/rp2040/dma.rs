@@ -56,12 +56,18 @@
 //!
 //! ## Deferred behaviour (documented, not diverging)
 //!
-//! * **Paced (DREQ) transfers.** Only `TREQ_PERMANENT` auto-runs. A channel
-//!   triggered with any other `TREQ_SEL` is a peripheral-paced transfer whose
-//!   throttle is the peripheral's DREQ, which this model does not yet source;
-//!   such a channel is accepted (its registers store) but does **not** begin,
-//!   rather than fabricate an un-paced copy that silicon would never perform.
-//!   Modelling per-peripheral DREQ is the documented follow-up (issue #577).
+//! * **Paced (DREQ) transfers.** A channel whose `TREQ_SEL` names a
+//!   peripheral DREQ (`0x00..=0x3A`) moves a beat only while the peripheral
+//!   at its endpoint raises its request: the write address for a transfer
+//!   into a peripheral (`Bus::dma_tx_request`, e.g. a PIO `TXFn` with room),
+//!   the read address for one out of it (`Bus::dma_rx_request`, a PIO `RXFn`
+//!   holding a word). The request is the endpoint's live FIFO state, read
+//!   before each beat, so the channel never runs ahead of the peripheral.
+//!   An endpoint that does not source its DREQ in this engine answers
+//!   neither; such a channel is accepted (its registers store) but does
+//!   **not** begin, rather than fabricate an un-paced copy that silicon would
+//!   never perform. The DMA pacing timers (`TREQ_SEL 0x3B..=0x3E`) are not
+//!   modelled and never begin either.
 //! * **Sniff CRC** (`SNIFF_CTRL`/`SNIFF_DATA`) is register storage only — the
 //!   checksum accumulator is not computed.
 
@@ -118,6 +124,9 @@ const CTRL_BUSY: u32 = 1 << 24;
 /// `TREQ_SEL` value selecting the permanent (unpaced) transfer request — the
 /// memory-to-memory mode that runs a beat every cycle.
 const TREQ_PERMANENT: u32 = 0x3F;
+/// Highest `TREQ_SEL` naming a peripheral DREQ (RP2040 §2.5.3.1); `0x3B..=0x3E`
+/// are the DMA pacing timers.
+const TREQ_LAST_DREQ: u32 = 0x3A;
 
 /// NVIC IRQ position of `DMA_IRQ_0` (RP2040 §2.5.7 / vector table).
 const DMA_IRQ_0: u32 = 11;
@@ -363,9 +372,20 @@ impl Rp2040Dma {
     /// (see the module-level "Deferred behaviour" note).
     fn try_start(&mut self, ch: usize) {
         let c = &mut self.channels[ch];
-        if c.ctrl & CTRL_EN != 0 && c.trans_count > 0 && c.treq_sel() == TREQ_PERMANENT {
+        let treq = c.treq_sel();
+        if c.ctrl & CTRL_EN != 0
+            && c.trans_count > 0
+            && (treq == TREQ_PERMANENT || treq <= TREQ_LAST_DREQ)
+        {
             c.busy = true;
         }
+    }
+
+    /// For a paced channel: whether its endpoint's DREQ is raised now.
+    /// `None` when neither endpoint sources a DREQ in this engine.
+    fn dreq(c: &Channel, bus: &dyn Bus) -> Option<bool> {
+        bus.dma_tx_request(u64::from(c.write_addr))
+            .or_else(|| bus.dma_rx_request(u64::from(c.read_addr)))
     }
 
     /// True while any channel is actively transferring — keeps the bus visiting
@@ -397,27 +417,51 @@ impl Rp2040Dma {
     /// Move one beat for channel `ch`; complete the channel when it reaches
     /// `TRANS_COUNT == 0`.
     fn beat(&mut self, bus: &mut dyn Bus, ch: usize) {
+        if self.channels[ch].treq_sel() != TREQ_PERMANENT {
+            match Self::dreq(&self.channels[ch], bus) {
+                Some(true) => {}
+                // DREQ low: the channel waits, BUSY held.
+                Some(false) => return,
+                // Nothing sources this DREQ: never begin (module docs).
+                None => {
+                    self.channels[ch].busy = false;
+                    return;
+                }
+            }
+        }
         let c = &mut self.channels[ch];
         let width = c.width();
         let bswap = c.ctrl & CTRL_BSWAP != 0;
 
-        // Read `width` bytes from the source.
-        let mut buf = [0u8; 4];
-        crate::with_device_write_bypass(bus, |bus| {
-            for (i, b) in buf.iter_mut().take(width as usize).enumerate() {
-                *b = bus.read_u8(c.read_addr as u64 + i as u64).unwrap_or(0);
+        if width == 4 && c.read_addr & 3 == 0 && c.write_addr & 3 == 0 {
+            // A word beat is one 32-bit access on each side, so a FIFO
+            // register (a PIO `RXFn`) pops once, not per byte.
+            crate::with_device_write_bypass(bus, |bus| {
+                let mut word = bus.read_u32(u64::from(c.read_addr)).unwrap_or(0);
+                if bswap {
+                    word = word.swap_bytes();
+                }
+                let _ = bus.write_u32(u64::from(c.write_addr), word);
+            });
+        } else {
+            // Read `width` bytes from the source.
+            let mut buf = [0u8; 4];
+            crate::with_device_write_bypass(bus, |bus| {
+                for (i, b) in buf.iter_mut().take(width as usize).enumerate() {
+                    *b = bus.read_u8(c.read_addr as u64 + i as u64).unwrap_or(0);
+                }
+            });
+            // BSWAP reverses the bytes within a (half-word / word) beat.
+            if bswap && width > 1 {
+                buf[..width as usize].reverse();
             }
-        });
-        // BSWAP reverses the bytes within a (half-word / word) beat.
-        if bswap && width > 1 {
-            buf[..width as usize].reverse();
+            // Write them to the destination.
+            crate::with_device_write_bypass(bus, |bus| {
+                for (i, &b) in buf.iter().take(width as usize).enumerate() {
+                    let _ = bus.write_u8(c.write_addr as u64 + i as u64, b);
+                }
+            });
         }
-        // Write them to the destination.
-        crate::with_device_write_bypass(bus, |bus| {
-            for (i, &b) in buf.iter().take(width as usize).enumerate() {
-                let _ = bus.write_u8(c.write_addr as u64 + i as u64, b);
-            }
-        });
 
         if c.ctrl & CTRL_INCR_READ != 0 {
             c.read_addr = c.advance(c.read_addr, false);
@@ -837,18 +881,83 @@ mod tests {
     }
 
     #[test]
-    fn paced_treq_channel_does_not_auto_run() {
+    fn paced_treq_channel_without_a_dreq_source_does_not_run() {
+        let mut bus = ram_bus();
+        bus.write_u8(0x2000_1000, 0x5A).unwrap();
         let mut dma = Rp2040Dma::new();
         dma.write_word(READ_ADDR, 0x2000_1000);
         dma.write_word(WRITE_ADDR, 0x2000_2000);
         dma.write_word(TRANS_COUNT, 4);
-        // TREQ_SEL = 0 (a paced DREQ), EN set, triggered: must NOT start.
+        // TREQ_SEL = 0 (DREQ_PIO0_TX0), EN set, triggered — but both ends
+        // are RAM, so nothing raises that DREQ: no beat may move.
         let paced = CTRL_EN; // treq_sel field left 0
         dma.write_word(CTRL_TRIG, paced);
+        drain(&mut dma, &mut bus);
         assert!(
             !dma.any_busy(),
             "paced channel waits for a DREQ we don't source"
         );
+        assert_eq!(bus.read_u8(0x2000_2000).unwrap(), 0, "no beat moved");
+        assert_eq!(dma.read_word(TRANS_COUNT), 4);
+    }
+
+    /// DREQ pacing end to end on a bus: channel 0 feeds PIO0 `TXF0` (TREQ 0,
+    /// `DREQ_PIO0_TX0`), the state machine echoes each word (`pull block;
+    /// mov isr, osr; push block`), channel 1 drains `RXF0` (TREQ 4,
+    /// `DREQ_PIO0_RX0`). Eight words through a four-deep FIFO only arrive if
+    /// both channels wait on their request instead of running ahead.
+    #[test]
+    fn paced_channels_follow_the_pio_fifo_requests() {
+        const PIO0: u64 = 0x5020_0000;
+        const SRC: u32 = 0x2000_1000;
+        const DST: u32 = 0x2000_2000;
+        let mut bus = ram_bus();
+        bus.add_peripheral(
+            "pio0",
+            PIO0,
+            0x1000,
+            None,
+            Box::new(crate::peripherals::pio::Pio::new()),
+        );
+        let pio = bus.find_peripheral_index_by_name("pio0").unwrap();
+        for (i, op) in [0x80a0u32, 0xa0c7, 0x8020].into_iter().enumerate() {
+            bus.write_u32(PIO0 + 0x048 + 4 * i as u64, op).unwrap();
+        }
+        // EXECCTRL: wrap_top 2, wrap_bottom 0.
+        bus.write_u32(PIO0 + 0x0cc, 2 << 12).unwrap();
+        bus.write_u32(PIO0, 1).unwrap(); // SM0 enable
+        for i in 0..8u32 {
+            bus.write_u32(u64::from(SRC + 4 * i), 0xC0DE_0000 | i)
+                .unwrap();
+        }
+        let mut dma = Rp2040Dma::new();
+        let word = 2;
+        // `ctrl` selects TREQ_PERMANENT; replace it with the PIO DREQ.
+        let paced = |c: u32, treq: u32| {
+            (c & !(TREQ_PERMANENT << CTRL_TREQ_SEL_SHIFT)) | (treq << CTRL_TREQ_SEL_SHIFT)
+        };
+        dma.write_word(READ_ADDR, SRC);
+        dma.write_word(WRITE_ADDR, (PIO0 + 0x010) as u32);
+        dma.write_word(TRANS_COUNT, 8);
+        dma.write_word(CTRL_TRIG, paced(ctrl(true, word, true, false, 0), 0));
+        dma.write_word(0x40 + READ_ADDR, (PIO0 + 0x020) as u32);
+        dma.write_word(0x40 + WRITE_ADDR, DST);
+        dma.write_word(0x40 + TRANS_COUNT, 8);
+        dma.write_word(0x40 + CTRL_TRIG, paced(ctrl(true, word, false, true, 1), 4));
+        for _ in 0..1_000 {
+            if !dma.any_busy() {
+                break;
+            }
+            dma.run(&mut bus);
+            bus.peripherals[pio].dev.tick();
+        }
+        assert!(!dma.any_busy(), "both paced channels completed");
+        for i in 0..8u32 {
+            assert_eq!(
+                bus.read_u32(u64::from(DST + 4 * i)).unwrap(),
+                0xC0DE_0000 | i
+            );
+        }
     }
 
     #[test]
