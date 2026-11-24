@@ -172,7 +172,9 @@ async function runCases() {
         systemYaml, chipYaml, new Uint8Array(firmware), null, exchange.exchange);
       try { for (let i = 0; i < 20; i += 1) sim.step_batch(8_400); } finally { sim.free(); }
     } catch (error) {
-      return { refused: String(error?.message ?? error) };
+      const message = String(error?.message ?? error);
+      check(/vmissing/i.test(message), `the error must name the missing element: ${message}`);
+      return { refused: message };
     } finally { exchange?.dispose(); }
     throw new Error('a missing source element must fail');
   });
@@ -287,8 +289,10 @@ async function runCases() {
   });
 
   // Controls: a callback that throws, or answers without a declared output,
-  // mid-run. Each must end the script as a model error, never as a pass.
-  const faulty = (label, answer) => run(`flex test: ${label} is a model error`, async () => {
+  // mid-run. Each must end the script as a model error, never as a pass, at
+  // the last boundary that completed (39 x 25 us) and with its own reason.
+  const FAULT_TIME_NS = 950_000;
+  const faulty = (label, answer, reason) => run(`flex test: ${label} is a model error`, async () => {
     const exchange = await host.createBrowserNgspiceExchange(rcModels(), factory);
     try {
       let calls = 0;
@@ -300,12 +304,15 @@ async function runCases() {
       const { result } = testRun('ngspice-enable.yaml', enableScript, callback);
       check(result.status === 'error' && result.stop_reason === 'model_error',
         `${result.status}/${result.stop_reason}: ${result.message}`);
+      check(result.time_ns === FAULT_TIME_NS, `stopped at ${result.time_ns} ns, expected ${FAULT_TIME_NS} ns`);
+      check(String(result.message).includes(reason), `message must contain '${reason}': ${result.message}`);
       return { stop_reason: result.stop_reason, message: result.message, time_ns: result.time_ns };
     } finally { exchange.dispose(); }
   });
-  await faulty('a throwing ngspice callback', () => { throw new Error('solver host crashed'); });
-  await faulty('a callback response without v_out', () => '{}');
-  await faulty('a callback response that is not JSON', () => 'not json');
+  await faulty('a throwing ngspice callback', () => { throw new Error('solver host crashed'); },
+    'solver host crashed');
+  await faulty('a callback response without v_out', () => '{}', 'omitted output v_out');
+  await faulty('a callback response that is not JSON', () => 'not json', 'returned invalid JSON');
 
   await run('flex test: a non-function callback is refused', async () => {
     try {

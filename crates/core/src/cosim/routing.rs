@@ -2069,6 +2069,14 @@ impl CosimSession {
         if configs.is_empty() {
             return Ok(None);
         }
+        // Checked before any adapter starts: a machine session sends no
+        // `(0, 0)` initialization step.
+        if let Some(refusal) = configs
+            .iter()
+            .find_map(crate::cosim::ngspice::machine_sampling_refusal)
+        {
+            return Err(SimulationError::Other(refusal));
+        }
         let mut models = Vec::with_capacity(configs.len());
         for config in configs {
             models.push(crate::cosim::CosimRunnerModel::new(

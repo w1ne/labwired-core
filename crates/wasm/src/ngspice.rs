@@ -104,10 +104,13 @@ pub(crate) fn adapter(
     }))
 }
 
-/// The browser adapter factory shared by `WasmSimulator` and
-/// `WasmFlexRuntime`: `adapter: ngspice` goes to the host callback, every
-/// other adapter to the generic core factory. Callers check the models with
-/// [`crate::cosim::check_browser_models`] first, so no model reads a path.
+/// The browser adapter factory shared by `WasmSimulator` and the Flex entry
+/// points (`WasmFlexRuntime`, `WasmFlexTestRun`): `adapter: ngspice` goes to
+/// the host callback, every other adapter to the generic core factory.
+/// `WasmSimulator` checks its models with [`crate::cosim::check_browser_models`]
+/// first; the Flex entry points do not call it and have only the Flex
+/// manifest checks. The ngspice callback reads no path: the host page
+/// supplies the netlist text.
 pub(crate) fn browser_adapter(
     config: &labwired_config::CosimModelConfig,
     callback: Option<&Function>,

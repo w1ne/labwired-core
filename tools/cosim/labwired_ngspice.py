@@ -3,7 +3,8 @@
 Speaks the `external_process` JSONL contract (see docs/cosimulation_plugins.md):
 one `{"time_ns", "dt_ns", "inputs": {...}}` line in, one `{"outputs": {...}}`
 line out, in lockstep with the firmware clock. The circuit is any SPICE netlist
-ngspice accepts, so open-source device models (`.include`/`.lib`) work as-is.
+ngspice accepts, so open-source device models (`.include`/`.lib`) work as-is
+in `serve`. The `adapter: ngspice` host (`serve_bridge`) refuses them.
 
 Mechanics: libngspice is loaded in-process (ctypes). Each step alters the
 named voltage sources to the requested values, places a breakpoint at the
@@ -289,8 +290,30 @@ def serve(
 # alter every mapped source to `value * scale + offset`, run the netlist's own
 # `.tran` to exactly `time_ns`, check the solver time, and read every output
 # node as `raw * scale + offset` (compared with `threshold` for a logic output).
+#
+# The netlist arrives as text in the spec, already checked by core; the host
+# checks it again and reads no other file (no `.include` / `.lib`, no
+# `.control` block), as the browser host does.
 
 _TIME_TOLERANCE_ULPS = 32
+_REFUSED_DIRECTIVES = (".control", ".endc", ".include", ".inc", ".lib")
+
+
+def _netlist_lines(netlist: str) -> list:
+    """Every physical line, blank ones included, as the browser host passes
+    them: ngspice, not the host, decides which line is the title."""
+    return [line.rstrip("\r") for line in netlist.splitlines()]
+
+
+def _check_bridge_netlist(model_id: str, netlist: str) -> None:
+    """Refuse what core refuses: control blocks and included files."""
+    for line in netlist.splitlines():
+        words = line.lstrip().lower().split(None, 1)
+        if words and words[0] in _REFUSED_DIRECTIVES:
+            raise NgSpiceError(
+                f"ngspice model '{model_id}' netlist contains a {words[0]} directive; "
+                "control blocks and included files are not supported"
+            )
 
 
 class BridgeCircuit:
@@ -311,19 +334,16 @@ class BridgeCircuit:
         if _ACTIVE is not None:
             _ACTIVE._detach()
         _ACTIVE = self
-        path = spec["netlist_path"]
-        with open(path, encoding="utf-8") as f:
-            lines = [line.rstrip("\r") for line in f.read().splitlines() if line.strip()]
+        netlist = spec.get("netlist")
+        if netlist is None:
+            # A standalone Python caller may still name a file.
+            with open(spec["netlist_path"], encoding="utf-8") as f:
+                netlist = f.read()
+        _check_bridge_netlist(self.model_id, netlist)
+        lines = _netlist_lines(netlist)
         arr = (ctypes.c_char_p * (len(lines) + 1))(*[line.encode() for line in lines], None)
         self._error = None
-        # `.include` / `.lib` paths resolve from the netlist's own directory;
-        # ngspice reads them while it parses the circuit.
-        cwd = os.getcwd()
-        os.chdir(os.path.dirname(os.path.abspath(path)))
-        try:
-            rc = self._lib.ngSpice_Circ(arr)
-        finally:
-            os.chdir(cwd)
+        rc = self._lib.ngSpice_Circ(arr)
         if rc != 0 or self._error:
             raise NgSpiceError(self._fail("netlist was rejected"))
 
@@ -415,7 +435,8 @@ class BridgeCircuit:
             # Without `uic` the first point is t = 0; with `uic` ngspice
             # stores no t = 0 point and the first is its first internal step,
             # which must still fall before the first boundary. The browser
-            # exchange has no such step (it rejects dt_ns = 0).
+            # exchange primes the same way when Flex sends this step; a
+            # machine session sends none.
             self._cmd("delete all")
             self._cmd("stop after 1")
             self._cmd("run")

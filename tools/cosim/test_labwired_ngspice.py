@@ -7,6 +7,7 @@ import io
 import json
 import math
 import os
+import subprocess
 import sys
 import textwrap
 
@@ -87,11 +88,10 @@ BRIDGE_NETLIST = RC_NETLIST.replace(".end", ".tran 1u 10 uic\n.end")
 
 def _bridge_spec(tmp_path, element="Vgpio", node="out", netlist_text=BRIDGE_NETLIST,
                  step_ns=100_000):
-    netlist = tmp_path / "rc.cir"
-    netlist.write_text(netlist_text)
+    # Core sends the validated text, not a path (see NgspiceModelSpec::host_json).
     return {
         "model_id": "rc",
-        "netlist_path": str(netlist),
+        "netlist": netlist_text,
         "step_ns": step_ns,
         "inputs": {"gpio": {"element": element, "scale": 3.3, "offset": 0.0,
                             "default_value": None, "logic": True}},
@@ -161,3 +161,83 @@ def test_bridge_errors_are_one_frame_then_exit(tmp_path):
     assert rc == 1 and "outputs" in lines[0] and "monotonically" in lines[1]["error"]
     rc, lines = _serve(_bridge_spec(tmp_path), [{**frame, "inputs": {"gpio": 1.0}}])
     assert rc == 1 and "must be boolean" in lines[0]["error"]
+
+
+def test_bridge_passes_every_physical_line_to_ngspice(tmp_path):
+    # Blank lines are not dropped, so the title is the line ngspice picks, as
+    # in the browser host. Measured on ngspice-42: a blank first line is
+    # skipped and the next line is the title.
+    assert lw._netlist_lines("\r\n* t\r\n\nV1 a 0 1\n") == ["", "* t", "", "V1 a 0 1"]
+    frame = {"time_ns": 100_000, "dt_ns": 100_000, "inputs": {"gpio": True}}
+    rc, lines = _serve(_bridge_spec(tmp_path, netlist_text="\n" + BRIDGE_NETLIST), [frame])
+    assert rc == 0 and "outputs" in lines[0], lines
+    # Negative control: an element on the first line is the title, so it is
+    # not in the circuit and the alter fails.
+    element_title = BRIDGE_NETLIST.lstrip("\n").split("\n", 1)[1]
+    assert element_title.startswith("Vgpio")
+    rc, lines = _serve(_bridge_spec(tmp_path, netlist_text=element_title), [frame])
+    assert rc == 1 and "vgpio" in lines[0]["error"].lower(), lines
+
+
+def test_bridge_reads_netlist_path_only_without_netlist_text(tmp_path):
+    path = tmp_path / "rc.cir"
+    path.write_text(BRIDGE_NETLIST)
+    spec = _bridge_spec(tmp_path)
+    del spec["netlist"]
+    spec["netlist_path"] = str(path)
+    frame = {"time_ns": 100_000, "dt_ns": 100_000, "inputs": {"gpio": True}}
+    rc, lines = _serve(spec, [frame])
+    assert rc == 0 and "outputs" in lines[0], lines
+    # The text wins over a path when both are given.
+    spec = _bridge_spec(tmp_path)
+    spec["netlist_path"] = str(tmp_path / "missing.cir")
+    rc, lines = _serve(spec, [frame])
+    assert rc == 0 and "outputs" in lines[0], lines
+
+
+def test_bridge_refuses_control_blocks_and_included_files(tmp_path):
+    # An included file could hold a `.control` block with a shell command; the
+    # host refuses the directive before ngspice parses anything.
+    marker = tmp_path / "shell-ran"
+    (tmp_path / "evil.cir").write_text(f"* evil\n.control\nshell touch {marker}\n.endc\n")
+    frame = {"time_ns": 100_000, "dt_ns": 100_000, "inputs": {"gpio": True}}
+    for directive, name in ((f".include {tmp_path}/evil.cir", ".include"),
+                            (f".inc {tmp_path}/evil.cir", ".inc"),
+                            (f"  .LIB {tmp_path}/evil.cir tt", ".lib"),
+                            (".control", ".control"),
+                            ("\t.endc", ".endc")):
+        text = BRIDGE_NETLIST.replace(".tran", f"{directive}\n.tran")
+        rc, lines = _serve(_bridge_spec(tmp_path, netlist_text=text), [frame])
+        assert rc == 1 and f"{name} directive" in lines[0]["error"], (directive, lines)
+    assert not marker.exists()
+
+
+_HOST_SOURCE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "labwired_ngspice.py")
+
+
+def test_isolated_host_ignores_a_poisoned_working_directory(tmp_path):
+    # Core runs `python3 -I -c <source> --bridge-spec <json>`. With -I a
+    # json.py or ctypes/ package in the working directory does not load;
+    # without it the poison does (negative control).
+    poison = tmp_path / "cwd"
+    (poison / "ctypes").mkdir(parents=True)
+    marker = tmp_path / "poison-ran"
+    payload = f"open({str(marker)!r}, 'w').write('ran')\nraise SystemExit('poisoned')\n"
+    (poison / "json.py").write_text(payload)
+    (poison / "ctypes" / "__init__.py").write_text(payload)
+    with open(_HOST_SOURCE, encoding="utf-8") as f:
+        source = f.read()
+    spec = json.dumps(_bridge_spec(tmp_path))
+    frame = json.dumps({"time_ns": 100_000, "dt_ns": 100_000, "inputs": {"gpio": True}}) + "\n"
+
+    def run(*flags):
+        return subprocess.run([sys.executable, *flags, "-c", source, "--bridge-spec", spec],
+                              cwd=poison, input=frame, capture_output=True, text=True,
+                              timeout=60)
+
+    isolated = run("-I")
+    assert isolated.returncode == 0, isolated.stderr
+    assert "outputs" in json.loads(isolated.stdout.splitlines()[0])
+    assert not marker.exists()
+    exposed = run()
+    assert exposed.returncode != 0 and marker.exists()

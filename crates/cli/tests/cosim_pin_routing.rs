@@ -57,8 +57,24 @@ fn run_with_args(
     script_yaml: &str,
     extra: &[&str],
 ) -> Run {
+    run_with_files(name, firmware_rel, system_yaml, script_yaml, extra, &[])
+}
+
+/// [`run_with_args`] with `(name, contents)` files written beside
+/// `system.yaml`, for models whose `model:` must stay inside its directory.
+fn run_with_files(
+    name: &str,
+    firmware_rel: &str,
+    system_yaml: &str,
+    script_yaml: &str,
+    extra: &[&str],
+    files: &[(&str, &str)],
+) -> Run {
     let temp_dir = labwired_cli::test_support::unique_temp_dir(&format!("labwired-cosim-{name}"));
     std::fs::create_dir_all(&temp_dir).unwrap();
+    for (file, contents) in files {
+        std::fs::write(temp_dir.join(file), contents).unwrap();
+    }
 
     let firmware = workspace_root().join(firmware_rel);
     assert!(
@@ -421,25 +437,26 @@ assertions:
 /// refusal and fails only for its own reasons, if any).
 #[test]
 fn a_runtime_snapshot_with_an_ngspice_model_is_refused() {
-    let netlist = workspace_root().join("examples/cosim-ngspice-ldr/ldr.cir");
-    let system = format!(
-        r#"
+    // `model:` stays inside the manifest directory: the netlist is copied there.
+    let netlist =
+        std::fs::read_to_string(workspace_root().join("examples/cosim-ngspice-ldr/ldr.cir"))
+            .unwrap();
+    let files = [("ldr.cir", netlist.as_str())];
+    let system = r#"
 name: "ngspice-snapshot"
 chip: "stm32f401"
 cosim_models:
   - id: "ldr"
     adapter: "ngspice"
-    model: "{}"
+    model: "./ldr.cir"
     step_ns: 100000
-    inputs: {{ supply: "board.gpio.pa5" }}
-    outputs: {{ v_out: "board.analog.pa0_volts" }}
+    inputs: { supply: "board.gpio.pa5" }
+    outputs: { v_out: "board.analog.pa0_volts" }
     config:
-      input_sources: {{ supply: {{ element: "Vsup", scale: 3.3, offset: 0 }} }}
-      output_nodes: {{ v_out: {{ node: "out", scale: 1, offset: 0 }} }}
+      input_sources: { supply: { element: "Vsup", scale: 3.3, offset: 0 } }
+      output_nodes: { v_out: { node: "out", scale: 1, offset: 0 } }
 external_devices: []
-"#,
-        netlist.display()
-    );
+"#;
     const SCRIPT: &str = r#"
 schema_version: "1.2"
 inputs:
@@ -452,12 +469,13 @@ assertions:
 "#;
     let capture = labwired_cli::test_support::unique_temp_dir("labwired-ngspice-capture")
         .join("app-entry.lwrs");
-    let refused = run_with_args(
+    let refused = run_with_files(
         "ngspice-snapshot",
         "tests/fixtures/stm32f401-blinky.elf",
-        &system,
+        system,
         SCRIPT,
         &["--capture-app-entry", capture.to_str().unwrap()],
+        &files,
     );
     assert_eq!(
         refused.status,
@@ -474,10 +492,22 @@ assertions:
     );
     assert!(!capture.exists(), "no snapshot may be written");
 
-    let plain = run("ngspice-no-snapshot", &system, SCRIPT);
+    let plain = run_with_files(
+        "ngspice-no-snapshot",
+        "tests/fixtures/stm32f401-blinky.elf",
+        system,
+        SCRIPT,
+        &[],
+        &files,
+    );
     assert!(
         !plain.stderr.contains("refused: runtime snapshots"),
         "without a snapshot flag the run is not refused.\nstderr: {}",
+        plain.stderr
+    );
+    assert!(
+        !plain.stderr.contains("manifest directory"),
+        "the copied netlist is inside the manifest directory.\nstderr: {}",
         plain.stderr
     );
 }

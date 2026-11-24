@@ -21,6 +21,13 @@
 //! same `config.input_sources` / `config.output_nodes` / `config.trace_volts`
 //! keys the browser runtime reads, checked before any process starts.
 //!
+//! Confinement of the native host, as in the browser: `model:` must name a
+//! file inside the manifest directory; the netlist may not contain `.control`,
+//! `.include`, `.inc` or `.lib` (no shell commands, no other file reads); the
+//! validated text goes to the host in its spec, so the host reads no path; and
+//! Python runs isolated (`-I`), so no module from the working directory,
+//! `PYTHONPATH` or the user site directory loads into it.
+//!
 //! Neither host can capture or restore solver state: snapshot/restore is
 //! refused for an ngspice session, not approximated.
 
@@ -36,12 +43,23 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-/// The native ngspice host, run as `python3 -c <source> --bridge-spec <json>`.
+/// The native ngspice host, run as `python3 -I -c <source> --bridge-spec <json>`.
 const NATIVE_HOST_SOURCE: &str = include_str!("../../../../tools/cosim/labwired_ngspice.py");
 
 /// Netlist limits shared with the browser runtime (`MAX_BROWSER_SPICE_NETLIST_*`).
 pub const MAX_NETLIST_BYTES: usize = 256 * 1024;
 pub const MAX_NETLIST_LINES: usize = 1024;
+
+/// The interpreter of the native host.
+pub const NATIVE_HOST_PROGRAM: &str = "python3";
+
+/// The native host's arguments for one `--bridge-spec` (see
+/// [`NgspiceModelSpec::host_json`]). `-I` isolates the interpreter: the
+/// working directory, `PYTHONPATH` and the user site directory add no module,
+/// so a `json.py` beside the manifest cannot replace the standard library.
+pub fn native_host_args(spec_json: &str) -> [&str; 5] {
+    ["-I", "-c", NATIVE_HOST_SOURCE, "--bridge-spec", spec_json]
+}
 
 /// One native exchange may include libngspice start-up and netlist parsing.
 const NATIVE_STEP_TIMEOUT: Duration = Duration::from_secs(20);
@@ -159,7 +177,8 @@ pub fn expected_outputs(config: &CosimModelConfig) -> Vec<String> {
 /// - `previous_boundary`: the inputs latched at the previous boundary, as the
 ///   analog adapter's mode of the same name. An input written mid-interval
 ///   reaches the circuit from the next boundary on. Requires the runner's
-///   `(time_ns = 0, dt_ns = 0)` initialization step first (Flex sends it).
+///   `(time_ns = 0, dt_ns = 0)` initialization step first: Flex sends it, a
+///   machine session does not, so [`machine_sampling_refusal`] refuses it there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NgspiceInputSampling {
     #[default]
@@ -181,6 +200,24 @@ impl NgspiceInputSampling {
             )),
         }
     }
+}
+
+/// Why a machine co-simulation session must not run `config`: a machine
+/// session sends no `(time_ns = 0, dt_ns = 0)` initialization step, so
+/// `previous_boundary` sampling would fail at the first boundary. Flex primes
+/// its models and accepts it. `None` for any other model.
+pub fn machine_sampling_refusal(config: &CosimModelConfig) -> Option<String> {
+    (config.adapter == labwired_config::CosimAdapter::Ngspice
+        && matches!(
+            NgspiceInputSampling::from_config(config),
+            Ok(NgspiceInputSampling::PreviousBoundary)
+        ))
+    .then(|| {
+        format!(
+            "ngspice model '{}' config.input_sampling: previous_boundary needs the (time_ns = 0, dt_ns = 0) initialization step, which only Flex sends; use current_boundary in a machine manifest",
+            config.id
+        )
+    })
 }
 
 /// Rewrites each boundary's inputs by [`NgspiceInputSampling`].
@@ -326,7 +363,10 @@ pub struct NgspiceOutputNode {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NgspiceModelSpec {
     pub model_id: String,
+    /// The canonical netlist path, inside the manifest directory.
     pub netlist_path: PathBuf,
+    /// The validated netlist text; the host receives this, not the path.
+    pub netlist: String,
     /// The model's boundary period; the host checks its priming point
     /// against it.
     pub step_ns: u64,
@@ -338,7 +378,9 @@ pub struct NgspiceModelSpec {
 
 impl NgspiceModelSpec {
     /// Check a manifest entry against the browser runtime's rules and read the
-    /// netlist it names, relative to `base_dir`.
+    /// netlist it names, relative to `base_dir`. The netlist must be inside
+    /// `base_dir`: an absolute `model:`, a `..` path or a symlink that leaves
+    /// the directory is refused.
     ///
     /// Native differences, both deliberate: routes are not limited to board
     /// paths (a CPU-free Flex manifest uses flat signal names), and a
@@ -355,14 +397,7 @@ impl NgspiceModelSpec {
         if config.step_ns == 0 {
             return Err(fail("step_ns must be greater than zero".into()));
         }
-        let netlist_path = {
-            let path = Path::new(model);
-            if path.is_absolute() {
-                path.to_path_buf()
-            } else {
-                base_dir.join(path)
-            }
-        };
+        let netlist_path = confined_netlist_path(model, base_dir).map_err(fail)?;
         let netlist = std::fs::read_to_string(&netlist_path)
             .map_err(|err| fail(format!("netlist '{}': {err}", netlist_path.display())))?;
         check_netlist(&netlist).map_err(fail)?;
@@ -477,6 +512,7 @@ impl NgspiceModelSpec {
         Ok(Self {
             model_id: id.clone(),
             netlist_path,
+            netlist,
             step_ns: config.step_ns,
             inputs,
             outputs,
@@ -524,13 +560,38 @@ impl NgspiceModelSpec {
             .collect();
         json!({
             "model_id": self.model_id,
-            "netlist_path": self.netlist_path.to_string_lossy(),
+            "netlist": self.netlist,
             "step_ns": self.step_ns,
             "inputs": inputs,
             "outputs": outputs,
         })
         .to_string()
     }
+}
+
+/// Resolve `model` inside `base_dir`, following symlinks, and refuse any
+/// path that ends outside it.
+fn confined_netlist_path(model: &str, base_dir: &Path) -> Result<PathBuf, String> {
+    let path = Path::new(model);
+    if path.is_absolute() {
+        return Err(format!(
+            "model path '{model}' must be relative to the manifest directory"
+        ));
+    }
+    let base = base_dir
+        .canonicalize()
+        .map_err(|err| format!("manifest directory '{}': {err}", base_dir.display()))?;
+    let netlist = base
+        .join(path)
+        .canonicalize()
+        .map_err(|err| format!("netlist '{}': {err}", base_dir.join(path).display()))?;
+    if !netlist.starts_with(&base) {
+        return Err(format!(
+            "model path '{model}' resolves outside the manifest directory '{}'",
+            base.display()
+        ));
+    }
+    Ok(netlist)
 }
 
 fn mapping<'a>(
@@ -583,6 +644,8 @@ fn valid_node(name: &str) -> bool {
 }
 
 /// The netlist checks the browser runtime applies before loading a circuit.
+/// `.control` blocks could run shell commands; `.include`, `.inc` and `.lib`
+/// would read other files, which could hold a control block themselves.
 fn check_netlist(netlist: &str) -> Result<(), String> {
     if netlist.len() > MAX_NETLIST_BYTES {
         return Err(format!("netlist exceeds {MAX_NETLIST_BYTES} bytes"));
@@ -603,6 +666,14 @@ fn check_netlist(netlist: &str) -> Result<(), String> {
         .any(|line| directive(line, ".control") || directive(line, ".endc"))
     {
         return Err("netlist contains a control block; control blocks are not supported".into());
+    }
+    if let Some(name) = [".include", ".inc", ".lib"]
+        .into_iter()
+        .find(|name| netlist.lines().any(|line| directive(line, name)))
+    {
+        return Err(format!(
+            "netlist contains a {name} directive; included files are not supported"
+        ));
     }
     let has_tran = netlist.lines().any(|line| directive(line, ".tran"));
     let has_end = netlist
@@ -672,8 +743,8 @@ pub fn build_native_adapter(
     let latch = NgspiceInputLatch::new(config).map_err(SimulationError::Other)?;
     let spec_json = spec.host_json();
     let process = ExternalProcessCosimAdapter::spawn_with_options(
-        "python3",
-        &["-c", NATIVE_HOST_SOURCE, "--bridge-spec", &spec_json],
+        NATIVE_HOST_PROGRAM,
+        &native_host_args(&spec_json),
         ExternalProcessCosimOptions {
             timeout: NATIVE_STEP_TIMEOUT,
             ..ExternalProcessCosimOptions::default()
@@ -700,7 +771,8 @@ pub fn runtime_snapshot_refusal(configs: &[CosimModelConfig]) -> Option<&'static
         .then_some("runtime snapshots cannot capture or restore externally hosted ngspice state")
 }
 
-/// Validate every `adapter: ngspice` entry without starting a solver.
+/// Validate every `adapter: ngspice` entry of a machine manifest without
+/// starting a solver, including [`machine_sampling_refusal`].
 /// Issues are prefixed `cosim_models[i]` like [`super::validate_analog_models`].
 pub fn validate_ngspice_models(configs: &[CosimModelConfig], base_dir: &Path) -> Vec<String> {
     configs
@@ -710,6 +782,7 @@ pub fn validate_ngspice_models(configs: &[CosimModelConfig], base_dir: &Path) ->
         .filter_map(|(index, config)| {
             NgspiceModelSpec::from_config(config, base_dir)
                 .err()
+                .or_else(|| machine_sampling_refusal(config))
                 .map(|err| format!("cosim_models[{index}] (id '{}'): {err}", config.id))
         })
         .collect()

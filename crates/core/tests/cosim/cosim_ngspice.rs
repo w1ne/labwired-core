@@ -88,7 +88,8 @@ fn model(yaml: &str) -> CosimModelConfig {
 const RC_NETLIST: &str =
     "* RC low-pass\nVgpio in 0 dc 0\nR1 in out 10k\nC1 out 0 100n\n.tran 1u 10 uic\n.end\n";
 
-fn rc_model(netlist: &Path, step_ns: u64) -> CosimModelConfig {
+/// An RC model whose `model:` is `netlist`, resolved from the test's base dir.
+fn rc_model(netlist: &str, step_ns: u64) -> CosimModelConfig {
     model(&format!(
         r#"
 id: rc
@@ -101,7 +102,7 @@ config:
   input_sources: {{ gpio: {{ element: Vgpio, scale: 3.3, offset: 0 }} }}
   output_nodes: {{ v_out: {{ node: out, scale: 1, offset: 0 }} }}
 "#,
-        netlist.display()
+        netlist
     ))
 }
 
@@ -148,7 +149,13 @@ fn the_committed_ldr_manifests_pass_the_ngspice_contract() {
     let host: serde_json::Value = serde_json::from_str(&spec.host_json()).unwrap();
     assert_eq!(host["inputs"]["supply"]["element"], "Vsup");
     assert_eq!(host["outputs"]["v_out"]["node"], "out");
-    assert!(host["netlist_path"].as_str().unwrap().ends_with("ldr.cir"));
+    // The host gets the validated text, not a path to read again.
+    assert_eq!(
+        host["netlist"].as_str().unwrap(),
+        std::fs::read_to_string(dir.join("ldr.cir")).unwrap()
+    );
+    assert!(host.get("netlist_path").is_none());
+    assert!(spec.netlist_path.ends_with("ldr.cir"));
 
     let flex = labwired_config::FlexManifest::from_yaml(
         &std::fs::read_to_string(dir.join("flex-ldr.yaml")).unwrap(),
@@ -163,8 +170,7 @@ fn the_committed_ldr_manifests_pass_the_ngspice_contract() {
 #[test]
 fn the_contract_rejects_what_the_browser_runtime_rejects() {
     let dir = scratch("contract");
-    let good = dir.join("rc.cir");
-    std::fs::write(&good, RC_NETLIST).unwrap();
+    std::fs::write(dir.join("rc.cir"), RC_NETLIST).unwrap();
     for (netlist, needle) in [
         ("* no tran\nV1 a 0 1\n.end\n", ".tran and .end"),
         ("* no end\nV1 a 0 1\n.tran 1u 1m\n", ".tran and .end"),
@@ -173,9 +179,8 @@ fn the_contract_rejects_what_the_browser_runtime_rejects() {
             "control block",
         ),
     ] {
-        let path = dir.join("bad.cir");
-        std::fs::write(&path, netlist).unwrap();
-        let err = NgspiceModelSpec::from_config(&rc_model(&path, 1000), &dir).unwrap_err();
+        std::fs::write(dir.join("bad.cir"), netlist).unwrap();
+        let err = NgspiceModelSpec::from_config(&rc_model("./bad.cir", 1000), &dir).unwrap_err();
         assert!(err.contains(needle), "{err}");
     }
     let cases: [(&str, &str, &str); 7] = [
@@ -189,17 +194,15 @@ fn the_contract_rejects_what_the_browser_runtime_rejects() {
     ];
     for (inputs, outputs, needle) in cases {
         let config = model(&format!(
-            "id: rc\nadapter: ngspice\nmodel: {}\nstep_ns: 1000\ninputs: {{ gpio: board.gpio.pa5 }}\noutputs: {{ v_out: board.analog.pa0_volts }}\nconfig:\n  {inputs}\n  {outputs}\n",
-            good.display()
+            "id: rc\nadapter: ngspice\nmodel: ./rc.cir\nstep_ns: 1000\ninputs: {{ gpio: board.gpio.pa5 }}\noutputs: {{ v_out: board.analog.pa0_volts }}\nconfig:\n  {inputs}\n  {outputs}\n",
         ));
         let err = NgspiceModelSpec::from_config(&config, &dir).unwrap_err();
         assert!(err.contains(needle), "expected '{needle}' in: {err}");
         assert!(err.contains("ngspice model 'rc'"), "{err}");
     }
-    let gpio_in = model(&format!(
-        "id: rc\nadapter: ngspice\nmodel: {}\noutputs: {{ high: board.gpio_in.pc13 }}\nconfig:\n  output_nodes: {{ high: {{ node: out, scale: 1, offset: 0 }} }}\n",
-        good.display()
-    ));
+    let gpio_in = model(
+        "id: rc\nadapter: ngspice\nmodel: ./rc.cir\noutputs: { high: board.gpio_in.pc13 }\nconfig:\n  output_nodes: { high: { node: out, scale: 1, offset: 0 } }\n",
+    );
     let err = NgspiceModelSpec::from_config(&gpio_in, &dir).unwrap_err();
     assert!(err.contains("threshold is required"), "{err}");
     // The factory reports the same error before it starts any process.
@@ -207,6 +210,207 @@ fn the_contract_rejects_what_the_browser_runtime_rejects() {
         panic!("the factory must refuse a gpio_in output without a threshold");
     };
     assert!(err.to_string().contains("threshold is required"), "{err}");
+}
+
+/// An included file could carry a `.control` block with a `shell` command or
+/// read any file. `.include`, `.inc` and `.lib` are refused (any case, after
+/// leading blanks) before a process starts: the shell command never runs.
+#[test]
+fn included_netlists_are_refused_before_ngspice_runs() {
+    let dir = scratch("include");
+    let marker = dir.join("shell-ran");
+    std::fs::write(
+        dir.join("evil.cir"),
+        format!(
+            "* evil\n.control\nshell touch {}\n.endc\n",
+            marker.display()
+        ),
+    )
+    .unwrap();
+    for directive in [
+        ".include ./evil.cir",
+        ".inc ./evil.cir",
+        ".lib ./evil.cir tt",
+        "  .INCLUDE ./evil.cir",
+        "\t.Lib ./evil.cir",
+    ] {
+        std::fs::write(
+            dir.join("rc.cir"),
+            RC_NETLIST.replace(".tran", &format!("{directive}\n.tran")),
+        )
+        .unwrap();
+        let name = directive.split_whitespace().next().unwrap();
+        let err = NgspiceModelSpec::from_config(&rc_model("./rc.cir", 1000), &dir).unwrap_err();
+        assert!(
+            err.contains(&format!("{} directive", name.to_ascii_lowercase())),
+            "{directive}: {err}"
+        );
+        let Err(err) = build_cosim_adapter_with_base(&rc_model("./rc.cir", 1000), &dir) else {
+            panic!("{directive} must be refused by the factory");
+        };
+        assert!(err.to_string().contains("directive"), "{err}");
+    }
+    // Positive control: the same netlist without the directive passes.
+    std::fs::write(dir.join("rc.cir"), RC_NETLIST).unwrap();
+    NgspiceModelSpec::from_config(&rc_model("./rc.cir", 1000), &dir).unwrap();
+    assert!(!marker.exists(), "an included control block ran");
+}
+
+/// `model:` names a file inside the manifest directory. An absolute path, a
+/// `..` path and a symlink that leaves the directory are refused; a file in a
+/// subdirectory and a symlink that stays inside are accepted.
+#[test]
+fn model_paths_are_confined_to_the_manifest_directory() {
+    let root_dir = scratch("confine");
+    let base = root_dir.join("manifest");
+    let outside = root_dir.join("outside");
+    std::fs::create_dir_all(base.join("nets")).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(outside.join("rc.cir"), RC_NETLIST).unwrap();
+    std::fs::write(base.join("nets/rc.cir"), RC_NETLIST).unwrap();
+    let outside_abs = outside.join("rc.cir").canonicalize().unwrap();
+
+    let refused = |model_path: &str, needle: &str| {
+        let err = NgspiceModelSpec::from_config(&rc_model(model_path, 1000), &base).unwrap_err();
+        assert!(err.contains(needle), "{model_path}: {err}");
+        assert!(
+            build_cosim_adapter_with_base(&rc_model(model_path, 1000), &base).is_err(),
+            "{model_path} must be refused by the factory"
+        );
+        let issues = validate_ngspice_models(&[rc_model(model_path, 1000)], &base);
+        assert_eq!(issues.len(), 1, "{model_path}: {issues:?}");
+    };
+    refused("../outside/rc.cir", "outside the manifest directory");
+    refused(
+        "./nets/../../outside/rc.cir",
+        "outside the manifest directory",
+    );
+    refused(
+        &outside_abs.display().to_string(),
+        "must be relative to the manifest directory",
+    );
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(&outside_abs, base.join("escape.cir")).unwrap();
+        refused("./escape.cir", "outside the manifest directory");
+        std::os::unix::fs::symlink(base.join("nets/rc.cir"), base.join("inside.cir")).unwrap();
+        let spec = NgspiceModelSpec::from_config(&rc_model("./inside.cir", 1000), &base).unwrap();
+        assert!(spec.netlist_path.ends_with("nets/rc.cir"));
+    }
+    // Positive controls: a subdirectory, and `..` that stays inside.
+    for inside in ["./nets/rc.cir", "nets/../nets/rc.cir"] {
+        let spec = NgspiceModelSpec::from_config(&rc_model(inside, 1000), &base).unwrap();
+        assert_eq!(spec.netlist, RC_NETLIST, "{inside}");
+    }
+}
+
+/// The native host runs `python3 -I`: a `json.py` or `ctypes/` package in the
+/// working directory does not load. The exact command the adapter spawns runs
+/// in a poisoned directory (via `current_dir`, so the test process keeps its
+/// own); the same command without `-I` imports the poison (negative control).
+#[test]
+fn native_host_ignores_modules_in_its_working_directory() {
+    use labwired_core::cosim::ngspice::{native_host_args, NATIVE_HOST_PROGRAM};
+    use std::io::Write;
+    use std::process::Stdio;
+    if !ngspice_ready() {
+        return;
+    }
+    let dir = scratch("poison");
+    std::fs::write(dir.join("rc.cir"), RC_NETLIST).unwrap();
+    let poison = dir.join("cwd");
+    std::fs::create_dir_all(poison.join("ctypes")).unwrap();
+    let marker = dir.join("poison-ran");
+    let payload = format!(
+        "open({:?}, 'w').write('ran')\nraise SystemExit('poisoned module imported')\n",
+        marker.display().to_string()
+    );
+    std::fs::write(poison.join("json.py"), &payload).unwrap();
+    std::fs::write(poison.join("ctypes/__init__.py"), &payload).unwrap();
+
+    let spec = NgspiceModelSpec::from_config(&rc_model("./rc.cir", 1000), &dir)
+        .unwrap()
+        .host_json();
+    let run = |args: &[&str]| {
+        let mut child = Command::new(NATIVE_HOST_PROGRAM)
+            .args(args)
+            .current_dir(&poison)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(b"{\"time_ns\": 1000, \"dt_ns\": 1000, \"inputs\": {\"gpio\": true}}\n")
+            .unwrap();
+        child.wait_with_output().unwrap()
+    };
+
+    let isolated = run(&native_host_args(&spec));
+    let stdout = String::from_utf8_lossy(&isolated.stdout);
+    assert!(
+        isolated.status.success() && stdout.contains("\"outputs\""),
+        "isolated host: {stdout} / {}",
+        String::from_utf8_lossy(&isolated.stderr)
+    );
+    assert!(!marker.exists(), "the isolated host imported the poison");
+
+    let open = run(&native_host_args(&spec)[1..]);
+    assert!(!open.status.success(), "without -I the poison must load");
+    assert!(marker.exists(), "without -I the poison must load");
+}
+
+/// A machine session sends no `(0, 0)` initialization step, so
+/// `previous_boundary` is refused there before any adapter is built; Flex
+/// primes its models and keeps it (see `flex_script_runs`).
+#[test]
+fn machine_sessions_refuse_previous_boundary_sampling() {
+    use labwired_core::cosim::ngspice::machine_sampling_refusal;
+    let dir = scratch("sampling");
+    std::fs::write(dir.join("rc.cir"), RC_NETLIST).unwrap();
+    let mut previous = rc_model("./rc.cir", 1000);
+    previous
+        .config
+        .insert("input_sampling".into(), "previous_boundary".into());
+    let mut current = previous.clone();
+    current
+        .config
+        .insert("input_sampling".into(), "current_boundary".into());
+
+    let refusal = machine_sampling_refusal(&previous).expect("previous_boundary is refused");
+    assert!(refusal.contains("ngspice model 'rc'"), "{refusal}");
+    assert_eq!(machine_sampling_refusal(&current), None);
+    assert_eq!(machine_sampling_refusal(&rc_model("./rc.cir", 1000)), None);
+    // The spec itself stays valid: Flex uses it.
+    NgspiceModelSpec::from_config(&previous, &dir).unwrap();
+
+    let issues = validate_ngspice_models(std::slice::from_ref(&previous), &dir);
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert!(issues[0].contains("previous_boundary"), "{}", issues[0]);
+    assert_eq!(
+        validate_ngspice_models(std::slice::from_ref(&current), &dir),
+        Vec::<String>::new()
+    );
+
+    let bus = SystemBus::new();
+    let Err(err) = CosimSession::new_with_factory(std::slice::from_ref(&previous), &bus, |_| {
+        panic!("no adapter may be built for a refused manifest")
+    }) else {
+        panic!("a machine session must refuse previous_boundary");
+    };
+    assert!(err.to_string().contains("previous_boundary"), "{err}");
+    // Negative control: current_boundary reaches the factory.
+    let mut built = 0;
+    let _ = CosimSession::new_with_factory(std::slice::from_ref(&current), &bus, |_| {
+        built += 1;
+        Err(labwired_core::SimulationError::Other(
+            "factory reached".into(),
+        ))
+    });
+    assert_eq!(built, 1);
 }
 
 /// Migration gap made executable: the in-core engine cannot run the LDR deck
@@ -241,8 +445,9 @@ fn native_steps_land_on_odd_boundaries_and_follow_the_rc_curve() {
     let dir = scratch("odd");
     let netlist = dir.join("rc.cir");
     std::fs::write(&netlist, RC_NETLIST).unwrap();
+    let rc = "./rc.cir";
     const STEP_NS: u64 = 123_457;
-    let mut adapter = build_cosim_adapter_with_base(&rc_model(&netlist, STEP_NS), &dir).unwrap();
+    let mut adapter = build_cosim_adapter_with_base(&rc_model(rc, STEP_NS), &dir).unwrap();
     let tau = 10e3 * 100e-9;
     let mut worst = 0.0f64;
     for k in 1..=40u64 {
@@ -280,7 +485,8 @@ fn native_ngspice_matches_the_in_core_solver_on_a_shared_rc() {
     let dir = scratch("parity");
     let netlist = dir.join("rc.cir");
     std::fs::write(&netlist, RC_NETLIST).unwrap();
-    let mut native = build_cosim_adapter_with_base(&rc_model(&netlist, 100_000), &dir).unwrap();
+    let rc = "./rc.cir";
+    let mut native = build_cosim_adapter_with_base(&rc_model(rc, 100_000), &dir).unwrap();
     let mut in_core = build_cosim_adapter_with_base(
         &model(&format!(
             "id: rc\nadapter: analog\nstep_ns: 100000\ninputs: {{ gpio: board.gpio.pa5 }}\noutputs: {{ v_out: board.analog.pa0_volts }}\nconfig:\n  netlist: {}\n  vdd: 3.3\n  substeps: 10\n  probes: {{ v_out: \"v(out)\" }}\n  sources: {{ gpio: Vgpio }}\n",
@@ -320,7 +526,8 @@ fn native_priming_step_is_the_start_of_the_transient() {
     let dir = scratch("priming");
     let netlist = dir.join("rc.cir");
     std::fs::write(&netlist, RC_NETLIST).unwrap();
-    let mut adapter = build_cosim_adapter_with_base(&rc_model(&netlist, 100_000), &dir).unwrap();
+    let rc = "./rc.cir";
+    let mut adapter = build_cosim_adapter_with_base(&rc_model(rc, 100_000), &dir).unwrap();
     let high = [("gpio", CosimSignalValue::Bool(true))];
     let primed = volts(&adapter.step(step(0, 0, &high)).unwrap().outputs, "v_out");
     assert!(
@@ -370,9 +577,10 @@ fn native_solver_errors_name_the_model_and_stop_the_adapter() {
     let dir = scratch("errors");
     let netlist = dir.join("rc.cir");
     std::fs::write(&netlist, RC_NETLIST).unwrap();
+    let rc = "./rc.cir";
 
     // An element the netlist does not contain: ngspice refuses the alter.
-    let mut config = rc_model(&netlist, 1000);
+    let mut config = rc_model(rc, 1000);
     let mut bad = config.clone();
     bad.config.insert(
         "input_sources".into(),
@@ -406,7 +614,7 @@ fn native_solver_errors_name_the_model_and_stop_the_adapter() {
     assert!(err.contains("nowhere"), "{err}");
 
     // Time must advance: a repeated boundary is a host error, not a no-op.
-    let mut adapter = build_cosim_adapter_with_base(&rc_model(&netlist, 1000), &dir).unwrap();
+    let mut adapter = build_cosim_adapter_with_base(&rc_model(rc, 1000), &dir).unwrap();
     adapter
         .step(step(1000, 1000, &[("gpio", CosimSignalValue::Bool(true))]))
         .unwrap();
@@ -417,7 +625,7 @@ fn native_solver_errors_name_the_model_and_stop_the_adapter() {
     assert!(err.contains("monotonically"), "{err}");
 
     // A GPIO route carries a logic level, as in the browser runtime.
-    let mut adapter = build_cosim_adapter_with_base(&rc_model(&netlist, 1000), &dir).unwrap();
+    let mut adapter = build_cosim_adapter_with_base(&rc_model(rc, 1000), &dir).unwrap();
     let err = adapter
         .step(step(1000, 1000, &[("gpio", CosimSignalValue::F64(1.0))]))
         .unwrap_err()
@@ -425,12 +633,14 @@ fn native_solver_errors_name_the_model_and_stop_the_adapter() {
     assert!(err.contains("must be boolean"), "{err}");
 }
 
+fn flex_ldr_dir() -> PathBuf {
+    root("examples/cosim-ngspice-ldr")
+}
+
+/// The committed manifest as is: `model: ./ldr.cir`, resolved from its
+/// directory by [`FlexRuntime::from_yaml_with_base`].
 fn flex_ldr_yaml() -> String {
-    let dir = root("examples/cosim-ngspice-ldr");
-    let netlist = dir.join("ldr.cir").canonicalize().unwrap();
-    std::fs::read_to_string(dir.join("flex-ldr.yaml"))
-        .unwrap()
-        .replace("model: ./ldr.cir", &format!("model: {}", netlist.display()))
+    std::fs::read_to_string(flex_ldr_dir().join("flex-ldr.yaml")).unwrap()
 }
 
 /// Flex: host-stepped firmware ports drive an ngspice LDR divider.
@@ -443,7 +653,8 @@ fn flex_ldr_divider_runs_on_native_ngspice() {
     if !ngspice_ready() {
         return;
     }
-    let mut flex = FlexRuntime::from_yaml(&flex_ldr_yaml()).expect("build Flex runtime");
+    let mut flex = FlexRuntime::from_yaml_with_base(&flex_ldr_yaml(), &flex_ldr_dir())
+        .expect("build Flex runtime");
     let enable = flex.port_id("enable").unwrap();
     let light = flex.port_id("light").unwrap();
     let v = flex.port_id("ldr_volts").unwrap();
@@ -511,7 +722,7 @@ fn flex_ldr_divider_runs_on_native_ngspice() {
 
     // A broken source mapping (negative control) fails at construction.
     let broken = flex_ldr_yaml().replace("element: Vsup", "element: Vmissing");
-    let Err(err) = FlexRuntime::from_yaml(&broken) else {
+    let Err(err) = FlexRuntime::from_yaml_with_base(&broken, &flex_ldr_dir()) else {
         panic!("ngspice refuses the alter");
     };
     let err = err.to_string();
@@ -637,14 +848,10 @@ mod flex_script_runs {
         name: &str,
         edit: impl FnOnce(String) -> String,
     ) -> labwired_core::flex_script::FlexScriptRun {
-        use labwired_core::flex_script::{run_script, FlexResultConfig};
+        use labwired_core::flex_script::{run_script_with_factory, FlexResultConfig};
         let dir = root("crates/wasm/tests/fixtures/flex-mixed-signal");
-        let netlist = dir.join("rc.cir").canonicalize().unwrap();
-        let manifest = edit(
-            std::fs::read_to_string(dir.join("system-ngspice.yaml"))
-                .unwrap()
-                .replace("model: ./rc.cir", &format!("model: {}", netlist.display())),
-        );
+        // `model: ./rc.cir` stays relative and resolves from the fixture dir.
+        let manifest = edit(std::fs::read_to_string(dir.join("system-ngspice.yaml")).unwrap());
         let firmware = std::fs::read(dir.join("firmware.wasm")).unwrap();
         let script: labwired_config::FlexTestScript =
             serde_yaml::from_str(&std::fs::read_to_string(dir.join(name)).unwrap()).unwrap();
@@ -660,7 +867,9 @@ mod flex_script_runs {
                 max_time_ns: script.limits.max_time_ns,
             },
         };
-        run_script(&script, config, &manifest, &firmware)
+        run_script_with_factory(&script, config, &manifest, &firmware, |model| {
+            build_cosim_adapter_with_base(model, &dir)
+        })
     }
 
     fn flex_rc_samples(run: &labwired_core::flex_script::FlexScriptRun) -> Vec<(u64, f64)> {

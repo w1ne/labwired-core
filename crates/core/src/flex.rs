@@ -358,8 +358,14 @@ fn model_device_type(model: &CosimModelConfig) -> Option<&str> {
 
 impl FlexRuntime {
     pub fn from_yaml(yaml: &str) -> SimResult<Self> {
+        Self::from_yaml_with_base(yaml, std::path::Path::new("."))
+    }
+
+    /// [`Self::from_yaml`] with each relative `model:` resolved from
+    /// `base_dir`, the manifest's directory.
+    pub fn from_yaml_with_base(yaml: &str, base_dir: &std::path::Path) -> SimResult<Self> {
         Self::from_yaml_with_factory(yaml, |config| {
-            crate::cosim::build_cosim_adapter_with_base(config, std::path::Path::new("."))
+            crate::cosim::build_cosim_adapter_with_base(config, base_dir)
         })
     }
 

@@ -752,7 +752,7 @@ One manifest entry runs on both hosts. Keys (shared with the app's
 ```yaml
 - id: ldr
   adapter: ngspice
-  model: ./ldr.cir            # netlist file; must contain .tran and .end, no .control
+  model: ./ldr.cir            # netlist inside the manifest directory; .tran and .end, no .control/.include/.inc/.lib
   step_ns: 100000
   inputs:  { supply: board.gpio.pa5, lux: ui.ldr.lux }
   outputs: { v_out: board.analog.pa0_volts }
@@ -778,7 +778,10 @@ boundary over the whole interval. `previous_boundary` holds the inputs latched
 at the previous boundary, as the analog adapter's mode of the same name does:
 an input written in the middle of an interval reaches the circuit at the next
 boundary, never before the write. Use it for Flex firmware tests. It needs the
-`(time_ns = 0, dt_ns = 0)` initialization step first; Flex sends that step. The
+`(time_ns = 0, dt_ns = 0)` initialization step first; Flex sends that step. A
+machine co-simulation session (`CosimSession`, native or `WasmSimulator`) does
+not send it, so it refuses `previous_boundary` before any adapter starts, and
+`labwired validate` reports it for a machine manifest. The
 latch is in `labwired_core::cosim::ngspice::NgspiceInputLatch`, in front of
 both hosts, so the browser callback and the native host receive the same
 frames.
@@ -787,7 +790,7 @@ frames.
 (`labwired_core::cosim::ngspice::NgspiceModelSpec`; `labwired validate`
 reports the same issues), then starts the libngspice host from
 `tools/cosim/labwired_ngspice.py` (embedded in `labwired-core`, run as
-`python3 -c ... --bridge-spec <json>`) over the `external_process` JSONL
+`python3 -I -c ... --bridge-spec <json>`) over the `external_process` JSONL
 transport: one process per model, a 20 s bound per exchange, and the process
 group is killed on failure. A host failure is one `{"error": "..."}` frame;
 the transport reports it and the adapter is terminally failed. Requirements:
@@ -796,6 +799,28 @@ the transport reports it and the adapter is terminally failed. Requirements:
 output. The native host places a solver breakpoint (`ngSpice_SetBkpt`) at
 each boundary: on ngspice-42, `stop when time = t` alone stepped past a
 200 us boundary to the `.tran` end time.
+
+Confinement of the native host:
+
+- `model:` must be a relative path that resolves inside the manifest
+  directory (the Flex file's or the system manifest's directory;
+  `FlexRuntime::from_yaml_with_base` takes it explicitly). An absolute path, a
+  `..` path that leaves the directory, and a symlink to a file outside it are
+  refused before any process starts.
+- The netlist may not contain `.control` / `.endc` (a control block can run
+  `shell` commands) or `.include`, `.inc` or `.lib` (an included file is not
+  checked and could carry a control block or read any file). The check is
+  case-insensitive, after leading whitespace. Put device models in the
+  netlist itself. The browser host has no host file system to include from.
+- Core sends the validated netlist text in the `--bridge-spec` JSON
+  (`"netlist"`); the host does not read the path again, repeats the directive
+  check, and does not change its working directory.
+- Python runs isolated (`-I`): the working directory, `PYTHONPATH` and the
+  user site directory add no module to the host, so a `json.py` or `ctypes/`
+  beside the manifest cannot replace the standard library.
+
+A standalone Python caller of `BridgeCircuit` may pass `"netlist_path"`
+instead of `"netlist"`; the same directive check applies.
 
 Native differences from the browser runtime, both deliberate: routes are not
 limited to `board.*` / `ui.*` paths (a CPU-free Flex manifest uses flat
