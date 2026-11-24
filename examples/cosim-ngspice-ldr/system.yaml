@@ -25,4 +25,9 @@ cosim_models:
         lux: { element: "Vlux", scale: 1, offset: 0, default_value: 100 }
       output_nodes:
         v_out: { node: "out", scale: 1, offset: 0 }
+      # `ldr.cir` states its curve for 1-100 lx, the range the README quotes.
+      # Outside it the run stops here; the deck's max(V(lux), 0.01) only keeps
+      # the solver finite.
+      input_ranges:
+        lux: { min: 1, max: 100, unit: lx }
 external_devices: []
