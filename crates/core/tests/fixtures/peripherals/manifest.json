@@ -1145,6 +1145,38 @@
       ]
     },
     {
+      "device_type": "cyw43439",
+      "label": "CYW43439 Wi-Fi/Bluetooth (Pico W)",
+      "summary": "Infineon CYW43439 on the RP2040/RP2350 PIO gSPI bus: firmware download, SDPCM ioctls and the WL_GPIO0 LED.",
+      "detail": "Bit-level gSPI device on the PIO clock line and a SIO chip select: F0 bus registers (0xFEEDBEAD test word, 16/32-bit word modes, interrupt and status words), F1 backplane (window, clock and sleep CSRs, core wrappers, 512 KiB SOCSRAM) and the host interface of a running firmware on F2 (SDPCM control frames, credit, gpioout, cur_etheraddr). The firmware is not executed: no radio, scan, join, data or Bluetooth. Watch `<id>:0` for the Pico W LED.",
+      "transport": "gpio_group",
+      "category": "misc",
+      "config_keys": [
+        {
+          "name": "data_pin",
+          "ty": "int",
+          "doc": "DIO / host-wake GPIO. Default 24."
+        },
+        {
+          "name": "clock_pin",
+          "ty": "int",
+          "doc": "gSPI clock GPIO (PIO side-set). Default 29."
+        },
+        {
+          "name": "cs_pin",
+          "ty": "int",
+          "doc": "Chip-select GPIO (SIO). Default 25."
+        },
+        {
+          "name": "mac",
+          "ty": "str",
+          "doc": "MAC address the chip reports, `aa:bb:cc:dd:ee:ff`. Default 28:cd:c1:00:00:01."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
       "device_type": "oled-ssd1306",
       "label": "SSD1306 OLED",
       "summary": "128×64 monochrome OLED display over I2C with a paged framebuffer.",

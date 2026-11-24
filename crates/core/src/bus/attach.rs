@@ -1332,18 +1332,37 @@ impl SystemBus {
         usize,
     )> {
         use crate::peripherals::rp2040::io_bank0::Rp2040IoBank0;
-        let functions = self
-            .peripherals
-            .iter()
-            .find_map(|p| {
-                p.dev
-                    .as_any()
-                    .and_then(|a| a.downcast_ref::<Rp2040IoBank0>())
-            })
-            .map(Rp2040IoBank0::pad_functions)?;
+        let functions = self.rp2040_io_bank0().map(Rp2040IoBank0::pad_functions)?;
         let sio_idx = self.find_peripheral_index_by_name("sio")?;
         self.rp2040_sio_mut(sio_idx)?;
         Some((functions, sio_idx))
+    }
+
+    fn rp2040_io_bank0(&self) -> Option<&crate::peripherals::rp2040::io_bank0::Rp2040IoBank0> {
+        use crate::peripherals::rp2040::io_bank0::Rp2040IoBank0;
+        self.peripherals.iter().find_map(|p| {
+            p.dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<Rp2040IoBank0>())
+        })
+    }
+
+    /// What an off-chip part clocked by an RP2040/RP2350 peripheral wire
+    /// needs to follow and answer pads: IO_BANK0's pad levels (to follow a
+    /// SIO-driven select) and the SIO's [`HeldPads`] (to answer a pad the
+    /// firmware reads with `gpio_get`). `None` off those chips.
+    ///
+    /// [`HeldPads`]: crate::peripherals::rp2040::sio::HeldPads
+    pub(crate) fn rp2040_part_pads(
+        &mut self,
+    ) -> Option<(
+        Arc<crate::peripherals::rp2040::io_bank0::BankIrq>,
+        Arc<crate::peripherals::rp2040::sio::HeldPads>,
+    )> {
+        let irq = self.rp2040_io_bank0()?.bank_irq();
+        let sio_idx = self.find_peripheral_index_by_name("sio")?;
+        let held = self.rp2040_sio_mut(sio_idx)?.held_pads();
+        Some((irq, held))
     }
 
     fn rp2040_sio_mut(
