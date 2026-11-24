@@ -47,6 +47,18 @@
 //! trapezoidal resumes from the consistent state it leaves. This is what SPICE
 //! does at a breakpoint, and it brings the same fixture to 0.002 %.
 //!
+//! A change is a discontinuity only where the drive's slope changes, not
+//! wherever its value does. A sine, or the flat part of a pulse, moves on every
+//! step while the derivative carried from the previous step stays the state of
+//! the circuit one step earlier; restarting there would downgrade a whole
+//! waveform-driven run to backward Euler, which is first order. So the restart
+//! follows [`Waveform::has_corner_between`](super::netlist::Waveform::has_corner_between)
+//! — a pulse edge, the start of a delayed sine — and the value setters a routed
+//! input or a test calls between steps, which can change at any boundary.
+//! Measured on a 1 kΩ / 100 nF low-pass driven by a 1 kHz sine at 1 µs steps,
+//! against the closed form: 0.14 % of the drive amplitude before this rule,
+//! 9.3e-5 % after, and the error falls fourfold when the step halves.
+//!
 //! ## Determinism
 //!
 //! `f64` throughout, `Vec` indices in the hot path, `BTreeMap` only for name
@@ -1438,26 +1450,51 @@ impl Solver {
     ///
     /// Sources are evaluated at the END of the step, which is the point the
     /// backward-Euler and trapezoidal companion models are written about, and
-    /// is what SPICE does. A value that actually moved counts as a
-    /// discontinuity for the trapezoidal restart rule, exactly as a routed
-    /// input does.
+    /// is what SPICE does.
+    ///
+    /// A new value is not a discontinuity. A smooth waveform — a sine, or the
+    /// flat part of a pulse — changes every step, and the reactive state the
+    /// trapezoidal rule carries is still the state of the circuit one step
+    /// earlier; restarting there would silently downgrade a waveform-driven
+    /// circuit to backward Euler for its whole run. What does restart the
+    /// integration is a corner of the waveform inside the step
+    /// ([`super::netlist::Waveform::has_corner_between`]), and a value another part of the
+    /// engine set through [`Self::set_voltage_source`], which can change
+    /// between any two steps. The settled early-out is cleared on any move,
+    /// because a resistive circuit has no reactive state to compare and would
+    /// otherwise report a stale solution.
     fn apply_waveforms(&mut self, time: f64) {
         if !self.has_waveforms {
             return;
         }
+        let from = self.time;
         for index in 0..self.circuit.voltage_sources.len() {
             let wave = self.circuit.voltage_sources[index].wave;
             if wave.is_constant() {
                 continue;
             }
-            self.set_voltage_source(index, wave.at(time));
+            let volts = wave.at(time);
+            if self.voltage_source_values[index] != volts {
+                self.voltage_source_values[index] = volts;
+                self.settled = false;
+            }
+            if wave.has_corner_between(from, time) {
+                self.restart = true;
+            }
         }
         for index in 0..self.circuit.current_sources.len() {
             let wave = self.circuit.current_sources[index].wave;
             if wave.is_constant() {
                 continue;
             }
-            self.set_current_source(index, wave.at(time));
+            let amps = wave.at(time);
+            if self.current_source_values[index] != amps {
+                self.current_source_values[index] = amps;
+                self.settled = false;
+            }
+            if wave.has_corner_between(from, time) {
+                self.restart = true;
+            }
         }
     }
 
