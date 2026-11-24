@@ -168,6 +168,22 @@ fn gpioc_edges(chip: &ChipDescriptor, fixture: &str, bit: u8) -> (u32, u32) {
     (edges, machine.cpu.mcause)
 }
 
+/// The descriptor's `profile: wch_v00x` must reach the model: 10 channels
+/// (IN0..IN9, DS0 Table 3-2), not the STM32F1's 19. A conversion of IN16 must
+/// not answer with the STM32F1 temperature sensor.
+#[test]
+fn ch32v003_adc1_is_the_ten_channel_wch_layout() {
+    let chip = load_chip("ch32v003f4p6");
+    let bus = SystemBus::from_config(&chip, &SystemManifest::default())
+        .expect("CH32V003 peripherals and clock gates");
+    let adc1 = bus.find_peripheral_index_by_name("adc1").expect("ADC1");
+    assert_eq!(
+        bus.peripherals[adc1].dev.adc_channel_count(),
+        Some(10),
+        "CH32V00x ADC converts IN0..IN9"
+    );
+}
+
 #[test]
 fn ch32v003_package_variants_match_ds0_bonding_on_the_f4p6_die() {
     let strip = |mut v: serde_yaml::Value| {

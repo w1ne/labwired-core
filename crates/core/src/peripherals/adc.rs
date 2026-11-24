@@ -576,7 +576,8 @@ pub struct Adc {
     /// Width of a regular conversion on the F1 layout. 12 on the STM32F1;
     /// the WCH CH32V00x ADC has the same register file but a 10-bit SAR
     /// (RDATAR 0..1023). Set by [`Self::set_f1_resolution_bits`]; not a
-    /// register, so not serialized.
+    /// register, so not serialized. No `Deserialize` impl exists; if one is
+    /// added, this needs `default = 12`, or a 10-bit part restores as 0 bits.
     #[serde(skip)]
     f1_bits: u32,
     /// Does the F1 layout's IN16/IN17 read ST silicon? `true` on the STM32F1
@@ -584,6 +585,8 @@ pub struct Adc {
     /// only and no IN16 temperature sensor or IN17 V_REFINT (its V_REFINT is
     /// IN8, which the model does not build). Set by
     /// [`Self::set_f1_internal_channels`]; not a register, so not serialized.
+    /// No `Deserialize` impl exists; if one is added, this needs
+    /// `default = true`, or a CH32V003 restores with IN16/IN17 present.
     #[serde(skip)]
     f1_internal_channels: bool,
 }
@@ -913,12 +916,11 @@ impl Adc {
     /// * H7 — 0..=19, the `PCSEL` bitmap's width.
     /// * U5 — 0..=19, the `PCSEL` bitmap's width.
     pub fn channel_count(&self) -> u8 {
-        if !self.f1_internal_channels {
-            // CH32V00x: IN0..IN9 (DS0 Table 3-2); IN8 V_REFINT and IN9 V_cal
-            // are not built.
-            return 10;
-        }
         match &self.regs {
+            // CH32V00x is the F1 register file without IN16/IN17, and it has 10
+            // channels (DS0 Table 3-2): IN0..IN9, where IN8 V_REFINT and IN9
+            // V_cal are not built. The flag is only meaningful on this layout.
+            AdcRegs::Stm32F1(_) if !self.f1_internal_channels => 10,
             AdcRegs::Stm32F1(_)
             | AdcRegs::Stm32F4(_)
             | AdcRegs::Stm32L4(_)
