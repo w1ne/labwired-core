@@ -55,7 +55,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32f411re | open | L0 | 46 | 835.5 | 1.7 | ≥1× (CI) | [doc](docs/boards/stm32f411re.md) |
 | stm32f446re | open | L0 | 34 | 834.4 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32f446re.md) |
 | nrf51822 | open | L1 | 22 | 965.1 | 2.0 | ≥1× (CI) | — |
-| nrf52832 | open | L1 | 17 | 835.5 | 1.4 | ≥1× (CI) | [doc](docs/boards/nrf52832.md) |
+| nrf52832 | open | L1 | 19 | 835.5 | 1.4 | ≥1× (CI) | [doc](docs/boards/nrf52832.md) |
 | nrf52833 | open | L1 | 48 | 995.9 | 2.1 | ≥1× (CI) | — |
 | nrf52840 | open | L1 | 53 | 995.9 | 2.1 | ≥1× (CI) | [doc](docs/boards/nrf52840.md) |
 | nrf5340 | open | L1 | 22 | 819.6 | 1.4 | ≥1× (CI) | [doc](docs/boards/nrf5340.md) |
