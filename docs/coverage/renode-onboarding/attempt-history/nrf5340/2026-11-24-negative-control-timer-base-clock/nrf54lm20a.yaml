@@ -1,0 +1,372 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Nordic nRF54LM20A — APPLICATION core (Cortex-M33, 128 MHz).
+#
+# Source references:
+# - Address map, IRQ numbers, GPIO widths and TIMER cc-num come from the Zephyr
+#   devicetree `dts/vendor/nordic/nrf54lm20_a_b.dtsi` (memory sizes from the
+#   same file's `cpuapp_rram` / `cpuapp_sram` nodes). That is the exact view the
+#   firmware is linked against — the same sourcing rule nrf54l15.yaml uses.
+# - Cross-checked against the Nordic MDK vendor SVD
+#   `nrf54lm20a_application.svd`, which is vendored at
+#   tests/fixtures/real_world/nrf54lm20a.svd and gates this file through
+#   `svd_conformance`.
+#
+# Address map note — same as the rest of the nRF54L family:
+#   All peripherals sit behind a single `global_peripherals` node with
+#   `ranges = <0x0 0x50000000 0x10000000>`, so a devicetree `reg = <0xc6000 ...>`
+#   is absolute address 0x500C6000. 0x5000_0000 is the SECURE alias and is the
+#   devicetree default; 0x4000_0000 is the non-secure alias. This profile maps
+#   the SECURE view, which is what a TF-M-less bare-metal or
+#   `nrf54lm20dk/nrf54lm20a/cpuapp` build uses. FICR/UICR and the RRAM
+#   controller carry their own absolute addresses.
+#
+# ── What differs from nRF54L15, which is the profile this one is closest to ──
+#
+#   RRAM        1524 KB  ->  2036 KB
+#   SRAM         256 KB  ->   511 KB
+#   P0 ngpios         7  ->      10
+#   P1 ngpios        17  ->      32
+#   P3               —   ->  a FOURTH port, 13 pins, at 0x500D8600
+#   TIMER00          —   ->  0x50055000, irq 85   (new, 32-bit, HFPLL)
+#   TIMER23/24       —   ->  0x500CD000 / 0x500CE000
+#   SPIM00           —   ->  0x5004D000, irq 77   (new, 32 MHz)
+#   CLOCK irq       261  ->     270
+#   TAMPC     0x500DC000 ->  0x500EF000
+#   RRAMC     0x5004B000 ->  0x5004E000
+#
+# Do NOT copy addresses between the two parts on the assumption that a shared
+# family means a shared map. TAMPC and RRAMC both moved, and nrf54l15.yaml's own
+# TAMPC comment already warned that this part puts it elsewhere.
+name: "nrf54lm20a"
+arch: "arm"
+core: "cortex-m33"
+
+# Simulated core clock, Hz -- see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# Matches peripherals/nrf54l/grtc.rs CPU_HZ_DEFAULT, and the devicetree: the
+# cpuapp node's `clocks = <&hfpll>` and `hfpll` is `clock-frequency =
+# <DT_FREQ_M(128)>` (nrf54lm20_a_b.dtsi). SPIM00's PRESCALER divides this same
+# 128 MHz, which is why its divisor and its cycles-per-SCK-bit are the same
+# number in the model.
+cpu_hz: 128_000_000
+
+# RRAM, not flash. 2036 KB — an odd size, and it is correct: see
+# nrf54lm20_a_b.dtsi, `cpuapp_rram: reg = <0x0 DT_SIZE_K(2036)>`.
+flash:
+  base: 0x00000000
+  size: "2036KB"
+# 511 KB, not 512: the top 1 KB of the 512 KB SRAM is not in the application
+# core's window (`cpuapp_sram: reg = <0x20000000 DT_SIZE_K(511)>`).
+ram:
+  base: 0x20000000
+  size: "511KB"
+
+peripherals:
+  # ── UARTE ──────────────────────────────────────────────────────────────
+  # UARTE20 is the nRF54LM20 DK console: `zephyr,console = &uart20`, routed to
+  # the on-board VCP on P1.16 (TX) / P1.17 (RX).
+  #
+  # This family needs its OWN UARTE model — it is not the nRF52 block at a new
+  # base. See the nrf54l15.yaml header for the full task/event renumbering; the
+  # short version is that EasyDMA moved into a DMA.{RX,TX} cluster and the TX
+  # kick, completion and buffer descriptors all moved, while ENABLE and
+  # BAUDRATE did NOT — which is what disguises a wrong model as a working one.
+  #
+  # NOTE: uart20/spi20/twi20 are the same 0x500C6000 instance in three
+  # personalities — the DT declares all three at one address and expects
+  # exactly one to be enabled. Mapping a second model at the same base would
+  # collide.
+  - id: "uart20"
+    type: "nrf54l_uarte"
+    base_address: 0x500C6000
+    size: "4KB"
+    irq: 198
+  - id: "uart30"
+    type: "nrf54l_uarte"
+    base_address: 0x50104000
+    size: "4KB"
+    irq: 260
+
+  # ── TWIM (I²C master) ──────────────────────────────────────────────────
+  # Same personality caveat: uart21/spi21/twi21 are one instance at
+  # 0x500C7000. The TWIM personality is mapped, because a sensor-carrying
+  # board needs I²C more than it needs a third UART.
+  - id: "twi21"
+    type: "nrf54l_twim"
+    base_address: 0x500C7000
+    size: "4KB"
+    irq: 199
+
+  # ── SPIM ───────────────────────────────────────────────────────────────
+  # SPIM22 is the DK's expansion-header SPI — Zephyr's board files label the
+  # node `nordic_expansion_spi: &spi22`, so this is the bus an add-on board
+  # actually lands on. It is the display bus for the AMOLED lab.
+  #
+  # The nRF54L SPIM is the shared EasyDMA engine on this family's own offset
+  # map, and it carries two things the nRF52 generation does not: PSEL.DCX +
+  # DCXCNT (the controller drives a display's data/command line itself) and
+  # PSEL.CSN (hardware chip select). SPIM22 derives from SPIM00 in the SVD, so
+  # it has the identical register set including DCX.
+  - id: "spi22"
+    type: "nrf54l_spim"
+    base_address: 0x500C8000
+    size: "4KB"
+    irq: 200
+  # SPIM00 is the high-speed instance (32 MHz, clocked from HFPLL rather than
+  # the 16 MHz PCLK the 2x instances use). On the DK its pins go to the
+  # on-board SPI-NOR flash.
+  - id: "spi00"
+    type: "nrf54l_spim"
+    base_address: 0x5004D000
+    size: "4KB"
+    irq: 77
+
+  # ── SysTick ────────────────────────────────────────────────────────────
+  # The 24-bit ARMv8-M architectural SysTick, part of the Cortex-M33 core (SCS
+  # block at 0xE000_E010), NOT an nRF peripheral. It raises system exception 15
+  # — no NVIC line. `configure_cortex_m` installs SCB/NVIC/DWT but not SysTick,
+  # so it is declared here to give firmware a periodic core interrupt.
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
+  # ── TIMER ──────────────────────────────────────────────────────────────
+  # cc-num differs per instance on this family (DT `cc-num`): TIMER10 has 8,
+  # every other instance has 6. The nRF52 model defaults to 4, so both are
+  # explicit — a wrong cc-num is silent until firmware uses the missing channel.
+  - id: "timer00"
+    type: "nrf52840_timer"
+    base_address: 0x50055000
+    size: "4KB"
+    irq: 85
+    config:
+      num_cc: 6
+  - id: "timer10"
+    type: "nrf52840_timer"
+    base_address: 0x50085000
+    size: "4KB"
+    irq: 133
+    config:
+      num_cc: 8
+  - id: "timer20"
+    type: "nrf52840_timer"
+    base_address: 0x500CA000
+    size: "4KB"
+    irq: 202
+    config:
+      num_cc: 6
+  - id: "timer21"
+    type: "nrf52840_timer"
+    base_address: 0x500CB000
+    size: "4KB"
+    irq: 203
+    config:
+      num_cc: 6
+  - id: "timer22"
+    type: "nrf52840_timer"
+    base_address: 0x500CC000
+    size: "4KB"
+    irq: 204
+    config:
+      num_cc: 6
+  - id: "timer23"
+    type: "nrf52840_timer"
+    base_address: 0x500CD000
+    size: "4KB"
+    irq: 205
+    config:
+      num_cc: 6
+  - id: "timer24"
+    type: "nrf52840_timer"
+    base_address: 0x500CE000
+    size: "4KB"
+    irq: 206
+    config:
+      num_cc: 6
+
+  # ── GPIO ───────────────────────────────────────────────────────────────
+  # Port widths are NOT uniform (DT `ngpios`): P0=10, P1=32, P2=11, P3=13. A
+  # wrong width here silently breaks board_io bindings rather than faulting.
+  #
+  # BASE ADDRESSES — these are the SVD's own bases, with no back-offset.
+  #
+  # nrf54l15.yaml maps each port at `MDK_base - 0x504` so that the nRF52 GPIO
+  # model's offsets (OUT 0x504, IN 0x510, DIR 0x514) land on the real
+  # registers. That arrangement CANNOT be used here, for two independent
+  # reasons:
+  #
+  #   1. P1 (0x500D8200) and P3 (0x500D8600) are only 0x400 apart, so their
+  #      back-offset windows overlap and whichever loses the router's
+  #      greatest-start-wins tie-break has every register served by its
+  #      neighbour. `GpioPort::window_offset` documents this exact failure for
+  #      the nRF5340 generation.
+  #   2. The back-offset is WRONG for PIN_CNF even where it fits. The nRF54L
+  #      block moved OUT by 0x504 but PIN_CNF by 0x680 (0x700 -> 0x080), so a
+  #      constant shift delivers DIR and OUT and drops every PIN_CNF access.
+  #      That is silent in the direction that hides it: LEDs need only DIR and
+  #      OUT and still light, while an input's pull-up — configured by Zephyr
+  #      and nrfx through PIN_CNF and nothing else — never arrives. The DK's
+  #      four buttons are all GPIO_PULL_UP, so this is not hypothetical.
+  #
+  # `profile: nrf54l` decodes this family's real offsets instead, so the base
+  # below is the vendor's own and `svd_conformance` needs no deviation entry.
+  #
+  # `size: 768` is the DT `reg` length (0x300), not the usual 4KB. It has to be:
+  # P1 and P3 are 0x400 apart and a 4KB window would swallow its neighbour.
+  - id: "gpio0"
+    type: "gpio"
+    base_address: 0x5010A000
+    size: 768
+    config:
+      profile: "nrf54l"
+      num_pins: 10
+  - id: "gpio1"
+    type: "gpio"
+    base_address: 0x500D8200
+    size: 768
+    config:
+      profile: "nrf54l"
+      num_pins: 32
+  - id: "gpio2"
+    type: "gpio"
+    base_address: 0x50050400
+    size: 768
+    config:
+      profile: "nrf54l"
+      num_pins: 11
+  - id: "gpio3"
+    type: "gpio"
+    base_address: 0x500D8600
+    size: 768
+    config:
+      profile: "nrf54l"
+      num_pins: 13
+
+  # ── TEMP ───────────────────────────────────────────────────────────────
+  # Die temperature sensor; same task/event + RESULT layout as nRF52.
+  - id: "temp"
+    type: "nrf52840_temp"
+    base_address: 0x500D7000
+    size: "4KB"
+    irq: 215
+
+  # ── EGU ────────────────────────────────────────────────────────────────
+  - id: "egu10"
+    type: "nrf52840_egu"
+    base_address: 0x50087000
+    size: "4KB"
+    irq: 135
+  - id: "egu20"
+    type: "nrf52840_egu"
+    base_address: 0x500C9000
+    size: "4KB"
+    irq: 201
+
+  # ── GPIOTE ─────────────────────────────────────────────────────────────
+  - id: "gpiote20"
+    type: "nrf52_gpiote"
+    base_address: 0x500DA000
+    size: "4KB"
+  - id: "gpiote30"
+    type: "nrf52_gpiote"
+    base_address: 0x5010C000
+    size: "4KB"
+
+  # ── GRTC ───────────────────────────────────────────────────────────────
+  # The Global RTC replaces RTC0/RTC1 on this family and is what Zephyr drives
+  # the kernel tick from, so it is a real behavioural model rather than a stub.
+  # cc-num = 12 (DT `grtc@e2000`, MDK `GRTC_CC_MaxCount`).
+  #
+  # IRQ: the SVD gives GRTC_0..GRTC_3 = 226..229 — FOUR independent lines, one
+  # per INTEN group. `irq` is GRTC_0 (the base); the model routes a compare
+  # enabled in INTEN group `g` to GRTC_g = irq + g. Load-bearing: nrfx on the
+  # secure app core uses group 2 and connects GRTC_2 = 228, so collapsing every
+  # group onto 226 leaves the tickless kernel tick permanently undelivered.
+  - id: "grtc"
+    type: "nrf54l_grtc"
+    base_address: 0x500E2000
+    size: "4KB"
+    irq: 226
+    config:
+      num_cc: 12
+
+  # ── Benign stub windows ────────────────────────────────────────────────
+
+  # CLOCK — oscillator control. A DEDICATED nRF54L model, not the nRF52 one:
+  # the block replaced the HFCLK/LFCLK task pair with an XO/PLL/LFCLK trio and
+  # moved every status register, while XO.STAT happens to land on the nRF52
+  # HFCLKSTAT offset — the coincidence that let the nRF52 model look alive
+  # right up until Zephyr hung in lfclk_spinwait().
+  #
+  # ⚠️ irq 270 here, NOT the 261 nRF54L15 uses (SVD CLOCK_POWER).
+  - id: "clock"
+    type: "nrf54l_clock"
+    base_address: 0x5010E000
+    size: "4KB"
+    irq: 270
+
+  # TAMPC — tamper controller, and the block that gates APPROTECT.
+  #
+  # Zephyr's SystemInit calls nrf54l_handle_approtect_signal() which READS the
+  # protect-domain signal registers at +0x500/0x508/0x510/0x518 before writing
+  # them; an unmapped window faults the bus there.
+  #
+  # Zero is the correct value, not merely a convenient one: the MDK treats
+  # "signal locked AND high" as an invalid state and deliberately hangs the
+  # part (it starts WDT30 with a minimum counter and spins waiting for reset).
+  # Reading zero means "not locked" — the unprovisioned / APPROTECT-disabled
+  # development part, which is the state a simulator should model. A stub
+  # returning 0xFFFFFFFF would boot into that deliberate hang and look like a
+  # simulator bug.
+  #
+  # ⚠️ 0x500EF000 on this part, NOT nRF54L15's 0x500DC000.
+  - id: "tampc"
+    type: "nrf54l_tampc_stub"
+    base_address: 0x500EF000
+    size: "4KB"
+
+  # WDT30 / WDT31 — mapped so the MDK's approtect-invalid-state path (which
+  # pokes WDT30 to force a reset) writes somewhere real rather than faulting.
+  # Not reached on a healthy boot.
+  - id: "wdt30"
+    type: "nrf54l_wdt_stub"
+    base_address: 0x50108000
+    size: "4KB"
+    irq: 264
+  - id: "wdt31"
+    type: "nrf54l_wdt_stub"
+    base_address: 0x50109000
+    size: "4KB"
+    irq: 265
+
+  # RRAM controller — NVM write/erase control. Reads as zero; firmware that
+  # only executes from RRAM never needs it, but the window must exist so a
+  # config readback does not fault. ⚠️ 0x5004E000, not nRF54L15's 0x5004B000.
+  - id: "rramc"
+    type: "nrf54l_rramc_stub"
+    base_address: 0x5004E000
+    size: "4KB"
+    irq: 78
+
+  # Regulators (DCDC/LDO selection) — write-only on the boot path.
+  - id: "regulators"
+    type: "nrf54l_regulators_stub"
+    base_address: 0x50120000
+    size: "4KB"
+
+  # DPPIC — event routing fabric. Poked during peripheral init but not polled
+  # for a settled value on a UART or SPI boot.
+  - id: "dppic20"
+    type: "nrf54l_dppic_stub"
+    base_address: 0x500C2000
+    size: "4KB"
+  - id: "dppic30"
+    type: "nrf54l_dppic_stub"
+    base_address: 0x50102000
+    size: "4KB"
