@@ -67,6 +67,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: ${{ !cancelled() }}
         with:
+          retention-days: 7
           name: pybadge-original-build-evidence
           path: ${{ runner.temp }}/pybadge-evidence/
           if-no-files-found: error

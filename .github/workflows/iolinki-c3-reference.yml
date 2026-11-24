@@ -73,6 +73,7 @@ jobs:
           cargo test -p labwired-core --features event-scheduler --test esp -- --include-ignored c3_gpio_interrupts:: c3_reference_firmware::
       - uses: actions/upload-artifact@v4
         with:
+          retention-days: 7
           name: iolinki-c3-esp-idf-firmware-prerequisite
           if-no-files-found: error
           include-hidden-files: true
