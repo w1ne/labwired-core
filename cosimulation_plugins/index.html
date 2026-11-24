@@ -1356,6 +1356,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Mixed-signal: ngspice as a model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pinning-the-circuit-a-flex-run-solved" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pinning the circuit a Flex run solved
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -5114,6 +5131,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Mixed-signal: ngspice as a model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pinning-the-circuit-a-flex-run-solved" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pinning the circuit a Flex run solved
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -5399,6 +5433,29 @@ the same input sequence always produces the same voltages.</p>
 (GPIO into a 10 kΩ / 100 nF low-pass, τ = 1 ms). Requires <code>libngspice0</code>
 (Debian/Ubuntu: <code>apt install libngspice0</code>). Tests:
 <code>python3 -m pytest tools/cosim/test_labwired_ngspice.py</code>.</p>
+<h3 id="pinning-the-circuit-a-flex-run-solved">Pinning the circuit a Flex run solved</h3>
+<p>A Flex manifest's <code>manifest_sha256</code> covers the manifest bytes. It cannot cover
+an external netlist, so <code>run_report()</code> carries one <code>source</code> pin per model whose
+adapter loaded such a source:</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">"kind"</span><span class="p">:</span><span class="w"> </span><span class="s2">"spice_netlist"</span><span class="p">,</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">"origin"</span><span class="p">:</span><span class="w"> </span><span class="s2">"file"</span><span class="p">,</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">"bytes"</span><span class="p">:</span><span class="w"> </span><span class="mi">231</span><span class="p">,</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">"sha256"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nt">"path"</span><span class="p">:</span><span class="w"> </span><span class="s2">"./rc.cir"</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">}</span>
+</span></code></pre></div>
+<ul>
+<li><code>origin: file</code>: an <code>adapter: ngspice</code> netlist named by <code>model:</code> and read by
+  the native host. <code>path</code> is the manifest's declared path.</li>
+<li><code>origin: inline</code>: an <code>adapter: analog</code> <code>netlist_text</code>. The digest names the
+  exact text the solver parsed.</li>
+<li>A model with no external source reports no pin. The browser ngspice host also
+  reports none: the page supplies the netlist text, not the runtime, so the
+  runtime does not claim a digest it did not compute.</li>
+</ul>
+<p>Editing the netlist changes <code>source.sha256</code> while <code>manifest_sha256</code> stays the
+same. Record both to reproduce a run.</p>
 <h2 id="shared-analog-in-a-multi-controller-world">Shared analog in a multi-controller world</h2>
 <p>An environment can own one inline <code>adapter: analog</code> model with instance-qualified
 <code>node.&lt;id&gt;.board.*</code> / <code>node.&lt;id&gt;.adc.*</code> routes. The existing world scheduler
@@ -5538,14 +5595,14 @@ reads is not what drives them. The two paths together describe a pin
 electrically. A circuit that treats <code>board.gpio.&lt;pad&gt;</code> as a source needs to
 know whether that source is connected, or an input pad would clamp the net to
 its idle output latch:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">inputs</span><span class="p">:</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">drv_pa0</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">board.gpio.pa0</span><span class="w">          </span><span class="c1"># level of the driver</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">ctl_pa0</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">board.gpio_output.pa0</span><span class="w">   </span><span class="c1"># the driver's switch control</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">netlist_text</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="no">Vdrv_pa0 drv_pa0 0 dc 0</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="no">Sdrv_pa0 drv_pa0 v_rc ctl_pa0 ron=25 roff=1e12</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="nt">sources</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> drv_pa0</span><span class="p">:</span><span class="w"> </span><span class="nv">Vdrv_pa0</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">inputs</span><span class="p">:</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">drv_pa0</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">board.gpio.pa0</span><span class="w">          </span><span class="c1"># level of the driver</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">ctl_pa0</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">board.gpio_output.pa0</span><span class="w">   </span><span class="c1"># the driver's switch control</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">netlist_text</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span><span class="no">Vdrv_pa0 drv_pa0 0 dc 0</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span><span class="no">Sdrv_pa0 drv_pa0 v_rc ctl_pa0 ron=25 roff=1e12</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">sources</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> drv_pa0</span><span class="p">:</span><span class="w"> </span><span class="nv">Vdrv_pa0</span><span class="w"> </span><span class="p p-Indicator">}</span>
 </span></code></pre></div>
 <p><code>board.gpio_output</code> and <code>board.gpio</code> describe a plain GPIO output. An
 alternate-function pad (SPI SCK, a timer PWM) is driven by the peripheral, not
@@ -5571,8 +5628,8 @@ through the same seam a <code>board_io</code> button uses. Likewise an analog pa
 sink only and cannot be read back into a model input.</p>
 <p><code>board.analog.&lt;pad&gt;_volts</code> resolves the pad through the chip descriptor's
 <code>analog_pins:</code> map, transcribed from the datasheet pinout:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">analog_pins</span><span class="p">:</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">PA0</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> peripheral</span><span class="p">:</span><span class="w"> </span><span class="s">"adc1"</span><span class="p p-Indicator">,</span><span class="nt"> channel</span><span class="p">:</span><span class="w"> </span><span class="nv">0</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">analog_pins</span><span class="p">:</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">PA0</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> peripheral</span><span class="p">:</span><span class="w"> </span><span class="s">"adc1"</span><span class="p p-Indicator">,</span><span class="nt"> channel</span><span class="p">:</span><span class="w"> </span><span class="nv">0</span><span class="w"> </span><span class="p p-Indicator">}</span>
 </span></code></pre></div>
 <p>It is data, not a built-in table, because the assignment differs between
 families: PA0 is ADC1_IN0 on an F401, ADC1_IN5 on an L476 and ADC1_IN1 on a
@@ -5607,10 +5664,10 @@ This is what lets a circuit node charging through a megohm reach
 <code>digitalRead</code> at the right time, instead of flipping at a guessed midpoint.</p>
 <p>The thresholds are chip data, transcribed from the datasheet into the chip
 descriptor as slopes of the I/O supply with optional voltage offsets:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">io_voltage_v</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5.0</span><span class="w">          </span><span class="c1"># the rail the GPIO pads run from</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">gpio_input_thresholds</span><span class="p">:</span><span class="w">     </span><span class="c1"># zero-offset limits: slope * supply</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">vil</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.3</span><span class="w">                 </span><span class="c1"># highest input guaranteed to read low</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">vih</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.6</span><span class="w">                 </span><span class="c1"># lowest input guaranteed to read high</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">io_voltage_v</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5.0</span><span class="w">          </span><span class="c1"># the rail the GPIO pads run from</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nt">gpio_input_thresholds</span><span class="p">:</span><span class="w">     </span><span class="c1"># zero-offset limits: slope * supply</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">vil</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.3</span><span class="w">                 </span><span class="c1"># highest input guaranteed to read low</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">vih</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.6</span><span class="w">                 </span><span class="c1"># lowest input guaranteed to read high</span>
 </span></code></pre></div>
 <p>Optional <code>vil_offset_v</code> and <code>vih_offset_v</code> add volts to the corresponding
 slope-times-supply limit. They default to zero, preserving existing ratio-only
@@ -5635,11 +5692,11 @@ arrives.</p>
 <p><code>ui.&lt;partId&gt;.&lt;field&gt;</code> paths belong to neither the machine nor a model. A model
 reads one like any other input, every one of them exists from the first step
 at 0 / false, and something outside the engine sets it:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">inputs</span><span class="p">:</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">ctl_touch</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ui.touch.pressed</span><span class="w">      </span><span class="c1"># a canvas touch pad, pressed or not</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">netlist_text</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="no">Stouch pad finger ctl_touch ron=1k roff=1e12</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">inputs</span><span class="p">:</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">ctl_touch</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ui.touch.pressed</span><span class="w">      </span><span class="c1"># a canvas touch pad, pressed or not</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">netlist_text</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="no">Stouch pad finger ctl_touch ron=1k roff=1e12</span>
 </span></code></pre></div>
 <ul>
 <li><strong>Rust:</strong> <code>CosimSession::set_signal(path, CosimSignalValue)</code>, or
@@ -5659,11 +5716,11 @@ board path the machine rewrites every boundary, and for NaN or an infinity. A
 model output routed to a <code>ui.</code> path is a startup error.</p>
 <p>A test script sets one with the stimulus trigger forms every other stimulus
 uses:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">schema_version</span><span class="p">:</span><span class="w"> </span><span class="s">"1.2"</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nt">stimuli</span><span class="p">:</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cosim_signal</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> path</span><span class="p">:</span><span class="w"> </span><span class="nv">ui.touch.pressed</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="w"> </span><span class="p p-Indicator">}</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="nt">trigger</span><span class="p">:</span><span class="w"> </span><span class="kt">!after_cycles</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> cycles</span><span class="p">:</span><span class="w"> </span><span class="nv">8000000</span><span class="w"> </span><span class="p p-Indicator">}</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cosim_signal</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> path</span><span class="p">:</span><span class="w"> </span><span class="nv">ui.bench.level</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="nv">2.5</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># at_start</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">schema_version</span><span class="p">:</span><span class="w"> </span><span class="s">"1.2"</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">stimuli</span><span class="p">:</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cosim_signal</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> path</span><span class="p">:</span><span class="w"> </span><span class="nv">ui.touch.pressed</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="nt">trigger</span><span class="p">:</span><span class="w"> </span><span class="kt">!after_cycles</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> cycles</span><span class="p">:</span><span class="w"> </span><span class="nv">8000000</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cosim_signal</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> path</span><span class="p">:</span><span class="w"> </span><span class="nv">ui.bench.level</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="nv">2.5</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># at_start</span>
 </span></code></pre></div>
 <p><code>labwired test</code> applies it through the run's <code>CosimSession</code>, and reports it in
 <code>result.json</code>'s <code>stimuli</code> block with <code>"cosim_signal": true</code> and the path as
@@ -5713,7 +5770,7 @@ a co-simulation whose pin never reached the firmware would otherwise still
 print a verdict that is evidence of nothing. A model that errors mid-run ends
 the run rather than letting the firmware keep executing against a plant that
 stopped answering. Routed outputs are logged under the <code>cosim</code> target:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nv">RUST_LOG</span><span class="o">=</span>info,cosim<span class="o">=</span>debug<span class="w"> </span>labwired<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>examples/cosim-spice-rc/rc-blink.yaml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nv">RUST_LOG</span><span class="o">=</span>info,cosim<span class="o">=</span>debug<span class="w"> </span>labwired<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>examples/cosim-spice-rc/rc-blink.yaml
 </span></code></pre></div>
 <p><code>labwired cosim-step &lt;system.yaml&gt; --set &lt;path&gt;=&lt;value&gt;</code> still drives a model
 directly, without firmware, for probing a manifest.</p>
@@ -5728,21 +5785,21 @@ replacement for ngspice or a second host for vendor SPICE models.</p>
 <p>A manifest switches engines by changing one line. The <code>netlist</code>, <code>vdd</code>,
 <code>probes</code> and <code>sources</code> config keys are spelled exactly as the ngspice wrapper
 spells them:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">cosim_models</span><span class="p">:</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">rc_lowpass</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">analog</span><span class="w">            </span><span class="c1"># was: external_process + model: ./models/rc_lowpass.py</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="nt">step_ns</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100000</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span><span class="nt">inputs</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> gpio</span><span class="p">:</span><span class="w"> </span><span class="nv">board.gpio.pa5</span><span class="w"> </span><span class="p p-Indicator">}</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span><span class="nt">outputs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> v_out</span><span class="p">:</span><span class="w"> </span><span class="nv">board.analog.pa0_volts</span><span class="w"> </span><span class="p p-Indicator">}</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">      </span><span class="nt">netlist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./rc.cir</span><span class="w">        </span><span class="c1"># or inline: netlist_text: |</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">      </span><span class="nt">vdd</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3.3</span><span class="w">                 </span><span class="c1"># volts a boolean input maps to (default 3.3)</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">      </span><span class="nt">substeps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span><span class="w">             </span><span class="c1"># internal solver steps per co-sim step</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">      </span><span class="nt">integration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">be</span><span class="w">          </span><span class="c1"># be (default) | trap</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">      </span><span class="nt">probes</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> v_out</span><span class="p">:</span><span class="w"> </span><span class="s">"v(out)"</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># output name &lt;- voltage / element current</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">      </span><span class="nt">sources</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> gpio</span><span class="p">:</span><span class="w"> </span><span class="nv">Vgpio</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">       </span><span class="c1"># input name -&gt; V, I, S, or R (ohms / Celsius)</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">      </span><span class="nt">trace</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"v(in)"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"i(Vgpio)"</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># extra oscilloscope channels</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">      </span><span class="nt">trace_samples</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20000</span><span class="w">           </span><span class="c1"># ring depth (default 20000)</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">cosim_models</span><span class="p">:</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">rc_lowpass</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">analog</span><span class="w">            </span><span class="c1"># was: external_process + model: ./models/rc_lowpass.py</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="nt">step_ns</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100000</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="nt">inputs</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> gpio</span><span class="p">:</span><span class="w"> </span><span class="nv">board.gpio.pa5</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span><span class="nt">outputs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> v_out</span><span class="p">:</span><span class="w"> </span><span class="nv">board.analog.pa0_volts</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">      </span><span class="nt">netlist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./rc.cir</span><span class="w">        </span><span class="c1"># or inline: netlist_text: |</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">      </span><span class="nt">vdd</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3.3</span><span class="w">                 </span><span class="c1"># volts a boolean input maps to (default 3.3)</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">      </span><span class="nt">substeps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span><span class="w">             </span><span class="c1"># internal solver steps per co-sim step</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">      </span><span class="nt">integration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">be</span><span class="w">          </span><span class="c1"># be (default) | trap</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">      </span><span class="nt">probes</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> v_out</span><span class="p">:</span><span class="w"> </span><span class="s">"v(out)"</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># output name &lt;- voltage / element current</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">      </span><span class="nt">sources</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> gpio</span><span class="p">:</span><span class="w"> </span><span class="nv">Vgpio</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">       </span><span class="c1"># input name -&gt; V, I, S, or R (ohms / Celsius)</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="w">      </span><span class="nt">trace</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"v(in)"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"i(Vgpio)"</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># extra oscilloscope channels</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="w">      </span><span class="nt">trace_samples</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20000</span><span class="w">           </span><span class="c1"># ring depth (default 20000)</span>
 </span></code></pre></div>
 <p>Worked example: <a href="../examples/cosim-spice-rc/system-analog.yaml"><code>examples/cosim-spice-rc/system-analog.yaml</code></a>,
 the same circuit and the same routing as <code>system.yaml</code>.</p>
@@ -5875,13 +5932,13 @@ routed input: a <code>sources:</code> entry pointing at one is a config error ra
 a race between two owners. Give that element a plain <code>dc</code> value, or route the
 input at a different element.</p>
 <h3 id="semiconductor-models">Semiconductor models</h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>.model &lt;name&gt; D    (IS=&lt;a&gt; N=&lt;n&gt; ISR=&lt;a&gt; NR=&lt;n&gt; RS=&lt;ohms&gt; BV=&lt;v&gt; IBV=&lt;a&gt; NBV=&lt;n&gt;)
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>.model &lt;name&gt; NPN  (IS=&lt;a&gt; BF=&lt;n&gt; BR=&lt;n&gt; NF=&lt;n&gt; NR=&lt;n&gt; IKF=&lt;a&gt; IKR=&lt;a&gt; NKF=&lt;n&gt; RB=&lt;ohms&gt; RBM=&lt;ohms&gt; IRB=&lt;a&gt;)
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>.model &lt;name&gt; PNP  (...)
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>.model &lt;name&gt; NMOS (VTO=&lt;v&gt; KP=&lt;a/v2&gt; LAMBDA=&lt;1/v&gt; GAMMA=&lt;sqrt(v)&gt; PHI=&lt;v&gt; RD=&lt;ohms&gt; RS=&lt;ohms&gt; RSH=&lt;ohms/square&gt; CBD=&lt;f&gt; CBS=&lt;f&gt; CJ=&lt;f/m²&gt; CJSW=&lt;f/m&gt; PB=&lt;v&gt; MJ=&lt;ratio&gt; MJSW=&lt;ratio&gt; FC=&lt;ratio&gt; TOX=&lt;m&gt; W=&lt;m&gt; L=&lt;m&gt; [CHARGEMOD=MEYER|WARD_DUTTON])
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>.model &lt;name&gt; PMOS (...)      ; VTO is negative, as in ngspice
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>.model &lt;name&gt; NJF  (VTO=&lt;v&gt; BETA=&lt;a/v2&gt; LAMBDA=&lt;1/v&gt; RD=&lt;ohms&gt; RS=&lt;ohms&gt; IS=&lt;a&gt;)
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>.model &lt;name&gt; PJF  (...)
+<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>.model &lt;name&gt; D    (IS=&lt;a&gt; N=&lt;n&gt; ISR=&lt;a&gt; NR=&lt;n&gt; RS=&lt;ohms&gt; BV=&lt;v&gt; IBV=&lt;a&gt; NBV=&lt;n&gt;)
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>.model &lt;name&gt; NPN  (IS=&lt;a&gt; BF=&lt;n&gt; BR=&lt;n&gt; NF=&lt;n&gt; NR=&lt;n&gt; IKF=&lt;a&gt; IKR=&lt;a&gt; NKF=&lt;n&gt; RB=&lt;ohms&gt; RBM=&lt;ohms&gt; IRB=&lt;a&gt;)
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>.model &lt;name&gt; PNP  (...)
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>.model &lt;name&gt; NMOS (VTO=&lt;v&gt; KP=&lt;a/v2&gt; LAMBDA=&lt;1/v&gt; GAMMA=&lt;sqrt(v)&gt; PHI=&lt;v&gt; RD=&lt;ohms&gt; RS=&lt;ohms&gt; RSH=&lt;ohms/square&gt; CBD=&lt;f&gt; CBS=&lt;f&gt; CJ=&lt;f/m²&gt; CJSW=&lt;f/m&gt; PB=&lt;v&gt; MJ=&lt;ratio&gt; MJSW=&lt;ratio&gt; FC=&lt;ratio&gt; TOX=&lt;m&gt; W=&lt;m&gt; L=&lt;m&gt; [CHARGEMOD=MEYER|WARD_DUTTON])
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>.model &lt;name&gt; PMOS (...)      ; VTO is negative, as in ngspice
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>.model &lt;name&gt; NJF  (VTO=&lt;v&gt; BETA=&lt;a/v2&gt; LAMBDA=&lt;1/v&gt; RD=&lt;ohms&gt; RS=&lt;ohms&gt; IS=&lt;a&gt;)
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>.model &lt;name&gt; PJF  (...)
 </span></code></pre></div>
 <p>The parentheses are optional, parameters may be separated by spaces or commas,
 and a card may be written after the elements that use it. A parameter omitted
@@ -6058,9 +6115,9 @@ seconds at a 100 µs step), read by cursor like <code>logic_read_edges</code>:</
   beside the digital logic capture. <code>labwired test</code> attaches its co-simulation
   session's ring, so the file holds the waveform of the firmware-driven run:</li>
 </ul>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>labwired<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--firmware<span class="w"> </span>tests/fixtures/stm32f401-blinky.elf<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">    </span>--system<span class="w"> </span>examples/cosim-spice-rc/system-analog.yaml<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span>--max-steps<span class="w"> </span><span class="m">1500000</span><span class="w"> </span>--analog-trace<span class="w"> </span>rc.csv
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>labwired<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--firmware<span class="w"> </span>tests/fixtures/stm32f401-blinky.elf<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">    </span>--system<span class="w"> </span>examples/cosim-spice-rc/system-analog.yaml<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span>--max-steps<span class="w"> </span><span class="m">1500000</span><span class="w"> </span>--analog-trace<span class="w"> </span>rc.csv
 </span></code></pre></div>
 <p><code>labwired run</code> steps no co-simulation models, so there the file has channels
   only when something else attached a runner; <code>cosim-step</code> writes its own
@@ -6112,20 +6169,20 @@ paths described above.</p>
 <h3 id="adapter-ngspice-contract-browser-and-native"><code>adapter: ngspice</code> contract (browser and native)</h3>
 <p>One manifest entry runs on both hosts. Keys (shared with the app's
 <code>prepareBrowserNgspiceModels</code>):</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ldr</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ngspice</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./ldr.cir</span><span class="w">            </span><span class="c1"># netlist inside the manifest directory; .tran and .end, no .control/.include/.inc/.lib</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="nt">step_ns</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100000</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span><span class="nt">inputs</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> supply</span><span class="p">:</span><span class="w"> </span><span class="nv">board.gpio.pa5</span><span class="p p-Indicator">,</span><span class="nt"> lux</span><span class="p">:</span><span class="w"> </span><span class="nv">ui.ldr.lux</span><span class="w"> </span><span class="p p-Indicator">}</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span><span class="nt">outputs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> v_out</span><span class="p">:</span><span class="w"> </span><span class="nv">board.analog.pa0_volts</span><span class="w"> </span><span class="p p-Indicator">}</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span><span class="nt">input_sources</span><span class="p">:</span><span class="w">            </span><span class="c1"># one entry per input: volts = value * scale + offset</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">      </span><span class="nt">supply</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> element</span><span class="p">:</span><span class="w"> </span><span class="nv">Vsup</span><span class="p p-Indicator">,</span><span class="nt"> scale</span><span class="p">:</span><span class="w"> </span><span class="nv">3.3</span><span class="p p-Indicator">,</span><span class="nt"> offset</span><span class="p">:</span><span class="w"> </span><span class="nv">0</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">           </span><span class="c1"># board.gpio* = logic level</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">      </span><span class="nt">lux</span><span class="p">:</span><span class="w">    </span><span class="p p-Indicator">{</span><span class="nt"> element</span><span class="p">:</span><span class="w"> </span><span class="nv">Vlux</span><span class="p p-Indicator">,</span><span class="nt"> scale</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="nt"> offset</span><span class="p">:</span><span class="w"> </span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="nt"> default_value</span><span class="p">:</span><span class="w"> </span><span class="nv">100</span><span class="w"> </span><span class="p p-Indicator">}</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">    </span><span class="nt">output_nodes</span><span class="p">:</span><span class="w">             </span><span class="c1"># one entry per output and trace_volts name</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">      </span><span class="nt">v_out</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> node</span><span class="p">:</span><span class="w"> </span><span class="nv">out</span><span class="p p-Indicator">,</span><span class="nt"> scale</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="nt"> offset</span><span class="p">:</span><span class="w"> </span><span class="nv">0</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">                 </span><span class="c1"># threshold: makes it a logic level</span>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="w">    </span><span class="nt">trace_volts</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">    </span><span class="nt">input_sampling</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">current_boundary</span><span class="w">   </span><span class="c1"># optional; or previous_boundary</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ldr</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ngspice</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./ldr.cir</span><span class="w">            </span><span class="c1"># netlist inside the manifest directory; .tran and .end, no .control/.include/.inc/.lib</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span><span class="nt">step_ns</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100000</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span><span class="nt">inputs</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> supply</span><span class="p">:</span><span class="w"> </span><span class="nv">board.gpio.pa5</span><span class="p p-Indicator">,</span><span class="nt"> lux</span><span class="p">:</span><span class="w"> </span><span class="nv">ui.ldr.lux</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span><span class="nt">outputs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> v_out</span><span class="p">:</span><span class="w"> </span><span class="nv">board.analog.pa0_volts</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">    </span><span class="nt">input_sources</span><span class="p">:</span><span class="w">            </span><span class="c1"># one entry per input: volts = value * scale + offset</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">      </span><span class="nt">supply</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> element</span><span class="p">:</span><span class="w"> </span><span class="nv">Vsup</span><span class="p p-Indicator">,</span><span class="nt"> scale</span><span class="p">:</span><span class="w"> </span><span class="nv">3.3</span><span class="p p-Indicator">,</span><span class="nt"> offset</span><span class="p">:</span><span class="w"> </span><span class="nv">0</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">           </span><span class="c1"># board.gpio* = logic level</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">      </span><span class="nt">lux</span><span class="p">:</span><span class="w">    </span><span class="p p-Indicator">{</span><span class="nt"> element</span><span class="p">:</span><span class="w"> </span><span class="nv">Vlux</span><span class="p p-Indicator">,</span><span class="nt"> scale</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="nt"> offset</span><span class="p">:</span><span class="w"> </span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="nt"> default_value</span><span class="p">:</span><span class="w"> </span><span class="nv">100</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">    </span><span class="nt">output_nodes</span><span class="p">:</span><span class="w">             </span><span class="c1"># one entry per output and trace_volts name</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">      </span><span class="nt">v_out</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> node</span><span class="p">:</span><span class="w"> </span><span class="nv">out</span><span class="p p-Indicator">,</span><span class="nt"> scale</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="nt"> offset</span><span class="p">:</span><span class="w"> </span><span class="nv">0</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">                 </span><span class="c1"># threshold: makes it a logic level</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">    </span><span class="nt">trace_volts</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">    </span><span class="nt">input_sampling</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">current_boundary</span><span class="w">   </span><span class="c1"># optional; or previous_boundary</span>
 </span></code></pre></div>
 <p>Each boundary: every mapped source is altered (<code>alter &lt;element&gt; = &lt;volts&gt;</code>),
 the netlist's own <code>.tran</code> runs or resumes to exactly <code>time_ns</code>, the solver
