@@ -2317,10 +2317,21 @@ pub fn try_build(
                     }
                     Box::new(adc)
                 }
-                _ => {
-                    let layout: crate::peripherals::adc::AdcRegisterLayout =
-                        SystemBus::parse_profile_or_default(p_cfg, "ADC")?;
+                profile => {
+                    // WCH CH32V00x (ch32v00x.h ADC_TypeDef): the STM32F1
+                    // register file (STATR..RDATAR at the F1 offsets,
+                    // CTLR2.SWSTART bit 22) with a 10-bit SAR, so RDATAR full
+                    // scale is 1023.
+                    let wch_v00x = profile == Some("wch_v00x");
+                    let layout: crate::peripherals::adc::AdcRegisterLayout = if wch_v00x {
+                        crate::peripherals::adc::AdcRegisterLayout::Stm32F1
+                    } else {
+                        SystemBus::parse_profile_or_default(p_cfg, "ADC")?
+                    };
                     let mut adc = crate::peripherals::adc::Adc::new_with_layout(layout);
+                    if wch_v00x {
+                        adc.set_f1_resolution_bits(10);
+                    }
                     // Board-level static channel voltages: `input_mv: { <ch>: <mV> }`.
                     if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
                         for (k, v) in map {

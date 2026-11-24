@@ -50,6 +50,16 @@ pins:
   PD5: { gpio: "gpiod", bit: 5 }
   PD6: { gpio: "gpiod", bit: 6 }
 
+# ADC pads (ch32v00x.h ADC_Channel): the variant's analog-capable pins.
+# `set_analog_pad_mv` and cosim `analog_pins:` routes drive these channels.
+analog_pins:
+  PA2: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }
+  PC4: { peripheral: "adc1", channel: 2 }
+  PD5: { peripheral: "adc1", channel: 5 }
+  PD6: { peripheral: "adc1", channel: 6 }
+  PD4: { peripheral: "adc1", channel: 7 }
+
 peripherals:
   - id: "rcc"
     type: "rcc"
@@ -118,6 +128,23 @@ peripherals:
     config:
       profile: "wch_v00x"
       lines: 10
+
+  # ADC1 (ch32v00x.h): ADC1_BASE = APB2PERIPH_BASE + 0x2400, RCC_ADC1EN =
+  # APB2PCENR bit 9. ADC_TypeDef is STATR, CTLR1, CTLR2, SAMPTR1/2, IOFR1-4,
+  # WDHTR, WDLTR, RSQR1-3, ISQR, IDATAR1-4, RDATAR at the STM32F1 offsets
+  # (CTLR2.ADON bit 0, SWSTART bit 22, STATR.EOC bit 1), plus DLYR at 0x50,
+  # which is not modelled. The SAR is 10 bits (variant ADC_RESOLUTION 10),
+  # profile `wch_v00x`. Pads: PA2 IN0, PA1 IN1, PC4 IN2, PD2 IN3, PD3 IN4,
+  # PD5 IN5, PD6 IN6, PD4 IN7. The internal IN8 (Vrefint) and IN9 (Vcal)
+  # sources are not modelled. ADC_IRQn = 29.
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012400
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 9 }
+    irq: 29
+    config:
+      profile: "wch_v00x"
 
   # QingKe V2 system timer STK (core_riscv.h): SysTick_Type at 0xE000F000 is
   # CTLR, SR, CNT, reserved, CMP. The vendor noneos-sdk `Delay_Us`/`Delay_Ms`

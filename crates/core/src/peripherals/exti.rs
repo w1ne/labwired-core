@@ -525,8 +525,9 @@ impl Exti {
                 push_line_irqs(active, &e.line_irqs, &mut irqs);
             }
             Self::WchV00x(e) => {
-                // Lines 8 (PVD) and 9 (AWU) route to their own vectors only
-                // when the descriptor names them in `line_irqs:`.
+                // Lines 8 (PVD) and 9 (AWU) stay register-level: their
+                // vectors (PVD_IRQn 17, AWU_IRQn 21) are not wired, and
+                // `line_irqs:` accepts only lines 16+.
                 let active = e.bank1.pr & e.bank1.imr;
                 for (mask, irq) in WCH_V00X_GPIO_GROUPS {
                     if active & mask != 0 {
