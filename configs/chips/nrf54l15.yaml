@@ -158,6 +158,9 @@ peripherals:
     size: "4KB"
     irq: 133
     config:
+      # TIMER10 is clocked from HFXO (32 MHz), not the 128 MHz core; see
+      # nrf54l15_application_peripherals.h `TIMER10_PCLK_MHZ 32`.
+      peripheral_hz: 32000000
       debug_schema: "../peripherals/nrf54l15/global_timer10_s.yaml"
       num_cc: 8
   - id: "timer20"
@@ -166,6 +169,8 @@ peripherals:
     size: "4KB"
     irq: 202
     config:
+      # TIMER2x is clocked from PCLK16M, not the 128 MHz core.
+      peripheral_hz: 16000000
       debug_schema: "../peripherals/nrf54l15/global_timer20_s.yaml"
       num_cc: 6
   - id: "timer21"
@@ -174,6 +179,7 @@ peripherals:
     size: "4KB"
     irq: 203
     config:
+      peripheral_hz: 16000000
       debug_schema: "../peripherals/nrf54l15/global_timer21_s.yaml"
       num_cc: 6
   - id: "timer22"
@@ -182,6 +188,7 @@ peripherals:
     size: "4KB"
     irq: 204
     config:
+      peripheral_hz: 16000000
       debug_schema: "../peripherals/nrf54l15/global_timer22_s.yaml"
       num_cc: 6
 

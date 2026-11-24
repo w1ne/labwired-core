@@ -43,6 +43,23 @@ OK
 The runnable assertion scripts are `io-smoke.yaml` (UART plus four LD2 GPIO
 edges) and `uart-smoke.yaml` (UART output).
 
+## Mixed-signal inputs
+
+[`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) wires two generic
+netlists to the board: a Beta-parameter NTC divider on PA0 and a Shockley diode
+load line on PA1. Neither deck names the board or a channel; the descriptor's
+`analog_pins:` map selects ADC1 channels 0 and 1. The same two decks run
+unchanged on the NUCLEO-F767ZI.
+
+```sh
+cargo test -p labwired-core --test analog cosim_nucleo_f103rb_analog
+```
+
+The test compares each solved node against an independent closed form (1e-9 V
+for the divider, 2e-5 V for the diode), then converts the same pads through the
+firmware-visible ADC1 registers and asserts the reported codes, including the
+undriven neighbouring channel.
+
 ## Source and validation boundary
 
 The board wiring follows ST UM1724 and the chip geometry follows ST DS5319.

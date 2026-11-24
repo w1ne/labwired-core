@@ -67,6 +67,25 @@ peripherals:
     config:
       peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
       debug_schema: "../peripherals/nrf52832/timer0.yaml"
+  # nRF52832 has three 32-bit TIMER instances (PS §6.30); only TIMER0 was
+  # declared, so firmware using TIMER1 or TIMER2 bus-faulted at its block base.
+  # Each has 4 capture/compare channels.
+  - id: "timer1"
+    type: "nrf52840_timer"
+    base_address: 0x40009000
+    size: "4KB"
+    irq: 9
+    config:
+      peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
+      debug_schema: "../peripherals/nrf52832/timer1.yaml"
+  - id: "timer2"
+    type: "nrf52840_timer"
+    base_address: 0x4000a000
+    size: "4KB"
+    irq: 10
+    config:
+      peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
+      debug_schema: "../peripherals/nrf52832/timer2.yaml"
   # SPIM0/TWIM0 share 0x40003000 — Zephyr arduino_i2c / i2c0 (and TWIM overlay).
   - id: "i2c0"
     type: "nrf52840_serial"

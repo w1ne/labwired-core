@@ -52,6 +52,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: ${{ !cancelled() }}
         with:
+          retention-days: 7
           name: samd-selected-irq-preprocessing
           path: ${{ runner.temp }}/irq-probe-result/result.json
           if-no-files-found: warn

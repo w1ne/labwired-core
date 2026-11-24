@@ -247,6 +247,8 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("nrf52832/saadc.yaml", packed!("nrf52832/saadc.yaml")),
     ("nrf52832/spi2.yaml", packed!("nrf52832/spi2.yaml")),
     ("nrf52832/timer0.yaml", packed!("nrf52832/timer0.yaml")),
+    ("nrf52832/timer1.yaml", packed!("nrf52832/timer1.yaml")),
+    ("nrf52832/timer2.yaml", packed!("nrf52832/timer2.yaml")),
     ("nrf52832/twi1.yaml", packed!("nrf52832/twi1.yaml")),
     ("nrf52832/twim0.yaml", packed!("nrf52832/twim0.yaml")),
     ("nrf52832/uart0.yaml", packed!("nrf52832/uart0.yaml")),

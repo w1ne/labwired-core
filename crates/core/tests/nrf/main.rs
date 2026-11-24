@@ -38,3 +38,5 @@ mod nrf54l15_smart_ring_probe;
 mod nrf54l_gpio_offsets;
 mod nrf54lm20a_peripheral_estate;
 mod nrf_gpio_in_step_vs_run;
+mod nrf_rtc_lfclk_clock;
+mod nrf_timer_base_clock;
