@@ -169,7 +169,7 @@ fn manifest_json_matches_registry() {
     if committed != expected {
         // Show a short diff hint so the developer knows what to do.
         panic!(
-            "peripherals-manifest.json is stale.\n\
+            "peripherals manifest.json is stale.\n\
              Re-run: cargo run -p labwired-cli --bin gen-peripherals-manifest -- \\\n        --out {}\n\
              (Committed bytes: {}, expected: {}.)",
             manifest_path.display(),
