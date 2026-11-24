@@ -1367,15 +1367,41 @@ impl FlexTestResult {
 /// fuel budget and `config.firmware_sha256` is set here.
 pub fn run_script(
     script: &FlexTestScript,
-    mut config: FlexResultConfig,
+    config: FlexResultConfig,
     manifest: &str,
     firmware: &[u8],
 ) -> FlexScriptRun {
+    run_script_with_factory(
+        script,
+        config,
+        manifest,
+        firmware,
+        crate::cosim::build_cosim_adapter,
+    )
+}
+
+/// [`run_script`] with the manifest's models built by `factory`, as
+/// [`FlexRuntime::from_yaml_with_factory`] builds them: the browser passes its
+/// ngspice callback here. A model that fails to build is a configuration
+/// error; a model that fails at a boundary is a model error, as with the
+/// default factory.
+pub fn run_script_with_factory<F>(
+    script: &FlexTestScript,
+    mut config: FlexResultConfig,
+    manifest: &str,
+    firmware: &[u8],
+    factory: F,
+) -> FlexScriptRun
+where
+    F: FnMut(
+        &labwired_config::CosimModelConfig,
+    ) -> crate::SimResult<Box<dyn crate::cosim::CosimAdapter>>,
+{
     config.firmware_sha256 = Some(format!("{:x}", Sha256::digest(firmware)));
     let max_steps = config.limits.max_steps;
     // Load everything before running anything; each failure here is a
     // configuration error with its own message.
-    let loaded = FlexRuntime::from_yaml(manifest)
+    let loaded = FlexRuntime::from_yaml_with_factory(manifest, factory)
         .map_err(|error| format!("failed to load Flex manifest {:?}: {error}", config.flex))
         .and_then(|mut runtime| {
             let tallies = validate_assertion_ports(&mut runtime, script)?;

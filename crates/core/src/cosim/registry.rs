@@ -61,9 +61,9 @@ pub fn build_cosim_adapter_with_base(
                 })?;
             Ok(Box::new(adapter))
         }
-        ManifestCosimAdapter::Ngspice => Err(SimulationError::NotImplemented(
-            "co-sim adapter ngspice needs a host-provided solver".to_string(),
-        )),
+        // The browser supplies its own solver callback (labwired-wasm); this
+        // factory is the native host.
+        ManifestCosimAdapter::Ngspice => super::ngspice::build_native_adapter(config, base_dir),
         ManifestCosimAdapter::Fmi => Err(SimulationError::NotImplemented(
             "co-sim adapter 'fmi' is declared but FMI import is not wired yet".to_string(),
         )),
@@ -314,12 +314,23 @@ impl CosimRunner {
         configs: &[CosimModelConfig],
         base_dir: &Path,
     ) -> SimResult<Self> {
+        Self::from_configs_with_factory(configs, |config| {
+            build_cosim_adapter_with_base(config, base_dir)
+        })
+    }
+
+    /// Build a runner using adapters supplied by the host (the browser's
+    /// ngspice callback), with the same scheduling as [`Self::from_configs`].
+    pub fn from_configs_with_factory<F>(
+        configs: &[CosimModelConfig],
+        mut factory: F,
+    ) -> SimResult<Self>
+    where
+        F: FnMut(&CosimModelConfig) -> SimResult<Box<dyn CosimAdapter>>,
+    {
         let mut models = Vec::new();
         for config in configs {
-            models.push(CosimRunnerModel::new(
-                config.clone(),
-                build_cosim_adapter_with_base(config, base_dir)?,
-            ));
+            models.push(CosimRunnerModel::new(config.clone(), factory(config)?));
         }
         Ok(Self::new(models))
     }

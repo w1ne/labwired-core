@@ -358,18 +358,39 @@ fn model_device_type(model: &CosimModelConfig) -> Option<&str> {
 
 impl FlexRuntime {
     pub fn from_yaml(yaml: &str) -> SimResult<Self> {
+        Self::from_yaml_with_base(yaml, std::path::Path::new("."))
+    }
+
+    /// [`Self::from_yaml`] with each relative `model:` resolved from
+    /// `base_dir`, the manifest's directory.
+    pub fn from_yaml_with_base(yaml: &str, base_dir: &std::path::Path) -> SimResult<Self> {
+        Self::from_yaml_with_factory(yaml, |config| {
+            crate::cosim::build_cosim_adapter_with_base(config, base_dir)
+        })
+    }
+
+    /// [`Self::from_yaml`] with adapters supplied by the host, as
+    /// `CosimSession::new_with_factory` does for a machine: the browser
+    /// passes its ngspice callback here. Part-pack models are still built from
+    /// their pack. Priming, scheduling and checks are unchanged.
+    pub fn from_yaml_with_factory<F>(yaml: &str, mut factory: F) -> SimResult<Self>
+    where
+        F: FnMut(
+            &labwired_config::CosimModelConfig,
+        ) -> SimResult<Box<dyn crate::cosim::CosimAdapter>>,
+    {
         let manifest =
             FlexManifest::from_yaml(yaml).map_err(|err| error(format!("Flex model: {err:#}")))?;
         crate::flex_parts::validate(&manifest.parts)?;
         // A model whose `config.device_type` names a part pack is built from
-        // the pack; every other model is built as the detailed path builds it.
+        // the pack; every other model is built by the host-supplied factory.
         let mut models = Vec::with_capacity(manifest.cosim_models.len());
         for config in &manifest.cosim_models {
             let pack = model_device_type(config)
                 .and_then(|device_type| crate::flex_parts::pack(&manifest.parts, device_type));
             let adapter = match pack {
                 Some(pack) => crate::cosim::build_part_adapter(config, pack)?,
-                None => crate::cosim::build_cosim_adapter(config)?,
+                None => factory(config)?,
             };
             models.push(crate::cosim::CosimRunnerModel::new(config.clone(), adapter));
         }

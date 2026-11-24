@@ -6,10 +6,12 @@ models and stepped through an adapter.
 
 **Browser circuit workflow:** The [online circuit simulator](https://labwired.com/circuit-simulator/)
 explains how supported MCU firmware interacts with R/L/C networks, independent
-sources, and switches. The browser analog adapter does not currently simulate
-nonlinear diodes/transistors, import SPICE device libraries, or perform AC/DC
-sweeps. For vendor SPICE models, use the native ngspice adapter described below.
-A passing model test does not certify the physical board.
+sources, and switches. The built-in `adapter: analog` is a limited deterministic
+subset: it does not import vendor SPICE device libraries or perform AC/DC
+sweeps. For nonlinear or vendor transient models, use `adapter: ngspice`, which
+has native and browser callback hosts described below. The browser host requires
+the caller to provide the netlist and ngspice-WASM callback. A passing model test
+does not certify the physical board.
 
 The first supported manifest shape is:
 
@@ -369,10 +371,13 @@ directly, without firmware, for probing a manifest.
 
 ## In-core analog engine (`adapter: analog`)
 
-The browser cannot spawn a process, so `external_process` — and with it
-ngspice — has no counterpart there. `labwired_core::analog` is a small
-deterministic MNA transient solver compiled into the engine itself: it runs in
-the browser, runs natively, and adds one dependency (`libm`) to either.
+The browser cannot spawn a process, so `external_process` has no browser
+counterpart. The separate `adapter: ngspice` uses an external-process host
+natively and a caller-owned ngspice-WASM callback in the browser. The existing
+`labwired_core::analog` adapter is a small deterministic MNA transient subset
+compiled into the engine; it runs in the browser and natively. Keep it for
+existing manifests until ngspice replacement coverage is verified; it is not a
+replacement for ngspice or a second host for vendor SPICE models.
 
 A manifest switches engines by changing one line. The `netlist`, `vdd`,
 `probes` and `sources` config keys are spelled exactly as the ngspice wrapper
@@ -706,9 +711,11 @@ device libraries, other MOSFET or JFET levels, other JFET `B` values, and AC/DC 
 the in-core engine. Unsupported netlist constructs fail validation with guidance
 to use the native ngspice adapter.
 
-Use `adapter: external_process` with `tools/cosim/labwired_ngspice.py` for
-circuits needing those capabilities. The browser runs `adapter: analog` with
-an inline `netlist_text`; it cannot run the external-process adapter.
+Use `adapter: ngspice` (below) or `adapter: external_process` with
+`tools/cosim/labwired_ngspice.py` for circuits needing those capabilities. The
+browser runs `adapter: analog` with an inline `netlist_text`, and
+`adapter: ngspice` through a host callback; it cannot run the
+external-process adapter.
 
 ### Browser-hosted ngspice callback
 
@@ -735,5 +742,207 @@ a session containing ngspice, any routing failure stops the entire session,
 including failures from other models, so the firmware cannot continue against a
 partially disconnected circuit. The older `pwm.duty:`, `adc.input_mv:`,
 `gpio.pad:`, and `gpio.input:` route forms are not supported and are rejected; use the board signal
-paths described above. Native execution of `adapter: ngspice` still requires a
-host integration and is refused explicitly by the core factory.
+paths described above.
+
+### `adapter: ngspice` contract (browser and native)
+
+One manifest entry runs on both hosts. Keys (shared with the app's
+`prepareBrowserNgspiceModels`):
+
+```yaml
+- id: ldr
+  adapter: ngspice
+  model: ./ldr.cir            # netlist inside the manifest directory; .tran and .end, no .control/.include/.inc/.lib
+  step_ns: 100000
+  inputs:  { supply: board.gpio.pa5, lux: ui.ldr.lux }
+  outputs: { v_out: board.analog.pa0_volts }
+  config:
+    input_sources:            # one entry per input: volts = value * scale + offset
+      supply: { element: Vsup, scale: 3.3, offset: 0 }           # board.gpio* = logic level
+      lux:    { element: Vlux, scale: 1, offset: 0, default_value: 100 }
+    output_nodes:             # one entry per output and trace_volts name
+      v_out:  { node: out, scale: 1, offset: 0 }                 # threshold: makes it a logic level
+    trace_volts: []
+    input_sampling: current_boundary   # optional; or previous_boundary
+```
+
+Each boundary: every mapped source is altered (`alter <element> = <volts>`),
+the netlist's own `.tran` runs or resumes to exactly `time_ns`, the solver
+time is checked (32 ulp), and each node is read as `raw * scale + offset`
+(`>= threshold` for a logic output). An absent input uses `default_value`, or
+0 / false. Time must increase strictly.
+
+`config.input_sampling` selects which inputs integrate the interval that ends
+at `time_ns`. `current_boundary` (the default) holds the inputs routed at this
+boundary over the whole interval. `previous_boundary` holds the inputs latched
+at the previous boundary, as the analog adapter's mode of the same name does:
+an input written in the middle of an interval reaches the circuit at the next
+boundary, never before the write. Use it for Flex firmware tests. It needs the
+`(time_ns = 0, dt_ns = 0)` initialization step first; Flex sends that step. A
+machine co-simulation session (`CosimSession`, native or `WasmSimulator`) does
+not send it, so it refuses `previous_boundary` before any adapter starts, and
+`labwired validate` reports it for a machine manifest. The
+latch is in `labwired_core::cosim::ngspice::NgspiceInputLatch`, in front of
+both hosts, so the browser callback and the native host receive the same
+frames.
+
+**Native host.** The core factory validates the entry
+(`labwired_core::cosim::ngspice::NgspiceModelSpec`; `labwired validate`
+reports the same issues), then starts the libngspice host from
+`tools/cosim/labwired_ngspice.py` (embedded in `labwired-core`, run as
+`python3 -I -c ... --bridge-spec <json>`) over the `external_process` JSONL
+transport: one process per model, a 20 s bound per exchange, and the process
+group is killed on failure. A host failure is one `{"error": "..."}` frame;
+the transport reports it and the adapter is terminally failed. Requirements:
+`python3` and libngspice on the host (`apt install libngspice0`, or
+`LABWIRED_NGSPICE_LIB`); set `LABWIRED_NGSPICE_LOG=1` to see ngspice's own
+output. The native host places a solver breakpoint (`ngSpice_SetBkpt`) at
+each boundary: on ngspice-42, `stop when time = t` alone stepped past a
+200 us boundary to the `.tran` end time.
+
+Confinement of the native host:
+
+- `model:` must be a relative path that resolves inside the manifest
+  directory (the Flex file's or the system manifest's directory;
+  `FlexRuntime::from_yaml_with_base` takes it explicitly). An absolute path, a
+  `..` path that leaves the directory, and a symlink to a file outside it are
+  refused before any process starts.
+- The netlist may not contain `.control` / `.endc` (a control block can run
+  `shell` commands) or `.include`, `.inc` or `.lib` (an included file is not
+  checked and could carry a control block or read any file). The check is
+  case-insensitive, after leading whitespace. Put device models in the
+  netlist itself. The browser host has no host file system to include from.
+- Core sends the validated netlist text in the `--bridge-spec` JSON
+  (`"netlist"`); the host does not read the path again, repeats the directive
+  check, and does not change its working directory.
+- Python runs isolated (`-I`): the working directory, `PYTHONPATH` and the
+  user site directory add no module to the host, so a `json.py` or `ctypes/`
+  beside the manifest cannot replace the standard library.
+
+A standalone Python caller of `BridgeCircuit` may pass `"netlist_path"`
+instead of `"netlist"`; the same directive check applies.
+
+Native differences from the browser runtime, both deliberate: routes are not
+limited to `board.*` / `ui.*` paths (a CPU-free Flex manifest uses flat
+signal names), and `threshold` is accepted on any output (it stays required
+for `board.gpio_in`). The runner's `(time_ns = 0, dt_ns = 0)` initialization
+step (Flex primes its outputs with it) is answered natively by starting the
+netlist's own `.tran` with the initial inputs and reporting its first stored
+point, so the next boundary continues from the reported state. Without `uic`
+that point is the t = 0 operating point; with `uic` ngspice stores no t = 0
+point and the first point is its first internal step (10 ns for `.tran 1u`),
+which must fall before the first boundary or the step fails. A separate DC
+`op` is not used: under `uic` it reported 3.3 V for an RC whose transient
+starts at 0 V. The browser's history/sample budgets are
+browser memory guards and are not applied natively.
+
+**Flex in the browser.** `WasmFlexRuntime::new_from_yaml_with_ngspice_callback`
+builds Flex models through the same browser adapter factory as
+`WasmSimulator` (`WasmFlexRuntime::new_from_yaml` refuses `adapter: ngspice`
+because it has no callback). Its first exchange is the `(0, 0)` priming step.
+The app exchange of `w1ne/labwired#3897` (head `1ba5b33f6`, merged to the
+app's main branch as `590744b4d2` on 2026-11-21) answers that step:
+`prepareBrowserFlexNgspiceModels` prepares the Flex models, and `createBrowserNgspiceExchange` stops the netlist's own
+`.tran` early in the first interval and reports its first stored point, as the
+native host does. The app exchange at `325616353` rejects the priming step
+(`received an invalid simulation time`).
+
+**Flex test scripts with ngspice.** A `labwired test` Flex script runs on the
+same runner on both hosts. `labwired_core::flex_script::run_script` keeps the
+default native factory; `run_script_with_factory` takes the factory that
+`FlexRuntime::from_yaml_with_factory` takes. In the browser,
+`WasmFlexTestRun::run_with_ngspice_callback(script_name, script_yaml,
+manifest_yaml, firmware, callback)` runs the script with the browser adapter
+factory, so `adapter: ngspice` models exchange each boundary with `callback`.
+`WasmFlexTestRun::run` takes no callback and uses the same browser factory, so
+it refuses an `adapter: ngspice` model with `co-sim model <id> needs an ngspice
+callback` (`config_error`), as `WasmFlexRuntime::new_from_yaml` does; it never
+falls through to the native host. Failures stay in the result, never a
+fabricated pass:
+
+- a model that fails while the models are built (for example, the solver
+  refuses a source element) gives `stop_reason: config_error` with no
+  firmware step;
+- a callback that throws, returns text that is not JSON, or omits a declared
+  output at a boundary gives `status: error`, `stop_reason: model_error` and
+  the adapter's message;
+- a `callback` that is not a function is an error of the call itself.
+
+Each ngspice boundary is synchronized with the firmware as for any Flex
+model: the firmware's `advance_ns` runs the models to each boundary in order.
+With `input_sampling: previous_boundary`, a port the firmware writes reaches
+the circuit at the next boundary.
+
+The worked fixture is `crates/wasm/tests/fixtures/flex-mixed-signal`:
+`system-ngspice.yaml` is `system.yaml` with the RC solved by ngspice
+(`rc.cir`, 10 kΩ / 100 nF, `.tran 1u 10m 0 1u uic`), driven by the same
+`control` behavior rule block. `ngspice-enable.yaml` (firmware mode 0) and
+`ngspice-disabled.yaml` (mode 1, the wrong command) run the committed
+`firmware.wasm`. `labwired test --script` resolves a relative `model:` from the
+directory of the Flex manifest (`inputs.flex`), so `model: ./rc.cir` works from
+any working directory. `FlexRuntime::from_yaml` has no base directory and
+resolves it from the process working directory, so the core test substitutes an
+absolute path. The browser host receives the netlist text under the name
+`./rc.cir`. The scripts are not named
+`test-*.yaml`, because the CLI matrix and
+the browser script receipt run every `test-*.yaml` without a solver host. The
+in-core analog fixture and its scripts are unchanged; ngspice is opt-in per
+model and does not replace `adapter: analog`.
+
+Expected response: the drive written at 1 µs is latched at the 25 µs boundary,
+so v(t) = 3.3 V · (1 − e^−(t − 25 µs)/1 ms). It crosses the firmware threshold
+(0.632 · 3.3 V = 2.0856 V) at 1024.67 µs, so the firmware returns 1025 at the
+1025 µs sample. The in-core backward-Euler engine on `system.yaml` lags this
+curve and returns 1050 (`test-enable.yaml`). Native measurement on 2026-11-23
+(libngspice 42): `entry_result` 1025, 2.055265 V at 1000 µs and 2.085998 V at
+1025 µs (analytic 2.055265 V and 2.085998 V), worst deviation 1.86e-7 V over 42
+scope samples (tolerance 1e-5 V; the scope stores `f32`). Mode 1 keeps every
+sample at exactly 0 V and returns 0 at 4 ms. Native tests:
+`LABWIRED_REQUIRE_NGSPICE=1 cargo test -p labwired-core --features flex-script
+--test cosim cosim_ngspice::` (14 pass), and
+`LABWIRED_REQUIRE_NGSPICE=1 cargo test -p labwired-cli --test cosim_pin_routing`
+(9 pass), which runs `labwired test --script` on `ngspice-enable.yaml`
+(`entry_result` 1025) and `ngspice-disabled.yaml` (`entry_result` 0) from a
+working directory outside the fixture.
+
+**Browser execution check.** `scripts/test_browser_ngspice.mjs` runs both
+browser constructors and `WasmFlexTestRun::run_with_ngspice_callback` in
+headless Chrome with the web build of this crate, a real ngspice WASM build and
+the host's exchange module (all named by environment variables; a missing one
+is an error, not a skip). The Flex test cases prepare their models with the
+host's `prepareBrowserFlexNgspiceModels`; no case mocks the solver. Measured on
+2026-11-23 (Chrome 156.0.8078.79, ngspice-47 WASM, app exchange bundled from
+`w1ne/labwired#3897` head `1ba5b33f6`, merged as `590744b4d2`), 11 of 11 cases
+pass:
+
+- machine: the F401 firmware-driven LDR settles to 0.548914 V (100 lx) and
+  2.751073 V (1 lx); a missing source element stops the run;
+  `take_runtime_snapshot` is refused;
+- Flex runtime (models from `prepareBrowserFlexNgspiceModels(flexYaml,
+  { './ldr.cir': netlist })`): the LDR divider gives 0.548914 V bright and
+  2.751073 V dark;
+- Flex test, mode 0: `status: pass`, `entry_result` 1025, 2.055265 V at
+  1000 µs and 2.085998 V at 1025 µs, worst deviation from the analytic curve
+  1.86e-7 V over 42 samples (tolerance 1e-5 V), the same values as native;
+- Flex test, mode 1: `status: pass`, `entry_result` 0, every one of 161
+  samples at 0 V;
+- a callback that throws, omits `v_out`, or returns text that is not JSON at
+  the 39th boundary: `model_error` at 950 µs with the adapter's message; a
+  callback that is not a function is refused; `WasmFlexTestRun::run` without a
+  callback gives `config_error` with `co-sim model rc needs an ngspice
+  callback`.
+
+The app has no production Flex caller of these helpers yet; this check
+exercises the helpers directly.
+
+**Not supported on either host:** snapshot/restore of solver state. It is
+refused, not approximated, through
+`labwired_core::cosim::ngspice::runtime_snapshot_refusal`: the browser's
+`take_runtime_snapshot` / `apply_runtime_snapshot` return the reason, and
+native `labwired test --capture-app-entry` / `--resume-snapshot` with an
+ngspice model exit with the config error before any solver starts. Browser
+Flex (`WasmFlexRuntime`, `WasmFlexTestRun`) has no snapshot API at all, so a
+Flex run with ngspice cannot be saved or resumed; it runs from t = 0 each time. Multi-node
+worlds and `transport: shm` are not supported either. Worked example and tests:
+[`examples/cosim-ngspice-ldr`](../examples/cosim-ngspice-ldr/README.md),
+`cargo test -p labwired-core --test cosim cosim_ngspice::`.

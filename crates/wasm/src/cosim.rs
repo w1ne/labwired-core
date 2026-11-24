@@ -20,7 +20,6 @@ use crate::WasmSimulator;
 use labwired_config::{CosimAdapter, CosimModelConfig, SystemManifest};
 use labwired_core::cosim::{CosimAdvanceError, CosimSession};
 use labwired_core::{AdvanceReport, AdvanceRequest, SimulationError};
-use std::path::Path;
 use wasm_bindgen::prelude::*;
 
 /// Why a browser build refuses `adapter: external_process`.
@@ -142,8 +141,7 @@ impl WasmSimulator {
     pub(crate) fn runtime_snapshot_refusal(&self) -> Option<&'static str> {
         self.cosim
             .as_ref()
-            .filter(|session| session.has_ngspice())
-            .map(|_| "runtime snapshots cannot capture or restore externally hosted ngspice state")
+            .and_then(|session| session.runtime_snapshot_refusal())
     }
     /// Set a co-simulation signal from outside the engine: a canvas touch pad
     /// sends `('ui.<partId>.pressed', 1)` on press and `0` on release.
@@ -205,17 +203,7 @@ impl WasmSimulator {
         // No base directory: the checks above leave no model that reads a path.
         let Some(session) =
             CosimSession::new_with_factory(&manifest.cosim_models, &machine.bus, |config| {
-                if config.adapter == CosimAdapter::Ngspice {
-                    let callback = callback.ok_or_else(|| {
-                        SimulationError::Other(format!(
-                            "co-sim model {} needs an ngspice callback",
-                            config.id
-                        ))
-                    })?;
-                    Ok(crate::ngspice::adapter(config, callback))
-                } else {
-                    labwired_core::cosim::build_cosim_adapter_with_base(config, Path::new("."))
-                }
+                crate::ngspice::browser_adapter(config, callback)
             })
             .map_err(|e| format!("co-sim: failed to start the declared models: {e}"))?
         else {

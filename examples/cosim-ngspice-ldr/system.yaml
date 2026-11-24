@@ -1,0 +1,28 @@
+# Firmware-driven LDR divider on a NUCLEO-F401RE: the committed Arduino blink
+# image drives LD2 (PA5), which supplies the divider; the light level comes
+# from the co-simulation signal `ui.ldr.lux` (a canvas slider in the browser,
+# a `cosim_signal` stimulus in `labwired test`). ngspice solves the circuit
+# every 100 us and the node voltage reaches PA0 (ADC1 channel 0).
+#
+# Native: `adapter: ngspice` starts the libngspice host embedded in
+# labwired-core (python3 + libngspice0). Browser: the same manifest runs
+# through `WasmSimulator::new_from_config_with_ngspice_callback`.
+name: "cosim-ngspice-ldr"
+chip: "../../configs/chips/stm32f401.yaml"
+cosim_models:
+  - id: "ldr"
+    adapter: "ngspice"
+    model: "./ldr.cir"
+    step_ns: 100000
+    inputs:
+      supply: "board.gpio.pa5"
+      lux: "ui.ldr.lux"
+    outputs:
+      v_out: "board.analog.pa0_volts"
+    config:
+      input_sources:
+        supply: { element: "Vsup", scale: 3.3, offset: 0 }
+        lux: { element: "Vlux", scale: 1, offset: 0, default_value: 100 }
+      output_nodes:
+        v_out: { node: "out", scale: 1, offset: 0 }
+external_devices: []

@@ -360,6 +360,16 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     // can never run PAST a boundary and then hand a model pin levels from its
     // future. Everything is synchronous — no threads, no wall clock — so the
     // same firmware produces the same model inputs on every run.
+    // A machine snapshot cannot carry an external solver's state: refuse the
+    // capture or resume before any model process starts.
+    if let Some(reason) = ctx.system.and_then(|system| {
+        labwired_core::cosim::ngspice::runtime_snapshot_refusal(&system.manifest.cosim_models)
+    }) {
+        if ctx.args.capture_app_entry.is_some() || ctx.args.resume_snapshot.is_some() {
+            error!("co-sim: --capture-app-entry / --resume-snapshot refused: {reason}");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    }
     let mut cosim = match ctx.system {
         Some(system) => {
             match labwired_core::cosim::CosimSession::new(

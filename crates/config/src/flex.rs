@@ -297,13 +297,18 @@ impl FlexManifest {
                 model.id
             );
             ensure!(
-                matches!(model.adapter, CosimAdapter::Analog | CosimAdapter::Behavior),
+                matches!(
+                    model.adapter,
+                    CosimAdapter::Analog | CosimAdapter::Behavior | CosimAdapter::Ngspice
+                ),
                 "model '{}' adapter {:?} is unsupported in CPU-free Flex",
                 model.id,
                 model.adapter
             );
+            // An ngspice model's `model` is its netlist file; the adapter
+            // factory validates its `input_sources` / `output_nodes`.
             ensure!(
-                model.model.is_none(),
+                model.model.is_none() || model.adapter == CosimAdapter::Ngspice,
                 "model '{}' must not declare an external model path",
                 model.id
             );

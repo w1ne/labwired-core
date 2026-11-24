@@ -2298,6 +2298,29 @@ fn flex_script_binding_reports_bad_scripts_and_limits_without_a_pass() {
     assert_eq!(result["time_ns"], 299_996_000_u64);
 }
 
+#[test]
+fn flex_script_binding_refuses_ngspice_without_a_callback() {
+    // `WasmFlexTestRun::run` has no solver callback: an `adapter: ngspice`
+    // model is a configuration error, as in `WasmFlexRuntime::new_from_yaml`,
+    // and never reaches the native factory or a netlist path.
+    let run = crate::flex::run_test_script(
+        "ngspice-enable.yaml",
+        include_str!("../tests/fixtures/flex-mixed-signal/ngspice-enable.yaml"),
+        include_str!("../tests/fixtures/flex-mixed-signal/system-ngspice.yaml"),
+        include_bytes!("../tests/fixtures/flex-mixed-signal/firmware.wasm"),
+    )
+    .unwrap();
+    let result = serde_json::to_value(&run.result).unwrap();
+    assert_eq!(result["status"], "error", "{result:#}");
+    assert_eq!(result["stop_reason"], "config_error");
+    let message = result["message"].as_str().unwrap();
+    assert!(
+        message.contains("co-sim model rc needs an ngspice callback"),
+        "{message}"
+    );
+    assert!(run.runtime.is_none());
+}
+
 /// One pinned-source contract for every heypcb sensor fixture. Each board is a
 /// row: the common checks (same pinned repository revision and LICENSE blob as
 /// the LDR fixture, the board's own asset path and five pinned file blobs, a
