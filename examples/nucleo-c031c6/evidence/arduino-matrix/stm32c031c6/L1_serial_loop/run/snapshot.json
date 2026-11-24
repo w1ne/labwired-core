@@ -18,9 +18,9 @@
       128,
       536883160,
       134224903,
-      134218576
+      134224902
     ],
-    "pc": 134218576,
+    "pc": 134224902,
     "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
@@ -33,9 +33,9 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "steps_executed": 100469,
-  "cycles": 100469,
-  "instructions": 100469,
+  "steps_executed": 110000,
+  "cycles": 110000,
+  "instructions": 110000,
   "stop_reason": "assertions_passed",
   "stop_reason_details": {
     "triggered_stop_condition": "assertions_passed",
@@ -55,8 +55,8 @@
   },
   "firmware_hash": "02708711576ba454169ca2faab2e9416ad5cb45502ed3571b4d5e895cfd80acc",
   "config": {
-    "firmware": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L1_serial_loop/firmware.elf",
-    "system": "/home/andrii/worktrees/labwired-core-c031/validation/arduino-matrix/systems/stm32c031c6.yaml",
-    "script": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L1_serial_loop/test.yaml"
+    "firmware": "/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L1_serial_loop/firmware.elf",
+    "system": "/data/worktrees/legacy-migrated/labwired-hw-onboarding/validation/arduino-matrix/systems/stm32c031c6.yaml",
+    "script": "/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L1_serial_loop/test.yaml"
   }
 }

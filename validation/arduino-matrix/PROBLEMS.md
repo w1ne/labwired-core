@@ -216,3 +216,15 @@ Controls: L3 with no INA219 prints `LW_L3_FAIL nack`; the BME280 example
 without a host prints nothing, and without a sensor prints
 `BME280 not found at 0x77` (`examples/arduino-nano-33-ble-bme280/controls/`).
 
+
+## NUCLEO-C031C6 (STM32C031C6, `stm32c031c6`)
+
+Stock STM32duino (`ststm32@19.7.1`, Arduino_Core_STM32 2.12). Eight of nine
+cells pass; L8 (no CAN) is the only skip. The L5 history:
+
+| Symptom | Cause | Fixed by |
+|---------|-------|----------|
+| `analogRead(A0)` returned `0 0` on every pin | ADC1 was declared with `profile: stm32l4`. The L4 block has SQRx, not CHSELR, so the C0's regular-group bitmap was never read | `profile: stm32g0` on `adc1` (RM0490 §18; the C0 and G0 ADC are the same IP). The row skipped L5 rather than pass a vacuous `0 == 0` |
+| L5 still read 0 after the layout fix | the matrix system declared no board voltage on A0 | `input_mv: { 0: 1651 }` for ADC1 channel 0 (PA0 = ADC1_IN0); 12-bit 2048, stm32duino returns 10 bits: `LW_L5_VAL 512 512` |
+
+Control: with the L4 profile the same firmware prints `LW_L5_FAIL 0 0`.

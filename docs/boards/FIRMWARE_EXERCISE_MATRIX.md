@@ -560,7 +560,7 @@ _SIM-DERIVED first G0 port: its committed tier-1 fixture drives all 12 declared 
 
 ### `stm32c031c6`
 
-_No tier-1 target. First STM32C0 part: the stock-STM32duino Arduino matrix row (core-arduino-matrix-smoke, board stm32c031c6) runs USART2 console, SysTick, LD4 GPIO, Wire/I2C1 (INA219 CONFIG/BUS read back exactly), SPI1 (MAX31855 frame) and TIM1_CH1 PWM measured on the PA5 pad. Those are rubric classes. Beyond the rubric nothing runs: CRC, PWR, DBGMCU and the DMAMUX are family models no firmware drives, the ADC is a register file the C0 HAL talks to without a conversion (matrix L5 is skipped, not passed), and SYSCFG is the shared stub._
+_No tier-1 target. First STM32C0 part: the stock-STM32duino Arduino matrix row (core-arduino-matrix-smoke, board stm32c031c6) runs USART2 console, SysTick, LD4 GPIO, Wire/I2C1 (INA219 CONFIG/BUS read back exactly), SPI1 (MAX31855 frame), ADC1 on the G0/C0 CHSELR block (analogRead(A0) reads exactly 512 at 1651 mV on PA0 = ADC1_IN0) and TIM1_CH1 PWM measured on the PA5 pad. Those are rubric classes plus one sensor-class ADC conversion. Beyond the rubric nothing runs: CRC, PWR, DBGMCU and the DMAMUX are family models no firmware drives, and SYSCFG is the shared stub._
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `CRC`
 

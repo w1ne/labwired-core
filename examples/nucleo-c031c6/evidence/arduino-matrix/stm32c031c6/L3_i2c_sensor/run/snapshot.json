@@ -16,11 +16,11 @@
       0,
       0,
       0,
-      536883184,
+      536883192,
       134239541,
-      134239904
+      134239532
     ],
-    "pc": 134239904,
+    "pc": 134239532,
     "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
@@ -33,9 +33,9 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "steps_executed": 11316915,
-  "cycles": 11316915,
-  "instructions": 11316915,
+  "steps_executed": 11330000,
+  "cycles": 11330000,
+  "instructions": 11330000,
   "stop_reason": "assertions_passed",
   "stop_reason_details": {
     "triggered_stop_condition": "assertions_passed",
@@ -55,8 +55,8 @@
   },
   "firmware_hash": "1a5e6e33e15609899de6126586b822fe89bca2dcb9e41c41021c760985aa2c48",
   "config": {
-    "firmware": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L3_i2c_sensor/firmware.elf",
-    "system": "/home/andrii/worktrees/labwired-core-c031/validation/arduino-matrix/systems/stm32c031c6.yaml",
-    "script": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L3_i2c_sensor/test.yaml"
+    "firmware": "/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L3_i2c_sensor/firmware.elf",
+    "system": "/data/worktrees/legacy-migrated/labwired-hw-onboarding/validation/arduino-matrix/systems/stm32c031c6.yaml",
+    "script": "/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L3_i2c_sensor/test.yaml"
   }
 }

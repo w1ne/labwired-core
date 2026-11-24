@@ -14,10 +14,7 @@ led_min_edges: 2
 pwm_watch: "gpioa:5"
 pwm_min_edges: 4
 family: stm32
-# L5 is skipped, not passed: stock analogRead(A0) completes but reads
-# "0 0" — the L4-shaped ADC model does not decode the C0's CFGR1/CHSELR
-# register file, and the generic oracle would accept equal samples.
-sketches_skip: [L5_adc, L8_can]
+notes: "STM32C0 on stock stm32duino; ADC1 uses the G0/C0 CHSELR layout (L5 = 512 at 1651 mV on PA0)"
+sketches_skip: [L8_can]
 sketches_skip_reason:
-  L5_adc: "No C0 ADC (CHSELR) model: analogRead returns 0 on every pin; a pass would be vacuous"
   L8_can: "STM32C031C6 has no CAN peripheral"
