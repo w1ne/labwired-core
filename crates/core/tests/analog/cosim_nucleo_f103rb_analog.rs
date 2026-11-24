@@ -85,8 +85,12 @@ fn board_machine(mut bus: SystemBus) -> Machine<CortexM> {
     machine
 }
 
-/// Perform one F1 software-triggered regular conversion, as firmware does:
+/// Perform one F1 software-triggered regular conversion the way firmware does:
 /// ADON | EXTSEL=111, then the SWSTART rising edge, then read SR before DR.
+///
+/// This is the register sequence, not the analog power-up story: the bounded
+/// F1 model does not gate a conversion on ADCAL/RSTCAL or on a settling time,
+/// so the test cannot detect a missing calibration step and does not claim to.
 fn stm32f1_adc_convert(machine: &mut Machine<CortexM>, channel: u8) -> u32 {
     let bus = &mut machine.bus;
     let apb2enr = bus.read_u32(RCC_BASE + 0x18).expect("read RCC APB2ENR");
@@ -117,6 +121,10 @@ fn stm32f1_adc_convert(machine: &mut Machine<CortexM>, channel: u8) -> u32 {
 
 /// The conversion the model reports: the routed pad voltage in whole
 /// millivolts, scaled to the 12-bit range against the 3.3 V reference.
+///
+/// The router converts volts to `u16` millivolts by rounding, and the ADC
+/// floors the scaled code, so the same rounding has to happen here; a value
+/// within a millivolt of a code boundary would otherwise read one code low.
 fn expected_adc_count(voltage_v: f64) -> u32 {
     let millivolts = (voltage_v * 1000.0).round();
     (millivolts * 4095.0 / 3300.0).floor().clamp(0.0, 4095.0) as u32
@@ -151,6 +159,7 @@ fn nucleo_f103rb_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
     assert_eq!(chip.analog_pins["PA0"].channel, 0);
     assert_eq!(chip.analog_pins["PA1"].channel, 1);
     assert_eq!(chip.analog_pins["PA0"].peripheral, "adc1");
+    assert_eq!(chip.analog_pins["PA1"].peripheral, "adc1");
 
     let bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F103RB bus");
     let mut machine = board_machine(bus);
@@ -200,6 +209,8 @@ fn nucleo_f103rb_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
             expected_adc_count(diode_v),
             "firmware-visible ADC1 channel 1 must report the solved diode voltage"
         );
+        // An unrouted channel reports the code after the previous DR value, so
+        // this assertion also proves the neighbour did not take a routed input.
         assert_eq!(
             stm32f1_adc_convert(&mut machine, 2),
             (diode_count + 1) & 0xfff,
