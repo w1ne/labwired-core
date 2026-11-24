@@ -172,7 +172,9 @@ fn gpioc_edges(chip: &ChipDescriptor, fixture: &str, bit: u8) -> (u32, u32) {
 fn ch32v003_package_variants_match_ds0_bonding_on_the_f4p6_die() {
     let strip = |mut v: serde_yaml::Value| {
         let map = v.as_mapping_mut().expect("descriptor is a mapping");
-        for key in ["name", "package", "pin_count", "pins"] {
+        // `analog_pins` is a pin-level map like `pins`: a package that bonds
+        // fewer pads names fewer channels on the same die.
+        for key in ["name", "package", "pin_count", "pins", "analog_pins"] {
             map.remove(key);
         }
         v
@@ -190,6 +192,17 @@ fn ch32v003_package_variants_match_ds0_bonding_on_the_f4p6_die() {
             .map(|k| k.as_str().expect("pin name"))
             .collect();
         assert_eq!(&pins, bonded, "{name} bonded GPIOs (DS0 Table 2-1)");
+        for pad in yaml["analog_pins"]
+            .as_mapping()
+            .expect("analog_pins map")
+            .keys()
+        {
+            let pad = pad.as_str().expect("pad name");
+            assert!(
+                bonded.contains(&pad),
+                "{name} routes analog input from {pad}, which it does not bond"
+            );
+        }
         assert_eq!(
             strip(yaml),
             die,
@@ -586,14 +599,10 @@ fn run_adc_fixture(chip: &ChipDescriptor) -> String {
         .expect("CH32V003 peripherals and clock gates");
     let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     bus.attach_uart_tx_sink(sink.clone(), false);
-    let adc1 = bus.find_peripheral_index_by_name("adc1").expect("ADC1");
-    let adc = bus.peripherals[adc1]
-        .dev
-        .as_any_mut()
-        .and_then(|any| any.downcast_mut::<labwired_core::peripherals::adc::Adc>())
-        .expect("ADC1 is the F1-layout model");
-    adc.set_channel_input(0, 1650);
-    adc.set_channel_input(7, 3000);
+    // Through the descriptor's `analog_pins:` map, the same path a user drives:
+    // PA2 is ADC1_IN0, PD4 is ADC1_IN7. No test reaches into the concrete model.
+    assert!(bus.set_analog_pad_mv("PA2", 1650), "PA2 drives ADC1_IN0");
+    assert!(bus.set_analog_pad_mv("PD4", 3000), "PD4 drives ADC1_IN7");
     let image = labwired_loader::load_elf(&root.join("tests/fixtures").join(ADC_FIXTURE))
         .expect("openwch Arduino ELF");
     let cpu = configure_riscv(&mut bus);

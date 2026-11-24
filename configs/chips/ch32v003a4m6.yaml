@@ -52,6 +52,16 @@ pins:
   PD6: { gpio: "gpiod", bit: 6 }
   PD7: { gpio: "gpiod", bit: 7 }
 
+# ADC pads (ch32v00x.h ADC_Channel): the variant's analog-capable pins.
+# `set_analog_pad_mv` and cosim `analog_pins:` routes drive these channels.
+analog_pins:
+  PA2: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }
+  PC4: { peripheral: "adc1", channel: 2 }
+  PD5: { peripheral: "adc1", channel: 5 }
+  PD6: { peripheral: "adc1", channel: 6 }
+  PD4: { peripheral: "adc1", channel: 7 }
+
 peripherals:
   - id: "rcc"
     type: "rcc"
