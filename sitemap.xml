@@ -2257,6 +2257,9 @@
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/nrf5340/2026-11-24-negative-control-timer-channels-and-nrf52832-timers/</loc>
     </url>
     <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/nrf5340/2026-11-24-rtc-lfclk-negative-control/</loc>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/nucleo_f767zi/2026-11-09-negative-control-b1-polarity/NOTE/</loc>
     </url>
     <url>

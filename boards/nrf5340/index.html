@@ -5147,7 +5147,7 @@ does not prove physical signal timing or TrustZone isolation.</p>
 <td>RTC0 / RTC1</td>
 <td>0x5001_4000 / 0x5001_5000</td>
 <td>✅ behavioural</td>
-<td>RTC1 drives the kernel tick (shared nRF RTC model)</td>
+<td>RTC1 drives the kernel tick (shared nRF RTC model); counts 32.768 kHz LFCLK, and the CPU-cycle ratio comes from the 128 MHz core clock</td>
 </tr>
 <tr>
 <td>TIMER0–2</td>
