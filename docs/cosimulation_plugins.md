@@ -96,6 +96,41 @@ Worked example: [`examples/cosim-spice-rc`](../examples/cosim-spice-rc/README.md
 (Debian/Ubuntu: `apt install libngspice0`). Tests:
 `python3 -m pytest tools/cosim/test_labwired_ngspice.py`.
 
+### Declaring an input's valid domain
+
+A deck is only an electrical model over the input range its parameters were
+extracted from. `config.input_ranges` states that domain; the adapter refuses a
+boundary outside it before the frame reaches either host, on native and in the
+browser:
+
+```yaml
+config:
+  input_sources:
+    lux: { element: Vlux, scale: 1, offset: 0 }
+  input_ranges:
+    lux: { min: 1, max: 100, unit: lx }
+```
+
+- `min` and `max` are inclusive and finite; give one or both. `unit` is printed
+  in the message and is not converted.
+- The check reads the routed signal value, not the netlist volts, and runs after
+  `input_sampling`: with `previous_boundary` a value stops the run at the
+  boundary where it first drives the circuit.
+- A value absent from the boundary is left to `input_sources.*.default_value`.
+- An out-of-range value fails the run:
+  `ngspice model 'ldr' input 'lux' is 150, outside the declared 1..100 lx range`.
+- `input_ranges` on a `board.gpio*` route is refused: a logic level has no
+  numeric domain.
+
+This replaces an in-deck clamp such as `max(V(lux), 0.01)`: the clamp still
+keeps the solver finite, but the run now stops instead of reporting a plausible
+voltage for an input the model was not fitted to. It is what lets a circuit that
+the in-core engine modelled as a bounded element (a `photoresistors` or
+`thermistors` entry) run as a behavioural deck with the same explicit stop. The
+differential test
+`cosim_ngspice::a_photoresistor_deck_matches_the_in_core_curve_within_its_range`
+compares both engines at 1, 10 and 100 lx and asserts both refuse 150 lx.
+
 ### Pinning the circuit a Flex run solved
 
 A Flex manifest's `manifest_sha256` covers the manifest bytes. It cannot cover

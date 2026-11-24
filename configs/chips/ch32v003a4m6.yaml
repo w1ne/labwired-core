@@ -20,6 +20,13 @@ arch: "riscv"
 core: "rv32ec"
 cpu_hz: 48_000_000
 
+# GPIO supply and digital input thresholds, copied from configs/chips/ch32v003f4p6.yaml
+# so every CH32V003 package reads a driven pad the same way. WCH CH32V003
+# datasheet (CH32V003DS0 V1.8), Table 3-16: VIL(max) = 0.19*VDD + 0.137 V,
+# VIH(min) = 0.22*VDD + 0.956 V for VDD 2.7-5.5 V.
+io_voltage_v: 3.3
+gpio_input_thresholds: { vil: 0.19, vih: 0.22, vil_offset_v: 0.137, vih_offset_v: 0.956 }
+
 # WCH's flash view at 0x08000000 is also aliased at address 0 for reset fetch.
 flash:
   base: 0x08000000

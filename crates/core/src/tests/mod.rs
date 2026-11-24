@@ -6,6 +6,8 @@ pub mod builtin_chip_self_contained;
 pub mod bus_proof_matrix;
 #[cfg(test)]
 pub mod bus_trace_one_home;
+#[cfg(test)]
+pub mod ch32v003_input_levels;
 
 /// A chip may not declare a memory size no silicon has (decimal-MB trap).
 #[cfg(test)]
