@@ -272,19 +272,32 @@ def check_selection(
 
     `validate()` above answers "is this manifest well formed"; it cannot
     answer the question the workflow actually depends on. `core-board-ci.yml`
-    pipes this script's stdout straight into `strategy.matrix` and has no
-    aggregator job, so `{"include": []}` skips the `board` job and the whole
-    workflow reports SUCCESS having compiled no firmware. A manifest with
-    every entry `gate: false` is perfectly valid and produces exactly that.
+    pipes this script's stdout into `strategy.matrix`, gates the `board` job
+    on `has_boards` (GitHub Actions fails a run whose matrix has an empty
+    `include`), and has no aggregator job. So `{"include": []}` skips the
+    `board` job and the whole workflow reports SUCCESS having compiled no
+    firmware. A manifest with every entry `gate: false` is perfectly valid
+    and produces exactly that.
 
-    An unscoped gate run must select at least one board; otherwise a manifest
-    with every entry `gate: false` silently skips the board job. A push with a
-    changed-path list may intentionally select none when it only changes an
-    unrelated device catalog, coverage file, or ungated example.
+    A gate event against a manifest with no `gate: true` entry fails closed,
+    scoped or not: a scoped push could otherwise emit an empty include for
+    every changed-path list and keep the workflow green forever. An unscoped
+    gate run must also select at least one board. A push with a changed-path
+    list may intentionally select none when the manifest has gated boards and
+    the push only changes an unrelated device catalog, coverage file, or
+    ungated example.
 
     `schedule` and `workflow_dispatch` take every entry, so an empty selection
     there means an empty manifest, which `validate()` already rejects.
     """
+    if event in GATE_EVENTS and entries and not any(e.get("gate") for e in entries):
+        return [
+            f"event {event!r}: the manifest has no gated boards (all "
+            f"{len(entries)} entries are `gate: false`). A gate event would "
+            "never build any firmware, and an empty include skips the `board` "
+            "job in core-board-ci.yml and reports the workflow GREEN having "
+            "built nothing. Mark at least one entry `gate: true`."
+        ]
     if (
         event in GATE_EVENTS
         and not selected
