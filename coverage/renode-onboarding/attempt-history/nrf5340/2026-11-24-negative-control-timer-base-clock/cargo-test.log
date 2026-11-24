@@ -1,0 +1,51 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+   Compiling labwired-config v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/config)
+   Compiling labwired-core v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/core)
+   Compiling svd-ingestor v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/svd-ingestor)
+   Compiling labwired-loader v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/loader)
+    Finished `test` profile [optimized] target(s) in 2m 07s
+     Running tests/nrf/main.rs (/data/cargo-pool/labwired-core/lanes/renode/debug/deps/nrf-c5a11bb656de55fd)
+
+running 2 tests
+test nrf_timer_base_clock::every_nrf_timer_declares_a_base_clock_when_it_differs_from_the_core ... FAILED
+test nrf_timer_base_clock::nrf_timers_count_their_base_clock_not_the_core_clock ... FAILED
+
+failures:
+
+---- nrf_timer_base_clock::every_nrf_timer_declares_a_base_clock_when_it_differs_from_the_core stdout ----
+
+thread 'nrf_timer_base_clock::every_nrf_timer_declares_a_base_clock_when_it_differs_from_the_core' (2451061) panicked at crates/core/tests/nrf/nrf_timer_base_clock.rs:146:25:
+assertion `left == right` failed: nrf5340.yaml: timer `timer0` has no `peripheral_hz`, which is only correct when its base clock (16000000 Hz) equals the core clock (128000000 Hz)
+  left: 16000000
+ right: 128000000
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- nrf_timer_base_clock::nrf_timers_count_their_base_clock_not_the_core_clock stdout ----
+
+thread 'nrf_timer_base_clock::nrf_timers_count_their_base_clock_not_the_core_clock' (2451062) panicked at crates/core/tests/nrf/nrf_timer_base_clock.rs:178:9:
+assertion `left == right` failed: nrf5340.yaml `timer0`: after 640 CPU cycles the counter is 640, expected 80 (base clock not applied?)
+  left: 640
+ right: 80
+
+
+failures:
+    nrf_timer_base_clock::every_nrf_timer_declares_a_base_clock_when_it_differs_from_the_core
+    nrf_timer_base_clock::nrf_timers_count_their_base_clock_not_the_core_clock
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.05s
+
+error: test failed, to rerun pass `-p labwired-core --test nrf`

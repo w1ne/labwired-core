@@ -2716,10 +2716,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#peripherals-from-chip-yaml" class="md-nav__link">
+  <a href="#peripherals-declared-from-chip-yaml" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Peripherals (from chip yaml)
+        Peripherals declared (from chip yaml)
       
     </span>
   </a>
@@ -2727,10 +2727,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#not-yet-modeled-commonly-expected-on-nrf52832" class="md-nav__link">
+  <a href="#not-declared" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Not yet modeled (commonly expected on nRF52832)
+        Not declared
       
     </span>
   </a>
@@ -4973,10 +4973,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#peripherals-from-chip-yaml" class="md-nav__link">
+  <a href="#peripherals-declared-from-chip-yaml" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Peripherals (from chip yaml)
+        Peripherals declared (from chip yaml)
       
     </span>
   </a>
@@ -4984,10 +4984,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#not-yet-modeled-commonly-expected-on-nrf52832" class="md-nav__link">
+  <a href="#not-declared" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Not yet modeled (commonly expected on nRF52832)
+        Not declared
       
     </span>
   </a>
@@ -5027,14 +5027,14 @@
 
 <h1 id="nrf52832">nRF52832</h1>
 <p>The Nordic nRF52832 (Cortex-M4F, 512 KB flash, 64 KB SRAM, 2.4 GHz radio)
-is a Tier 1 LabWired target. The current
-model is <strong>uart-only</strong> — UART0 is the only on-chip peripheral declared.
-Everything else (radio, EasyDMA, PPI, GPIO, RTC, TIMER, TWI/SPI) is not
-yet declared in the chip yaml.</p>
+is a Tier 1 LabWired target. The chip yaml declares the Cortex-M4F core,
+UART0, GPIO P0, CLOCK, TIMER0–2, TWI0/TWI1, SPI2, RTC0/RTC1, WDT, SAADC,
+PWM0, NVMC, FICR, UICR, and the RADIO register block.</p>
+<p>This page is a hand-maintained snapshot. For the authoritative per-block
+status see the <a href="../../coverage/chip-conformance/">chip conformance scoreboard</a>
+(level · modelled peripherals · register-match vs silicon) and the
+<a href="../../coverage/tier1-scoreboard/">tier-1 matrix</a> (per-peripheral pass/fail).</p>
 <h2 id="status-at-a-glance">Status at a glance</h2>
-<blockquote>
-<p><strong>Live status:</strong> the table below is a hand-maintained snapshot. For the authoritative, auto-generated view see the <a href="../../coverage/chip-conformance/">chip conformance scoreboard</a> (level · modelled peripherals · register-match vs silicon) and the <a href="../../coverage/tier1-scoreboard/">tier-1 matrix</a> (per-peripheral pass/fail).</p>
-</blockquote>
 <table>
 <thead>
 <tr>
@@ -5065,17 +5065,16 @@ yet declared in the chip yaml.</p>
 </tr>
 <tr>
 <td>Tier</td>
-<td>structural — UART0 model only, no in-tree validation runbook</td>
+<td>structural — no in-tree validation runbook</td>
 </tr>
 </tbody>
 </table>
-<h2 id="peripherals-from-chip-yaml">Peripherals (from chip yaml)</h2>
+<h2 id="peripherals-declared-from-chip-yaml">Peripherals declared (from chip yaml)</h2>
 <table>
 <thead>
 <tr>
 <th>Peripheral</th>
 <th>Base</th>
-<th>Status</th>
 <th>Notes</th>
 </tr>
 </thead>
@@ -5083,33 +5082,99 @@ yet declared in the chip yaml.</p>
 <tr>
 <td>Cortex-M4F</td>
 <td>—</td>
-<td>✅ modeled</td>
 <td>Thumb-2 + VFPv4 single-precision</td>
 </tr>
 <tr>
 <td>UART0</td>
 <td>0x40002000</td>
-<td>✅ modeled</td>
-<td><code>nrf52</code> profile — uses Nordic register layout, not ARM PrimeCell</td>
+<td><code>nrf52</code> profile — Nordic register layout, not PrimeCell</td>
+</tr>
+<tr>
+<td>TIMER0</td>
+<td>0x40008000</td>
+<td>IRQ 8; 16 MHz base clock, 4 CC</td>
+</tr>
+<tr>
+<td>TIMER1</td>
+<td>0x40009000</td>
+<td>IRQ 9; same model</td>
+</tr>
+<tr>
+<td>TIMER2</td>
+<td>0x4000a000</td>
+<td>IRQ 10; same model</td>
+</tr>
+<tr>
+<td>GPIO P0</td>
+<td>0x50000000</td>
+<td>nRF GPIO register layout</td>
+</tr>
+<tr>
+<td>CLOCK</td>
+<td>0x40000000</td>
+<td>HFCLK/LFCLK task and event registers</td>
+</tr>
+<tr>
+<td>TWI0/TWI1</td>
+<td>0x40003000 / 0x40004000</td>
+<td>I²C models</td>
+</tr>
+<tr>
+<td>SPI2</td>
+<td>0x40023000</td>
+<td><code>nrf52_spim</code> layout</td>
+</tr>
+<tr>
+<td>RTC0/RTC1</td>
+<td>0x4000b000 / 0x40011000</td>
+<td>24-bit RTC; RTC1 drives Arduino <code>millis()</code></td>
+</tr>
+<tr>
+<td>WDT</td>
+<td>0x40010000</td>
+<td>Watchdog</td>
+</tr>
+<tr>
+<td>SAADC</td>
+<td>0x40007000</td>
+<td>ADC</td>
+</tr>
+<tr>
+<td>PWM0</td>
+<td>0x4001c000</td>
+<td>PWM</td>
+</tr>
+<tr>
+<td>NVMC</td>
+<td>0x4001e000</td>
+<td>Flash controller</td>
+</tr>
+<tr>
+<td>FICR, UICR</td>
+<td>0x10000000 / 0x10001000</td>
+<td>Factory and user configuration</td>
+</tr>
+<tr>
+<td>RADIO</td>
+<td>0x40001000</td>
+<td>Register block; radio traffic is not simulated</td>
 </tr>
 </tbody>
 </table>
-<h2 id="not-yet-modeled-commonly-expected-on-nrf52832">Not yet modeled (commonly expected on nRF52832)</h2>
-<p>The chip yaml does not declare: <strong>CLOCK</strong>, <strong>POWER</strong>, <strong>RADIO</strong>,
-<strong>TIMER0–4</strong>, <strong>RTC0–2</strong>, <strong>GPIO P0</strong> (<code>0x50000000</code>), <strong>GPIOTE</strong>,
-<strong>TWI0/1</strong> (I²C), <strong>SPI0/1/2</strong>, <strong>TWIM/TWIS</strong>, <strong>PPI</strong> (programmable
-peripheral interconnect), <strong>EasyDMA</strong> infrastructure, <strong>RNG</strong>,
-<strong>TEMP</strong>, <strong>WDT</strong>, <strong>NVMC</strong>, <strong>UICR</strong>, <strong>FICR</strong>, <strong>SAADC</strong>, <strong>ECB</strong>,
-<strong>CCM</strong>, <strong>AAR</strong>.</p>
-<p>Firmware that touches any of these registers will hit
-<code>MemoryAccessViolation</code> or stall in a polling loop. See
+<p>TIMER0–2 count their 16 MHz base clock, not the 64 MHz core clock. The
+<code>nrf_timer_base_clock</code> gate in <code>crates/core/tests/nrf/</code> checks the
+descriptors and the captured counter.</p>
+<h2 id="not-declared">Not declared</h2>
+<p>POWER, PPI, RNG, TEMP, ECB, CCM, AAR, GPIOTE, SPI0/1, TWIM/TWIS, I2S,
+PDM, and the EasyDMA infrastructure. Firmware that touches any of these
+registers hits <code>MemoryAccessViolation</code> or stalls in a polling loop. See
 <a href="../../getting_started_firmware/"><code>docs/getting_started_firmware.md</code></a>.</p>
 <h2 id="roadmap-notes">Roadmap notes</h2>
 <p>nRF52832 is a Tier 1 target (see
 <a href="../../coverage_scoreboard/"><code>docs/coverage_scoreboard.md</code></a>). Closing the gap
-to a full Tier 1 model requires at minimum: CLOCK, POWER, RADIO, GPIO
-P0, TIMER0, RTC0, and PPI. The hardware-validation playbook to follow
-once peripherals are added is
+to a full Tier 1 model requires at minimum: POWER, PPI, GPIOTE, and a
+behavioural RADIO. The hardware-validation playbook to follow once
+peripherals are added is
 <a href="../nucleo-l476rg/"><code>docs/boards/nucleo-l476rg.md</code></a>.</p>
 
 

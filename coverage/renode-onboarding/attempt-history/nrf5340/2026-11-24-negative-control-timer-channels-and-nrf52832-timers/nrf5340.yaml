@@ -1,0 +1,280 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Nordic nRF5340 — APPLICATION core (Cortex-M33).
+#
+# Source references:
+# - nRF5340 Product Specification v1.5 (memory map, peripheral instances, IRQs).
+# - Address map taken from the Zephyr `nrf5340dk/nrf5340/cpuapp` devicetree, which
+#   is the secure application-core view: peripherals are accessed at 0x50000000
+#   (DT `peripheral@50000000`, `ranges = <0x0 0x50000000 0x10000000>`), so e.g.
+#   UARTE0 = 0x50008000, TWIM1 = 0x50009000, CLOCK = 0x50005000 and GPIO P0 =
+#   0x50842500. The Zephyr `/ns` board target uses the 0x40000000 non-secure
+#   aliases and is not this profile.
+# - Peripheral bases cross-checked against tests/fixtures/real_world/nrf5340.svd
+#   (NordicSemiconductor/nrfx v3.12.0, mdk/nrf5340_application.svd).
+# - IRQ numbers are the DT `interrupts` cell (UARTE0=8, CLOCK=5, TIMER0..2=15..17,
+#   RTC0=20, RTC1=21).
+#
+# Boot path this profile is built to satisfy (unmodified Zephyr v3.7 hello_world):
+#   reset -> SystemInit/soc trims -> clock_control (HFCLK/LFCLK start+poll) ->
+#   nrf_rtc_timer (RTC1 + LFCLK) -> UARTE0 EasyDMA console -> "Hello World! nrf5340dk".
+#
+# The Nordic CLOCK + UARTE EasyDMA + RTC behavioural models are shared with
+# nRF52 (crates/core/src/peripherals/nrf52/); their register offsets match the
+# nRF5340 application core, so they are reused verbatim — only the base address
+# differs. Pure trim/config blocks the boot ROM/soc-init poke but never poll for
+# a settled value (DCNF, SPU, OSCILLATORS/REGULATORS, CTRL-AP, GPIOTE) are mapped
+# as benign stub windows so a write/readback never faults the bus.
+name: "nrf5340"
+arch: "arm"
+core: "cortex-m33"
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# nRF5340 application core, 128 MHz.
+cpu_hz: 128_000_000
+
+flash:
+  base: 0x00000000
+  size: "1024KB"
+ram:
+  base: 0x20000000
+  size: "512KB"
+peripherals:
+  # SysTick: an ARMv6-M/ARMv7-M/ARMv8-M core peripheral every Cortex-M on
+  # this family has. The Nordic SVD starts above the PPB, so it is declared
+  # by hand; without it, any firmware using SysTick (the Arduino and Zephyr
+  # cores both do) faults on its first SYST_CSR write.
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
+  # ── Behavioural models (shared nRF52 implementations, reused at nRF5340 bases) ──
+
+  # CLOCK / POWER / RESET share peripheral id 5 (0x50005000). The model settles
+  # EVENTS_HFCLKSTARTED / EVENTS_LFCLKSTARTED on the same tick the start task is
+  # written — the busy-loops in Zephyr's clock_control and nrf_rtc_timer init.
+  - id: "clock"
+    type: "nrf_clock"
+    base_address: 0x50005000
+    size: "4KB"
+    irq: 5
+    config:
+      debug_schema: "../peripherals/nrf5340/clock_s.yaml"
+
+  # UARTE0 — the console. EasyDMA TX walks TXD.PTR/MAXCNT out of RAM and emits the
+  # bytes to the capture sink (this is the path the hello_world banner travels).
+  - id: "uart0"
+    type: "nrf52840_uart"
+    base_address: 0x50008000
+    size: "4KB"
+    irq: 8
+    config:
+      debug_schema: "../peripherals/nrf5340/uarte0_s.yaml"
+
+  # TWIM1 — Zephyr's enabled `i2c1` / Arduino Wire controller on the DK.
+  # nRF5340 TWIM1_S is derived from TWIM0_NS in the vendor SVD and retains every
+  # nRF52840 TWIM register offset the behavioural model uses; nRF53 adds DPPI
+  # PUBLISH/SUBSCRIBE registers, which are not needed for polling/EasyDMA I2C.
+  # The secure cpuapp target uses 0x50009000. The board pinctrl routes SDA to
+  # P1.02 and SCL to P1.03.
+  - id: "i2c1"
+    type: "nrf52840_i2c"
+    base_address: 0x50009000
+    size: "4KB"
+    irq: 9
+
+  # RTC0/RTC1 — nrf_rtc_timer drives the kernel tick off RTC1 (LFCLK-clocked).
+  - id: "rtc0"
+    type: "nrf52840_rtc"
+    base_address: 0x50014000
+    size: "4KB"
+    irq: 20
+    config:
+      debug_schema: "../peripherals/nrf5340/rtc0_s.yaml"
+  - id: "rtc1"
+    type: "nrf52840_rtc"
+    base_address: 0x50015000
+    size: "4KB"
+    irq: 21
+    config:
+      debug_schema: "../peripherals/nrf5340/rtc1_s.yaml"
+      num_cc: 4
+
+  - id: "timer0"
+    type: "nrf52840_timer"
+    base_address: 0x5000f000
+    size: "4KB"
+    irq: 15
+    config:
+      # TIMER base clock is PCLK16M, not the 128 MHz application core. Without
+      # this key the model counts one tick per CPU cycle and runs 8x fast.
+      peripheral_hz: 16000000
+      # nRF5340 TIMER0..2 each have 6 capture/compare channels (MDK
+      # `TIMER0_CC_NUM 6`; the vendored SVD lists TASKS_CAPTURE0..5).
+      num_cc: 6
+      debug_schema: "../peripherals/nrf5340/timer0_s.yaml"
+  - id: "timer1"
+    type: "nrf52840_timer"
+    base_address: 0x50010000
+    size: "4KB"
+    irq: 16
+    config:
+      peripheral_hz: 16000000
+      num_cc: 6
+      debug_schema: "../peripherals/nrf5340/timer1_s.yaml"
+  - id: "timer2"
+    type: "nrf52840_timer"
+    base_address: 0x50011000
+    size: "4KB"
+    irq: 17
+    config:
+      peripheral_hz: 16000000
+      num_cc: 6
+      debug_schema: "../peripherals/nrf5340/timer2_s.yaml"
+
+  # GPIO P0/P1 — the nRF5340 GPIO block sits at 0x5084_2500, far from the rest
+  # of the peripheral window.
+  #
+  # These two used to be declared at 0x5084_2000 / 0x5084_2300 — the vendor
+  # bases minus 0x500 — because the shared nRF52 GPIO model counts registers
+  # from the block start (OUT at +0x504) while Nordic bases an nRF53 port at
+  # OUT itself (P0_S = 0x5084_2500, OUT at +0x004). Both describe the same
+  # silicon and the same absolute addresses, but the two ports are only 0x300
+  # apart, so a window anchored 0x500 low starts INSIDE its neighbour's. With
+  # both declared 4 KB wide, gpio1's window covered every gpio0 register, and
+  # the router's greatest-start-wins rule handed all of them to gpio1: P0.OUT
+  # (0x5084_2504) was answered by gpio1 at its offset 0x204, which is not a
+  # register, so P0 writes vanished and P0 reads returned 0. Every P0 pin on
+  # the nRF5340-DK — the LEDs and the buttons — was dead, silently. No size or
+  # ordering change can fix that; the window has to move.
+  #
+  # So the windows are now declared where the vendor puts them, and
+  # `reg_offset: 0x500` tells the model how far into its register map each
+  # window starts (the SVD `addressBlock.offset` idea). Sources, both in-tree:
+  # tests/fixtures/real_world/nrf5340.svd (nrfx v3.12.0 mdk) gives P0_S
+  # 0x5084_2500 / P1_S 0x5084_2800 with a 0x300 addressBlock, and the Zephyr
+  # `nrf5340dk/nrf5340/cpuapp` devicetree agrees: gpio0@50842500 /
+  # gpio1@50842800, reg length 0x300.
+  #
+  # These two still carry no `debug_schema`, but the reason has changed. It was
+  # that the SVD's P0_S/P1_S names are written against the MDK base, so on the
+  # old anchor a debugger would have labelled every register 0x500 off. That is
+  # fixed — the window IS the MDK base now, and p0_s.yaml / p1_s.yaml would line
+  # up exactly. What stops it is only cost: they are 48 KB each and every
+  # referenced descriptor is `include_str!`d into the wasm download, so wiring
+  # them is a 96 KB change to the browser bundle and belongs in its own commit,
+  # not in a collision fix.
+  - id: "gpio0"
+    type: "gpio"
+    base_address: 0x50842500
+    size: "768B"
+    config:
+      profile: "nrf52"
+      reg_offset: 0x500
+  - id: "gpio1"
+    type: "gpio"
+    base_address: 0x50842800
+    size: "768B"
+    config:
+      profile: "nrf52"
+      num_pins: 16
+      reg_offset: 0x500
+
+  # ── Benign stub windows (trim/config blocks: write-only or never polled) ──
+  # These are poked by SystemInit / soc-level errata + DCDC/regulator setup but
+  # are not waited on for a settled status, so a zero-returning stub is faithful
+  # to the boot path. If a future firmware polls one of these, promote it to a
+  # behavioural model.
+  - id: "dcnf"
+    type: "nrf5340_dcnf_stub"
+    base_address: 0x50000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/nrf5340/dcnf_s.yaml"
+  # FPU's event registers live INSIDE the DCNF page on silicon (both are based
+  # at 0x50000000), and the bus maps one peripheral per address range, so this
+  # inert stub gets a private window. 0x50002000 is reserved on silicon, which
+  # makes it the honest place to park an artifact — see ALLOWED in
+  # crates/core/tests/svd_conformance.rs.
+  # No `debug_schema`: by construction there is no SVD peripheral at 0x50002000
+  # (the SVD puts FPU_S at 0x50000000, overlaid on DCNF_S).
+  - id: "fpu"
+    type: "nrf5340_fpu_stub"
+    base_address: 0x50002000
+    size: "4KB"
+  # CACHE is at 0x50001000 (SVD). It previously sat at 0x50002000 because the
+  # fpu stub had taken this address, so neither stub was where its silicon is.
+  - id: "cache"
+    type: "nrf5340_cache_stub"
+    base_address: 0x50001000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/nrf5340/cache_s.yaml"
+  - id: "spu"
+    type: "nrf5340_spu_stub"
+    base_address: 0x50003000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/nrf5340/spu_s.yaml"
+  - id: "oscillators_regulators"
+    type: "nrf5340_osc_reg_stub"
+    base_address: 0x50004000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/nrf5340/oscillators_s.yaml"
+  - id: "ctrlap"
+    type: "nrf5340_ctrlap_stub"
+    base_address: 0x50006000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/nrf5340/ctrlap_s.yaml"
+  - id: "gpiote0"
+    type: "nrf5340_gpiote_stub"
+    base_address: 0x5000d000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/nrf5340/gpiote0_s.yaml"
+  # DPPIC channel-enable subset. UARTE implements its own configured
+  # ENDTX -> STOPTX route; cross-instance and other DPPI routes are unmodelled.
+  - id: "dppic"
+    type: "nrf5340_dppic"
+    base_address: 0x50017000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/nrf5340/dppic_s.yaml"
+  # FICR — factory info / analog trims at 0x00FF0000 (NOT in the 0x5000_0000
+  # block). Zephyr's soc-init copies a trim block out of here; the values are
+  # oscillator/radio calibration that the UART console path does not depend on,
+  # so a zero-returning window is faithful to the boot path while keeping the bus
+  # violation-free. Promote to real FICR reset values if a future firmware needs
+  # the device ID or a specific trim.
+  - id: "ficr"
+    type: "nrf5340_ficr_stub"
+    base_address: 0x00FF0000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/nrf5340/ficr_s.yaml"
+  # UICR — user info config at 0x00FF8000. Read during soc-init (e.g. approtect /
+  # reg-out config); unprovisioned reads as 0 here, which the boot path accepts.
+  - id: "uicr"
+    type: "nrf5340_uicr_stub"
+    base_address: 0x00FF8000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/nrf5340/uicr_s.yaml"
+  # Analog trim target block (0x5002A000): soc-init writes FICR-sourced
+  # oscillator/analog trim values here. Write-only on the boot path (never read
+  # back) and irrelevant to the digital UART console, so a stub is faithful.
+  # No `debug_schema`: 0x5002A000 is IPC_S in the SVD, not a trim block. The
+  # base matches but the identity does not, and naming these IPC TASKS/EVENTS
+  # would describe a peripheral this stub does not model. Resolve what actually
+  # lives here before wiring a descriptor.
+  - id: "trim_analog"
+    type: "nrf5340_trim_stub"
+    base_address: 0x5002A000
+    size: "4KB"
