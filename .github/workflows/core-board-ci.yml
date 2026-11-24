@@ -81,9 +81,11 @@ jobs:
           # push included, when the manifest has no `gate: true` board, and
           # on an unscoped gate event that selects no board.
           has_boards="$(printf '%s' "$matrix" | python -c 'import json, sys; print("true" if json.load(sys.stdin)["include"] else "false")')"
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "has_boards=$has_boards" >> "$GITHUB_OUTPUT"
-          echo "run_coverage=$run_coverage" >> "$GITHUB_OUTPUT"
+          {
+            echo "matrix=$matrix"
+            echo "has_boards=$has_boards"
+            echo "run_coverage=$run_coverage"
+          } >> "$GITHUB_OUTPUT"
 
   board:
     needs: setup

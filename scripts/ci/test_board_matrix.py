@@ -249,7 +249,12 @@ def test_setup_exports_has_boards_from_the_emitted_matrix():
     setup = _workflow_jobs()["setup"]
     assert setup["outputs"]["has_boards"] == "${{ steps.gen.outputs.has_boards }}"
     gen = next(s for s in setup["steps"] if s.get("id") == "gen")
-    assert 'echo "has_boards=$has_boards" >> "$GITHUB_OUTPUT"' in gen["run"]
+    run = gen["run"]
+    assert 'echo "has_boards=$has_boards"\n' in run
+    # The echo must sit inside the braced block redirected to $GITHUB_OUTPUT.
+    block_start = run.rindex("{\n", 0, run.index('echo "has_boards=$has_boards"'))
+    block_end = run.index('} >> "$GITHUB_OUTPUT"', block_start)
+    assert block_start < run.index('echo "has_boards=$has_boards"') < block_end
     assert '["include"]' in gen["run"]
 
 
