@@ -564,6 +564,10 @@ impl Waveform {
                 if v1 == v2 {
                     return false;
                 }
+                // A pulse with zero rise, width and fall never leaves `v1`
+                // according to `at`, yet the wrap counts below still report a
+                // corner each period. That over-reports by one backward-Euler
+                // step per period, which changes no value and is harmless.
                 // The phase arithmetic must match `at` exactly: a corner is a
                 // segment boundary of the waveform `at` evaluates, so deriving
                 // the corner from different arithmetic can miss an edge that
