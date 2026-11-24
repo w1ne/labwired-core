@@ -111,6 +111,12 @@ peripherals:
     size: "4KB"
     irq: 15
     config:
+      # TIMER base clock is PCLK16M, not the 128 MHz application core. Without
+      # this key the model counts one tick per CPU cycle and runs 8x fast.
+      peripheral_hz: 16000000
+      # nRF5340 TIMER0..2 each have 6 capture/compare channels (MDK
+      # `TIMER0_CC_NUM 6`; the vendored SVD lists TASKS_CAPTURE0..5).
+      num_cc: 6
       debug_schema: "../peripherals/nrf5340/timer0_s.yaml"
   - id: "timer1"
     type: "nrf52840_timer"
@@ -118,6 +124,8 @@ peripherals:
     size: "4KB"
     irq: 16
     config:
+      peripheral_hz: 16000000
+      num_cc: 6
       debug_schema: "../peripherals/nrf5340/timer1_s.yaml"
   - id: "timer2"
     type: "nrf52840_timer"
@@ -125,6 +133,8 @@ peripherals:
     size: "4KB"
     irq: 17
     config:
+      peripheral_hz: 16000000
+      num_cc: 6
       debug_schema: "../peripherals/nrf5340/timer2_s.yaml"
 
   # GPIO P0/P1 — the nRF5340 GPIO block sits at 0x5084_2500, far from the rest

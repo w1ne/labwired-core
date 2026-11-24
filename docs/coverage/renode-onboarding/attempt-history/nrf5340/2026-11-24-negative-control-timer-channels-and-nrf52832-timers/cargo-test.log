@@ -1,0 +1,50 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+   Compiling labwired-config v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/config)
+   Compiling labwired-core v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/core)
+   Compiling svd-ingestor v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/svd-ingestor)
+   Compiling labwired-loader v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/loader)
+    Finished `test` profile [optimized] target(s) in 1m 44s
+     Running tests/nrf/main.rs (/data/cargo-pool/labwired-core/lanes/renode/debug/deps/nrf-c5a11bb656de55fd)
+
+running 3 tests
+test nrf_timer_base_clock::every_nrf_timer_declares_a_base_clock_when_it_differs_from_the_core ... ok
+test nrf_timer_base_clock::nrf5340_timers_expose_six_compare_channels ... FAILED
+test nrf_timer_base_clock::nrf_timers_count_their_base_clock_not_the_core_clock ... FAILED
+
+failures:
+
+---- nrf_timer_base_clock::nrf5340_timers_expose_six_compare_channels stdout ----
+
+thread 'nrf_timer_base_clock::nrf5340_timers_expose_six_compare_channels' (2466688) panicked at crates/core/tests/nrf/nrf_timer_base_clock.rs:217:9:
+assertion `left == right` failed: timer at 0x5000f000: CC[5] write was dropped (num_cc < 6?)
+  left: 0
+ right: 305419896
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- nrf_timer_base_clock::nrf_timers_count_their_base_clock_not_the_core_clock stdout ----
+
+thread 'nrf_timer_base_clock::nrf_timers_count_their_base_clock_not_the_core_clock' (2466689) panicked at crates/core/tests/nrf/nrf_timer_base_clock.rs:106:44:
+called `Result::unwrap()` on an `Err` value: MemoryViolation(1073779976)
+
+
+failures:
+    nrf_timer_base_clock::nrf5340_timers_expose_six_compare_channels
+    nrf_timer_base_clock::nrf_timers_count_their_base_clock_not_the_core_clock
+
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.13s
+
+error: test failed, to rerun pass `-p labwired-core --test nrf`

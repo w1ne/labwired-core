@@ -146,6 +146,8 @@ peripherals:
     size: "4KB"
     irq: 85
     config:
+      # TIMER00 is clocked from HF PLL (128 MHz, the core clock).
+      peripheral_hz: 128000000
       num_cc: 6
   - id: "timer10"
     type: "nrf52840_timer"
@@ -153,6 +155,8 @@ peripherals:
     size: "4KB"
     irq: 133
     config:
+      # TIMER10 is clocked from HFXO (32 MHz), not the 128 MHz core.
+      peripheral_hz: 32000000
       num_cc: 8
   - id: "timer20"
     type: "nrf52840_timer"
@@ -160,6 +164,8 @@ peripherals:
     size: "4KB"
     irq: 202
     config:
+      # TIMER2x is clocked from PCLK16M, not the 128 MHz core.
+      peripheral_hz: 16000000
       num_cc: 6
   - id: "timer21"
     type: "nrf52840_timer"
@@ -167,6 +173,7 @@ peripherals:
     size: "4KB"
     irq: 203
     config:
+      peripheral_hz: 16000000
       num_cc: 6
   - id: "timer22"
     type: "nrf52840_timer"
@@ -174,6 +181,7 @@ peripherals:
     size: "4KB"
     irq: 204
     config:
+      peripheral_hz: 16000000
       num_cc: 6
   - id: "timer23"
     type: "nrf52840_timer"
@@ -181,6 +189,7 @@ peripherals:
     size: "4KB"
     irq: 205
     config:
+      peripheral_hz: 16000000
       num_cc: 6
   - id: "timer24"
     type: "nrf52840_timer"
@@ -188,6 +197,7 @@ peripherals:
     size: "4KB"
     irq: 206
     config:
+      peripheral_hz: 16000000
       num_cc: 6
 
   # ── GPIO ───────────────────────────────────────────────────────────────

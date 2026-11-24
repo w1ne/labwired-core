@@ -54,7 +54,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32f411re | **L0** | ✓ | 46 | — | — | — |
 | stm32f446re | **L0** | ✓ | 34 | — | — | — |
 | nrf51822 | **L1** | ✓ | 22 | — | — | firmware_survival::test_nrf51822_microbit_v1_smoke_survival |
-| nrf52832 | **L1** | ✓ | 17 | — | — | firmware_survival::test_nrf52832_demo_survival |
+| nrf52832 | **L1** | ✓ | 19 | — | — | firmware_survival::test_nrf52832_demo_survival |
 | nrf52833 | **L1** | ✓ | 48 | — | — | firmware_survival::test_nrf52833_microbit_v2_smoke_survival |
 | nrf52840 | **L1** | ✓ | 53 | — | — | firmware_survival::test_nrf52840_demo_survival |
 | nrf5340 | **L1** | ✓ | 22 | — | — | firmware_survival::test_nrf5340_zephyr_survival |
