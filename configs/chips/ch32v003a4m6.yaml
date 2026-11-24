@@ -137,8 +137,9 @@ peripherals:
   # (CTLR2.ADON bit 0, SWSTART bit 22, STATR.EOC bit 1), plus DLYR at 0x50,
   # which is not modelled. The SAR is 10 bits (variant ADC_RESOLUTION 10),
   # profile `wch_v00x`. Die pads: PA2 IN0, PA1 IN1, PC4 IN2, PD2 IN3, PD3 IN4,
-  # PD5 IN5, PD6 IN6, PD4 IN7; this package bonds a subset (see analog_pins). The internal IN8 (Vrefint) and IN9 (Vcal)
-  # sources are not modelled. ADC_IRQn = 29.
+  # PD5 IN5, PD6 IN6, PD4 IN7; this package bonds a subset (see analog_pins).
+  # IN8 (V_REFINT) and IN9 (V_cal) are internal and not modelled, and IN10..
+  # IN18 do not exist on this part. ADC_IRQn = 29.
   - id: "adc1"
     type: "adc"
     base_address: 0x40012400
