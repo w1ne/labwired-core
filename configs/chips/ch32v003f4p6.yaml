@@ -22,6 +22,18 @@ arch: "riscv"
 core: "rv32ec"
 cpu_hz: 48_000_000
 
+# GPIO supply and digital input thresholds, so a co-simulation circuit voltage
+# becomes the level the firmware reads. WCH CH32V003 datasheet
+# (CH32V003DS0 V1.8), Table 3-16 "General I/O static characteristics", VDD
+# 2.7-5.5 V, standard and FT pads alike:
+#   VIL(max) = 0.19*(VDD - 2.7) + 0.65 V = 0.19*VDD + 0.137 V
+#   VIH(min) = 0.22*(VDD - 2.7) + 1.55 V = 0.22*VDD + 0.956 V
+# These are the guaranteed limits, not the 150 mV typical Schmitt hysteresis.
+# The nominal rail is 3.3 V (0.764 V / 1.682 V); a routed VDD replaces it at
+# each model boundary (5.0 V gives 1.087 V / 2.056 V).
+io_voltage_v: 3.3
+gpio_input_thresholds: { vil: 0.19, vih: 0.22, vil_offset_v: 0.137, vih_offset_v: 0.956 }
+
 # WCH's flash view at 0x08000000 is also aliased at address 0 for reset fetch.
 flash:
   base: 0x08000000

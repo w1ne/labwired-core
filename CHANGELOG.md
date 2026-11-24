@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Flex run reports pin the circuit they solved: each model whose adapter loaded a SPICE netlist carries `source.kind`, `origin`, `bytes`, `sha256` and, for a file, `path`. Editing an `adapter: ngspice` `model:` file now changes the report even when the manifest is unchanged.
 
 ### Changed
+- **CH32V003 pads read a driven voltage**: the F4P6 descriptor and its three package variants declare `io_voltage_v: 3.3` and the datasheet's affine `gpio_input_thresholds` (WCH CH32V003DS0 V1.8, Table 3-16). A co-simulation model that drives PC4/PC3 through `board.gpio_in` now binds and sets the pin, instead of refusing the deck with `NoInputThresholds`.
 - **BMP280 is drivable**: `pressure` (hPa) and `temperature` (°C) SimInput channels. The raw ADC words are the exact inverse of Bosch's integer compensation at the part's calibration block (same derived-program path as BME280), so firmware running the standard Bosch math reads the stimulus back. Defaults 25 °C / 1013.25 hPa (was the constant raw word 0x80000).
 
 ## [0.26.0] - 2026-11-15
