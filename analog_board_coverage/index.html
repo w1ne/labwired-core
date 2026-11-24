@@ -4944,9 +4944,9 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.</p>
 <ul>
 <li>Profiles in <code>configs/systems/</code>: <strong>439</strong></li>
-<li>Covered end to end: <strong>4</strong></li>
-<li>Not covered: <strong>435</strong></li>
-<li>Not covered but with an <code>analog_pins:</code> map: <strong>57</strong> (these are the
+<li>Covered end to end: <strong>5</strong></li>
+<li>Not covered: <strong>434</strong></li>
+<li>Not covered but with an <code>analog_pins:</code> map: <strong>56</strong> (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   <code>analog_pins:</code> map, an ADC model, or a digital endpoint first)</li>
 </ul>
@@ -4982,11 +4982,6 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>labwired-demo-board</code></td>
 <td><code>stm32f103</code></td>
 <td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>microbit-v2</code></td>
-<td><code>nrf52833</code></td>
-<td style="text-align: right;">8</td>
 </tr>
 <tr>
 <td><code>nucleo-f103rb-epaper</code></td>
@@ -5699,11 +5694,6 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>microbit-v1</code></td>
 <td><code>nrf51822</code></td>
 <td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>microbit-v2</code></td>
-<td><code>nrf52833</code></td>
-<td style="text-align: right;">8</td>
 </tr>
 <tr>
 <td><code>mimxrt1062-teensy41</code></td>
@@ -7456,6 +7446,11 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>arduino-mega-2560</code></td>
 <td><code>atmega2560</code></td>
 <td><code>crates/core/tests/cosim/cosim_pin_routing.rs</code></td>
+</tr>
+<tr>
+<td><code>microbit-v2</code></td>
+<td><code>nrf52833</code></td>
+<td><code>crates/core/tests/analog/cosim_microbit_v2_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>nucleo-f103rb</code></td>
