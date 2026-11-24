@@ -1,0 +1,13 @@
+test nrf_timer_base_clock::nrf54l_profiles_declare_every_timer_the_devicetree_defines ... FAILED
+test nrf_timer_base_clock::every_nrf_timer_declares_a_base_clock_when_it_differs_from_the_core ... ok
+test nrf_timer_base_clock::nrf_timers_count_their_base_clock_not_the_core_clock ... FAILED
+test nrf_timer_base_clock::nrf5340_timers_expose_six_compare_channels ... ok
+failures:
+thread 'nrf_timer_base_clock::nrf54l_profiles_declare_every_timer_the_devicetree_defines' (96024) panicked at crates/core/tests/nrf/nrf_timer_base_clock.rs:239:9:
+  timer00: not declared; firmware using it bus-faults
+  timer23: not declared; firmware using it bus-faults
+  timer24: not declared; firmware using it bus-faults
+thread 'nrf_timer_base_clock::nrf_timers_count_their_base_clock_not_the_core_clock' (96025) panicked at crates/core/tests/nrf/nrf_timer_base_clock.rs:112:44:
+called `Result::unwrap()` on an `Err` value: MemoryViolation(1342526728)
+failures:
+test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 72 filtered out; finished in 0.09s

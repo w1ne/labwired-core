@@ -14,9 +14,9 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **439**
-- Covered end to end: **4**
-- Not covered: **435**
-- Not covered but with an `analog_pins:` map: **57** (these are the
+- Covered end to end: **5**
+- Not covered: **434**
+- Not covered but with an `analog_pins:` map: **56** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` map, an ADC model, or a digital endpoint first)
 
@@ -32,7 +32,6 @@ count is what the generic decks can reach without new routing.
 | `at32f421g8u7` | `at32f421g8u7` | 10 |
 | `feather-f405` | `stm32f405` | 16 |
 | `labwired-demo-board` | `stm32f103` | 10 |
-| `microbit-v2` | `nrf52833` | 8 |
 | `nucleo-f103rb-epaper` | `stm32f103rb` | 16 |
 | `nucleo-f401re` | `stm32f401` | 16 |
 | `nucleo-f407` | `stm32f407` | 16 |
@@ -178,7 +177,6 @@ count is what the generic decks can reach without new routing.
 | `mb1355c` | `stm32wb55` | 0 |
 | `metro-m4` | `atsamd51` | 0 |
 | `microbit-v1` | `nrf51822` | 0 |
-| `microbit-v2` | `nrf52833` | 8 |
 | `mimxrt1062-teensy41` | `mimxrt1062-teensy41` | 0 |
 | `mimxrt595-evk` | `mimxrt595s` | 0 |
 | `mpfs-disco-kit` | `mpfs095t` | 0 |
@@ -532,6 +530,7 @@ count is what the generic decks can reach without new routing.
 | --- | --- | --- |
 | `adafruit-feather-esp32-v2` | `esp32` | `crates/core/tests/analog/cosim_esp32_analog_diode.rs` |
 | `arduino-mega-2560` | `atmega2560` | `crates/core/tests/cosim/cosim_pin_routing.rs` |
+| `microbit-v2` | `nrf52833` | `crates/core/tests/analog/cosim_microbit_v2_analog.rs` |
 | `nucleo-f103rb` | `stm32f103rb` | `crates/core/tests/analog/cosim_nucleo_f103rb_analog.rs` |
 | `nucleo-f767zi` | `stm32f767` | `crates/core/tests/analog/cosim_nucleo_f767zi_analog.rs` |
 
