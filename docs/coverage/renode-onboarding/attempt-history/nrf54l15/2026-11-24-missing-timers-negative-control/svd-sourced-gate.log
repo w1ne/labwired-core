@@ -1,0 +1,21 @@
+$ # nrf54l15.yaml with the timer24 declaration removed (SVD-sourced gate)
+
+running 1 test
+test nrf_timer_base_clock::nrf54l_profiles_declare_every_timer_the_devicetree_defines ... FAILED
+
+failures:
+
+---- nrf_timer_base_clock::nrf54l_profiles_declare_every_timer_the_devicetree_defines stdout ----
+
+thread 'nrf_timer_base_clock::nrf54l_profiles_declare_every_timer_the_devicetree_defines' (931169) panicked at crates/core/tests/nrf/nrf_timer_base_clock.rs:331:9:
+nrf54l15.yaml timer estate disagrees with nrf54l15.svd:
+  timer24: not declared; SVD has it at 0x500CE000
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    nrf_timer_base_clock::nrf54l_profiles_declare_every_timer_the_devicetree_defines
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p labwired-core --test nrf`

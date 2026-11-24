@@ -380,6 +380,10 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
         packed!("nrf54l15/global_temp_s.yaml"),
     ),
     (
+        "nrf54l15/global_timer00_s.yaml",
+        packed!("nrf54l15/global_timer00_s.yaml"),
+    ),
+    (
         "nrf54l15/global_timer10_s.yaml",
         packed!("nrf54l15/global_timer10_s.yaml"),
     ),
@@ -394,6 +398,14 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     (
         "nrf54l15/global_timer22_s.yaml",
         packed!("nrf54l15/global_timer22_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_timer23_s.yaml",
+        packed!("nrf54l15/global_timer23_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_timer24_s.yaml",
+        packed!("nrf54l15/global_timer24_s.yaml"),
     ),
     (
         "nrf54l15/global_twim21_s.yaml",

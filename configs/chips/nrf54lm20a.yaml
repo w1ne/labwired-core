@@ -32,12 +32,14 @@
 #   P0 ngpios         7  ->      10
 #   P1 ngpios        17  ->      32
 #   P3               —   ->  a FOURTH port, 13 pins, at 0x500D8600
-#   TIMER00          —   ->  0x50055000, irq 85   (new, 32-bit, HFPLL)
-#   TIMER23/24       —   ->  0x500CD000 / 0x500CE000
 #   SPIM00           —   ->  0x5004D000, irq 77   (new, 32 MHz)
 #   CLOCK irq       261  ->     270
 #   TAMPC     0x500DC000 ->  0x500EF000
 #   RRAMC     0x5004B000 ->  0x5004E000
+#
+# TIMER00 (0x50055000, irq 85) and TIMER23/24 (0x500CD000 / 0x500CE000) are NOT
+# differences between the parts: the shared nrf54l_05_10_15.dtsi and the
+# nRF54L15 vendor SVD define all three there as well.
 #
 # Do NOT copy addresses between the two parts on the assumption that a shared
 # family means a shared map. TAMPC and RRAMC both moved, and nrf54l15.yaml's own
