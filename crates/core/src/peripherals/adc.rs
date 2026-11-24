@@ -573,6 +573,12 @@ pub struct Adc {
     /// not serialized (keeps snapshot shapes identical).
     #[serde(skip)]
     ambient_temp_c: f64,
+    /// Width of a regular conversion on the F1 layout. 12 on the STM32F1;
+    /// the WCH CH32V00x ADC has the same register file but a 10-bit SAR
+    /// (RDATAR 0..1023). Set by [`Self::set_f1_resolution_bits`]; not a
+    /// register, so not serialized.
+    #[serde(skip)]
+    f1_bits: u32,
 }
 
 impl Adc {
@@ -654,7 +660,18 @@ impl Adc {
             f1_rstcal_live: false,
             f1_cal_live: false,
             ambient_temp_c: DEFAULT_AMBIENT_TEMPERATURE_C,
+            f1_bits: 12,
         }
+    }
+
+    /// Set the F1-layout conversion width (1..=12). The WCH CH32V00x ADC is
+    /// the F1 register file with a 10-bit result. Other values are refused.
+    pub fn set_f1_resolution_bits(&mut self, bits: u32) -> bool {
+        if !(1..=12).contains(&bits) {
+            return false;
+        }
+        self.f1_bits = bits;
+        true
     }
 
     /// Set the temperature the F1 internal temperature sensor reports, in °C.
@@ -804,10 +821,10 @@ impl Adc {
                     let count12 = Self::code_for_mv(sample.millivolts, sample.reference_millivolts);
                     self.dr = match &self.regs {
                         AdcRegs::Stm32F4(_) => scaled_input_code(count12, f4_resolution_bits(cr1)),
-                        _ => count12,
+                        _ => scaled_input_code(count12, self.f1_bits),
                     };
                 } else {
-                    self.dr = (self.dr + 1) & 0xFFF;
+                    self.dr = (self.dr + 1) & ((1 << self.f1_bits) - 1);
                 }
                 // CR2.DMA: every DR update requests a transfer (RM0008
                 // §11.12.3; RM_AT32F421 §18.4.4.2).

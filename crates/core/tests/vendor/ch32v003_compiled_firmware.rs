@@ -172,7 +172,9 @@ fn gpioc_edges(chip: &ChipDescriptor, fixture: &str, bit: u8) -> (u32, u32) {
 fn ch32v003_package_variants_match_ds0_bonding_on_the_f4p6_die() {
     let strip = |mut v: serde_yaml::Value| {
         let map = v.as_mapping_mut().expect("descriptor is a mapping");
-        for key in ["name", "package", "pin_count", "pins"] {
+        // `analog_pins` is a pin-level map like `pins`: a package that bonds
+        // fewer pads names fewer channels on the same die.
+        for key in ["name", "package", "pin_count", "pins", "analog_pins"] {
             map.remove(key);
         }
         v
@@ -190,6 +192,17 @@ fn ch32v003_package_variants_match_ds0_bonding_on_the_f4p6_die() {
             .map(|k| k.as_str().expect("pin name"))
             .collect();
         assert_eq!(&pins, bonded, "{name} bonded GPIOs (DS0 Table 2-1)");
+        for pad in yaml["analog_pins"]
+            .as_mapping()
+            .expect("analog_pins map")
+            .keys()
+        {
+            let pad = pad.as_str().expect("pad name");
+            assert!(
+                bonded.contains(&pad),
+                "{name} routes analog input from {pad}, which it does not bond"
+            );
+        }
         assert_eq!(
             strip(yaml),
             die,
@@ -574,4 +587,80 @@ fn ch32v003_attach_interrupt_misses_pd3_with_the_stm32f1_afio_mux() {
         "{out}"
     );
     assert!(out.contains("CH32V003_EXTI_FAIL"), "{out}");
+}
+
+const ADC_FIXTURE: &str = "ch32v003f4p6-arduino-openwch-adc.elf";
+
+/// Run the openwch `analogRead` fixture with PA2 (ADC1_IN0) held at 1650 mV
+/// and PD4 (ADC1_IN7) at 3000 mV against the 3.3 V reference.
+fn run_adc_fixture(chip: &ChipDescriptor) -> String {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut bus = SystemBus::from_config(chip, &SystemManifest::default())
+        .expect("CH32V003 peripherals and clock gates");
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+    // Through the descriptor's `analog_pins:` map, the same path a user drives:
+    // PA2 is ADC1_IN0, PD4 is ADC1_IN7. No test reaches into the concrete model.
+    assert!(bus.set_analog_pad_mv("PA2", 1650), "PA2 drives ADC1_IN0");
+    assert!(bus.set_analog_pad_mv("PD4", 3000), "PD4 drives ADC1_IN7");
+    let image = labwired_loader::load_elf(&root.join("tests/fixtures").join(ADC_FIXTURE))
+        .expect("openwch Arduino ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load CH32V003 ELF");
+    let text = |sink: &std::sync::Mutex<Vec<u8>>| {
+        String::from_utf8_lossy(&sink.lock().unwrap()).into_owned()
+    };
+    for step in 1..=2_000_000u64 {
+        if machine.step().is_err() {
+            break;
+        }
+        if step % 5_000 == 0 {
+            let out = text(&sink);
+            if out.contains("DONE") && out.ends_with('\n') {
+                break;
+            }
+        }
+    }
+    text(&sink)
+}
+
+#[test]
+fn ch32v003_openwch_analog_read_returns_10_bit_codes() {
+    // Stock openwch arduino_core_ch32: analogRead() enables RCC_ADC1EN, sets
+    // ADON, writes RSQR3 rank 1, sets CTLR2.SWSTART, polls STATR.EOC and
+    // returns RDATAR unchanged (variant ADC_RESOLUTION 10).
+    // 1650 mV -> floor(1650 * 4095 / 3300) >> 2 = 511;
+    // 3000 mV -> floor(3000 * 4095 / 3300) >> 2 = 930.
+    let chip = load_chip("ch32v003f4p6");
+    let out = run_adc_fixture(&chip);
+    assert_eq!(
+        out,
+        "CH32V003_ADC_BOOT\r\npa2=511\r\npd4=930\r\n\
+         CH32V003_ADC_PASS\r\nCH32V003_ADC_DONE\r\n",
+        "USART1 TX stream"
+    );
+}
+
+#[test]
+fn ch32v003_analog_read_overflows_10_bits_with_the_stm32f1_adc() {
+    // Negative control: the plain STM32F1 profile converts at 12 bits, so
+    // RDATAR exceeds the 10-bit range the openwch V00x core returns as is.
+    let mut yaml = chip_yaml("ch32v003f4p6");
+    let adc = yaml["peripherals"]
+        .as_sequence_mut()
+        .expect("peripherals list")
+        .iter_mut()
+        .find(|p| p["id"].as_str() == Some("adc1"))
+        .expect("adc1 block");
+    assert_eq!(adc["config"]["profile"].as_str(), Some("wch_v00x"));
+    adc["config"]["profile"] = "stm32f1".into();
+    let chip: ChipDescriptor = serde_yaml::from_value(yaml).expect("descriptor with F1 ADC");
+    let out = run_adc_fixture(&chip);
+    assert_eq!(
+        out,
+        "CH32V003_ADC_BOOT\r\npa2=2047\r\npd4=3722\r\n\
+         CH32V003_ADC_FAIL\r\nCH32V003_ADC_DONE\r\n",
+        "USART1 TX stream"
+    );
 }
