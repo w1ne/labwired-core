@@ -14,9 +14,9 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **439**
-- Covered end to end: **5**
-- Not covered: **434**
-- Not covered but with an `analog_pins:` map: **56** (these are the
+- Covered end to end: **11**
+- Not covered: **428**
+- Not covered but with an `analog_pins:` map: **50** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` map, an ADC model, or a digital endpoint first)
 
@@ -29,14 +29,8 @@ count is what the generic decks can reach without new routing.
 | Profile | Chip | Analog pad map |
 | --- | --- | ---: |
 | `adxl345-sensor-lab` | `stm32f103` | 10 |
-| `at32f421g8u7` | `at32f421g8u7` | 10 |
-| `feather-f405` | `stm32f405` | 16 |
 | `labwired-demo-board` | `stm32f103` | 10 |
 | `nucleo-f103rb-epaper` | `stm32f103rb` | 16 |
-| `nucleo-f401re` | `stm32f401` | 16 |
-| `nucleo-f407` | `stm32f407` | 16 |
-| `nucleo-f411re` | `stm32f411re` | 16 |
-| `nucleo-f446re` | `stm32f446re` | 16 |
 | `stm32f103` | `stm32f103` | 2 |
 | `stm32f4` | `stm32f4` | 1 |
 | `stm32f412` | `stm32f412` | 2 |
@@ -110,7 +104,6 @@ count is what the generic decks can reach without new routing.
 | `arduino-uno` | `atmega328p` | 0 |
 | `arduino-zero` | `atsamd21g18a` | 0 |
 | `arty-litex-vexriscv` | `arty-litex-vexriscv` | 0 |
-| `at32f421g8u7` | `at32f421g8u7` | 10 |
 | `atmega1281` | `atmega1281` | 0 |
 | `atmega2561` | `atmega2561` | 0 |
 | `brd2709a` | `efr32mg26` | 0 |
@@ -163,7 +156,6 @@ count is what the generic decks can reach without new routing.
 | `esp32s3-zero` | `esp32s3` | 0 |
 | `esp32s3` | `esp32s3` | 0 |
 | `esp8684-devkitm-1-h4x` | `esp32c2` | 0 |
-| `feather-f405` | `stm32f405` | 16 |
 | `frdm-k64f` | `mk64f12` | 0 |
 | `frdm-kw41z-lcd` | `mkw41z4` | 0 |
 | `frdm-kw41z` | `mkw41z4` | 0 |
@@ -191,10 +183,6 @@ count is what the generic decks can reach without new routing.
 | `nucleo-c031c6` | `stm32c031c6` | 0 |
 | `nucleo-f103rb-bme280` | `stm32f103rb-nucleo-bme280-smoke` | 0 |
 | `nucleo-f103rb-epaper` | `stm32f103rb` | 16 |
-| `nucleo-f401re` | `stm32f401` | 16 |
-| `nucleo-f407` | `stm32f407` | 16 |
-| `nucleo-f411re` | `stm32f411re` | 16 |
-| `nucleo-f446re` | `stm32f446re` | 16 |
 | `nucleo-g071rb` | `stm32g071` | 0 |
 | `nucleo-g0b1re` | `stm32g0b1re` | 0 |
 | `nucleo-g431rb` | `stm32g431rb` | 0 |
@@ -530,8 +518,14 @@ count is what the generic decks can reach without new routing.
 | --- | --- | --- |
 | `adafruit-feather-esp32-v2` | `esp32` | `crates/core/tests/analog/cosim_esp32_analog_diode.rs` |
 | `arduino-mega-2560` | `atmega2560` | `crates/core/tests/cosim/cosim_pin_routing.rs` |
+| `at32f421g8u7` | `at32f421g8u7` | `crates/core/tests/analog/cosim_at32f421_analog.rs` |
+| `feather-f405` | `stm32f405` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `microbit-v2` | `nrf52833` | `crates/core/tests/analog/cosim_microbit_v2_analog.rs` |
 | `nucleo-f103rb` | `stm32f103rb` | `crates/core/tests/analog/cosim_nucleo_f103rb_analog.rs` |
+| `nucleo-f401re` | `stm32f401` | `crates/core/tests/analog/cosim_nucleo_f401re_analog.rs` |
+| `nucleo-f407` | `stm32f407` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
+| `nucleo-f411re` | `stm32f411re` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
+| `nucleo-f446re` | `stm32f446re` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `nucleo-f767zi` | `stm32f767` | `crates/core/tests/analog/cosim_nucleo_f767zi_analog.rs` |
 
 ## How to add a board
