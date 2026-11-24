@@ -104,7 +104,7 @@ static bool samples_ok(int v0, int v1) {
   return v0 == 512 && v1 == 512;
 #  endif
 
-#elif defined(ARDUINO_NUCLEO_G071RB) || defined(ARDUINO_NUCLEO_G0B1RE)
+#elif defined(ARDUINO_NUCLEO_G071RB) || defined(ARDUINO_NUCLEO_G0B1RE) || defined(ARDUINO_NUCLEO_C031C6)
   // adc profile stm32g0 (the G0/C0 CHSELR block): the matrix system holds A0
   // (PA0 = ADC1_IN0) at 1651 mV. 12-bit against 3.3 V is 2048; stm32duino
   // returns 10 bits: 512. Exact; the unheld fixed source (3.0 V) reads 930,

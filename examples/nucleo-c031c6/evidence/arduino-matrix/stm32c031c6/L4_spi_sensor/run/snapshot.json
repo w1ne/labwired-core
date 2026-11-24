@@ -16,11 +16,11 @@
       0,
       0,
       2048,
-      536883192,
+      536883184,
       134231541,
-      134231970
+      134231972
     ],
-    "pc": 134231970,
+    "pc": 134231972,
     "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
@@ -33,9 +33,9 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "steps_executed": 101691,
-  "cycles": 101691,
-  "instructions": 101691,
+  "steps_executed": 120000,
+  "cycles": 120000,
+  "instructions": 120000,
   "stop_reason": "assertions_passed",
   "stop_reason_details": {
     "triggered_stop_condition": "assertions_passed",
@@ -55,8 +55,8 @@
   },
   "firmware_hash": "2755302f068e325b44a0a584a4f9f3a8525e9ea04467a47c01b5f55792108baf",
   "config": {
-    "firmware": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L4_spi_sensor/firmware.elf",
-    "system": "/home/andrii/worktrees/labwired-core-c031/validation/arduino-matrix/systems/stm32c031c6.yaml",
-    "script": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L4_spi_sensor/test.yaml"
+    "firmware": "/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L4_spi_sensor/firmware.elf",
+    "system": "/data/worktrees/legacy-migrated/labwired-hw-onboarding/validation/arduino-matrix/systems/stm32c031c6.yaml",
+    "script": "/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L4_spi_sensor/test.yaml"
   }
 }

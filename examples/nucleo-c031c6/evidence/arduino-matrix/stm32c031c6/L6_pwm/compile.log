@@ -235,50 +235,68 @@ Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
 RAM:   [=         ]  10.2% (used 1248 bytes from 12288 bytes)
 Flash: [======    ]  60.4% (used 19792 bytes from 32768 bytes)
 Building .pio/build/matrix/firmware.bin
-========================= [SUCCESS] Took 3.16 seconds =========================
+========================= [SUCCESS] Took 2.56 seconds =========================
 
 --- stderr ---
-/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:48: warning: "LW_PWM_PIN" redefined
-   48 | #    define LW_PWM_PIN 2
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:54: warning: "LW_PWM_PIN" redefined
+   54 | #    define LW_PWM_PIN 2
       | 
-/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:43: note: this is the location of the previous definition
-   43 | #    define LW_PWM_PIN PA0
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:49: note: this is the location of the previous definition
+   49 | #    define LW_PWM_PIN PA0
       | 
-/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:52: warning: "LW_PWM_PIN" redefined
-   52 | #    define LW_PWM_PIN PA0
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:58: warning: "LW_PWM_PIN" redefined
+   58 | #    define LW_PWM_PIN PA0
       | 
-/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:48: note: this is the location of the previous definition
-   48 | #    define LW_PWM_PIN 2
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:54: note: this is the location of the previous definition
+   54 | #    define LW_PWM_PIN 2
       | 
-/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:57: warning: "LW_PWM_PIN" redefined
-   57 | #    define LW_PWM_PIN 9
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:67: warning: "LW_PWM_PIN" redefined
+   67 | #    define LW_PWM_PIN 9
       | 
-/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:52: note: this is the location of the previous definition
-   52 | #    define LW_PWM_PIN PA0
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:62: note: this is the location of the previous definition
+   62 | #    define LW_PWM_PIN PA0
       | 
-/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:59: warning: "LW_PWM_PIN" redefined
-   59 | #    define LW_PWM_PIN LED_BUILTIN
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:72: warning: "LW_PWM_PIN" redefined
+   72 | #    define LW_PWM_PIN 2
       | 
-/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:57: note: this is the location of the previous definition
-   57 | #    define LW_PWM_PIN 9
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:67: note: this is the location of the previous definition
+   67 | #    define LW_PWM_PIN 9
       | 
-/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:61: warning: "LW_PWM_PIN" redefined
-   61 | #    define LW_PWM_PIN 2
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:77: warning: "LW_PWM_PIN" redefined
+   77 | #    define LW_PWM_PIN 9
       | 
-/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:59: note: this is the location of the previous definition
-   59 | #    define LW_PWM_PIN LED_BUILTIN
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:72: note: this is the location of the previous definition
+   72 | #    define LW_PWM_PIN 2
       | 
-/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:63: warning: "LW_PWM_PIN" redefined
-   63 | #    define LW_PWM_PIN 25
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:82: warning: "LW_PWM_PIN" redefined
+   82 | #    define LW_PWM_PIN 5
       | 
-/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:61: note: this is the location of the previous definition
-   61 | #    define LW_PWM_PIN 2
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:77: note: this is the location of the previous definition
+   77 | #    define LW_PWM_PIN 9
       | 
-/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:65: warning: "LW_PWM_PIN" redefined
-   65 | #    define LW_PWM_PIN 9
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:84: warning: "LW_PWM_PIN" redefined
+   84 | #    define LW_PWM_PIN LED_BUILTIN
       | 
-/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:63: note: this is the location of the previous definition
-   63 | #    define LW_PWM_PIN 25
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:82: note: this is the location of the previous definition
+   82 | #    define LW_PWM_PIN 5
+      | 
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:86: warning: "LW_PWM_PIN" redefined
+   86 | #    define LW_PWM_PIN 2
+      | 
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:84: note: this is the location of the previous definition
+   84 | #    define LW_PWM_PIN LED_BUILTIN
+      | 
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:88: warning: "LW_PWM_PIN" redefined
+   88 | #    define LW_PWM_PIN 25
+      | 
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:86: note: this is the location of the previous definition
+   86 | #    define LW_PWM_PIN 2
+      | 
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:90: warning: "LW_PWM_PIN" redefined
+   90 | #    define LW_PWM_PIN 9
+      | 
+/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/_pio_work/stm32c031c6__L6_pwm/src/main.ino:88: note: this is the location of the previous definition
+   88 | #    define LW_PWM_PIN 25
       | 
 In file included from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_hal_adc.h:31,
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/STM32C0xx/stm32c0xx_hal_conf_default.h:238,
@@ -367,28 +385,6 @@ In file included from /home/andrii/.platformio/packages/framework-arduinoststm32
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_hal.h:30,
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/CMSIS/Device/ST/STM32C0xx/Include/stm32c0xx.h:211,
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/libraries/SrcWrapper/inc/stm32_def.h:24,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/libraries/SrcWrapper/inc/clock.h:19,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring_time.h:23,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring.h:38,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/Arduino.h:36,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/HardwareSerial.cpp:26:
-/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h: In function 'void LL_ADC_SetAnalogWDMonitChannels(ADC_TypeDef*, uint32_t, uint32_t)':
-/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4010:27: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
- 4010 |   register __IO uint32_t *preg;
-      |                           ^~~~
-/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h: In function 'uint32_t LL_ADC_GetAnalogWDMonitChannels(const ADC_TypeDef*, uint32_t)':
-/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4115:27: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
- 4115 |   register __IO uint32_t *preg = __ADC_PTR_REG_OFFSET(ADCx->CFGR1,
-      |                           ^~~~
-/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4120:21: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
- 4120 |   register uint32_t AnalogWDMonitChannels = (READ_BIT(*preg, AWDy) & AWDy & ADC_AWD_CR_ALL_CHANNEL_MASK);
-      |                     ^~~~~~~~~~~~~~~~~~~~~
-In file included from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_hal_adc.h:31,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/STM32C0xx/stm32c0xx_hal_conf_default.h:238,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/STM32C0xx/stm32c0xx_hal_conf.h:13,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_hal.h:30,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/CMSIS/Device/ST/STM32C0xx/Include/stm32c0xx.h:211,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/libraries/SrcWrapper/inc/stm32_def.h:24,
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/libraries/SrcWrapper/inc/uart.h:42,
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/HardwareSerial.h:30,
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/WSerial.h:5,
@@ -414,51 +410,7 @@ In file included from /home/andrii/.platformio/packages/framework-arduinoststm32
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring_time.h:23,
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring.h:38,
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/Arduino.h:36,
-                 from /home/andrii/.hermes/cache/scratch/tmpeyzlg0n0:1:
-/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h: In function 'void LL_ADC_SetAnalogWDMonitChannels(ADC_TypeDef*, uint32_t, uint32_t)':
-/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4010:27: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
- 4010 |   register __IO uint32_t *preg;
-      |                           ^~~~
-/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h: In function 'uint32_t LL_ADC_GetAnalogWDMonitChannels(const ADC_TypeDef*, uint32_t)':
-/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4115:27: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
- 4115 |   register __IO uint32_t *preg = __ADC_PTR_REG_OFFSET(ADCx->CFGR1,
-      |                           ^~~~
-/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4120:21: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
- 4120 |   register uint32_t AnalogWDMonitChannels = (READ_BIT(*preg, AWDy) & AWDy & ADC_AWD_CR_ALL_CHANNEL_MASK);
-      |                     ^~~~~~~~~~~~~~~~~~~~~
-In file included from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_hal_adc.h:31,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/STM32C0xx/stm32c0xx_hal_conf_default.h:238,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/STM32C0xx/stm32c0xx_hal_conf.h:13,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_hal.h:30,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/CMSIS/Device/ST/STM32C0xx/Include/stm32c0xx.h:211,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/libraries/SrcWrapper/inc/stm32_def.h:24,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/libraries/SrcWrapper/inc/clock.h:19,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring_time.h:23,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring.h:38,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/Arduino.h:36,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/Print.cpp:23:
-/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h: In function 'void LL_ADC_SetAnalogWDMonitChannels(ADC_TypeDef*, uint32_t, uint32_t)':
-/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4010:27: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
- 4010 |   register __IO uint32_t *preg;
-      |                           ^~~~
-/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h: In function 'uint32_t LL_ADC_GetAnalogWDMonitChannels(const ADC_TypeDef*, uint32_t)':
-/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4115:27: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
- 4115 |   register __IO uint32_t *preg = __ADC_PTR_REG_OFFSET(ADCx->CFGR1,
-      |                           ^~~~
-/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4120:21: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
- 4120 |   register uint32_t AnalogWDMonitChannels = (READ_BIT(*preg, AWDy) & AWDy & ADC_AWD_CR_ALL_CHANNEL_MASK);
-      |                     ^~~~~~~~~~~~~~~~~~~~~
-In file included from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_hal_adc.h:31,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/STM32C0xx/stm32c0xx_hal_conf_default.h:238,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/STM32C0xx/stm32c0xx_hal_conf.h:13,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_hal.h:30,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/CMSIS/Device/ST/STM32C0xx/Include/stm32c0xx.h:211,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/libraries/SrcWrapper/inc/stm32_def.h:24,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/libraries/SrcWrapper/inc/clock.h:19,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring_time.h:23,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring.h:38,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/Arduino.h:36,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/Tone.cpp:22:
+                 from /data/tmp/andrii/tmpfubum622:1:
 /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h: In function 'void LL_ADC_SetAnalogWDMonitChannels(ADC_TypeDef*, uint32_t, uint32_t)':
 /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4010:27: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
  4010 |   register __IO uint32_t *preg;
@@ -502,6 +454,72 @@ In file included from /home/andrii/.platformio/packages/framework-arduinoststm32
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring_time.h:23,
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring.h:38,
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/Arduino.h:36,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/Tone.cpp:22:
+/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h: In function 'void LL_ADC_SetAnalogWDMonitChannels(ADC_TypeDef*, uint32_t, uint32_t)':
+/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4010:27: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
+ 4010 |   register __IO uint32_t *preg;
+      |                           ^~~~
+/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h: In function 'uint32_t LL_ADC_GetAnalogWDMonitChannels(const ADC_TypeDef*, uint32_t)':
+/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4115:27: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
+ 4115 |   register __IO uint32_t *preg = __ADC_PTR_REG_OFFSET(ADCx->CFGR1,
+      |                           ^~~~
+/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4120:21: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
+ 4120 |   register uint32_t AnalogWDMonitChannels = (READ_BIT(*preg, AWDy) & AWDy & ADC_AWD_CR_ALL_CHANNEL_MASK);
+      |                     ^~~~~~~~~~~~~~~~~~~~~
+In file included from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_hal_adc.h:31,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/STM32C0xx/stm32c0xx_hal_conf_default.h:238,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/STM32C0xx/stm32c0xx_hal_conf.h:13,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_hal.h:30,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/CMSIS/Device/ST/STM32C0xx/Include/stm32c0xx.h:211,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/libraries/SrcWrapper/inc/stm32_def.h:24,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/libraries/SrcWrapper/inc/clock.h:19,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring_time.h:23,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring.h:38,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/Arduino.h:36,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/Print.cpp:23:
+/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h: In function 'void LL_ADC_SetAnalogWDMonitChannels(ADC_TypeDef*, uint32_t, uint32_t)':
+/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4010:27: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
+ 4010 |   register __IO uint32_t *preg;
+      |                           ^~~~
+/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h: In function 'uint32_t LL_ADC_GetAnalogWDMonitChannels(const ADC_TypeDef*, uint32_t)':
+/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4115:27: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
+ 4115 |   register __IO uint32_t *preg = __ADC_PTR_REG_OFFSET(ADCx->CFGR1,
+      |                           ^~~~
+/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4120:21: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
+ 4120 |   register uint32_t AnalogWDMonitChannels = (READ_BIT(*preg, AWDy) & AWDy & ADC_AWD_CR_ALL_CHANNEL_MASK);
+      |                     ^~~~~~~~~~~~~~~~~~~~~
+In file included from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_hal_adc.h:31,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/STM32C0xx/stm32c0xx_hal_conf_default.h:238,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/STM32C0xx/stm32c0xx_hal_conf.h:13,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_hal.h:30,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/CMSIS/Device/ST/STM32C0xx/Include/stm32c0xx.h:211,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/libraries/SrcWrapper/inc/stm32_def.h:24,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/libraries/SrcWrapper/inc/clock.h:19,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring_time.h:23,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring.h:38,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/Arduino.h:36,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/HardwareSerial.cpp:26:
+/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h: In function 'void LL_ADC_SetAnalogWDMonitChannels(ADC_TypeDef*, uint32_t, uint32_t)':
+/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4010:27: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
+ 4010 |   register __IO uint32_t *preg;
+      |                           ^~~~
+/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h: In function 'uint32_t LL_ADC_GetAnalogWDMonitChannels(const ADC_TypeDef*, uint32_t)':
+/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4115:27: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
+ 4115 |   register __IO uint32_t *preg = __ADC_PTR_REG_OFFSET(ADCx->CFGR1,
+      |                           ^~~~
+/home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4120:21: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
+ 4120 |   register uint32_t AnalogWDMonitChannels = (READ_BIT(*preg, AWDy) & AWDy & ADC_AWD_CR_ALL_CHANNEL_MASK);
+      |                     ^~~~~~~~~~~~~~~~~~~~~
+In file included from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_hal_adc.h:31,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/STM32C0xx/stm32c0xx_hal_conf_default.h:238,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/STM32C0xx/stm32c0xx_hal_conf.h:13,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_hal.h:30,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/CMSIS/Device/ST/STM32C0xx/Include/stm32c0xx.h:211,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/libraries/SrcWrapper/inc/stm32_def.h:24,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/libraries/SrcWrapper/inc/clock.h:19,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring_time.h:23,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring.h:38,
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/Arduino.h:36,
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/Stream.cpp:25:
 /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h: In function 'void LL_ADC_SetAnalogWDMonitChannels(ADC_TypeDef*, uint32_t, uint32_t)':
 /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4010:27: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
@@ -524,7 +542,7 @@ In file included from /home/andrii/.platformio/packages/framework-arduinoststm32
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring_time.h:23,
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring.h:38,
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/Arduino.h:36,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/WInterrupts.cpp:20:
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/main.cpp:21:
 /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h: In function 'void LL_ADC_SetAnalogWDMonitChannels(ADC_TypeDef*, uint32_t, uint32_t)':
 /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4010:27: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
  4010 |   register __IO uint32_t *preg;
@@ -546,7 +564,7 @@ In file included from /home/andrii/.platformio/packages/framework-arduinoststm32
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring_time.h:23,
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/wiring.h:38,
                  from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/Arduino.h:36,
-                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/main.cpp:21:
+                 from /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/cores/arduino/WInterrupts.cpp:20:
 /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h: In function 'void LL_ADC_SetAnalogWDMonitChannels(ADC_TypeDef*, uint32_t, uint32_t)':
 /home/andrii/.platformio/packages/framework-arduinoststm32@4.21200.0/system/Drivers/STM32C0xx_HAL_Driver/Inc/stm32c0xx_ll_adc.h:4010:27: warning: ISO C++17 does not allow 'register' storage class specifier [-Wregister]
  4010 |   register __IO uint32_t *preg;
