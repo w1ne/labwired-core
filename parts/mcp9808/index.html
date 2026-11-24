@@ -5118,14 +5118,19 @@
 </thead>
 <tbody>
 <tr>
-<td>TA temperature read</td>
+<td>T_A temperature read (pointer 0x05)</td>
 <td>✅</td>
-<td>Seeded noise σ≈0.0625 °C + thermal lag τ≈1 s</td>
+<td>13-bit two's complement, -40 to 125 °C; seeded noise σ≈0.0625 °C (placement <code>noise_sigma</code> overrides it) + thermal lag τ≈1 s</td>
+</tr>
+<tr>
+<td>Register map (DS20005095B Table 5-1)</td>
+<td>✅</td>
+<td>CONFIG 0x01, T_UPPER 0x02, T_LOWER 0x03, T_CRIT 0x04, IDs 0x06/0x07, RESOLUTION 0x08</td>
 </tr>
 <tr>
 <td>CONFIG / limits regs</td>
 <td>⚠️</td>
-<td>Storage; alert IRQ not modelled</td>
+<td>Storage with the datasheet write masks; alert output and T_A flag bits 15:13 not modelled</td>
 </tr>
 <tr>
 <td>Conversion timing by resolution</td>
