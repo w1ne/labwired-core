@@ -27,6 +27,12 @@
 //! output gives the reference there instead: for a `C`, an `AC` value or a
 //! gain the operating point does not move, so the held-operating-point
 //! derivative is the whole derivative.
+//!
+//! Model and instance parameters (`d1:cjo`, `q1_area`) hold the operating
+//! point too. With every device terminal pinned by a `V` source no
+//! parameter can move it, so there the held derivative is the whole one,
+//! and a central difference of the `.ac` output checks every parameter of
+//! every device kind, `IS`, `VTO` and `W` included.
 
 mod analog {
     use labwired_core::analog::{parse_netlist, Integration, Phasor, Solver, TransferOutput};
@@ -400,5 +406,252 @@ mod analog {
             .ac_sensitivity_analysis(&v("nowhere"), &[1e3])
             .is_err());
         assert!(solver.ac_sensitivity_analysis(&v("out2"), &[-1.0]).is_err());
+    }
+
+    /// A device with every terminal pinned by a `V` source, AC drive on
+    /// one terminal and the `.ac` current of another read out as `v(o)`
+    /// through a unit `H`.
+    struct Pinned {
+        /// The deck around the device line and `.model` card.
+        frame: &'static str,
+        /// The device line up to its instance parameters.
+        device: &'static str,
+        instance: &'static [(&'static str, f64)],
+        model: &'static str,
+        parameters: &'static [(&'static str, f64)],
+    }
+
+    impl Pinned {
+        fn deck(&self, moved: Option<(&str, f64)>) -> String {
+            let render = |list: &[(&str, f64)], instance: bool| {
+                list.iter()
+                    .map(|&(name, value)| {
+                        let value = match moved {
+                            Some((which, to))
+                                if which
+                                    == format!("{}{name}", if instance { "_" } else { ":" }) =>
+                            {
+                                to
+                            }
+                            _ => value,
+                        };
+                        format!(" {name}={value:.17e}")
+                    })
+                    .collect::<String>()
+            };
+            format!(
+                "{}{}{}\n.model {}{}\n.sens v(o) ac lin 1 1meg 1meg\n",
+                self.frame,
+                self.device,
+                render(self.instance, true),
+                self.model,
+                render(self.parameters, false),
+            )
+        }
+
+        /// Every model and instance entry against a Richardson central
+        /// difference of `v(o)` at 1 MHz, and the entry names against the
+        /// card.
+        fn check(&self, name: &str) {
+            const HERTZ: f64 = 1e6;
+            let sens = build(&self.deck(None))
+                .ac_sensitivity()
+                .unwrap_or_else(|error| panic!("{error}"));
+            let moved: Vec<(String, f64, f64)> = self
+                .parameters
+                .iter()
+                .map(|&(p, value)| (format!(":{p}"), value, value))
+                .chain(self.instance.iter().map(|&(p, value)| {
+                    let scale = if p == "temp" { value + 273.15 } else { value };
+                    (format!("_{p}"), value, scale)
+                }))
+                .collect();
+            let full = output(&self.deck(None), "o", HERTZ);
+            for (suffix, value, scale) in &moved {
+                let entry = format!("{name}{suffix}");
+                let at =
+                    |offset: f64| output(&self.deck(Some((suffix, value + offset))), "o", HERTZ);
+                let step = 1e-3 * scale;
+                let difference = |h: f64| {
+                    let (up, down) = (at(h), at(-h));
+                    ((up.re - down.re) / (2.0 * h), (up.im - down.im) / (2.0 * h))
+                };
+                let (near, far) = (difference(step), difference(2.0 * step));
+                let expected = ((4.0 * near.0 - far.0) / 3.0, (4.0 * near.1 - far.1) / 3.0);
+                let got = sens.get(&entry).unwrap_or_else(|| panic!("no `{entry}`"))[0];
+                // A parameter with no hold at this bias (a breakdown voltage
+                // in forward bias) is checked against the output's scale.
+                let floor = 1e-9 * full.magnitude() / scale.abs();
+                let error = libm::hypot(got.re - expected.0, got.im - expected.1);
+                assert!(
+                    error <= 1e-6 * libm::hypot(expected.0, expected.1) + floor,
+                    "{entry}: expected {expected:?}, got ({:e}, {:e})",
+                    got.re,
+                    got.im
+                );
+            }
+            let reported: Vec<&str> = sens
+                .entries
+                .iter()
+                .map(|(entry, _)| entry.as_str())
+                .filter(|entry| {
+                    entry.starts_with(&format!("{name}:")) || entry.starts_with(&format!("{name}_"))
+                })
+                .collect();
+            let expected: Vec<String> = moved
+                .iter()
+                .map(|(suffix, ..)| format!("{name}{suffix}"))
+                .collect();
+            assert_eq!(reported, expected, "{name} entries");
+        }
+    }
+
+    #[test]
+    fn pinned_diode_parameters_match_ac_differences() {
+        Pinned {
+            frame: "* pinned diode\nva a 0 dc 0.6 ac 1\nh1 o 0 va 1\n",
+            device: "d1 a 0 dd",
+            instance: &[("area", 1.5), ("m", 2.0), ("temp", 40.0)],
+            model: "dd d",
+            parameters: &[
+                ("is", 1e-14),
+                ("n", 1.2),
+                ("cjo", 2e-12),
+                ("vj", 0.7),
+                ("m", 0.4),
+                ("fc", 0.5),
+                ("tt", 5e-9),
+                ("bv", 50.0),
+                ("ibv", 1e-10),
+                ("eg", 1.11),
+                ("xti", 3.0),
+            ],
+        }
+        .check("d1");
+    }
+
+    #[test]
+    fn pinned_bjt_parameters_match_ac_differences() {
+        Pinned {
+            frame: "* pinned bjt\nvc c 0 dc 3\nvb b 0 dc 0.7 ac 1\nve e 0 dc 0\nh1 o 0 vc 1\n",
+            device: "q1 c b e qn",
+            instance: &[("area", 1.2), ("m", 2.0), ("temp", 40.0)],
+            model: "qn npn",
+            parameters: &[
+                ("is", 1e-15),
+                ("bf", 120.0),
+                ("br", 3.0),
+                ("nf", 1.01),
+                ("nr", 1.02),
+                ("vaf", 60.0),
+                ("var", 20.0),
+                ("ikf", 0.05),
+                ("ise", 1e-14),
+                ("ne", 1.6),
+                ("cje", 2e-12),
+                ("vje", 0.75),
+                ("mje", 0.33),
+                ("cjc", 1e-12),
+                ("vjc", 0.7),
+                ("mjc", 0.4),
+                ("xcjc", 0.8),
+                ("tf", 3e-10),
+                ("xtf", 2.0),
+                ("vtf", 4.0),
+                ("itf", 0.01),
+                ("ptf", 20.0),
+                ("tr", 1e-8),
+                ("xtb", 1.5),
+                ("eg", 1.11),
+                ("xti", 3.0),
+            ],
+        }
+        .check("q1");
+    }
+
+    #[test]
+    fn pinned_jfet_parameters_match_ac_differences() {
+        Pinned {
+            frame: "* pinned jfet\nvd d 0 dc 5\nvg g 0 dc -0.5 ac 1\nvs s 0 dc 0\nh1 o 0 vd 1\n",
+            device: "j1 d g s jn",
+            instance: &[("area", 1.3), ("m", 2.0), ("temp", 40.0)],
+            model: "jn njf",
+            parameters: &[
+                ("vto", -2.0),
+                ("beta", 1e-3),
+                ("lambda", 0.02),
+                ("is", 1e-14),
+                ("cgs", 2e-12),
+                ("cgd", 1e-12),
+                ("pb", 0.8),
+                ("fc", 0.5),
+                ("vtotc", -2e-3),
+                ("betatce", -0.5),
+            ],
+        }
+        .check("j1");
+    }
+
+    #[test]
+    fn pinned_mosfet_parameters_match_ac_differences() {
+        Pinned {
+            frame: "* pinned mosfet\nvd d 0 dc 5\nvg g 0 dc 2 ac 1\nvs s 0 dc 0\nvb b 0 dc -1\n\
+                    h1 o 0 vd 1\n",
+            device: "m1 d g s b nm",
+            instance: &[("w", 1e-5), ("l", 2e-6), ("m", 2.0), ("temp", 40.0)],
+            model: "nm nmos level=1",
+            parameters: &[
+                ("vto", 0.7),
+                ("kp", 1e-4),
+                ("gamma", 0.5),
+                ("phi", 0.65),
+                ("lambda", 0.02),
+                ("tox", 2e-8),
+                ("cgso", 1e-10),
+                ("cgdo", 1e-10),
+                ("cgbo", 1e-11),
+                ("cbd", 1e-14),
+                ("cbs", 1e-14),
+                ("pb", 0.8),
+                ("mj", 0.5),
+            ],
+        }
+        .check("m1");
+    }
+
+    /// In a network the operating point would move with `IS`; the entry
+    /// holds it. At the held point the diode is `gd = IS·e^{v/Vt}/Vt`, so
+    /// `v(a) = 1/(1 + r1·gd)` and `∂v(a)/∂IS = −r1·(gd/IS)/(1 + r1·gd)²`.
+    #[test]
+    fn model_entry_holds_the_operating_point() {
+        const HERTZ: f64 = 1e4;
+        let mut solver = build(
+            "* resistor into a diode\n\
+             v1 in 0 dc 5 ac 1\n\
+             r1 in a 1k\n\
+             d1 a 0 dd\n\
+             .model dd d is=1e-14\n\
+             .sens v(a) ac lin 1 10k 10k\n",
+        );
+        let sens = solver
+            .ac_sensitivity()
+            .unwrap_or_else(|error| panic!("{error}"));
+        let a = solver.circuit().node("a").unwrap();
+        let vt = 1.380649e-23 * 300.0 / 1.602176634e-19;
+        let gd = 1e-14 * libm::exp(solver.node_voltage(a) / vt) / vt;
+        let expected = -1e3 * (gd / 1e-14) / ((1.0 + 1e3 * gd) * (1.0 + 1e3 * gd));
+        assert_phasor(
+            "d1:is",
+            sens.get("d1:is").unwrap()[0],
+            (expected, 0.0),
+            1e-6,
+        );
+        assert_eq!(sens.frequencies, vec![HERTZ]);
+        // The element entries come first, then the model, then the instance.
+        let names: Vec<&str> = sens.entries.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(
+            names,
+            ["r1", "v1_acmag", "v1_acphase", "d1:is", "d1_area", "d1_m"]
+        );
     }
 }

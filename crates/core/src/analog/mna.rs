@@ -264,8 +264,9 @@ pub struct AcSensitivityResponse {
     /// `(name, d output / d value)` with one phasor per frequency. Names are
     /// ngspice's: the lower-case element name for an `R`, `C`, `L` or `K`
     /// (per ohm, farad, henry or unit of `k`), `<name>_gain` for an `E`,
-    /// `F`, `G` or `H`, and `<name>_acmag` / `<name>_acphase` (per unit of
-    /// magnitude, per degree) for a `V` or `I`.
+    /// `F`, `G` or `H`, `<name>_acmag` / `<name>_acphase` (per unit of
+    /// magnitude, per degree) for a `V` or `I`, `<device>:<param>` for a
+    /// model parameter and `<device>_<param>` for an instance parameter.
     pub entries: Vec<(String, Vec<Phasor>)>,
 }
 
@@ -482,6 +483,10 @@ fn solve_dense(matrix: &mut [f64], rhs: &mut [f64], size: usize) -> Result<(), u
     }
     Ok(())
 }
+
+/// One frequency's realified `.ac` forward solution and `.sens` adjoint,
+/// as [`Solver::ac_solves`] gives them.
+type AcSolve = (Vec<f64>, Vec<f64>);
 
 /// The realified complex system `[G −ωC; ωC G]` at `hertz`, with each
 /// delayed term multiplied by `e^{-jωTD}`, into `system` (`2·dim` square).
@@ -2871,31 +2876,7 @@ impl Solver {
         if let Some(mut free) = self.small_signal_point()? {
             return free.model_sensitivity_analysis(output);
         }
-        let circuit = &self.circuit;
-        let mut moves = Vec::new();
-        for (name, model) in circuit
-            .diodes
-            .iter()
-            .map(|d| (&d.name, &d.model_name))
-            .chain(circuit.bjts.iter().map(|q| (&q.name, &q.model_name)))
-            .chain(circuit.jfets.iter().map(|j| (&j.name, &j.model_name)))
-            .chain(circuit.mosfets.iter().map(|m| (&m.name, &m.model_name)))
-            .filter(|(name, _)| !name.contains('#'))
-        {
-            for (parameter, value) in circuit.model_parameters(model) {
-                if *value != 0.0 {
-                    moves.push(ParameterMove {
-                        entry: format!("{}:{parameter}", name.to_ascii_lowercase()),
-                        instance: name.clone(),
-                        target: MoveTarget::Model {
-                            model: model.clone(),
-                            parameter: parameter.clone(),
-                        },
-                        value: *value,
-                    });
-                }
-            }
-        }
+        let moves = self.model_moves();
         self.parameter_sensitivity(output, moves)
     }
 
@@ -2926,6 +2907,43 @@ impl Solver {
         if let Some(mut free) = self.small_signal_point()? {
             return free.instance_sensitivity_analysis(output);
         }
+        let moves = self.instance_moves();
+        self.parameter_sensitivity(output, moves)
+    }
+
+    /// Every model parameter [`Solver::model_sensitivity_analysis`] moves.
+    fn model_moves(&self) -> Vec<ParameterMove> {
+        let circuit = &self.circuit;
+        let mut moves = Vec::new();
+        for (name, model) in circuit
+            .diodes
+            .iter()
+            .map(|d| (&d.name, &d.model_name))
+            .chain(circuit.bjts.iter().map(|q| (&q.name, &q.model_name)))
+            .chain(circuit.jfets.iter().map(|j| (&j.name, &j.model_name)))
+            .chain(circuit.mosfets.iter().map(|m| (&m.name, &m.model_name)))
+            .filter(|(name, _)| !name.contains('#'))
+        {
+            for (parameter, value) in circuit.model_parameters(model) {
+                if *value != 0.0 {
+                    moves.push(ParameterMove {
+                        entry: format!("{}:{parameter}", name.to_ascii_lowercase()),
+                        instance: name.clone(),
+                        target: MoveTarget::Model {
+                            model: model.clone(),
+                            parameter: parameter.clone(),
+                        },
+                        value: *value,
+                    });
+                }
+            }
+        }
+        moves
+    }
+
+    /// Every instance parameter [`Solver::instance_sensitivity_analysis`]
+    /// moves.
+    fn instance_moves(&self) -> Vec<ParameterMove> {
         use InstanceParameter::{Area, Length, Multiplier, Temperature, Width};
         let circuit = &self.circuit;
         let mut moves = Vec::new();
@@ -2985,7 +3003,48 @@ impl Solver {
                 ],
             );
         }
-        self.parameter_sensitivity(output, moves)
+        moves
+    }
+
+    /// A solver for the deck lowered again with `movement` at `moved`, its
+    /// devices linearised at the unknowns `x`.
+    fn moved_solver(
+        &self,
+        movement: &ParameterMove,
+        moved: f64,
+        x: &[f64],
+    ) -> Result<Solver, AnalogError> {
+        let lowered = match &movement.target {
+            MoveTarget::Model { model, parameter } => {
+                self.circuit
+                    .with_model_parameter(&movement.instance, model, parameter, moved)?
+            }
+            MoveTarget::Instance(parameter) => {
+                self.circuit
+                    .with_instance_parameter(&movement.instance, *parameter, moved)?
+            }
+        };
+        let mut solver = Solver::new(lowered, self.integration)?;
+        if solver.dim() != self.dim() {
+            return Err(AnalogError::Config(format!(
+                "moving `{}` changed the circuit's unknowns",
+                movement.entry
+            )));
+        }
+        solver.land(x)?;
+        Ok(solver)
+    }
+
+    /// The step a move is differenced with: a part in 10³ of the value, or
+    /// for a temperature (in °C, whose zero is not a scale) of its absolute
+    /// value.
+    fn move_step(movement: &ParameterMove) -> f64 {
+        const STEP: f64 = 1e-3;
+        let scale = match movement.target {
+            MoveTarget::Instance(InstanceParameter::Temperature) => movement.value + 273.15,
+            _ => movement.value,
+        };
+        STEP * scale
     }
 
     /// `−wᵀ·∂F/∂p` for each move, with `w` the `.sens` adjoint and `∂F/∂p` a
@@ -2996,7 +3055,6 @@ impl Solver {
         output: &TransferOutput,
         moves: Vec<ParameterMove>,
     ) -> Result<SensitivityResponse, AnalogError> {
-        const STEP: f64 = 1e-3;
         let output_port = self.output_port(output, ".sens")?;
         if moves.is_empty() {
             return Ok(SensitivityResponse {
@@ -3008,27 +3066,7 @@ impl Solver {
         let x: Vec<f64> = self.node_v.iter().chain(&self.branch_i).copied().collect();
         let mut entries = Vec::new();
         for movement in moves {
-            let residual = |moved: f64| -> Result<Vec<f64>, AnalogError> {
-                let lowered =
-                    match &movement.target {
-                        MoveTarget::Model { model, parameter } => self
-                            .circuit
-                            .with_model_parameter(&movement.instance, model, parameter, moved)?,
-                        MoveTarget::Instance(parameter) => self.circuit.with_instance_parameter(
-                            &movement.instance,
-                            *parameter,
-                            moved,
-                        )?,
-                    };
-                let mut solver = Solver::new(lowered, self.integration)?;
-                if solver.dim() != dim {
-                    return Err(AnalogError::Config(format!(
-                        "moving `{}` changed the circuit's unknowns",
-                        movement.entry
-                    )));
-                }
-                solver.dc_residual(&x)
-            };
+            let residual = |moved: f64| self.moved_solver(&movement, moved, &x)?.dc_residual(&x);
             // Richardson's `(4·D(h) − D(2h))/3` of two central differences
             // cancels the `h²` term, so the step can be large enough that
             // the residual's rounding (cells shared with a terminal
@@ -3043,13 +3081,7 @@ impl Solver {
                     .sum::<f64>()
                     / (2.0 * step))
             };
-            // A temperature moves in °C, whose zero is not a scale: step it
-            // by a part in 10³ of its absolute value.
-            let scale = match movement.target {
-                MoveTarget::Instance(InstanceParameter::Temperature) => movement.value + 273.15,
-                _ => movement.value,
-            };
-            let step = STEP * scale;
+            let step = Self::move_step(&movement);
             let slope = (4.0 * difference(step)? - difference(2.0 * step)?) / 3.0;
             entries.push((movement.entry, slope));
         }
@@ -3073,13 +3105,15 @@ impl Solver {
         Ok(w)
     }
 
-    /// The DC residual `A(x)·x − b(x)` of the operating-point system at the
-    /// unknowns `x`, with every device linearised exactly at `x`. The
-    /// limiters may refuse to jump there from a fresh solver's zero state at
-    /// once, so the linearisation is moved until they let it land.
-    fn dc_residual(&mut self, x: &[f64]) -> Result<Vec<f64>, AnalogError> {
+    /// Put the unknowns at `x` and every device's linearisation exactly
+    /// there. The limiters may refuse to jump there from a fresh solver's
+    /// zero state at once, so the linearisation is moved until they let it
+    /// land.
+    fn land(&mut self, x: &[f64]) -> Result<(), AnalogError> {
         let dim = self.dim();
         self.solution[..dim].copy_from_slice(x);
+        self.node_v.copy_from_slice(&x[..self.nodes]);
+        self.branch_i.copy_from_slice(&x[self.nodes..dim]);
         if self.nonlinear {
             let mut landed = false;
             for _ in 0..MAX_NEWTON_ITERATIONS {
@@ -3097,6 +3131,13 @@ impl Solver {
             }
         }
         self.cached_stamp = None;
+        Ok(())
+    }
+
+    /// The DC residual `A(x)·x − b(x)` of the operating-point system at the
+    /// unknowns `x` the solver has [landed](Solver::land) on.
+    fn dc_residual(&mut self, x: &[f64]) -> Result<Vec<f64>, AnalogError> {
+        let dim = self.dim();
         self.build(Stamp::OperatingPoint);
         if let Some(error) = self.behavioural_error.take() {
             return Err(error);
@@ -3296,8 +3337,10 @@ impl Solver {
         Ok(PoleZeroResponse { poles, zeros })
     }
 
-    /// Run the netlist's own `.sens ... ac` card; see
-    /// [`Solver::ac_sensitivity_analysis`].
+    /// Run the netlist's own `.sens ... ac` card: the element values of
+    /// [`Solver::ac_sensitivity_analysis`], then the model parameters of
+    /// [`Solver::ac_model_sensitivity_analysis`] and the instance parameters
+    /// of [`Solver::ac_instance_sensitivity_analysis`].
     pub fn ac_sensitivity(&mut self) -> Result<AcSensitivityResponse, AnalogError> {
         let card = self.circuit.sensitivity.clone().ok_or_else(|| {
             AnalogError::Config(
@@ -3309,7 +3352,17 @@ impl Solver {
                 "the `.sens` card is the DC form; run `Solver::sensitivity`".to_string(),
             )
         })?;
-        self.ac_sensitivity_analysis(&card.output, &sweep.frequencies())
+        let frequencies = sweep.frequencies();
+        let mut response = self.ac_sensitivity_analysis(&card.output, &frequencies)?;
+        response.entries.extend(
+            self.ac_model_sensitivity_analysis(&card.output, &frequencies)?
+                .entries,
+        );
+        response.entries.extend(
+            self.ac_instance_sensitivity_analysis(&card.output, &frequencies)?
+                .entries,
+        );
+        Ok(response)
     }
 
     /// AC sensitivity, as ngspice's `.sens ... ac`: at each of `frequencies`
@@ -3351,11 +3404,7 @@ impl Solver {
         }
         let output_port = self.output_port(output, ".sens")?;
         let dim = self.dim();
-        let (g, c, couplings, excitation) = self.linearised(|solver| {
-            let couplings = solver.delayed_couplings();
-            let (g, c) = solver.ac_matrices(&couplings)?;
-            Ok((g, c, couplings, solver.ac_excitation()))
-        })?;
+        let solves = self.ac_solves(output_port, frequencies)?;
         let derivatives: Vec<_> = self
             .value_derivatives()
             .into_iter()
@@ -3363,29 +3412,7 @@ impl Solver {
             .collect();
         let mut values = vec![Vec::with_capacity(frequencies.len()); derivatives.len()];
 
-        let size = 2 * dim;
-        let mut system = vec![0.0; size * size];
-        let mut transpose = vec![0.0; size * size];
-        for &hertz in frequencies {
-            small_signal_system(&mut system, dim, &g, &c, &couplings, hertz);
-            for row in 0..size {
-                for column in 0..size {
-                    transpose[column * size + row] = system[row * size + column];
-                }
-            }
-            let mut forward: Vec<f64> = excitation
-                .iter()
-                .map(|p| p.re)
-                .chain(excitation.iter().map(|p| p.im))
-                .collect();
-            solve_dense(&mut system, &mut forward, size)
-                .map_err(|row| AnalogError::Singular { row: row % dim })?;
-            // The realified transpose is `Yᴴ`; with a real `e` its solution
-            // is `conj(w)`.
-            let mut adjoint = vec![0.0; size];
-            output_port.excite(&mut adjoint[..dim]);
-            solve_dense(&mut transpose, &mut adjoint, size)
-                .map_err(|row| AnalogError::Singular { row: row % dim })?;
+        for (&hertz, (forward, adjoint)) in frequencies.iter().zip(&solves) {
             let x = |node: NodeRef| {
                 node.map_or(Phasor::default(), |n| Phasor {
                     re: forward[n],
@@ -3442,6 +3469,197 @@ impl Solver {
             .zip(values)
             .map(|((name, _), values)| (name, values))
             .collect();
+        Ok(AcSensitivityResponse {
+            frequencies: frequencies.to_vec(),
+            entries,
+        })
+    }
+
+    /// Per frequency, the realified forward solution `Y·x = b` of the `.ac`
+    /// system at the present linearisation and the realified adjoint
+    /// `Yᴴ·w̄ = e` for the output port's unit excitation `e`, whose
+    /// conjugate is the `.sens` adjoint `w` with `Yᵀ·w = e`.
+    fn ac_solves(
+        &mut self,
+        output_port: Port,
+        frequencies: &[f64],
+    ) -> Result<Vec<AcSolve>, AnalogError> {
+        let dim = self.dim();
+        let (g, c, couplings, excitation) = self.linearised(|solver| {
+            let couplings = solver.delayed_couplings();
+            let (g, c) = solver.ac_matrices(&couplings)?;
+            Ok((g, c, couplings, solver.ac_excitation()))
+        })?;
+        let size = 2 * dim;
+        let mut system = vec![0.0; size * size];
+        let mut transpose = vec![0.0; size * size];
+        let mut solves = Vec::with_capacity(frequencies.len());
+        for &hertz in frequencies {
+            small_signal_system(&mut system, dim, &g, &c, &couplings, hertz);
+            for row in 0..size {
+                for column in 0..size {
+                    transpose[column * size + row] = system[row * size + column];
+                }
+            }
+            let mut forward: Vec<f64> = excitation
+                .iter()
+                .map(|p| p.re)
+                .chain(excitation.iter().map(|p| p.im))
+                .collect();
+            solve_dense(&mut system, &mut forward, size)
+                .map_err(|row| AnalogError::Singular { row: row % dim })?;
+            // The realified transpose is `Yᴴ`; with a real `e` its solution
+            // is `conj(w)`.
+            let mut adjoint = vec![0.0; size];
+            output_port.excite(&mut adjoint[..dim]);
+            solve_dense(&mut transpose, &mut adjoint, size)
+                .map_err(|row| AnalogError::Singular { row: row % dim })?;
+            solves.push((forward, adjoint));
+        }
+        Ok(solves)
+    }
+
+    /// AC sensitivity to device model parameters: the `<device>:<param>`
+    /// entries of [`Solver::model_sensitivity_analysis`], for the `.ac`
+    /// output phasor at each of `frequencies` (hertz), with the parameters
+    /// chosen and named the same way. [`Solver::ac_sensitivity`] adds them
+    /// after the element values.
+    ///
+    /// The operating point is held, as for the element values of
+    /// [`Solver::ac_sensitivity_analysis`]: the moved device is linearised
+    /// at the solver's present solution, so a parameter that moves the DC
+    /// bias (`IS`, `BF`, `VTO`) enters only through the change it makes to
+    /// the small-signal conductances and capacitances at that bias. For a
+    /// parameter that sets only charge (`CJO`, `TT`, `CJE`, `TF`, `CGSO`) the
+    /// held derivative is the whole derivative.
+    ///
+    /// Each entry is `−wᵀ·(∂Y/∂p)·x` with the forward solution `x` and the
+    /// adjoint `w` of [`Solver::ac_sensitivity_analysis`]. `∂Y/∂p` is a
+    /// Richardson-extrapolated central difference of the `.ac` system of
+    /// the deck lowered again with the parameter moved by one and two parts
+    /// in 10³ each way, every lowering linearised at the unchanged
+    /// operating point. This needs a circuit parsed from a deck with its
+    /// `.sens` card. ngspice-42 does not solve the operating point for this
+    /// analysis, so it is no reference here.
+    ///
+    /// The transient state is left exactly as it was, as for
+    /// [`Solver::ac_analysis`].
+    pub fn ac_model_sensitivity_analysis(
+        &mut self,
+        output: &TransferOutput,
+        frequencies: &[f64],
+    ) -> Result<AcSensitivityResponse, AnalogError> {
+        if let Some(mut free) = self.small_signal_point()? {
+            return free.ac_model_sensitivity_analysis(output, frequencies);
+        }
+        let moves = self.model_moves();
+        self.ac_parameter_sensitivity(output, frequencies, moves)
+    }
+
+    /// AC sensitivity to device instance parameters: the
+    /// `<device>_<param>` entries of
+    /// [`Solver::instance_sensitivity_analysis`], for the `.ac` output
+    /// phasor at each of `frequencies` (hertz), with the operating point
+    /// held and the method of [`Solver::ac_model_sensitivity_analysis`].
+    /// [`Solver::ac_sensitivity`] adds them after the model parameters.
+    ///
+    /// The transient state is left exactly as it was, as for
+    /// [`Solver::ac_analysis`].
+    pub fn ac_instance_sensitivity_analysis(
+        &mut self,
+        output: &TransferOutput,
+        frequencies: &[f64],
+    ) -> Result<AcSensitivityResponse, AnalogError> {
+        if let Some(mut free) = self.small_signal_point()? {
+            return free.ac_instance_sensitivity_analysis(output, frequencies);
+        }
+        let moves = self.instance_moves();
+        self.ac_parameter_sensitivity(output, frequencies, moves)
+    }
+
+    /// `−wᵀ·(∂Y/∂p)·x` per frequency for each move, with `∂Y/∂p` a
+    /// Richardson-extrapolated central difference of the moved `.ac` system
+    /// at the held operating point.
+    fn ac_parameter_sensitivity(
+        &mut self,
+        output: &TransferOutput,
+        frequencies: &[f64],
+        moves: Vec<ParameterMove>,
+    ) -> Result<AcSensitivityResponse, AnalogError> {
+        if let Some(bad) = frequencies.iter().find(|f| !(f.is_finite() && **f >= 0.0)) {
+            return Err(AnalogError::Config(format!(
+                "`.sens` frequency {bad} Hz must be finite and not negative"
+            )));
+        }
+        let output_port = self.output_port(output, ".sens")?;
+        let mut entries = Vec::with_capacity(moves.len());
+        if moves.is_empty() {
+            return Ok(AcSensitivityResponse {
+                frequencies: frequencies.to_vec(),
+                entries,
+            });
+        }
+        let dim = self.dim();
+        let size = 2 * dim;
+        let x: Vec<f64> = self.node_v.iter().chain(&self.branch_i).copied().collect();
+        let solves = self.ac_solves(output_port, frequencies)?;
+        let mut system = vec![0.0; size * size];
+        for movement in moves {
+            let step = Self::move_step(&movement);
+            // The moved `G`, `C` and delayed terms at `p + h`, `p − h`,
+            // `p + 2h` and `p − 2h`.
+            let lowerings = [step, -step, 2.0 * step, -2.0 * step]
+                .into_iter()
+                .map(|offset| {
+                    let mut solver = self.moved_solver(&movement, movement.value + offset, &x)?;
+                    let couplings = solver.delayed_couplings();
+                    let (g, c) = solver.ac_matrices(&couplings)?;
+                    Ok((g, c, couplings))
+                })
+                .collect::<Result<Vec<_>, AnalogError>>()?;
+            let mut values = Vec::with_capacity(frequencies.len());
+            for (&hertz, (forward, adjoint)) in frequencies.iter().zip(&solves) {
+                // `Y(p + offset)·x` for each lowering, realified.
+                let products: Vec<Vec<f64>> = lowerings
+                    .iter()
+                    .map(|(g, c, couplings)| {
+                        small_signal_system(&mut system, dim, g, c, couplings, hertz);
+                        (0..size)
+                            .map(|row| {
+                                (0..size)
+                                    .map(|column| system[row * size + column] * forward[column])
+                                    .sum::<f64>()
+                            })
+                            .collect()
+                    })
+                    .collect();
+                // Richardson's `(4·D(h) − D(2h))/3` of the two central
+                // differences of `Y·x`.
+                let derivative = |row: usize| {
+                    let near = (products[0][row] - products[1][row]) / (2.0 * step);
+                    let far = (products[2][row] - products[3][row]) / (4.0 * step);
+                    (4.0 * near - far) / 3.0
+                };
+                // `w = conj(adjoint)`.
+                let value = (0..dim).fold(Phasor::default(), |sum, row| {
+                    let w = Phasor {
+                        re: adjoint[row],
+                        im: -adjoint[dim + row],
+                    };
+                    let dy = Phasor {
+                        re: derivative(row),
+                        im: derivative(dim + row),
+                    };
+                    let term = complex_product(w, dy);
+                    Phasor {
+                        re: sum.re - term.re,
+                        im: sum.im - term.im,
+                    }
+                });
+                values.push(value);
+            }
+            entries.push((movement.entry, values));
+        }
         Ok(AcSensitivityResponse {
             frequencies: frequencies.to_vec(),
             entries,
