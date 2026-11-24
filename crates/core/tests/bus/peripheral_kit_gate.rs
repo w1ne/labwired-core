@@ -162,24 +162,14 @@ fn manifest_json_matches_registry() {
     let committed = std::fs::read_to_string(&manifest_path)
         .unwrap_or_else(|e| panic!("reading {manifest_path:?}: {e}"));
 
-    #[derive(serde::Serialize)]
-    struct Manifest<'a> {
-        schema_version: u32,
-        peripherals: Vec<&'a labwired_core::peripherals::kit::KitMetadata>,
-    }
-    let expected_value = Manifest {
-        schema_version: 2,
-        peripherals: registry::kits().iter().map(|k| k.metadata()).collect(),
-    };
-    let mut expected = serde_json::to_string_pretty(&expected_value).unwrap();
-    if !expected.ends_with('\n') {
-        expected.push('\n');
-    }
+    // Same serialiser as the generator: the check and the writer cannot
+    // disagree about ordering or formatting.
+    let expected = labwired_core::peripherals::kit::manifest::json();
 
     if committed != expected {
         // Show a short diff hint so the developer knows what to do.
         panic!(
-            "peripherals-manifest.json is stale.\n\
+            "peripherals manifest.json is stale.\n\
              Re-run: cargo run -p labwired-cli --bin gen-peripherals-manifest -- \\\n        --out {}\n\
              (Committed bytes: {}, expected: {}.)",
             manifest_path.display(),
