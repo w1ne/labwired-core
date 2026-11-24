@@ -1,5 +1,6 @@
-[2m2026-11-09T07:28:38.906671Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../../configs/chips/stm32c031c6.yaml
-[2m2026-11-09T07:28:38.985688Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8002b11
+[2m2026-11-24T22:10:13.948141Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../../configs/chips/stm32c031c6.yaml
+[2m2026-11-24T22:10:14.014110Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8002b11
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-PASS  1/1 checks · test · 52470 steps · 0.02s
+labwired-cli test: idle_ff skipped 51330 of 70000 device cycles (18670 interpreted)
+PASS  1/1 checks · test · 70000 steps · 0.00s
