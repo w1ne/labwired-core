@@ -245,6 +245,11 @@ fn input_ranges_are_validated_before_a_solver_starts() {
     assert_eq!(spec.input_ranges["lux"].min, Some(1.0));
     assert_eq!(spec.input_ranges["lux"].max, Some(100.0));
     assert_eq!(spec.input_ranges["lux"].unit.as_deref(), Some("lx"));
+    // The unit is trimmed for the message; surrounding blanks are not data.
+    let padded =
+        NgspiceModelSpec::from_config(&ranging(lux, "{ lux: { min: 1, unit: \" lx \" } }"), &dir)
+            .unwrap();
+    assert_eq!(padded.input_ranges["lux"].unit.as_deref(), Some("lx"));
     // One bound is allowed; no bound is not.
     for ranges in ["{ lux: { min: 1 } }", "{ lux: { max: 100 } }"] {
         NgspiceModelSpec::from_config(&ranging(lux, ranges), &dir).unwrap();

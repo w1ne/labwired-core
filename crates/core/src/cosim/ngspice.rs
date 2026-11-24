@@ -324,7 +324,8 @@ fn input_ranges_from_config(
             Some(value) => Some(
                 value
                     .as_str()
-                    .filter(|unit| !unit.trim().is_empty() && unit.chars().count() <= 16)
+                    .map(str::trim)
+                    .filter(|unit| !unit.is_empty() && unit.chars().count() <= 16)
                     .ok_or_else(|| {
                         fail(format!(
                             "config.input_ranges.{name}.unit must be 1-16 visible characters"
