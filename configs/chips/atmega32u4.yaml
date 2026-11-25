@@ -129,3 +129,23 @@ pins:
   PF5: { gpio: "portf", bit: 5 }
   PF6: { gpio: "portf", bit: 6 }
   PF7: { gpio: "portf", bit: 7 }
+
+# Regular ADC inputs by pad, Microchip DS7766 "Pinout": ADC0..ADC7 are
+# PF0..PF7 and ADC8..ADC11 are PD4..PD7. The 44-pin TQFP/QFN package does not
+# bond PF2/PF3 (ADC2/ADC3), so they are absent here, the same rule the
+# STM32F103 LQFP48 applies to PC0..PC5. Arduino A0..A5 are PF7, PF6, PF5,
+# PF4, PF1, PF0 on the Leonardo, so the deck names the chip pad, not the
+# header pin.
+# Consumed by co-simulation `board.analog.<pad>_volts`; pads not listed are
+# refused.
+analog_pins:
+  PF0: { peripheral: "adc", channel: 0 }
+  PF1: { peripheral: "adc", channel: 1 }
+  PF4: { peripheral: "adc", channel: 4 }
+  PF5: { peripheral: "adc", channel: 5 }
+  PF6: { peripheral: "adc", channel: 6 }
+  PF7: { peripheral: "adc", channel: 7 }
+  PD4: { peripheral: "adc", channel: 8 }
+  PD5: { peripheral: "adc", channel: 9 }
+  PD6: { peripheral: "adc", channel: 10 }
+  PD7: { peripheral: "adc", channel: 11 }

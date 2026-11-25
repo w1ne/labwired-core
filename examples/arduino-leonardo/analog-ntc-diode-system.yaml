@@ -1,0 +1,44 @@
+# Generic Beta NTC and Shockley diode netlists drive two ARDUINO LEONARDO
+# analog inputs through the ATmega32U4 descriptor's PF7/PF6 channel routes.
+#
+# Neither netlist names the board, the ADC, or a channel: each one only solves
+# its own circuit and publishes a probe voltage to `board.analog.<pad>_volts`.
+# The descriptor's `analog_pins:` maps PF7 -> adc/channel 7 (Arduino A0) and
+# PF6 -> adc/channel 6 (A1), so the same two decks that run on the STM32, WCH,
+# nRF52 and ATmega328P boards run here unchanged at the Leonardo's 5 V AVcc.
+name: "arduino-leonardo-analog"
+chip: "../../configs/chips/atmega32u4.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.pf7_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 5
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 5
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.pf6_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 5
+        Rlim supply sense 1k
+        D1 sense 0 DREF
+        .model DREF D(IS=2.52n N=1.752 RS=0.568)
+      probes:
+        v_diode: "v(sense)"
+      vdd: 5

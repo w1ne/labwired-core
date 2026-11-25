@@ -14,8 +14,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **439**
-- Covered end to end: **18**
-- Not covered: **421**
+- Covered end to end: **19**
+- Not covered: **420**
 - Not covered but with an `analog_pins:` map: **50** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` map, an ADC model, or a digital endpoint first)
@@ -89,7 +89,6 @@ count is what the generic decks can reach without new routing.
 | `adafruit-feather-rp2350` | `rp2350-feather` | 0 |
 | `adxl345-sensor-lab` | `stm32f103` | 10 |
 | `apollo4p-evb` | `amap42kp` | 0 |
-| `arduino-leonardo` | `atmega32u4` | 0 |
 | `arduino-nano-33-ble-bme280` | `nrf52840` | 8 |
 | `arduino-nano-33-iot-bme280` | `atsamd21g18a` | 0 |
 | `arduino-nano-esp32-bme280` | `esp32s3` | 0 |
@@ -510,6 +509,7 @@ count is what the generic decks can reach without new routing.
 | Profile | Chip | Evidence |
 | --- | --- | --- |
 | `adafruit-feather-esp32-v2` | `esp32` | `crates/core/tests/analog/cosim_esp32_analog_diode.rs` |
+| `arduino-leonardo` | `atmega32u4` | `crates/core/tests/analog/cosim_avr_atmega32u4_analog.rs` |
 | `arduino-mega-2560` | `atmega2560` | `crates/core/tests/cosim/cosim_pin_routing.rs` |
 | `arduino-nano-33-ble` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
 | `arduino-nano` | `atmega328p` | `crates/core/tests/analog/cosim_avr_atmega328p_analog.rs` |
