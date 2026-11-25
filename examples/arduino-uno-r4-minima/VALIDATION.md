@@ -75,3 +75,19 @@ cargo run -q -p labwired-cli -- \
 Pass criteria:
 1. script exits `0`
 2. audit report exists at `out/unsupported-audit/arduino-uno-r4-minima/report.md`
+
+## 7) Run the mixed-signal analog coverage test
+
+The board's `analog_pins:` map (A0-A5 → P014/P000/P001/P002/P101/P100) is proven
+by the generic NTC divider, Shockley diode load line and A4 divider in
+`analog-ntc-diode-system.yaml`:
+
+```bash
+cargo test -p labwired-core --test analog cosim_ra4m1_analog -- --nocapture
+```
+
+Pass criteria:
+1. both tests pass (`uno_r4_minima_*`)
+2. `docs/analog_board_coverage.md` lists `arduino-uno-r4-minima` and
+   `arduino-uno-r4-minima-bme280` under **Covered**
+

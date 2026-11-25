@@ -56,6 +56,32 @@ pins:
   P110: { gpio: port1, bit: 10, functions: [{ type: uart, peripheral: sci9, role: rx }] }
   # D13 / LED — MINIMA: P111.
   P111: { gpio: port1, bit: 11, functions: [{ type: gpio, peripheral: port1 }] }
+  # Arduino A0-A5 — MINIMA: P014, P000, P001, P002, P101, P100
+  # (ArduinoCore-renesas 1.6.0 variants/MINIMA/variant.cpp g_pin_cfg). A4/A5
+  # share the pad with IIC1 SDA1/SCL1; a profile that runs the analog decks
+  # on them must not also drive the sensor bus.
+  P000: { gpio: port0, bit: 0, functions: [{ type: gpio, peripheral: port0 }] }
+  P001: { gpio: port0, bit: 1, functions: [{ type: gpio, peripheral: port0 }] }
+  P002: { gpio: port0, bit: 2, functions: [{ type: gpio, peripheral: port0 }] }
+  P014: { gpio: port0, bit: 14, functions: [{ type: gpio, peripheral: port0 }] }
+  P100: { gpio: port1, bit: 0, functions: [{ type: gpio, peripheral: port1 }] }
+  P101: { gpio: port1, bit: 1, functions: [{ type: gpio, peripheral: port1 }] }
+# The converter inputs the Arduino pin names reach. Labels are the chip's own
+# pad names, as everywhere else in this tree. The channel numbers are the
+# `PIN_ANALOG|CHANNEL_n` values in ArduinoCore-renesas 1.6.0
+# variants/MINIMA/pinmux.inc, which are the ADANSA0/ADANSA1 bit positions the
+# core scans, not an `AN0nn` relabelling:
+#   A0 = P014 -> 9,  A1 = P000 -> 0,  A2 = P001 -> 1,
+#   A3 = P002 -> 2,  A4 = P101 -> 21, A5 = P100 -> 22.
+# A4/A5 land in ADANSA1 (channels 16-28), so a conversion of either proves the
+# second half of the group-A selector.
+analog_pins:
+  P014: { peripheral: "adc0", channel: 9 }
+  P000: { peripheral: "adc0", channel: 0 }
+  P001: { peripheral: "adc0", channel: 1 }
+  P002: { peripheral: "adc0", channel: 2 }
+  P101: { peripheral: "adc0", channel: 21 }
+  P100: { peripheral: "adc0", channel: 22 }
 peripherals:
   # R_SYSTEM @ 0x4001E000: the full R_SYSTEM register file (0x700 bytes,
   # VBTBKR[512] at +0x500 last; R7FA4M1AB.h) with OSCSF derived from the

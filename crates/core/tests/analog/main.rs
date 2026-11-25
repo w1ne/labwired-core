@@ -49,6 +49,7 @@ mod cosim_nrf52840_family_analog;
 mod cosim_nucleo_f103rb_analog;
 mod cosim_nucleo_f401re_analog;
 mod cosim_nucleo_f767zi_analog;
+mod cosim_ra4m1_analog;
 mod cosim_stm32f4_family_analog;
 mod declarative_noise;
 mod declarative_spi_supply_por;
