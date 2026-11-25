@@ -4944,8 +4944,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.</p>
 <ul>
 <li>Profiles in <code>configs/systems/</code>: <strong>440</strong></li>
-<li>Covered end to end: <strong>21</strong></li>
-<li>Not covered: <strong>419</strong></li>
+<li>Covered end to end: <strong>34</strong></li>
+<li>Not covered: <strong>406</strong></li>
 <li>Not covered but with an <code>analog_pins:</code> map: <strong>51</strong> (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   <code>analog_pins:</code> map, an ADC model, or a digital endpoint first)</li>
@@ -5233,21 +5233,6 @@ count is what the generic decks can reach without new routing.</p>
 <tr>
 <td><code>adafruit-feather-esp32-v2-bme280</code></td>
 <td><code>esp32</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>adafruit-feather-rp2040-bme280</code></td>
-<td><code>rp2040-feather</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>adafruit-feather-rp2040</code></td>
-<td><code>rp2040-feather</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>adafruit-feather-rp2350</code></td>
-<td><code>rp2350-feather</code></td>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
@@ -7021,58 +7006,8 @@ count is what the generic decks can reach without new routing.</p>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
-<td><code>pico-bme280</code></td>
-<td><code>rp2040</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>pico-selftest</code></td>
-<td><code>rp2040</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>pico-w-bme280</code></td>
-<td><code>rp2040</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>pico</code></td>
-<td><code>rp2040</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>pico2-bme280</code></td>
-<td><code>rp2350</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>pico2</code></td>
-<td><code>rp2350</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
 <td><code>pybadge</code></td>
 <td><code>atsamd51-pybadge</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>rp2040-pico</code></td>
-<td><code>rp2040</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>rp2350-zero</code></td>
-<td><code>rp2350</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>rpi-pico-2-w-bme280</code></td>
-<td><code>rp2350</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>rpi-pico-2-w</code></td>
-<td><code>rp2350</code></td>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
@@ -7343,6 +7278,21 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>crates/core/tests/analog/cosim_esp32_analog_diode.rs</code></td>
 </tr>
 <tr>
+<td><code>adafruit-feather-rp2040-bme280</code></td>
+<td><code>rp2040-feather</code></td>
+<td><code>crates/core/tests/analog/cosim_rp2040_family_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>adafruit-feather-rp2040</code></td>
+<td><code>rp2040-feather</code></td>
+<td><code>crates/core/tests/analog/cosim_rp2040_family_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>adafruit-feather-rp2350</code></td>
+<td><code>rp2350-feather</code></td>
+<td><code>crates/core/tests/analog/cosim_rp2040_family_analog.rs</code></td>
+</tr>
+<tr>
 <td><code>arduino-leonardo</code></td>
 <td><code>atmega32u4</code></td>
 <td><code>crates/core/tests/analog/cosim_avr_atmega32u4_analog.rs</code></td>
@@ -7431,6 +7381,56 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>nucleo-f767zi</code></td>
 <td><code>stm32f767</code></td>
 <td><code>crates/core/tests/analog/cosim_nucleo_f767zi_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>pico-bme280</code></td>
+<td><code>rp2040</code></td>
+<td><code>crates/core/tests/analog/cosim_rp2040_family_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>pico-selftest</code></td>
+<td><code>rp2040</code></td>
+<td><code>crates/core/tests/analog/cosim_rp2040_family_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>pico-w-bme280</code></td>
+<td><code>rp2040</code></td>
+<td><code>crates/core/tests/analog/cosim_rp2040_family_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>pico</code></td>
+<td><code>rp2040</code></td>
+<td><code>crates/core/tests/analog/cosim_rp2040_family_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>pico2-bme280</code></td>
+<td><code>rp2350</code></td>
+<td><code>crates/core/tests/analog/cosim_rp2040_family_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>pico2</code></td>
+<td><code>rp2350</code></td>
+<td><code>crates/core/tests/analog/cosim_rp2040_family_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>rp2040-pico</code></td>
+<td><code>rp2040</code></td>
+<td><code>crates/core/tests/analog/cosim_rp2040_family_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>rp2350-zero</code></td>
+<td><code>rp2350</code></td>
+<td><code>crates/core/tests/analog/cosim_rp2040_family_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>rpi-pico-2-w-bme280</code></td>
+<td><code>rp2350</code></td>
+<td><code>crates/core/tests/analog/cosim_rp2040_family_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>rpi-pico-2-w</code></td>
+<td><code>rp2350</code></td>
+<td><code>crates/core/tests/analog/cosim_rp2040_family_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>seeed-xiao-nrf52840-sense</code></td>
