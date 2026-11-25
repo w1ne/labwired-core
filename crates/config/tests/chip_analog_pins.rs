@@ -65,7 +65,7 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
             None => problems.push(format!(
                 "{chip}: {pad} names ADC '{peripheral}', not declared"
             )),
-            Some(p) if !matches!(p.r#type.as_str(), "adc" | "nrf52840_saadc") => {
+            Some(p) if !matches!(p.r#type.as_str(), "adc" | "nrf52840_saadc" | "avr_adc") => {
                 problems.push(format!(
                     "{chip}: {pad} names '{peripheral}', which is type '{}', not adc",
                     p.r#type
@@ -79,33 +79,92 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
             .peripherals
             .iter()
             .any(|p| &p.id == peripheral && p.r#type == "nrf52840_saadc");
-        match pad_port_and_bit(pad, nordic) {
-            Some((port, bit)) => match desc
+        let avr = desc
+            .peripherals
+            .iter()
+            .any(|p| &p.id == peripheral && p.r#type == "avr_adc");
+        if avr {
+            // AVR names its GPIO blocks `port<letter>` and its converter
+            // `avr_adc`; a few inputs are dedicated die pads with no GPIO, so
+            // their pad label is the channel name (`ADC6`).
+            // `channels` is the width of the `avr_adc` input window, so this
+            // bounds the window, not the number of bonded analog pads.
+            let channels = desc
                 .peripherals
                 .iter()
-                .find(|p| p.id == port && matches!(p.r#type.as_str(), "gpio" | "stm32f4_gpio"))
-            {
-                Some(p) => {
-                    let count = p
-                        .config
-                        .get("num_pins")
-                        .and_then(serde_yaml::Value::as_u64)
-                        .unwrap_or(if nordic { 32 } else { 16 });
-                    if u64::from(bit) >= count {
-                        problems.push(format!("{chip}: {pad} is outside {port}'s {count} pins"));
+                .find(|p| &p.id == peripheral)
+                .and_then(|p| p.config.get("channels"))
+                .and_then(serde_yaml::Value::as_u64)
+                .unwrap_or(8);
+            if u64::from(*channel) >= channels {
+                problems.push(format!(
+                    "{chip}: {pad} is outside {peripheral}'s {channels} channels"
+                ));
+            }
+            match avr_pad_port_and_bit(pad) {
+                Some((port, bit)) => match desc
+                    .peripherals
+                    .iter()
+                    .find(|p| p.id == port && p.r#type == "avr_gpio")
+                {
+                    Some(p) => {
+                        let count = p
+                            .config
+                            .get("num_pins")
+                            .and_then(serde_yaml::Value::as_u64)
+                            .unwrap_or(8);
+                        if u64::from(bit) >= count {
+                            problems
+                                .push(format!("{chip}: {pad} is outside {port}'s {count} pins"));
+                        }
                     }
-                    if nordic
-                        && (port != "gpio0"
-                            || [2, 3, 4, 5, 28, 29, 30, 31].get(*channel as usize) != Some(&bit))
-                    {
-                        problems.push(format!(
-                            "{chip}: {pad} is not Nordic AIN{channel}'s physical pad"
-                        ));
+                    None => problems.push(format!(
+                        "{chip}: {pad} is on {port}, not a declared AVR GPIO"
+                    )),
+                },
+                None => match dedicated_adc_channel(pad) {
+                    Some(pin) if pin != *channel => problems.push(format!(
+                        "{chip}: dedicated input {pad} must name channel {pin}, not {channel}"
+                    )),
+                    Some(_) => {}
+                    None => problems.push(format!(
+                        "{chip}: {pad} is not a P<port><bit> or ADC<n> label"
+                    )),
+                },
+            }
+        } else {
+            match pad_port_and_bit(pad, nordic) {
+                Some((port, bit)) => {
+                    match desc.peripherals.iter().find(|p| {
+                        p.id == port && matches!(p.r#type.as_str(), "gpio" | "stm32f4_gpio")
+                    }) {
+                        Some(p) => {
+                            let count = p
+                                .config
+                                .get("num_pins")
+                                .and_then(serde_yaml::Value::as_u64)
+                                .unwrap_or(if nordic { 32 } else { 16 });
+                            if u64::from(bit) >= count {
+                                problems.push(format!(
+                                    "{chip}: {pad} is outside {port}'s {count} pins"
+                                ));
+                            }
+                            if nordic
+                                && (port != "gpio0"
+                                    || [2, 3, 4, 5, 28, 29, 30, 31].get(*channel as usize)
+                                        != Some(&bit))
+                            {
+                                problems.push(format!(
+                                    "{chip}: {pad} is not Nordic AIN{channel}'s physical pad"
+                                ));
+                            }
+                        }
+                        None => problems
+                            .push(format!("{chip}: {pad} is on {port}, not a declared GPIO")),
                     }
                 }
-                None => problems.push(format!("{chip}: {pad} is on {port}, not a declared GPIO")),
-            },
-            None => problems.push(format!("{chip}: {pad} is not a P<port><bit> label")),
+                None => problems.push(format!("{chip}: {pad} is not a P<port><bit> label")),
+            }
         }
         if let Some(other) = seen.insert((peripheral.clone(), *channel), pad.clone()) {
             problems.push(format!(
@@ -114,6 +173,31 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
         }
     }
     problems
+}
+
+/// The two pad shapes an AVR descriptor may name: a `P<port><bit>` GPIO pad
+/// (`PF7` -> `portf` bit 7), or a dedicated ADC die pad with no GPIO block.
+fn avr_pad_port_and_bit(pad: &str) -> Option<(String, u8)> {
+    let upper = pad.to_ascii_uppercase();
+    let rest = upper.strip_prefix('P')?;
+    let port = rest.chars().next()?;
+    if !port.is_ascii_alphabetic() {
+        return None;
+    }
+    let digits = &rest[1..];
+    if digits.is_empty() || !digits.bytes().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    Some((
+        format!("port{}", port.to_ascii_lowercase()),
+        digits.parse().ok()?,
+    ))
+}
+
+/// `ADC6`/`ADC7` on an ATmega328P are dedicated inputs, not Port C pads; the
+/// label already carries the channel number.
+fn dedicated_adc_channel(pad: &str) -> Option<u8> {
+    pad.to_ascii_uppercase().strip_prefix("ADC")?.parse().ok()
 }
 
 fn pad_port_and_bit(pad: &str, nordic: bool) -> Option<(String, u8)> {
@@ -262,4 +346,118 @@ fn an_analog_pin_entry_rejects_unknown_fields() {
         serde_yaml::from_str::<ChipDescriptor>(yaml).is_err(),
         "a misspelled key must fail loudly, not parse as a pad with no ADC"
     );
+}
+
+/// The AVR transcription: ATmega328P ADC0..ADC5 = PC0..PC5 plus the dedicated
+/// ADC6/ADC7 TQFP pads, and ATmega32U4 ADC0..ADC7 = PF0..PF7, ADC8..ADC10 =
+/// PD4/PD6/PD7 (PD5 has no ADC input) and ADC11..ADC13 = PB4..PB6. DS40002061B
+/// Table 24-4 and DS7766 Tables 10-3/10-8/10-13/24-4.
+#[test]
+fn avr_descriptors_carry_the_datasheet_assignment() {
+    let mega = load("atmega328p");
+    assert_eq!(mega.analog_pins.len(), 8);
+    for channel in 0..6u8 {
+        assert_eq!(
+            mega.analog_pins[&format!("PC{channel}")].channel,
+            channel,
+            "ATmega328P PC{channel} is ADC{channel}"
+        );
+    }
+    for channel in [6u8, 7] {
+        assert_eq!(
+            mega.analog_pins[&format!("ADC{channel}")].channel,
+            channel,
+            "ATmega328P ADC{channel} is the dedicated input"
+        );
+    }
+    assert!(analog_pin_problems("atmega328p", &mega).is_empty());
+
+    let leonardo = load("atmega32u4");
+    let assignment: [(&str, u8); 12] = [
+        ("PF0", 0),
+        ("PF1", 1),
+        ("PF4", 4),
+        ("PF5", 5),
+        ("PF6", 6),
+        ("PF7", 7),
+        ("PD4", 8),
+        ("PD6", 9),
+        ("PD7", 10),
+        ("PB4", 11),
+        ("PB5", 12),
+        ("PB6", 13),
+    ];
+    assert_eq!(leonardo.analog_pins.len(), assignment.len());
+    for (pad, channel) in assignment {
+        assert_eq!(
+            leonardo.analog_pins[pad].channel, channel,
+            "ATmega32U4 {pad} is ADC{channel}"
+        );
+    }
+    assert!(
+        !leonardo.analog_pins.contains_key("PD5"),
+        "PD5 is XCK1/CTS on the ATmega32U4 and has no ADC input"
+    );
+    assert!(analog_pin_problems("atmega32u4", &leonardo).is_empty());
+}
+
+#[test]
+fn avr_validation_rejects_bad_models_ports_channels_and_pads() {
+    let original = load("atmega32u4");
+
+    // A pad label must be a real AVR GPIO or a dedicated ADC<n> input.
+    for bad_pad in ["PZ0", "PD8", "P7", "PA", "PD5x", "ADC14"] {
+        let mut desc = original.clone();
+        let mapping = desc.analog_pins.remove("PD4").unwrap();
+        desc.analog_pins.insert(bad_pad.to_string(), mapping);
+        assert!(
+            !analog_pin_problems("bad", &desc).is_empty(),
+            "accepted {bad_pad}"
+        );
+    }
+
+    let mut desc = original.clone();
+    desc.analog_pins.get_mut("PD4").unwrap().channel = 16;
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+
+    let mut desc = original.clone();
+    desc.analog_pins.get_mut("PD6").unwrap().channel = 8;
+    assert!(
+        !analog_pin_problems("bad", &desc).is_empty(),
+        "PD6 and PD4 cannot both claim ADC8"
+    );
+
+    let mut desc = original.clone();
+    desc.peripherals
+        .iter_mut()
+        .find(|p| p.id == "adc")
+        .unwrap()
+        .r#type = "uart".into();
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+
+    let mut desc = original.clone();
+    desc.analog_pins.get_mut("PF7").unwrap().peripheral = "adc9".into();
+    assert!(
+        !analog_pin_problems("bad", &desc).is_empty(),
+        "an AVR pad cannot name an ADC the descriptor does not declare"
+    );
+
+    let mut desc = original.clone();
+    desc.peripherals
+        .iter_mut()
+        .find(|p| p.id == "portf")
+        .unwrap()
+        .r#type = "uart".into();
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+
+    // A dedicated pad's label is its channel number, not just any number.
+    let mut desc = original.clone();
+    desc.analog_pins.insert(
+        "ADC6".to_string(),
+        AdcPinFn {
+            peripheral: "adc".to_string(),
+            channel: 7,
+        },
+    );
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
 }
