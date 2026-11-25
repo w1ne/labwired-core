@@ -93,7 +93,7 @@ Stated plainly, because a fidelity table that only lists successes is marketing:
 | SYSCTRL, GCLK, PM, WDT, NVMCTRL | ⚠️ declarative | Register banks; ready flags modelled, no clock tree |
 | EIC (`attachInterrupt`) | ❌ | Window unmapped — an access is reported, not absorbed |
 | USB device | ✅ behavioural | `samd21_usb`: RAM endpoint table, control / bulk / interrupt endpoints, bus reset, SOF, and a scripted host that enumerates and opens a CDC port into the console. Off by default (`host: false`, no cable); a board manifest plugs it in. Host mode, high speed, isochronous, LPM and suspend are not modelled |
-| ADC | ✅ behavioural | Single-ended software conversions, 8/10/12-bit, gain, internal references (`samd21_adc`) |
+| ADC | ✅ behavioural | Single-ended software conversions, 8/10/12-bit, gain, internal references (`samd21_adc`); `analog_pins:` routes `board.analog.<pad>_volts` into AIN0..AIN7/AIN10/11/AIN16..19 in co-simulation |
 | TCC0–2 | ✅ behavioural | Counter, compare IRQs, CCB/PERB buffering, single-slope NPWM on the PMUX E/F pads (`samd21_tcc`); counts at the CPU clock (GCLK not checked) |
 | TC3–5, DAC, AC, I²S, DMAC, EVSYS, RTC, DSU | ❌ | Declared not modelled in the chip yaml (DAC is a register bank) |
 
@@ -115,6 +115,14 @@ pads out.
 | D13 / `LED_BUILTIN` | PA17 | User LED (`board_io` `led0`) |
 | D1 / TX | PA10 | SERCOM0 PAD[2], PMUX C |
 | D0 / RX | PA11 | SERCOM0 PAD[3], PMUX C |
+
+The descriptor also carries a 14-entry `analog_pins:` map for the AIN inputs
+the 48-pin G package bonds: PA2/AIN0, PA3/AIN1, PB8/AIN2, PB9/AIN3,
+PA4..PA7/AIN4..7, PB2/AIN10, PB3/AIN11 and PA8..PA11/AIN16..19. A board net
+hooked to one of those pads through `board.analog.<pad>_volts` reaches
+`samd21_adc` only after `PINCFG.PMUXEN` and PMUX function B hand the pad to the
+converter, as `pinPeripheral(pin, PIO_ANALOG)` does. AIN8/9 and AIN12..15 are
+not bonded here and are deliberately absent, so no net can bias them.
 
 ## How to run
 

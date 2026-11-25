@@ -1281,6 +1281,9 @@ impl WasmSimulator {
         // the manifest operating clock overrides the chip's declared clock.
         bus.cpu_hz = manifest.cpu_hz.unwrap_or(chip.cpu_hz);
         let cpu = configure_xtensa_esp32(&mut bus);
+        // Programmatic peripherals still need the resolved descriptor's GPIO
+        // supply and input thresholds before co-simulation binds voltage routes.
+        bus.attach_chip_io_levels(chip);
 
         // A classic ESP32 has NO USB peripheral: its devkit's CP210x sits on
         // UART0 and IS the USB device the host enumerates. So `debug_uart:

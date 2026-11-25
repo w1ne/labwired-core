@@ -1391,3 +1391,69 @@ cosim_models:
 "#;
     crate::flex::WasmFlexRuntime::build_for_test(BEHAVIOR).expect("behavior builds");
 }
+
+/// Classic ESP32 uses a programmatic bus. Its browser constructor must still
+/// retain the resolved descriptor's electrical levels before binding an analog
+/// voltage to GPIO18 (the MOSFET motor driver's gate feedback path).
+#[test]
+fn esp32_browser_analog_gpio_uses_descriptor_levels() {
+    use labwired_core::bus::Bus;
+    let chip: ChipDescriptor =
+        serde_yaml::from_str(include_str!("../../../configs/chips/esp32.yaml")).unwrap();
+    let cfg = manifest(
+        r#"
+name: esp32-analog-gpio
+chip: esp32
+external_devices: []
+cosim_models:
+  - id: gate
+    adapter: analog
+    step_ns: 1000
+    inputs: { drive: ui.pad_voltage }
+    outputs: { pad: board.gpio_in.gpio18 }
+    config:
+      netlist_text: |
+        Vdrive pad 0 dc 0
+        Rload pad 0 10k
+      probes: { pad: "v(pad)" }
+      sources: { drive: Vdrive }
+"#,
+    );
+    let fw = include_bytes!("../../../tests/fixtures/tier1/esp32.elf");
+    let mut sim = WasmSimulator::new_from_config_xtensa_esp32(&chip, &cfg, fw)
+        .unwrap_or_else(|_| panic!("classic ESP32 browser constructor"));
+    sim.attach_cosim(&cfg)
+        .expect("voltage-to-GPIO route binds using chip thresholds");
+    for (volts, high) in [(3.0, true), (0.5, false)] {
+        sim.set_cosim_signal_number("ui.pad_voltage", volts)
+            .unwrap();
+        sim.advance_machine(AdvanceRequest::run(Some(2400)))
+            .unwrap_or_else(|error| match error {
+                crate::cosim::AdvanceFailure::Machine(error) => panic!("machine: {error}"),
+                crate::cosim::AdvanceFailure::Cosim(error) => panic!("cosim: {error}"),
+            });
+        let pad = sim
+            .machine
+            .as_ref()
+            .unwrap()
+            .bus
+            .read_u32(0x3ff4_403c)
+            .unwrap();
+        assert_eq!(pad & (1 << 18) != 0, high, "GPIO18 at {volts} V");
+    }
+    assert_eq!(
+        sim.cosim.as_ref().unwrap().cpu_hz(),
+        chip.cpu_hz,
+        "analog time must use the descriptor's ESP32 clock"
+    );
+
+    // The co-simulation timeline honors the manifest clock override,
+    // matching the descriptor-built bus's precedence.
+    let mut cfg = cfg;
+    cfg.cpu_hz = Some(chip.cpu_hz / 2);
+    let mut sim = WasmSimulator::new_from_config_xtensa_esp32(&chip, &cfg, fw)
+        .unwrap_or_else(|_| panic!("classic ESP32 browser constructor"));
+    sim.attach_cosim(&cfg)
+        .expect("analog routes bind with a manifest clock");
+    assert_eq!(sim.cosim.as_ref().unwrap().cpu_hz(), chip.cpu_hz / 2);
+}

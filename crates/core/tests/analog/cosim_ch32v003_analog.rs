@@ -2,12 +2,17 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Generic MNA devices route through the WCH CH32V003EVT RISC-V profile into
+//! Generic MNA devices route through the WCH CH32V003EVT RISC-V profiles into
 //! its 10-bit ADC. The same two decks already proven on the STM32F1/F4 boards
 //! (`cosim_nucleo_f103rb_analog`, `cosim_stm32f4_family_analog`) run here
 //! unchanged: a Beta-parameter NTC divider and a Shockley diode load line name
 //! only `board.analog.<pad>_volts`, and the CH32V003 descriptor's
 //! `analog_pins:` map selects the ADC channel.
+//!
+//! Two profiles share the run: the bare CH32V003EVT and the same board with a
+//! BME280 on I2C1. The sensor owns PC1/PC2 and the LED jumper owns PC0; the
+//! generic decks drive PA1/PA2, so the attached sensor does not disturb the
+//! analog front end and no engine code changes per board.
 //!
 //! This is the first mixed-signal board on a non-ARM core. The deck, the
 //! netlist solver, and the routing layer are unchanged; only the descriptor
@@ -137,41 +142,39 @@ fn expected_adc_count(voltage_v: f64) -> u32 {
     ((millivolts * 4095.0 / 3300.0).floor().clamp(0.0, 4095.0) as u32) >> 2
 }
 
-#[test]
-fn ch32v003_ntc_and_diode_netlists_reach_pa2_pa1_adc1_end_to_end() {
-    let system_path = root("configs/systems/wch-ch32v003evt.yaml");
-    let mut profile = SystemManifest::from_file(&system_path).expect("load CH32V003EVT profile");
-    assert_eq!(profile.name, "wch-ch32v003evt");
-    assert!(profile.external_devices.is_empty());
-    assert!(
-        profile
-            .board_io
-            .iter()
-            .any(|io| io.id == "led1_pc0" && io.peripheral == "gpioc" && io.pin == 0),
-        "the mixed-signal run keeps the CH32V003EVT LED jumper"
-    );
+fn run_board(profile_name: &str, system: &str) {
+    let system_path = root(system);
+    let mut profile = SystemManifest::from_file(&system_path)
+        .unwrap_or_else(|e| panic!("load {profile_name} profile: {e}"));
+    assert_eq!(profile.name, profile_name);
 
     let analog = SystemManifest::from_file(root(
         "examples/wch-ch32v003evt/analog-ntc-diode-system.yaml",
     ))
-    .expect("load generic NTC divider and diode netlists");
+    .unwrap_or_else(|e| panic!("load generic decks for {profile_name}: {e}"));
+    assert!(
+        analog.external_devices.is_empty(),
+        "{profile_name}: the generic decks add no external device"
+    );
     profile.cosim_models = analog.cosim_models;
     let chip_path = system_path.parent().unwrap().join(&profile.chip);
-    let chip = ChipDescriptor::from_file(&chip_path).expect("load CH32V003 descriptor");
+    let chip = ChipDescriptor::from_file(&chip_path)
+        .unwrap_or_else(|e| panic!("load {profile_name} descriptor: {e}"));
     assert_eq!(chip.analog_pins["PA2"].channel, 0);
     assert_eq!(chip.analog_pins["PA1"].channel, 1);
     assert_eq!(chip.analog_pins["PA2"].peripheral, "adc1");
     assert_eq!(chip.analog_pins["PA1"].peripheral, "adc1");
 
-    let bus = SystemBus::from_config(&chip, &profile).expect("build CH32V003EVT bus");
+    let bus = SystemBus::from_config(&chip, &profile)
+        .unwrap_or_else(|e| panic!("build {profile_name} bus: {e}"));
     let mut machine = board_machine(bus);
     let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &machine.bus)
-        .expect("build analog co-simulation")
-        .expect("fixture carries both analog devices");
+        .unwrap_or_else(|e| panic!("build {profile_name} co-simulation: {e}"))
+        .unwrap_or_else(|| panic!("{profile_name} deck carries both analog devices"));
     assert_eq!(
         session.binding_errors(),
         &[] as &[RoutingError],
-        "the generic netlists must resolve through PA2/PA1 to ADC1 channels 0/1"
+        "{profile_name} generic netlists must resolve through PA2/PA1 to ADC1 channels 0/1"
     );
     let expected_diode_v = diode_load_line_voltage();
     let mut cycles = 0;
@@ -233,5 +236,43 @@ fn ch32v003_ntc_and_diode_netlists_reach_pa2_pa1_adc1_end_to_end() {
     assert_eq!(
         samples[1].2, 511,
         "the 25 C NTC divider is half scale on the 3.3 V reference and 10-bit SAR"
+    );
+}
+
+#[test]
+fn ch32v003_ntc_and_diode_netlists_reach_pa2_pa1_adc1_end_to_end() {
+    let system_path = root("configs/systems/wch-ch32v003evt.yaml");
+    let profile = SystemManifest::from_file(&system_path).expect("load CH32V003EVT profile");
+    assert_eq!(profile.name, "wch-ch32v003evt");
+    assert!(profile.external_devices.is_empty());
+    assert!(
+        profile
+            .board_io
+            .iter()
+            .any(|io| io.id == "led1_pc0" && io.peripheral == "gpioc" && io.pin == 0),
+        "the mixed-signal run keeps the CH32V003EVT LED jumper"
+    );
+    run_board("wch-ch32v003evt", "configs/systems/wch-ch32v003evt.yaml");
+}
+
+/// The CH32V003EVT with the BME280 breakout on I2C1. The sensor owns PC1/PC2
+/// (SDA/SCL) and the LED jumper owns PC0; the generic decks drive PA1/PA2,
+/// which the I2C wiring leaves free, so the attached sensor does not disturb
+/// the analog front end.
+#[test]
+fn ch32v003_bme280_ntc_and_diode_netlists_reach_pa2_pa1_adc1_end_to_end() {
+    let system_path = root("configs/systems/wch-ch32v003evt-bme280.yaml");
+    let profile = SystemManifest::from_file(&system_path).expect("load CH32V003EVT-BME280 profile");
+    assert_eq!(profile.name, "wch-ch32v003evt-bme280");
+    assert!(
+        profile
+            .external_devices
+            .iter()
+            .any(|device| device.id == "bme280"),
+        "the mixed-signal run keeps the BME280 on I2C1"
+    );
+    run_board(
+        "wch-ch32v003evt-bme280",
+        "configs/systems/wch-ch32v003evt-bme280.yaml",
     );
 }

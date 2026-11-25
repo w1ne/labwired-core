@@ -142,6 +142,34 @@ pins:
   PB30: { gpio: gpio_b, bit: 30 }
   PB31: { gpio: gpio_b, bit: 31 }
 
+# ── Analog pad map ──────────────────────────────────────────────────────────
+# Which ADC input a pad reaches, so `board.analog.<pad>_volts` can be routed
+# into the converter instead of naming a raw `adc.<peripheral>.<channel>`.
+#
+# SOURCE: CMSIS `pio/samd21g18a.h`, the `PIN_PxyyB_ADC_AINn` macros — the same
+# table `crates/core/src/peripherals/sam/adc21.rs` converts against. Only the
+# AIN inputs bonded on the 48-pin G package are listed; AIN8/9 and AIN12..15
+# have no ball on this part, so a board net must not be able to bias them.
+#
+# This is descriptor data only. The model still requires the pad to be handed
+# to the ADC (PORT.PINCFG.PMUXEN and PMUX function B), exactly as
+# `pinPeripheral(pin, PIO_ANALOG)` does before `analogRead()`.
+analog_pins:
+  PA2: { peripheral: "adc", channel: 0 }
+  PA3: { peripheral: "adc", channel: 1 }
+  PA4: { peripheral: "adc", channel: 4 }
+  PA5: { peripheral: "adc", channel: 5 }
+  PA6: { peripheral: "adc", channel: 6 }
+  PA7: { peripheral: "adc", channel: 7 }
+  PA8: { peripheral: "adc", channel: 16 }
+  PA9: { peripheral: "adc", channel: 17 }
+  PA10: { peripheral: "adc", channel: 18 }
+  PA11: { peripheral: "adc", channel: 19 }
+  PB2: { peripheral: "adc", channel: 10 }
+  PB3: { peripheral: "adc", channel: 11 }
+  PB8: { peripheral: "adc", channel: 2 }
+  PB9: { peripheral: "adc", channel: 3 }
+
 peripherals:
   # ── Clocks and reset ───────────────────────────────────────────────────────
   # PM — the power manager: the AHB/APB clock masks and the CPU/APB dividers.
