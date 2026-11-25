@@ -4944,9 +4944,9 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.</p>
 <ul>
 <li>Profiles in <code>configs/systems/</code>: <strong>439</strong></li>
-<li>Covered end to end: <strong>12</strong></li>
-<li>Not covered: <strong>427</strong></li>
-<li>Not covered but with an <code>analog_pins:</code> map: <strong>49</strong> (these are the
+<li>Covered end to end: <strong>15</strong></li>
+<li>Not covered: <strong>424</strong></li>
+<li>Not covered but with an <code>analog_pins:</code> map: <strong>50</strong> (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   <code>analog_pins:</code> map, an ADC model, or a digital endpoint first)</li>
 </ul>
@@ -4967,6 +4967,11 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>adxl345-sensor-lab</code></td>
 <td><code>stm32f103</code></td>
 <td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>arduino-nano-33-ble-bme280</code></td>
+<td><code>nrf52840</code></td>
+<td style="text-align: right;">8</td>
 </tr>
 <tr>
 <td><code>labwired-demo-board</code></td>
@@ -5258,12 +5263,7 @@ count is what the generic decks can reach without new routing.</p>
 <tr>
 <td><code>arduino-nano-33-ble-bme280</code></td>
 <td><code>nrf52840</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>arduino-nano-33-ble</code></td>
-<td><code>nrf52840</code></td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">8</td>
 </tr>
 <tr>
 <td><code>arduino-nano-33-iot-bme280</code></td>
@@ -5673,11 +5673,6 @@ count is what the generic decks can reach without new routing.</p>
 <tr>
 <td><code>nrf52-dk</code></td>
 <td><code>nrf52832</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>nrf52840-dk</code></td>
-<td><code>nrf52840</code></td>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
@@ -7136,11 +7131,6 @@ count is what the generic decks can reach without new routing.</p>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
-<td><code>seeed-xiao-nrf52840-sense</code></td>
-<td><code>nrf52840</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
 <td><code>simctl-selftest</code></td>
 <td><code>ci-fixture-cortex-m3-uart1</code></td>
 <td style="text-align: right;">0</td>
@@ -7378,6 +7368,11 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>crates/core/tests/cosim/cosim_pin_routing.rs</code></td>
 </tr>
 <tr>
+<td><code>arduino-nano-33-ble</code></td>
+<td><code>nrf52840</code></td>
+<td><code>crates/core/tests/analog/cosim_nrf52840_family_analog.rs</code></td>
+</tr>
+<tr>
 <td><code>at32f421g8u7</code></td>
 <td><code>at32f421g8u7</code></td>
 <td><code>crates/core/tests/analog/cosim_at32f421_analog.rs</code></td>
@@ -7391,6 +7386,11 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>microbit-v2</code></td>
 <td><code>nrf52833</code></td>
 <td><code>crates/core/tests/analog/cosim_microbit_v2_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>nrf52840-dk</code></td>
+<td><code>nrf52840</code></td>
+<td><code>crates/core/tests/analog/cosim_nrf52840_family_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>nucleo-f103rb</code></td>
@@ -7421,6 +7421,11 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>nucleo-f767zi</code></td>
 <td><code>stm32f767</code></td>
 <td><code>crates/core/tests/analog/cosim_nucleo_f767zi_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>seeed-xiao-nrf52840-sense</code></td>
+<td><code>nrf52840</code></td>
+<td><code>crates/core/tests/analog/cosim_nrf52840_family_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>wch-ch32v003evt</code></td>
