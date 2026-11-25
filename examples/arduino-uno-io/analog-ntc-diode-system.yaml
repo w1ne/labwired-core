@@ -1,0 +1,48 @@
+# Generic Beta NTC and Shockley diode netlists drive two ATmega328P analog
+# inputs through the chip descriptor's PC0/PC1 routing.
+#
+# Neither netlist names the board, the CPU, the ADC, or a channel: each one
+# solves its own circuit and publishes a probe voltage to
+# `board.analog.<pad>_volts`. The ATmega328P descriptor's `analog_pins:` maps
+# PC0 -> adc/ADC0 and PC1 -> adc/ADC1, so the same two decks that run on the
+# STM32, WCH, nRF52 and micro:bit profiles run here unchanged.
+#
+# On the Arduino Uno, Nano and CONTROLLINO MINI these pads are A0 and A1. The
+# supply is the board's 5 V rail, which is also the AVcc reference the AVR
+# converter converts against, so a full-scale input reads 1023.
+name: "arduino-uno-analog"
+chip: "../../configs/chips/atmega328p.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.pc0_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 5.0
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 5.0
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.pc1_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 5.0
+        Rlim supply sense 1k
+        D1 sense 0 DREF
+        .model DREF D(IS=2.52n N=1.752 RS=0.568)
+      probes:
+        v_diode: "v(sense)"
+      vdd: 5.0
