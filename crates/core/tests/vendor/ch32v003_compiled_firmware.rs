@@ -1129,3 +1129,208 @@ fn ch32v003_tone_needs_the_tim2_irq_line() {
         "a TIM2 without an irq line must leave PD4 undriven, got {edges:?}"
     );
 }
+
+const PULSE_FIXTURE: &str = "ch32v003f4p6-arduino-openwch-pulse.elf";
+
+/// High widths, in HCLK cycles at 48 MHz, of the pulses the harness puts on
+/// the pad: 100 us and 250 us.
+const PULSE_WIDTHS_CYCLES: [u64; 2] = [4_800, 12_000];
+
+/// Run the pulse-width fixture and drive `pad` from the harness only. The
+/// sketch never drives an output: it waits for PD3 to rise, reads the STK
+/// counter, and waits for PD3 to fall.
+///
+/// Each pulse is placed on exact cycle boundaries. The pad is held high for
+/// `PULSE_WIDTHS_CYCLES[i]`, then released; the sketch prints one `WIDTH`
+/// line per pulse and the test compares the reported microseconds with the
+/// cycles the harness actually drove.
+fn run_pulse_fixture(chip: &ChipDescriptor, pad: u8) -> String {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut bus = SystemBus::from_config(chip, &SystemManifest::default())
+        .expect("CH32V003 peripherals and clock gates");
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+    let image = labwired_loader::load_elf(&root.join("tests/fixtures").join(PULSE_FIXTURE))
+        .expect("openwch pulse ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine
+        .load_firmware(&image)
+        .expect("load CH32V003 pulse ELF");
+    let gpiod = machine
+        .bus
+        .find_peripheral_index_by_name("gpiod")
+        .expect("GPIOD registered from descriptor");
+
+    let text = |sink: &std::sync::Mutex<Vec<u8>>| {
+        String::from_utf8_lossy(&sink.lock().unwrap()).into_owned()
+    };
+    let width_lines = |out: &str| out.lines().filter(|l| l.starts_with("WIDTH ")).count();
+
+    // Setup prints BOOT, then calls pinMode and enters the PD3 wait loop. A
+    // 0.4 ms settle after the line arrives is ample for those instructions.
+    let mut guard = 0u32;
+    while guard < 2_000_000 && !text(&sink).contains("CH32V003_PULSE_BOOT") {
+        if machine.step().is_err() {
+            break;
+        }
+        guard += 1;
+    }
+    let settle = machine.total_cycles + 20_000;
+    while machine.total_cycles < settle {
+        if machine.step().is_err() {
+            break;
+        }
+    }
+
+    for (index, width) in PULSE_WIDTHS_CYCLES.iter().enumerate() {
+        machine.bus.set_peripheral_gpio_input(gpiod, pad, true);
+        let fall = machine.total_cycles + width;
+        while machine.total_cycles < fall {
+            if machine.step().is_err() {
+                break;
+            }
+        }
+        machine.bus.set_peripheral_gpio_input(gpiod, pad, false);
+        // Let the sketch report this pulse and return to its wait loop before
+        // the next one starts; otherwise the rising edge would arrive while
+        // the previous line is still in the UART FIFO.
+        let mut guard = 0u32;
+        while guard < 2_000_000 && width_lines(&text(&sink)) <= index {
+            if machine.step().is_err() {
+                break;
+            }
+            guard += 1;
+        }
+        let settle = machine.total_cycles + 20_000;
+        while machine.total_cycles < settle {
+            if machine.step().is_err() {
+                break;
+            }
+        }
+    }
+
+    // pulseIn() needs a pulse of its own: wait for the MICROS line, then drive
+    // the same width again so a working pulseIn would have to report it.
+    let mut guard = 0u32;
+    while guard < 2_000_000 && !text(&sink).contains("MICROS ") {
+        if machine.step().is_err() {
+            break;
+        }
+        guard += 1;
+    }
+    machine.bus.set_peripheral_gpio_input(gpiod, pad, true);
+    let fall = machine.total_cycles + PULSE_WIDTHS_CYCLES[0];
+    while machine.total_cycles < fall {
+        if machine.step().is_err() {
+            break;
+        }
+    }
+    machine.bus.set_peripheral_gpio_input(gpiod, pad, false);
+
+    let mut guard = 0u32;
+    while guard < 2_000_000 && !text(&sink).contains("CH32V003_PULSE_DONE") {
+        if machine.step().is_err() {
+            break;
+        }
+        guard += 1;
+    }
+    text(&sink)
+}
+
+fn printed_numbers(out: &str, prefix: &str) -> Vec<u32> {
+    let mut values = Vec::new();
+    for line in out.lines() {
+        if let Some(rest) = line.strip_prefix(prefix) {
+            values.extend(
+                rest.split_whitespace()
+                    .filter_map(|n| n.parse::<u32>().ok()),
+            );
+        }
+    }
+    values
+}
+
+/// The QingKe V2 STK is an up-counter that reloads from 0 at `CMP`
+/// (`SysTick->CMP = 48 000 - 1`, `CTLR = 0xF` from the core's `hw_config.c`),
+/// so elapsed microseconds are `CNT * 1000 / (CMP + 1)`. Polling the pad and
+/// reading `CNT` must recover the width the harness drove, to the polling
+/// granularity.
+#[test]
+fn ch32v003_pad_pulse_width_reads_microseconds_from_the_stk_counter() {
+    let chip = load_chip("ch32v003f4p6");
+    let out = run_pulse_fixture(&chip, 3);
+    assert!(
+        out.contains("CH32V003_PULSE_DONE"),
+        "sketch stopped before PULSE_DONE: {out:?}"
+    );
+
+    let widths = printed_numbers(&out, "WIDTH ");
+    assert_eq!(widths.len(), 2, "one WIDTH line per pulse: {out:?}");
+    let expected = [100u32, 250];
+    for (measured, want) in widths.iter().zip(expected) {
+        assert!(
+            measured.abs_diff(want) <= 2,
+            "pulse of {want} us measured as {measured} us: {widths:?}"
+        );
+    }
+    let span = widths[1] - widths[0];
+    assert!(
+        span.abs_diff(150) <= 2,
+        "100 us and 250 us pulses differ by {span} us, not 150: {widths:?}"
+    );
+}
+
+/// Negative control: drive PD2 instead of PD3. The sketch polls PD3 only, so
+/// no `WIDTH` line can appear. This shows the printed widths come from the
+/// pad the harness drives, not from the sketch's own instruction timing.
+#[test]
+fn ch32v003_pulse_width_needs_the_pad_the_sketch_polls() {
+    let chip = load_chip("ch32v003f4p6");
+    let out = run_pulse_fixture(&chip, 2);
+    assert!(
+        out.starts_with("CH32V003_PULSE_BOOT\r\n"),
+        "USART1 stream: {out:?}"
+    );
+    assert!(
+        !out.contains("WIDTH "),
+        "PD2 pulses must not reach a sketch that polls PD3: {out:?}"
+    );
+}
+
+/// The stock core's `micros()` cannot report elapsed time on this part.
+/// `getCurrentMicros()` (ch32/clock.c) computes `(CMP + 1 - CNT) * 1000 /
+/// (CMP + 1)`, the *remaining* time in the millisecond for an up-counter, so
+/// three consecutive samples are not increasing. `pulseIn()` measures with
+/// `micros()`, so a real 100 us pulse on the pad fails its own timeout test
+/// and the sketch prints `PULSEIN 0`.
+///
+/// The defect is the vendor core's arithmetic, not the model: WCH's own
+/// noneos-sdk `Delay_Us` (`Debug/ch32v00x/debug.c`) writes `CNT = 0`, waits
+/// for `SR.CNTIF` at `CMP`, and therefore needs the up-counter the descriptor
+/// models.
+#[test]
+fn ch32v003_shipped_micros_runs_backwards_and_pulse_in_cannot_measure() {
+    let chip = load_chip("ch32v003f4p6");
+    let out = run_pulse_fixture(&chip, 3);
+    assert!(
+        out.contains("CH32V003_PULSE_DONE"),
+        "sketch stopped before PULSE_DONE: {out:?}"
+    );
+
+    let samples = printed_numbers(&out, "MICROS ");
+    assert_eq!(samples.len(), 3, "three micros() samples: {out:?}");
+    assert!(
+        samples[1] < samples[0] || samples[2] < samples[1],
+        "micros() must not increase across consecutive calls: {samples:?}"
+    );
+
+    let pulse_in = printed_numbers(&out, "PULSEIN ");
+    assert_eq!(pulse_in.len(), 1, "one PULSEIN line: {out:?}");
+    assert_eq!(
+        pulse_in[0], 0,
+        "pulseIn() with a real 100 us pulse on the pad returns 0 on this core, \
+         measured {}: {out:?}",
+        pulse_in[0]
+    );
+}
