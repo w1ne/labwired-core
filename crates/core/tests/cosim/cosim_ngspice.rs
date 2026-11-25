@@ -51,6 +51,21 @@ fn ldr_tau_s(lux: f64) -> f64 {
     R_FIXED * r / (R_FIXED + r) * C_ADC
 }
 
+/// NTC law in `examples/cosim-ngspice-ntc/ntc.cir` and in the in-core
+/// `thermistors` entry: R25 = 10 kOhm, B25/50 = 3380 K at 25 degC.
+const NTC_BETA_K: f64 = 3380.0;
+const NTC_R25: f64 = 10_000.0;
+const NTC_T0_C: f64 = 25.0;
+
+fn ntc_ohms(celsius: f64) -> f64 {
+    NTC_R25 * (NTC_BETA_K * (1.0 / (celsius + 273.15) - 1.0 / (NTC_T0_C + 273.15))).exp()
+}
+
+fn ntc_volts(celsius: f64) -> f64 {
+    let r = ntc_ohms(celsius);
+    VDD * r / (R_FIXED + r)
+}
+
 fn ngspice_ready() -> bool {
     let probe = Command::new("python3")
         .arg("-c")
@@ -172,6 +187,37 @@ fn the_committed_ldr_manifests_pass_the_ngspice_contract() {
     assert_eq!(
         validate_ngspice_models(&flex.cosim_models, &dir),
         Vec::<String>::new()
+    );
+}
+
+#[test]
+fn the_committed_ntc_manifests_pass_the_ngspice_contract() {
+    let dir = root("examples/cosim-ngspice-ntc");
+    let flex = labwired_config::FlexManifest::from_yaml(
+        &std::fs::read_to_string(dir.join("flex-ntc.yaml")).unwrap(),
+    )
+    .expect("Flex accepts adapter: ngspice with a netlist path");
+    // `previous_boundary` is a Flex sampling mode: a machine session sends no
+    // (0, 0) initialization step, so the manifest checker refuses it there.
+    assert!(
+        labwired_core::cosim::ngspice::machine_sampling_refusal(&flex.cosim_models[0]).is_some(),
+        "a machine session must be told this deck needs Flex initialization"
+    );
+    let spec = NgspiceModelSpec::from_config(&flex.cosim_models[0], &dir).unwrap();
+    assert_eq!(
+        spec.input_ranges["temperature"],
+        labwired_core::cosim::ngspice::NgspiceInputRange {
+            min: Some(10.0),
+            max: Some(60.0),
+            unit: Some("°C".to_string()),
+        }
+    );
+    let host: serde_json::Value = serde_json::from_str(&spec.host_json()).unwrap();
+    assert_eq!(host["inputs"]["temperature"]["element"], "Vtemp");
+    assert_eq!(host["outputs"]["voltage"]["node"], "sns_an1");
+    assert_eq!(
+        host["netlist"].as_str().unwrap(),
+        std::fs::read_to_string(dir.join("ntc.cir")).unwrap()
     );
 }
 
@@ -769,6 +815,95 @@ fn a_photoresistor_deck_matches_the_in_core_curve_within_its_range() {
     );
 }
 
+/// The second bounded curve, and the other half of the coverage evidence: a
+/// beta-equation thermistor. `ntc.cir` writes the NCP18XH103F03RB law as a
+/// behavioral current; the in-core engine offers the same curve as a
+/// `thermistors` entry. Both are the same R6 divider, the same 10 kOhm at
+/// 25 degC, the same 3380 K, and the same 10..60 degC domain, so the engines
+/// must agree on the voltage and on refusing a value outside it.
+#[test]
+fn a_thermistor_deck_matches_the_in_core_curve_within_its_range() {
+    if !ngspice_ready() {
+        return;
+    }
+    let dir = root("examples/cosim-ngspice-ntc");
+    let spiced = model(
+        "id: ntc\nadapter: ngspice\nmodel: ./ntc.cir\nstep_ns: 100000\ninputs: { temperature: bench.temperature }\noutputs: { voltage: ntc.out_volts }\nconfig:\n  input_sources: { temperature: { element: Vtemp, scale: 1, offset: 0 } }\n  output_nodes: { voltage: { node: sns_an1, scale: 1, offset: 0 } }\n  input_ranges: { temperature: { min: 10, max: 60, unit: \"°C\" } }\n  trace_volts: [voltage]\n",
+    );
+    let in_core = model(
+        "id: ntc\nadapter: analog\nstep_ns: 100000\ninputs: { temperature: bench.temperature }\noutputs: { voltage: ntc.out_volts }\nconfig:\n  netlist_text: |\n    V3V3 3v3 0 dc 3.3\n    R6 3v3 sns_an1 10k\n    RU4 sns_an1 0 10k\n    C7 sns_an1 0 100n\n  vdd: 3.3\n  probes: { voltage: \"v(sns_an1)\" }\n  thermistors:\n    temperature: { resistor: RU4, r_ref_ohms: 10000, beta_kelvin: 3380, reference_c: 25, min_c: 10, max_c: 60 }\n",
+    );
+    assert_eq!(
+        validate_ngspice_models(std::slice::from_ref(&spiced), &dir),
+        Vec::<String>::new()
+    );
+    let mut native = build_cosim_adapter_with_base(&spiced, &dir).unwrap();
+    let mut analog = build_cosim_adapter_with_base(&in_core, &dir).unwrap();
+    const STEP_NS: u64 = 100_000;
+    // 20 ms is more than forty time constants at both ends of the range, so
+    // both engines report the divider's settled value, not a residue.
+    const SETTLE: u64 = 200;
+    // One monotonic timeline for both engines: the host refuses a repeated or
+    // earlier boundary, so each temperature gets its own settle window.
+    let mut t_ns = 0;
+    for celsius in [10.0f64, 25.0, 60.0] {
+        let expected = ntc_volts(celsius);
+        let mut spiced_v = f64::NAN;
+        let mut analog_v = f64::NAN;
+        for _ in 0..SETTLE {
+            t_ns += STEP_NS;
+            let s = step(
+                t_ns,
+                STEP_NS,
+                &[("temperature", CosimSignalValue::F64(celsius))],
+            );
+            spiced_v = volts(&native.step(s.clone()).unwrap().outputs, "voltage");
+            analog_v = volts(&analog.step(s).unwrap().outputs, "voltage");
+        }
+        assert!(
+            (spiced_v - expected).abs() < 2e-3,
+            "{celsius} degC: ngspice {spiced_v} V vs {expected} V"
+        );
+        assert!(
+            (analog_v - expected).abs() < 2e-3,
+            "{celsius} degC: in-core {analog_v} V vs {expected} V"
+        );
+        assert!(
+            (spiced_v - analog_v).abs() < 2e-3,
+            "{celsius} degC: ngspice {spiced_v} V vs in-core {analog_v} V"
+        );
+        eprintln!(
+            "{celsius} degC: ngspice {spiced_v:.6} V, in-core {analog_v:.6} V, analytic {expected:.6} V"
+        );
+    }
+    // Outside the declared domain both stop, with their own wording.
+    let err = analog
+        .step(step(
+            99_000_000,
+            STEP_NS,
+            &[("temperature", CosimSignalValue::F64(61.0))],
+        ))
+        .expect_err("the in-core curve is bounded");
+    assert!(
+        err.to_string()
+            .contains("thermistor temperature must be within 10..60 C"),
+        "{err}"
+    );
+    let mut spiced = build_cosim_adapter_with_base(&spiced, &dir).unwrap();
+    let err = spiced
+        .step(step(
+            STEP_NS,
+            STEP_NS,
+            &[("temperature", CosimSignalValue::F64(61.0))],
+        ))
+        .expect_err("the declared ngspice domain is bounded");
+    assert!(
+        err.to_string()
+            .contains("input 'temperature' is 61, outside the declared 10..60 °C range"),
+        "{err}"
+    );
+}
+
 /// Continuity across the runner's `(0, 0)` priming step: the primed value is
 /// where the `uic` transient starts (C uncharged), and the next boundaries
 /// follow the RC curve from it. A DC operating point here would report
@@ -994,6 +1129,106 @@ fn flex_ldr_divider_runs_on_native_ngspice() {
     };
     let err = err.to_string();
     assert!(err.contains("vmissing"), "{err}");
+}
+
+fn flex_ntc_dir() -> PathBuf {
+    root("examples/cosim-ngspice-ntc")
+}
+
+/// Flex: host-stepped temperature drives a beta-equation NTC divider solved by
+/// ngspice. This is the same network and part values as the pinned HeyPCB
+/// ESP32-S3 NTC fixture, moved from the in-core `thermistors` entry to the
+/// reference solver. Positive controls: the settled divider at 25 and 60 degC
+/// from the circuit equations. Negative controls: an unpowered deck stays at
+/// 0 V, and a temperature outside the declared domain stops the run.
+#[test]
+fn flex_ntc_divider_runs_on_native_ngspice() {
+    if !ngspice_ready() {
+        return;
+    }
+    let dir = flex_ntc_dir();
+    let mut flex = FlexRuntime::from_yaml_with_base(
+        &std::fs::read_to_string(dir.join("flex-ntc.yaml")).unwrap(),
+        &dir,
+    )
+    .expect("build Flex runtime");
+    let ambient = flex.port_id("ambient_c").unwrap();
+    let sensor = flex.port_id("sensor_v").unwrap();
+
+    // The deck is the reference solver, so the settled node must match the
+    // divider equation. 20 ms is more than forty time constants at 60 degC.
+    flex.advance_ns(20_000_000).unwrap();
+    let at_25 = flex.read(sensor).unwrap();
+    assert!(
+        (at_25 - ntc_volts(25.0)).abs() < 1e-4,
+        "25 degC: {at_25} V vs {} V",
+        ntc_volts(25.0)
+    );
+
+    flex.write(ambient, 60.0).unwrap();
+    flex.advance_ns(20_000_000).unwrap();
+    let hot = flex.read(sensor).unwrap();
+    assert!(
+        (hot - ntc_volts(60.0)).abs() < 1e-4,
+        "60 degC: {hot} V vs {} V",
+        ntc_volts(60.0)
+    );
+    assert!(
+        hot < at_25 - 0.8,
+        "the NTC resistance falls with temperature: {hot} V vs {at_25} V"
+    );
+
+    // The routed voltage is on the scope as a volts channel with the port
+    // alias, and the run report pins the exact netlist bytes.
+    let batch = flex.analog_trace_snapshot(0);
+    assert_eq!(batch.channels.len(), 1);
+    assert_eq!(batch.channels[0].name, "ntc.voltage");
+    assert_eq!(batch.channels[0].unit, "V");
+    assert_eq!(batch.channels[0].port_names, vec!["sensor_v".to_string()]);
+    assert!(!batch.samples.is_empty());
+    let last = batch.samples.last().unwrap();
+    assert_eq!(last.time_ns, flex.time_ns());
+    assert!((f64::from(last.values[0]) - hot).abs() < 1e-5);
+
+    let report = flex.run_report();
+    assert_eq!(report.execution_path, "flex_portable_wasm");
+    assert!(report.scope_notes_complete);
+    let model = &report.models[0];
+    assert_eq!(model.adapter, labwired_config::CosimAdapter::Ngspice);
+    let source = model.source.as_ref().expect("the netlist is pinned");
+    assert_eq!(source.kind, "spice_netlist");
+    assert_eq!(source.origin, "file");
+    assert_eq!(source.path.as_deref(), Some("./ntc.cir"));
+    {
+        use sha2::{Digest, Sha256};
+        assert_eq!(
+            source.sha256,
+            format!(
+                "{:x}",
+                Sha256::digest(std::fs::read(dir.join("ntc.cir")).unwrap())
+            )
+        );
+    }
+
+    // The declared domain is the deck's, and a value outside it stops the run
+    // instead of extrapolating the beta curve. `previous_boundary` latches the
+    // new value at the second boundary, so cross two.
+    flex.write(ambient, 61.0).unwrap();
+    let err = flex
+        .advance_ns(200_000)
+        .expect_err("61 degC is outside the deck's declared range");
+    assert!(
+        err.to_string()
+            .contains("input 'temperature' is 61, outside the declared 10..60 °C range"),
+        "{err}"
+    );
+
+    eprintln!(
+        "Flex NTC: {at_25:.6} V at 25 degC (model {:.6}), {hot:.6} V at 60 degC (model {:.6}), {} scope samples",
+        ntc_volts(25.0),
+        ntc_volts(60.0),
+        batch.samples.len()
+    );
 }
 
 fn f401_machine() -> Machine<CortexM> {
