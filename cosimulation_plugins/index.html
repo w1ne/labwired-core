@@ -5509,6 +5509,14 @@ because the generic fixture matrix and the browser receipt run without a solver
 host; <code>labwired_test_runs_the_heypcb_ntc_deck_on_ngspice</code> runs them on both
 engines and also requires the <code>source.sha256</code> netlist pin and the 61 °C stop on
 both.</p>
+<p>The HeyPCB ESP32-S3 LDR sensor-network fixture repeats the pattern with
+<code>ldr.cir</code> and two <code>ngspice-*.yaml</code> scripts. Measured on 2026-11-25: the ADC count of both
+scripts and both instrument counts are identical, the bright 3.95 ms sample
+agrees within 4·10⁻⁷ V, and the bright 350 µs transient differs by 3.6·10⁻³ V
+for the same backward-Euler reason. 0, 0.5 and 100000 lx stop both engines.
+<code>labwired_test_runs_the_heypcb_ldr_network_deck_on_ngspice</code> requires that,
+plus the <code>source.sha256</code> pin; the in-core manifest keeps the committed browser
+receipt because the receipt has no solver host.</p>
 <h3 id="pinning-the-circuit-a-flex-run-solved">Pinning the circuit a Flex run solved</h3>
 <p>A Flex manifest's <code>manifest_sha256</code> covers the manifest bytes. It cannot cover
 an external netlist, so <code>run_report()</code> carries one <code>source</code> pin per model whose
