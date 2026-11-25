@@ -4944,8 +4944,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.</p>
 <ul>
 <li>Profiles in <code>configs/systems/</code>: <strong>439</strong></li>
-<li>Covered end to end: <strong>18</strong></li>
-<li>Not covered: <strong>421</strong></li>
+<li>Covered end to end: <strong>19</strong></li>
+<li>Not covered: <strong>420</strong></li>
 <li>Not covered but with an <code>analog_pins:</code> map: <strong>50</strong> (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   <code>analog_pins:</code> map, an ADC model, or a digital endpoint first)</li>
@@ -5253,11 +5253,6 @@ count is what the generic decks can reach without new routing.</p>
 <tr>
 <td><code>apollo4p-evb</code></td>
 <td><code>amap42kp</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>arduino-leonardo</code></td>
-<td><code>atmega32u4</code></td>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
@@ -7346,6 +7341,11 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>adafruit-feather-esp32-v2</code></td>
 <td><code>esp32</code></td>
 <td><code>crates/core/tests/analog/cosim_esp32_analog_diode.rs</code></td>
+</tr>
+<tr>
+<td><code>arduino-leonardo</code></td>
+<td><code>atmega32u4</code></td>
+<td><code>crates/core/tests/analog/cosim_avr_atmega32u4_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>arduino-mega-2560</code></td>
