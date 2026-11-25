@@ -1210,14 +1210,22 @@ fn run_pulse_fixture(chip: &ChipDescriptor, pad: u8) -> String {
         }
     }
 
-    // pulseIn() needs a pulse of its own: wait for the MICROS line, then drive
-    // the same width again so a working pulseIn would have to report it.
+    // pulseIn() needs a pulse of its own. The sketch prints PULSEIN_WAIT and
+    // calls pulseIn() immediately after the line; the settle below makes sure
+    // the call is already polling before the edge arrives, so a pulse that
+    // "was not there yet" cannot explain the result.
     let mut guard = 0u32;
-    while guard < 2_000_000 && !text(&sink).contains("MICROS ") {
+    while guard < 2_000_000 && !text(&sink).contains("PULSEIN_WAIT") {
         if machine.step().is_err() {
             break;
         }
         guard += 1;
+    }
+    let settle = machine.total_cycles + 20_000;
+    while machine.total_cycles < settle {
+        if machine.step().is_err() {
+            break;
+        }
     }
     machine.bus.set_peripheral_gpio_input(gpiod, pad, true);
     let fall = machine.total_cycles + PULSE_WIDTHS_CYCLES[0];
@@ -1288,27 +1296,33 @@ fn ch32v003_pad_pulse_width_reads_microseconds_from_the_stk_counter() {
 fn ch32v003_pulse_width_needs_the_pad_the_sketch_polls() {
     let chip = load_chip("ch32v003f4p6");
     let out = run_pulse_fixture(&chip, 2);
-    assert!(
-        out.starts_with("CH32V003_PULSE_BOOT\r\n"),
-        "USART1 stream: {out:?}"
-    );
-    assert!(
-        !out.contains("WIDTH "),
+    // The sketch printed its banner, then blocked in `while (!pd3())` for the
+    // whole run: no width, no micros() samples, no pulseIn() call.
+    assert_eq!(
+        out, "CH32V003_PULSE_BOOT\r\n",
         "PD2 pulses must not reach a sketch that polls PD3: {out:?}"
     );
 }
 
-/// The stock core's `micros()` cannot report elapsed time on this part.
-/// `getCurrentMicros()` (ch32/clock.c) computes `(CMP + 1 - CNT) * 1000 /
-/// (CMP + 1)`, the *remaining* time in the millisecond for an up-counter, so
-/// three consecutive samples are not increasing. `pulseIn()` measures with
-/// `micros()`, so a real 100 us pulse on the pad fails its own timeout test
-/// and the sketch prints `PULSEIN 0`.
+/// Characterization test for the stock core's `micros()` on this part.
+/// `getCurrentMicros()` (ch32/clock.c, the CH32V00x branch) computes
+/// `(CMP + 1 - CNT) * 1000 / (CMP + 1)`. That is the remaining time in the
+/// millisecond when `CNT` counts up, so three consecutive samples are not
+/// increasing. `pulseIn()` (cores/arduino/wiring_pulse.cpp) compares
+/// `micros()` differences against its timeout on every pass, so the call
+/// returns 0 in tens of microseconds, before the 100 us pulse the harness
+/// drives after PULSEIN_WAIT could end. The sketch times the call with the
+/// STK counter and prints both the result and the duration.
 ///
-/// The defect is the vendor core's arithmetic, not the model: WCH's own
-/// noneos-sdk `Delay_Us` (`Debug/ch32v00x/debug.c`) writes `CNT = 0`, waits
-/// for `SR.CNTIF` at `CMP`, and therefore needs the up-counter the descriptor
-/// models.
+/// The model and the core disagree on the counter direction. This test does
+/// not settle which is right against silicon. It records that the model
+/// follows WCH's own noneos-sdk `Delay_Us` (`Debug/ch32v00x/debug.c` writes
+/// `CNT = 0` and waits for `SR.CNTIF` at `CMP`, which needs an up-counter),
+/// and that the model's direction explains the stock core's output.
+///
+/// This test asserts the current, defective behaviour. If the vendor core is
+/// fixed (or a patched core is added), invert it: `micros()` must increase
+/// and `pulseIn()` must report the driven width.
 #[test]
 fn ch32v003_shipped_micros_runs_backwards_and_pulse_in_cannot_measure() {
     let chip = load_chip("ch32v003f4p6");
@@ -1326,11 +1340,18 @@ fn ch32v003_shipped_micros_runs_backwards_and_pulse_in_cannot_measure() {
     );
 
     let pulse_in = printed_numbers(&out, "PULSEIN ");
-    assert_eq!(pulse_in.len(), 1, "one PULSEIN line: {out:?}");
+    assert_eq!(pulse_in.len(), 2, "PULSEIN <width> <call us>: {out:?}");
     assert_eq!(
         pulse_in[0], 0,
-        "pulseIn() with a real 100 us pulse on the pad returns 0 on this core, \
-         measured {}: {out:?}",
-        pulse_in[0]
+        "pulseIn() must return 0 on this core: {out:?}"
+    );
+    // The harness holds the pad high for 4 800 cycles (100 us) after the
+    // sketch prints PULSEIN_WAIT. A call that ended inside that window bailed
+    // out on its own timeout before the pulse could finish; a call that
+    // waited for the pulse would last at least the pulse width.
+    assert!(
+        pulse_in[1] < 100,
+        "pulseIn() took {} us, which is not shorter than the 100 us pulse: {out:?}",
+        pulse_in[1]
     );
 }

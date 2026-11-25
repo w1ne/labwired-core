@@ -1,9 +1,10 @@
 # CH32V003F4P6 openwch Arduino pulse-width fixture
 
-Built as `../ch32v003f4p6-arduino-openwch/` (PlatformIO `ch32v` platform
-1.1.0, `board = ch32v003f4p6_evt_r0`, `framework = arduino`,
-`board_build.core = openwch`, `framework-arduino-openwch-ch32`). The sketch is
-not modified for the simulator.
+Built with the same settings as `../ch32v003f4p6-arduino-openwch/`
+(PlatformIO `ch32v` platform 1.1.0, `board = ch32v003f4p6_evt_r0`,
+`framework = arduino`, `board_build.core = openwch`,
+`framework-arduino-openwch-ch32`); this fixture has its own sketch. The sketch
+is not modified for the simulator.
 
 What the sketch exercises:
 
@@ -19,9 +20,10 @@ What the sketch exercises:
   `MICROS` line. On this variant `getCurrentMicros()` (`ch32/clock.c`)
   computes `(CMP + 1 - CNT) * 1000 / (CMP + 1)`, which is the *remaining*
   time in the millisecond for an up-counter, so the samples decrease.
-- `pulseIn(PD3, HIGH, 20000)` with a real 100 us pulse on the pad. It
-  measures with `micros()`, so its timeout fires immediately and it prints
-  `PULSEIN 0`.
+- `pulseIn(PD3, HIGH, 20000)`, timed with the STK. It measures with
+  `micros()`, so the timeout test rejects the call at once: the sketch
+  prints `PULSEIN 0 <call us>`, and the call ends before the 100 us pulse
+  the harness drives after `PULSEIN_WAIT` can finish.
 
 The tests in `crates/core/tests/vendor/ch32v003_compiled_firmware.rs` place
 each pulse on exact HCLK cycle boundaries (4 800 cycles = 100 us, 12 000 =

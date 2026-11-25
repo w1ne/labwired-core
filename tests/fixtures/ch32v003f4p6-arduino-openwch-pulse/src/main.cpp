@@ -55,8 +55,16 @@ void setup() {
   Serial.print(" ");
   Serial.println(m2);
 
+  // pulseIn() is timed with the STK so the caller can see that it returned
+  // before the pulse on the pad could have ended.
+  Serial.println("PULSEIN_WAIT");
+  uint32_t p0 = stk_micros();
+  uint32_t width = pulseIn(PD3, HIGH, 20000);
+  uint32_t p1 = stk_micros();
   Serial.print("PULSEIN ");
-  Serial.println(pulseIn(PD3, HIGH, 20000));
+  Serial.print(width);
+  Serial.print(" ");
+  Serial.println(p1 - p0);
   Serial.println("CH32V003_PULSE_DONE");
 }
 
