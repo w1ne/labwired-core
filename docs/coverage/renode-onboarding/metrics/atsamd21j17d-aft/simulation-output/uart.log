@@ -1,0 +1,14 @@
+OK
+samd21 sercom0 up
+led on
+portb dir=00000400 out=00000400 clr=00000000
+tc4 cc0=000003e7 adv=1 flags=11 nvic19=1 cleared=00 stop=1
+tc6 reset_stop=1 oneshot_stop=1 ovf=1 count=20 retrigger=1 halted=1
+Usercom1 ctrla=40000006 dre=1 txc=1 w1c=1
+Usercom3 ctrla=40000006 dre=1 txc=1 w1c=1
+rtc mode2 alarm=1 nvic3=1 released=1 day=1d hm=0000
+rtc mode0 flags=81 wrapped=1
+rtc mode1 per=04 flags=83 wrapped=1
+systick pendsv m0+ tailchain frame=1 r0=1 pending=1 ipsr=0000000e ok
+systick pendsv m0+ psp tailchain frame=1 r0=1 pending=1 exc_return=fffffffd restored=1 ok
+SAMD21 PASS

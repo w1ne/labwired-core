@@ -1,0 +1,8 @@
+2026-11-09T16:41:35.645654Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sam_e70.yaml
+2026-11-09T16:41:35.649683Z  INFO labwired_loader: ELF Entry Point: 0x400401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+2026-11-09T16:41:37.196482Z ERROR labwired_cli::execute: Memory assertion failed to read address 0x400e1900 (size 32): Memory access violation at 0x400e1900
+2026-11-09T16:41:37.196509Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1074665728, expected_value: 0, mask: None, size: None, node: None } }) (captured len=630)
+2026-11-09T16:41:37.196520Z ERROR labwired_cli::execute: Memory assertion failed to read address 0x400e2000 (size 32): Memory access violation at 0x400e2000
+2026-11-09T16:41:37.196523Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1074667520, expected_value: 0, mask: None, size: None, node: None } }) (captured len=630)
+FAIL  7/9 checks · sam_e70-new · 4000000 steps · 1.54s

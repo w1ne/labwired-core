@@ -1,0 +1,86 @@
+# HD44780 character LCD (16x2 "LCD1602 I2C") behind a PCF8574 backpack.
+#
+# Two chips, both stated here as data. The PCF8574 has no register pointer:
+# every I2C byte is its 8-bit port. The port drives the HD44780 in 4-bit mode,
+# and the HD44780 latches D7..D4, RS and RW on the FALLING edge of E
+# (HD44780U datasheet, Hitachi ADE-207-272, Figure 25 "4-bit transfer"), so
+# a byte that only raises E or toggles the backlight moves no data. Which
+# port bit is which line is the backpack's wiring, the near-universal
+# PCF8574T layout that LiquidCrystal_I2C assumes:
+#
+#   P0 RS   P1 RW   P2 E   P3 backlight   P4..P7 D4..D7
+#
+# Frame memory is DDRAM: 128 one-byte cells addressed by the 7-bit address
+# counter, so line 1 is cells 0x00..0x27 and line 2 is 0x40..0x67 (datasheet
+# Table 4 / Figure 10 for a 2-line display). Each cell holds a character
+# code, which the `text` meta reads back for the 16 visible columns.
+#
+# Instruction set (datasheet Table 6). Every instruction except "set CGRAM
+# address" leaves data writes going to DDRAM, which is why each of them opens
+# the RAM stream; after "set CGRAM address" data goes to CGRAM, which is not
+# modelled, so those bytes are dropped instead of landing in DDRAM.
+#
+# NOT modelled, stated: CGRAM (custom glyphs), the entry-mode direction and
+# display shift (the address counter always increments), cursor/display
+# shift instructions, the busy flag and reads (RW=1 nibbles are ignored),
+# execution times, and the backlight bit.
+type: hd44780_pcf8574
+
+behavior:
+  primitive: display
+  display:
+    width: 128
+    height: 8
+    pixel_format: mono_page
+    artifact_format: hd44780_ddram_128
+    ram: { pages: 1, bytes: 128, layout: page_major, stream: command, blank: 0x20 }
+    dc:
+      source: strobed_nibbles
+      nibble: { rs_bit: 0, rw_bit: 1, e_bit: 2, data_shift: 4 }
+    addressing: { modes: [horizontal], default: horizontal }
+    default_address: 0x27
+    power_on: { display_on: false, awake: true }
+    artifact_meta:
+      - display_on
+      - { text: [{ offset: 0, len: 16 }, { offset: 64, len: 16 }] }
+    commands:
+      - opcode: 0x01
+        name: CLEAR_DISPLAY
+        do:
+          - clear_ram: true
+          - set_cursor: { axis: col, value: { value: 0 } }
+          - ram_write: { reset_cursor: false }
+      - opcode: 0x02
+        opcode_end: 0x03
+        name: RETURN_HOME
+        do:
+          - set_cursor: { axis: col, value: { value: 0 } }
+          - ram_write: { reset_cursor: false }
+      - { opcode: 0x04, opcode_end: 0x07, name: ENTRY_MODE_SET, do: [ { ram_write: { reset_cursor: false } } ] }
+      - opcode: 0x08
+        opcode_end: 0x0B
+        name: DISPLAY_OFF
+        do: [ { display_on: false }, { ram_write: { reset_cursor: false } } ]
+      - opcode: 0x0C
+        opcode_end: 0x0F
+        name: DISPLAY_ON
+        do: [ { display_on: true }, { ram_write: { reset_cursor: false } } ]
+      - { opcode: 0x10, opcode_end: 0x1F, name: CURSOR_OR_DISPLAY_SHIFT, do: [ { ram_write: { reset_cursor: false } } ] }
+      - { opcode: 0x20, opcode_end: 0x3F, name: FUNCTION_SET, do: [ { ram_write: { reset_cursor: false } } ] }
+      - { opcode: 0x40, opcode_end: 0x7F, name: SET_CGRAM_ADDRESS }
+      - opcode: 0x80
+        opcode_end: 0xFF
+        name: SET_DDRAM_ADDRESS
+        do:
+          - set_cursor: { axis: col, value: { opcode_mask: 0x7F } }
+          - ram_write: { reset_cursor: false }
+
+metadata:
+  label: "LCD1602 I2C (HD44780 + PCF8574)"
+  summary: "16x2 character LCD: HD44780 controller in 4-bit mode behind a PCF8574 I2C backpack."
+  detail: "Every I2C byte is the PCF8574 port; the HD44780 latches a nibble on each falling edge of E (P2), RS on P0, RW on P1, D4..D7 on P4..P7, two nibbles per byte. DDRAM is published as text: line 1 from address 0x00, line 2 from 0x40, 16 visible columns each. Default address 0x27 (0x3F on PCF8574A backpacks). Not modelled: CGRAM, entry-mode direction and shift, busy flag and reads, timing, backlight."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit address of the PCF8574 backpack. Default 0x27; PCF8574A backpacks use 0x3F."

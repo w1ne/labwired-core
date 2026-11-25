@@ -1,0 +1,482 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 20000,
+  "cycles": 20000,
+  "instructions": 20000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 20000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 20000
+    }
+  },
+  "limits": {
+    "max_steps": 20000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "MG26-IO DONE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "MG26-TIMER-IRQ 0010 0020 0040 0080 0100 0200 0400 0800 1000 2000 ok"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      134218663,
+      134218663,
+      10,
+      2147483648,
+      10,
+      1074413572,
+      537395168,
+      537395184,
+      0,
+      16368,
+      32,
+      0,
+      0,
+      537395160,
+      10,
+      134218556
+    ],
+    "pc": 134218556,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "a58597e161a4a637c322e391b2043a4480ee415ed9991997b3efed466199609d",
+  "config": {
+    "firmware": "examples/brd2709a/../../target/thumbv7m-none-eabi/release/firmware-mg26-demo",
+    "system": "examples/brd2709a/./system.yaml",
+    "script": "examples/brd2709a/timer-irq-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "spi2",
+        "kind": "native",
+        "base": 1074429952,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1074413568,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "cmu",
+        "kind": "native",
+        "base": 1073774592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio_head",
+        "kind": "native",
+        "base": 1073987584,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1073987632,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiob",
+        "kind": "native",
+        "base": 1073987680,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1073987728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1073987776,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio_busalloc",
+        "kind": "native",
+        "base": 1073988384,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio_timerroute",
+        "kind": "native",
+        "base": 1073989344,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio_i2croute",
+        "kind": "native",
+        "base": 1073988904,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio_usartroute",
+        "kind": "native",
+        "base": 1073989664,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer0",
+        "kind": "native",
+        "base": 1074036736,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer1",
+        "kind": "native",
+        "base": 1074053120,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer2",
+        "kind": "native",
+        "base": 1074069504,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer3",
+        "kind": "native",
+        "base": 1074085888,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer4",
+        "kind": "native",
+        "base": 1074102272,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer5",
+        "kind": "native",
+        "base": 1074118656,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer6",
+        "kind": "native",
+        "base": 1074135040,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer7",
+        "kind": "native",
+        "base": 1074151424,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer8",
+        "kind": "native",
+        "base": 1074167808,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer9",
+        "kind": "native",
+        "base": 1074184192,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi0",
+        "kind": "native",
+        "base": 1074397184,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c0",
+        "kind": "i2c",
+        "base": 1258291200,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "i2c",
+        "base": 1074462720,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c2",
+        "kind": "i2c",
+        "base": 1074479104,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c3",
+        "kind": "i2c",
+        "base": 1074495488,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "smu",
+        "kind": "native",
+        "base": 1140883456,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio_exti",
+        "kind": "native",
+        "base": 1073988608,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "iadc0",
+        "kind": "native",
+        "base": 1224753152,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "msc",
+        "kind": "native",
+        "base": 1073938432,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ble",
+        "kind": "native",
+        "base": 1325400064,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "btn0_pb00",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      },
+      {
+        "id": "btn1_pb01",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "brd2709a: MG26 OK",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "MG26-IO",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "PC08=1 PC09=1",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "PC08=0 PC09=0",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "BTN0=1 BTN1=1",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "MG26-IO DONE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "MG26-TIMER-IRQ 0010 0000 0000 0000 0000 0000 0000 0000 0000 0020 FAIL",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1075,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 1075,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 3276800,
+    "ram_total_bytes": 524288,
+    "flash_used_pct": 0.03,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 524288,
+    "main_stack_high_water_bytes": 32,
+    "main_stack_free_min_bytes": 524248,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537395200,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 524288,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 524248,
+    "heap_base": 536870912,
+    "heap_top": 537395200
+  },
+  "metrics": {
+    "cycles": 20000,
+    "instructions": 20000,
+    "steps_executed": 20000,
+    "memory_reads": 719,
+    "memory_writes": 208,
+    "peripheral_accesses": 461,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134218556,
+        "count": 78,
+        "symbol": "firmware_mg26_demo::main"
+      }
+    ]
+  }
+}

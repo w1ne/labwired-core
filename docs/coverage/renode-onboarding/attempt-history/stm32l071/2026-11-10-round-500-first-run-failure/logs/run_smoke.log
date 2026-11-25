@@ -1,0 +1,22 @@
+2026-11-10T15:09:25.404743Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32l071.yaml
+2026-11-10T15:09:25.465460Z  INFO labwired_loader: ELF Entry Point: 0x80000c1
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-10T15:09:25.467955Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart1'
+2026-11-10T15:09:25.467963Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart2'
+2026-11-10T15:09:25.467965Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart4'
+2026-11-10T15:09:25.467968Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart5'
+2026-11-10T15:09:25.467970Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'lpuart1'
+2026-11-10T15:09:25.468577Z  INFO labwired_cli::execute: stimulus: position = 25 applied
+2026-11-10T15:09:25.468593Z  INFO labwired_cli::execute: stimulus: temperature = 100 applied
+2026-11-10T15:09:25.468598Z  INFO labwired_cli::execute: stimulus: temperature = 50 applied
+2026-11-10T15:09:25.856279Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-10T15:09:25.871195Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-10T15:09:25.905709Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-10T15:09:25.995935Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-10T15:09:26.031369Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-10T15:09:26.121044Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-10T15:09:26.564063Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["rcc reset=1 gate=1 ok", "usart irq u1=1 u2=1 u4=1 u5=1 lp1=1 ok", "usart rx u1 re_off=1 ue_off=1 data=00005253 rxne_irq=isolated,asserted,reasserted,released ok", "usart rx u2 re_off=1 ue_off=1 data=00005253 rxne_irq=isolated,asserted,reasserted,released ok", "usart rx u4 re_off=1 ue_off=1 data=00005253 rxne_irq=isolated,asserted,reasserted,released ok", "usart rx u5 re_off=1 ue_off=1 data=00005253 rxne_irq=isolated,asserted,reasserted,released ok", "usart rx lp1 re_off=1 ue_off=1 data=00005253 rxne_irq=isolated,asserted,reasserted,released ok", "gpio pa=1 reset=1 ph=1 de=1 ok", "exti swier masked=1 routed=1 ok", "tim2 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim6 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim7 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim21 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim22 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "exti pads idle=1 presses=1 pa_quiet=1 ph1=1 pc13=1 ok", "spi1 frame=0x01901600 data=1 pend=1 alone=1 released=1 ok", "spi2 frame=0x06401600 data=1 pend=1 alone=1 released=1 ok", "dma1 spi1 frame=0x01901600 unselected=1 cselr=1 data=1 flags=1 pend=1 alone=1 released=1 ok", "dma1 spi2 frame=0x06401600 unselected=1 cselr=1 data=1 flags=1 pend=1 alone=1 released=1 ok", "i2c1 tmp102=0x00001900 oar=1 data=1 rx_pend=1 nack=1 nack_pend=1 stop=1 released=1 ok", "i2c2 tmp102=0x00001900 oar=1 data=1 rx_pend=1 nack=1 nack_pend=1 stop=1 released=1 ok", "i2c3 tmp102=0x00001900 oar=1 data=1 rx_pend=1 nack=1 nack_pend=1 stop=1 released=1 ok", "spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok", "crc word=0xDF8A8A2B seed=1 std=1 init=1 ok", "adc in1=0x000007FF ts=0x0000026D cal=1 ready=1 seq=1 eos=1 pend=1 released=1 dma=1 ovr=1 awd=1 off=1 ok", "summary 0x714FFFFF", "DONE"] }) (captured len=1967)
+2026-11-10T15:09:26.564102Z ERROR labwired_cli::execute: Memory assertion failed at 0x20001000 (size 4): expected 0x71cfffff, got 0x71cfe7ff (mask 0xffffffff)
+2026-11-10T15:09:26.564105Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536875008, expected_value: 1909456895, mask: None, size: Some(4), node: None } }) (captured len=1967)
+FAIL  4/6 checks · stm32l071-smoke · 4000000 steps · 1.10s

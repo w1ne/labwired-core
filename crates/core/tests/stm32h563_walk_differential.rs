@@ -86,6 +86,24 @@ fn stm32h563_zephyr_boot_walk_vs_scheduler_is_byte_identical() {
     );
 }
 
+/// NUCLEO-H533RE USART2 + LD2 + BME280 CHIP_ID smoke on the H533 profile, which
+/// shares the H5 RCC/GPIO/USART models. The firmware reads the sensor over I2C1,
+/// so it runs on the `nucleo-h533re-bme280` board system (a bare `nucleo-h533re`
+/// has no sensor and the firmware reports `..._BME280_I2C_ERROR`). This loads
+/// `configs/chips/stm32h533re.yaml` via that board system. Keep it in the existing H5 differential target so it
+/// inherits the target's required feature and PR scheduler lane.
+#[test]
+fn stm32h533re_boot_walk_vs_scheduler_is_byte_identical() {
+    harness::assert_walk_free_boot_identical(
+        "stm32h533re",
+        "nucleo-h533re-bme280",
+        "stm32h533re-smoke.elf",
+        b"NUCLEO_H533RE_BME280_OK ID=0x60",
+        800_000,
+        50_000,
+    );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // GPDMA1 mem-to-mem
 // ═══════════════════════════════════════════════════════════════════════════

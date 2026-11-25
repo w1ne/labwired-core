@@ -1,0 +1,9 @@
+# LP-MSPM0G3507 board smoke profile. The onboard XDS110 console is UART0 on
+# PA10/PA11 via jumpers J21/J22. The UART register window is modelled; IOMUX
+# routing, power sequencing and electrical pad behaviour are not.
+name: "lp-mspm0g3507"
+chip: "../chips/mspm0g3507.yaml"
+cpu_hz: 80_000_000
+debug_uart: "uart0"
+external_devices: []
+board_io: []

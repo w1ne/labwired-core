@@ -1,0 +1,298 @@
+{
+  "status": "passed",
+  "runtime": "compiled-wasm",
+  "firmware_bytes": 379,
+  "cpu_emulation": false,
+  "source_board": "HeyPCB ESP32-S3 LDR / GL5528 / ESP32-S3-WROOM-1-N16R8",
+  "observable": "source.U3.GPIO1 LDR voltage converted to 12-bit ADC count; source.U3.GPIO48 drives D1 logic state",
+  "positive_adc_code": 4087,
+  "positive_led_edges": 4,
+  "negative_adc_code": 0,
+  "negative_led_edges": 0,
+  "digital_port_aliases": [
+    {
+      "signal": "source.D1.logic_state",
+      "port_names": [
+        "user_led_state"
+      ]
+    },
+    {
+      "signal": "source.U3.GPIO48",
+      "port_names": [
+        "user_led_drive"
+      ]
+    }
+  ],
+  "trace_overflow": {
+    "time_ns": 32769000,
+    "digital": {
+      "cursor": 65538,
+      "retained_edges": 65536,
+      "dropped": 2,
+      "next_poll_dropped": 2
+    },
+    "analog": {
+      "next_cursor": 32770,
+      "retained_samples": 20000,
+      "dropped": 12770,
+      "next_poll_dropped": 12770
+    }
+  },
+  "analog_trace": {
+    "positive": {
+      "time_unit": "ns",
+      "channels": [
+        {
+          "name": "source-u4-gl5528.voltage_mv",
+          "port_names": [
+            "sensor_mv"
+          ],
+          "unit": "mV"
+        }
+      ],
+      "dropped": 0,
+      "samples": [
+        [
+          0,
+          2751
+        ],
+        [
+          1000,
+          3294
+        ],
+        [
+          2000,
+          3294
+        ],
+        [
+          3000,
+          3294
+        ]
+      ]
+    },
+    "negative": {
+      "time_unit": "ns",
+      "channels": [
+        {
+          "name": "source-u4-gl5528.voltage_mv",
+          "port_names": [
+            "sensor_mv"
+          ],
+          "unit": "mV"
+        }
+      ],
+      "dropped": 0,
+      "samples": [
+        [
+          0,
+          2751
+        ],
+        [
+          1000,
+          0
+        ],
+        [
+          2000,
+          0
+        ]
+      ]
+    }
+  },
+  "native_model_equality": true,
+  "run_report": {
+    "assumptions": [
+      "Firmware is a newly authored portable WebAssembly behavior program, not firmware from the pinned board source.",
+      "The registered LDR kit uses a typical 10 kΩ-at-10-lux curve and samples a static millivolt output at model boundaries.",
+      "Public verified Part Knowledge returned NOT_FOUND for GL5528; this generic curve is not verified for the source part.",
+      "The IO48 user LED is represented by digital logic state only."
+    ],
+    "execution_path": "flex_portable_wasm",
+    "execution_scope": {
+      "chip_parity": "not_established",
+      "detailed_target_execution_selected": false,
+      "firmware": "portable_behavior",
+      "full_board_coverage": "not_established",
+      "original_target_firmware_executed": false
+    },
+    "manifest_sha256": "9c78f66d7564bfb8027fea1515141b6e1273ca8918b168280915c82fdf1dacd8",
+    "model_name": "heypcb-esp32-s3-ldr-gl5528",
+    "models": [
+      {
+        "adapter": "behavior",
+        "config": {
+          "device_type": "ldr"
+        },
+        "id": "source-u4-gl5528",
+        "inputs": [
+          {
+            "name": "lux",
+            "signal": "environment.lux"
+          }
+        ],
+        "model_type": "ldr",
+        "outputs": [
+          {
+            "name": "voltage_mv",
+            "signal": "source.U3.GPIO1"
+          }
+        ],
+        "step_ns": 1000
+      },
+      {
+        "adapter": "behavior",
+        "config": {
+          "behavior": {
+            "outputs": [
+              "led"
+            ],
+            "pin_defaults": {
+              "led": false
+            },
+            "primitive": "gpio_device",
+            "rules": [
+              {
+                "do": [
+                  {
+                    "goto": "on"
+                  },
+                  {
+                    "level": 1,
+                    "pin": "led"
+                  }
+                ],
+                "on": {
+                  "input": "drive"
+                },
+                "when": "input(drive) != 0"
+              },
+              {
+                "do": [
+                  {
+                    "goto": "off"
+                  },
+                  {
+                    "level": 0,
+                    "pin": "led"
+                  }
+                ],
+                "on": {
+                  "input": "drive"
+                },
+                "when": "input(drive) == 0"
+              }
+            ],
+            "states": [
+              "off",
+              "on"
+            ]
+          }
+        },
+        "id": "source-d1-user-led",
+        "inputs": [
+          {
+            "name": "drive",
+            "signal": "source.U3.GPIO48"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "led",
+            "signal": "source.D1.logic_state"
+          }
+        ],
+        "step_ns": 1000
+      }
+    ],
+    "ports": [
+      {
+        "access": "write",
+        "initial": 100,
+        "kind": "number",
+        "name": "lux",
+        "signal": "environment.lux",
+        "unit": "lx"
+      },
+      {
+        "access": "read",
+        "kind": "number",
+        "name": "sensor_mv",
+        "signal": "source.U3.GPIO1",
+        "unit": "mV"
+      },
+      {
+        "access": "write",
+        "initial": 0,
+        "kind": "bool",
+        "name": "user_led_drive",
+        "signal": "source.U3.GPIO48"
+      },
+      {
+        "access": "read",
+        "kind": "bool",
+        "name": "user_led_state",
+        "signal": "source.D1.logic_state"
+      }
+    ],
+    "schema_version": 1,
+    "scope_notes_complete": true,
+    "target_cpu_emulated": false,
+    "time_unit": "ns",
+    "unsupported_checks": [
+      "Original ESP32-S3 firmware execution and target instruction or ADC peripheral fidelity; the pinned source contains no board firmware.",
+      "Full-board power, USB, boot/reset, RF, MCU integration, and assembled hardware behavior.",
+      "The generic importer does not model U4 as a two-terminal photoconductive device: the schematic import drops it, and the PCB import maps it as a fixed resistor.",
+      "This behavior slice injects the generic LDR kit's modeled millivolts at the source-mapped GPIO1 endpoint. It does not model the GL5528 resistance, R6 divider, or C7 transient behavior.",
+      "GL5528 production spread and physical optical or electrical behavior."
+    ]
+  },
+  "checks": [
+    "portable-firmware-execution",
+    "native-model-equality",
+    "pinned-source-mapping",
+    "run-scope-report",
+    "named-digital-port-aliases",
+    "named-analog-port-aliases",
+    "bright-output",
+    "dark-negative-control",
+    "oscilloscope-samples",
+    "oscilloscope-nanosecond-time-unit",
+    "safe-integer-host-advance",
+    "trace-overflow-reporting"
+  ],
+  "measured_browser_ms": 3350.5,
+  "browser": "156.0.8078.79",
+  "browser_driver": "Playwright",
+  "core_commit": "d5307b0a9e174e3059449ecaa7ed9959559667c9",
+  "firmware_sha256": "366f562ab8a19449a479e3b5e4b2d783f108fdaceb6e61948a0f6b559c314294",
+  "firmware_source_sha256": "04cdc152150ed1ca85924081f124438698370c12af6535aaff934c1ddd539402",
+  "system_sha256": "9c78f66d7564bfb8027fea1515141b6e1273ca8918b168280915c82fdf1dacd8",
+  "source_map_sha256": "a056b1a8be17496938e78206d5581fdc6f4e74e5ab63bfcea4afe827192fb831",
+  "source": {
+    "repository": "HeyPCB/esp32-sensors-1",
+    "revision": "57a2122a19ac1aa9c092e43fb5b123c461508752",
+    "asset": "boards/ldr/kicad/esp32_ldr",
+    "license_spdx": "CERN-OHL-S-2.0",
+    "files": {
+      "schematic": {
+        "path": "boards/ldr/kicad/esp32_ldr.kicad_sch",
+        "git_blob": "64667760dad1369a130b8935718b7a262d746d66"
+      },
+      "pcb": {
+        "path": "boards/ldr/kicad/esp32_ldr.kicad_pcb",
+        "git_blob": "54b05837a3e254b6a424b2ea2eb97a4b8318e578"
+      },
+      "board_json": {
+        "path": "boards/ldr/board.json",
+        "git_blob": "409e43b9a6afe61c082635c30461e433e8d39772"
+      },
+      "board_readme": {
+        "path": "boards/ldr/README.md",
+        "git_blob": "e41508ce5052097c2e6ab1a11ba6b31a1d37cbd6"
+      },
+      "license": {
+        "path": "LICENSE",
+        "git_blob": "0f1092207caa645ff426e0cc40b7eaad69caecb1"
+      }
+    }
+  }
+}

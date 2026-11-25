@@ -71,10 +71,38 @@
 //! the direction and the dependence on capacitance and window, not
 //! silicon-exact counts. The touch interrupt (RTC_CNTL `rtc_touch`) is not
 //! raised, so `touchAttachInterrupt()` does not fire.
+//!
+//! ## DAC (`soc/esp32/sens_reg.h`, `hal/dac_ll.h`)
+//!
+//! The classic DACs are split across two blocks. Their power and 8-bit code
+//! sit in RTC_IO `PAD_DAC1/2` (`peripherals::esp_rtc_io`), whose pad-stage
+//! level the bus hands this block as ADC input probes 8 / 9
+//! (`SystemBus::wire_esp32_dac_adc`). Which source feeds the DAC is muxed
+//! here: `SAR_DAC_CTRL2` (0x9C) `DAC_CW_EN1` [24] / `DAC_CW_EN2` [25], both
+//! reset to 1, pick the cosine generator instead of the `PDACn_DAC` code. IDF
+//! `dac_ll_update_output_value` (Arduino `dacWrite()`) clears the bit. The
+//! cosine generator is not modelled, so with `CW_ENn` set the DAC reads as
+//! not driven.
+//!
+//! The muxed DAC1 / DAC2 level is this block's analog output 0 / 1
+//! ([`Peripheral::analog_output_probe`]), so a board jumper names it as
+//! `sens_sar_adc:0` / `sens_sar_adc:1`. It is read in two places:
+//!
+//! * ADC2_CH8 / ADC2_CH9 are GPIO25 / GPIO26, the DAC pads themselves, so a
+//!   SAR2 conversion of a pad the DAC drives reads what it drives, ahead of
+//!   any injected level. Stock Arduino `analogRead(25)` never sees this,
+//!   because `__adcAttachPin` powers the DAC on that pin down first, as it
+//!   does on silicon.
+//! * ADC1_CH0..7 take a board wire (`analog_links: { <ch>: "<peripheral>:<output>" }`,
+//!   bound by [`Peripheral::bind_adc_channel_probe`]): a jumper from GPIO25
+//!   to GPIO34 is `6: "sens_sar_adc:0"`. A wired SAR1 channel reads the source
+//!   while it drives, and the injected level or the ramp while it does not.
 
 use crate::sim_input::{InputChannel, SimInput, SimInputError};
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{AnalogProbe, Peripheral, PeripheralTickResult, SimResult};
 use std::borrow::Cow;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 
 /// SENS block base on the classic ESP32 (`DR_REG_SENS_BASE`).
 pub const SENS_BASE: u32 = 0x3FF4_8800;
@@ -113,6 +141,15 @@ fn channel_sample(channel: u32) -> u32 {
 
 const NO_INJECT: u16 = 0xFFFF;
 const CHANNEL_SLOTS: usize = 16;
+
+/// `SAR_DAC_CTRL2`: `DAC_CW_EN1` [24] / `DAC_CW_EN2` [25], reset 1 each.
+const SAR_DAC_CTRL2: u64 = 0x9C;
+const DAC_CW_EN: [u32; 2] = [1 << 24, 1 << 25];
+/// The SAR2 channels on the DAC1 / DAC2 pads (GPIO25 / GPIO26), and the ADC
+/// input probes the bus binds the DAC pad stages to.
+const SAR2_DAC_CHANNELS: [u8; 2] = [8, 9];
+/// SAR1 (ADC1) has CH0..CH7.
+const SAR1_CHANNELS: usize = 8;
 
 const SAR_TOUCH_CTRL1: u64 = 0x58;
 const SAR_TOUCH_THRES1: u64 = 0x5C;
@@ -197,6 +234,12 @@ pub struct Esp32SarAdc {
     channel_inputs: [u16; CHANNEL_SLOTS],
     /// Touch pad capacitance in pF, indexed by HARDWARE channel.
     touch_pf: [f64; TOUCH_CHANNELS],
+    /// DAC1 / DAC2 pad stage (RTC_IO), as bound to [`SAR2_DAC_CHANNELS`].
+    dac_pads: [Option<AnalogProbe>; 2],
+    /// `SAR_DAC_CTRL2`, shared with the DAC output probes this block hands out.
+    dac_ctrl2: Arc<AtomicU32>,
+    /// Board wires onto ADC1_CH0..7.
+    sar1_links: [Option<AnalogProbe>; SAR1_CHANNELS],
 }
 
 impl Default for Esp32SarAdc {
@@ -222,12 +265,17 @@ impl Esp32SarAdc {
         let default_width = SAMPLE_BIT_MASK << SAMPLE_BIT_SHIFT;
         regs[(SAR_READ_CTRL / 4) as usize] = default_width;
         regs[(SAR_READ_CTRL2 / 4) as usize] = default_width;
+        let dac_ctrl2 = DAC_CW_EN[0] | DAC_CW_EN[1];
+        regs[(SAR_DAC_CTRL2 / 4) as usize] = dac_ctrl2;
         Self {
             regs,
             sar1: SarUnit::default(),
             sar2: SarUnit::default(),
             channel_inputs: [NO_INJECT; CHANNEL_SLOTS],
             touch_pf: [TOUCH_BARE_PAD_PF; TOUCH_CHANNELS],
+            dac_pads: [None, None],
+            dac_ctrl2: Arc::new(AtomicU32::new(dac_ctrl2)),
+            sar1_links: Default::default(),
         }
     }
 
@@ -303,16 +351,41 @@ impl Esp32SarAdc {
         *self.regs.get((off / 4) as usize).unwrap_or(&0)
     }
 
+    /// DAC `dac`'s output (see the module docs): the pad stage's level unless
+    /// the cosine generator owns the DAC.
+    fn dac_output(ctrl2: &AtomicU32, dac: usize, pad: &AnalogProbe) -> Option<u16> {
+        if ctrl2.load(Ordering::Relaxed) & DAC_CW_EN[dac] != 0 {
+            return None;
+        }
+        pad()
+    }
+
+    /// The level a conversion of `channel` on SAR2 (`sar2`) or SAR1 reads
+    /// from an analog source wired to it, while that source drives.
+    fn wired_mv(&self, channel: u32, sar2: bool) -> Option<u16> {
+        if sar2 {
+            let dac = SAR2_DAC_CHANNELS
+                .iter()
+                .position(|&c| u32::from(c) == channel)?;
+            Self::dac_output(&self.dac_ctrl2, dac, self.dac_pads[dac].as_ref()?)
+        } else {
+            self.sar1_links.get(channel as usize)?.as_ref()?()
+        }
+    }
+
     /// Run a conversion for the given `start_word` and resolution, returning the
-    /// latched unit state, or `None` if no channel was selected.
-    fn convert(&self, start_word: u32, width_bits: u32) -> Option<SarUnit> {
+    /// latched unit state, or `None` if no channel was selected. `sar2` picks
+    /// the unit (see [`Self::wired_mv`]).
+    fn convert(&self, start_word: u32, width_bits: u32, sar2: bool) -> Option<SarUnit> {
         let en_pad = (start_word >> EN_PAD_SHIFT) & EN_PAD_MASK;
         if en_pad == 0 {
             return None;
         }
         // The IDF selects exactly one channel via a one-hot EN_PAD bitmap.
         let channel = en_pad.trailing_zeros();
-        let full = {
+        let full = if let Some(mv) = self.wired_mv(channel, sar2) {
+            (u32::from(mv) * 4095 / 3300).min(4095)
+        } else {
             let idx = channel as usize;
             if idx < self.channel_inputs.len() && self.channel_inputs[idx] != NO_INJECT {
                 self.channel_inputs[idx] as u32
@@ -390,7 +463,7 @@ impl Peripheral for Esp32SarAdc {
                     let bits = 9
                         + ((self.regs[(ctrl_off / 4) as usize] >> SAMPLE_BIT_SHIFT)
                             & SAMPLE_BIT_MASK);
-                    if let Some(converted) = self.convert(value, bits) {
+                    if let Some(converted) = self.convert(value, bits, off == SAR_MEAS_START2) {
                         if off == SAR_MEAS_START1 {
                             self.sar1 = converted;
                         } else {
@@ -398,6 +471,10 @@ impl Peripheral for Esp32SarAdc {
                         }
                     }
                 }
+            }
+            SAR_DAC_CTRL2 => {
+                self.regs[(SAR_DAC_CTRL2 / 4) as usize] = value;
+                self.dac_ctrl2.store(value, Ordering::Relaxed);
             }
             // The OUT words are RO counts.
             SAR_TOUCH_OUT1..=SAR_TOUCH_OUT5 => {}
@@ -418,6 +495,32 @@ impl Peripheral for Esp32SarAdc {
 
     fn tick(&mut self) -> PeripheralTickResult {
         PeripheralTickResult::default()
+    }
+
+    /// Inputs 0..7 are board wires onto ADC1_CH0..7; 8 / 9 are the DAC1 /
+    /// DAC2 pad stages (see the module docs).
+    fn bind_adc_channel_probe(&mut self, channel: u8, probe: AnalogProbe) -> bool {
+        let channel = usize::from(channel);
+        if let Some(link) = self.sar1_links.get_mut(channel) {
+            *link = Some(probe);
+        } else if let Some(dac) = SAR2_DAC_CHANNELS
+            .iter()
+            .position(|&c| usize::from(c) == channel)
+        {
+            self.dac_pads[dac] = Some(probe);
+        } else {
+            return false;
+        }
+        true
+    }
+
+    /// Outputs 0 / 1: DAC1 / DAC2 after the source mux, once the bus has
+    /// bound their pad stages.
+    fn analog_output_probe(&self, channel: u8) -> Option<AnalogProbe> {
+        let dac = usize::from(channel);
+        let pad = self.dac_pads.get(dac)?.clone()?;
+        let ctrl2 = Arc::clone(&self.dac_ctrl2);
+        Some(Arc::new(move || Self::dac_output(&ctrl2, dac, &pad)))
     }
 
     /// The touch pads are this peripheral's own inputs (`t0`..`t9`, pF).
@@ -514,6 +617,91 @@ mod tests {
 
         assert_eq!(d12, channel_sample(7));
         assert_eq!(d9, d12 >> 3, "9-bit result is 12-bit value >> 3");
+    }
+
+    fn sar2_oneshot(a: &mut Esp32SarAdc, channel: u32) -> u32 {
+        let en_pad = (1u32 << channel) & EN_PAD_MASK;
+        a.write_u32(
+            SAR_MEAS_START2,
+            (en_pad << EN_PAD_SHIFT) | (1 << 18) | MEAS_START_SAR,
+        )
+        .unwrap();
+        a.read_u32(SAR_MEAS_START2).unwrap() & MEAS_DATA_MASK
+    }
+
+    #[test]
+    fn sar2_dac_pads_read_the_dac_once_cw_is_off() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        use std::sync::Arc;
+        // u32::MAX = the DAC is powered down.
+        let level = Arc::new(AtomicU32::new(u32::MAX));
+        let probe_level = Arc::clone(&level);
+        let probe: crate::AnalogProbe = Arc::new(move || {
+            let mv = probe_level.load(Ordering::Relaxed);
+            (mv != u32::MAX).then_some(mv as u16)
+        });
+        let mut a = Esp32SarAdc::new();
+        assert!(a.analog_output_probe(0).is_none(), "no pad stage bound yet");
+        assert!(!a.bind_adc_channel_probe(10, Arc::clone(&probe)));
+        assert!(a.bind_adc_channel_probe(8, probe));
+        let dac1 = a.analog_output_probe(0).expect("DAC1 output");
+        assert!(a.analog_output_probe(1).is_none());
+        // CW_EN1/2 reset to 1.
+        assert_eq!(a.read_u32(SAR_DAC_CTRL2).unwrap(), 0x0300_0000);
+        level.store(1650, Ordering::Relaxed);
+        // The cosine generator owns the DAC: not modelled, the old ramp.
+        assert_eq!(sar2_oneshot(&mut a, 8), channel_sample(8));
+        assert_eq!(dac1(), None);
+        // dac_ll_update_output_value clears CW_EN1.
+        a.write_u32(SAR_DAC_CTRL2, DAC_CW_EN[1]).unwrap();
+        assert_eq!(sar2_oneshot(&mut a, 8), 1650 * 4095 / 3300);
+        assert_eq!(dac1(), Some(1650));
+        level.store(3300, Ordering::Relaxed);
+        assert_eq!(sar2_oneshot(&mut a, 8), 4095);
+        // The DAC drives the pad over an injected kit level.
+        a.set_channel_input(8, 100);
+        assert_eq!(sar2_oneshot(&mut a, 8), 4095);
+        // Powered down: the injected level again.
+        level.store(u32::MAX, Ordering::Relaxed);
+        assert_eq!(sar2_oneshot(&mut a, 8), 100 * 4095 / 3300);
+        // SAR1 has no channel on the DAC pads.
+        level.store(3300, Ordering::Relaxed);
+        a.write_u32(SAR_MEAS_START1, sar1_oneshot(8)).unwrap();
+        assert_eq!(
+            a.read_u32(SAR_MEAS_START1).unwrap() & MEAS_DATA_MASK,
+            100 * 4095 / 3300
+        );
+        // CH9 has no DAC bound here: the ramp.
+        assert_eq!(sar2_oneshot(&mut a, 9), channel_sample(9));
+    }
+
+    #[test]
+    fn a_jumper_from_the_dac_reaches_an_adc1_channel() {
+        use std::sync::Arc;
+        let pad: AnalogProbe = Arc::new(|| Some(1000));
+        let mut a = Esp32SarAdc::new();
+        assert!(a.bind_adc_channel_probe(8, pad));
+        // GPIO25 -> GPIO34 (ADC1_CH6), as `analog_links: { 6: "sens_sar_adc:0" }`.
+        let dac1 = a.analog_output_probe(0).unwrap();
+        assert!(a.bind_adc_channel_probe(6, dac1));
+        a.write_u32(SAR_MEAS_START1, sar1_oneshot(6)).unwrap();
+        // CW_EN1 still at reset: the DAC is the cosine generator's, not driven.
+        assert_eq!(
+            a.read_u32(SAR_MEAS_START1).unwrap() & MEAS_DATA_MASK,
+            channel_sample(6)
+        );
+        a.write_u32(SAR_DAC_CTRL2, 0).unwrap();
+        a.write_u32(SAR_MEAS_START1, sar1_oneshot(6)).unwrap();
+        assert_eq!(
+            a.read_u32(SAR_MEAS_START1).unwrap() & MEAS_DATA_MASK,
+            1000 * 4095 / 3300
+        );
+        // A neighbouring channel is not wired.
+        a.write_u32(SAR_MEAS_START1, sar1_oneshot(7)).unwrap();
+        assert_eq!(
+            a.read_u32(SAR_MEAS_START1).unwrap() & MEAS_DATA_MASK,
+            channel_sample(7)
+        );
     }
 
     #[test]

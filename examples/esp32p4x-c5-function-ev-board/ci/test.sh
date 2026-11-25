@@ -3,7 +3,9 @@ set -eu
 
 repo_root=$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd)
 cd "$repo_root"
-cargo run -q -p labwired-cli -- test \
-  --script examples/esp32p4x-c5-function-ev-board/uart-smoke.yaml \
-  --output-dir out/boards/esp32p4x-c5-function-ev-board/uart-smoke \
-  --no-uart-stdout
+scripts/onboarding_smoke.sh \
+  --target-id esp32p4x-c5-function-ev-board-bme280 \
+  --script examples/esp32p4x-c5-function-ev-board/io-smoke.yaml \
+  --system configs/systems/esp32p4x-c5-function-ev-board.yaml \
+  --firmware-build-script examples/esp32p4x-c5-function-ev-board/ci/build.sh \
+  --out-dir examples/esp32p4x-c5-function-ev-board/evidence/run

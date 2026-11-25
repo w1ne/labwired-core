@@ -24,7 +24,7 @@
 //! baseline is `docs/coverage/chip-conformance.json`. A chip's estate must stay
 //! green, its reg-match% may not fall, and a present behavior gate may not vanish.
 //! Re-baseline (after a deliberate, explained change):
-//!   UPDATE_CONFORMANCE_BASELINE=1 cargo test -p labwired-core --test chip_conformance -- --nocapture
+//!   UPDATE_CONFORMANCE_BASELINE=1 cargo test -p labwired-core --test gates chip_conformance_ratchet -- --nocapture
 //!
 //! "Are the gates enough?" is now a number per chip on the board — and missing
 //! coverage is a visible red cell, not a silent gap.
@@ -76,6 +76,17 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/esp32c3.yaml",
         reset_oracle: Some("scripts/hw-oracle/captures/esp32c3/20260611T161223Z/reg_oracle.json"),
         behavior_gate: Some("firmware_survival::test_esp32c3_demo_survival"),
+    },
+    // ESP32-C2 (ESP8684H4X). SIM-DERIVED: no silicon capture, so no
+    // reset_oracle. The gate boots a committed RV32IMC ELF that prints on
+    // UART0 and toggles GPIO10.
+    ChipConf {
+        name: "esp32c2",
+        yaml: "configs/chips/esp32c2.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "esp32c2_compiled_firmware::esp32c2_compiled_rv32imc_firmware_prints_on_uart0_and_toggles_gpio10",
+        ),
     },
     ChipConf {
         // ESP32-C6 HP core (RV32IMAC). SIM-DERIVED: nothing here has been
@@ -151,8 +162,9 @@ const CHIPS: &[ChipConf] = &[
         // PolarFire SoC MPFS095T (Discovery Kit), first RV64 part: one U54
         // hart (RV64IMAC M-mode, CLINT in the core). SIM-DERIVED: no MPFS
         // bench part. Modelled: MMUART0-4 as 16550s with the DLAB divisor
-        // latch. PLIC, MSS GPIO/I2C/SPI/QSPI and the system-controller mailbox
-        // are declared stubs — see examples/mpfs-disco-kit/VALIDATION.md.
+        // latch; the PLIC, MSS GPIO_0..2, I2C0/1 and SPI1 (master). QSPI and the
+        // system-controller mailbox are declared stubs — see
+        // examples/mpfs-disco-kit/VALIDATION.md.
         name: "mpfs095t",
         yaml: "configs/chips/mpfs095t.yaml",
         reset_oracle: None,
@@ -821,6 +833,17 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_stm32h563_demo_survival"),
     },
     ChipConf {
+        // NUCLEO-H533RE. Sim-derived from the H5 register models and the
+        // official H533RE datasheet/schematic; USART2 + PA5 execution is
+        // checked by the walk-vs-scheduler differential.
+        name: "stm32h533re",
+        yaml: "configs/chips/stm32h533re.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "stm32h563_walk_differential::stm32h533re_boot_walk_vs_scheduler_is_byte_identical",
+        ),
+    },
+    ChipConf {
         // First U5 part. Sim-derived (RM0456 + the vendor SVD); no bench part
         // has been captured, so no reset_oracle. The running-firmware gate is
         // the committed stock Zephyr 3.7.2 hello_world for nucleo_u575zi_q
@@ -899,6 +922,15 @@ const CHIPS: &[ChipConf] = &[
         // this exact part.
         name: "stm32l432kc",
         yaml: "configs/chips/stm32l432kc.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        // NUCLEO-L031K6: the raw-register USART2 / LD3 smoke
+        // (examples/nucleo-l031k6) runs in the PR board lane, but no PR-run
+        // Rust survival gate or reset oracle exists for this exact part.
+        name: "stm32l031k6",
+        yaml: "configs/chips/stm32l031k6.yaml",
         reset_oracle: None,
         behavior_gate: None,
     },
@@ -1005,12 +1037,15 @@ const CHIPS: &[ChipConf] = &[
     // ATmega4809 (megaAVR 0-series, Arduino Nano Every). SIM-DERIVED from the
     // Microchip ATDF: no silicon capture. Its Arduino matrix row and
     // examples/arduino-nano-every/io-smoke.yaml run through PlatformIO and the
-    // CLI, not as a Rust test, so no behavior_gate resolves.
+    // CLI. The behavior gate boots the committed stock-Arduino BME280 sketch
+    // (tests/fixtures/avr/arduino-nano-every-bme280.elf) over TWI0 and USART3.
     ChipConf {
         name: "atmega4809",
         yaml: "configs/chips/atmega4809.yaml",
         reset_oracle: None,
-        behavior_gate: None,
+        behavior_gate: Some(
+            "avr_nano_every_bme280::nano_every_wire_reads_compensated_bme280_values",
+        ),
     },
     // ATmega32U4 (Arduino Leonardo / Micro). SIM-DERIVED from DS7766: no
     // silicon capture. The USB device model is unit-tested in
@@ -1063,6 +1098,15 @@ const CHIPS: &[ChipConf] = &[
         // the 0x4000 reset SP/PC with an in-test stub, but runs no firmware, and
         // the Metro M4 survival smoke loads atsamd51.yaml, not this descriptor.
         // Estate-only (L0) until a PyBadge image runs through this chip.
+        behavior_gate: None,
+    },
+    ChipConf {
+        // Narrow LP-MSPM0G3507 LaunchPad profile. Its committed onboarding
+        // smoke runs in board CI; it has no Rust test-target behavior gate or
+        // silicon reset capture yet, so the public conformance row is estate-only.
+        name: "mspm0g3507",
+        yaml: "configs/chips/mspm0g3507.yaml",
+        reset_oracle: None,
         behavior_gate: None,
     },
     ChipConf {
@@ -1207,7 +1251,7 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/ch32l103c8t6.yaml",
         reset_oracle: None,
         behavior_gate: Some(
-            "ch32l103_compiled_firmware::ch32l103_compiled_rv32imac_firmware_toggles_pc13",
+            "ch32_compiled_firmware::every_ch32_compiled_blink_toggles_its_pin_and_only_its_pin",
         ),
     },
     // CH32V005F6P6 (QingKe V2C, RV32EmC). SIM-DERIVED: no silicon capture,
@@ -1217,7 +1261,7 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/ch32v005f6p6.yaml",
         reset_oracle: None,
         behavior_gate: Some(
-            "ch32v005_compiled_firmware::ch32v005_compiled_rv32e_firmware_toggles_pc0",
+            "ch32_compiled_firmware::every_ch32_compiled_blink_toggles_its_pin_and_only_its_pin",
         ),
     },
     // CH32X035C8T6 (QingKe V4C, RV32IMAC). SIM-DERIVED: no silicon capture,
@@ -1227,7 +1271,7 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/ch32x035c8t6.yaml",
         reset_oracle: None,
         behavior_gate: Some(
-            "ch32x035_compiled_firmware::ch32x035_compiled_rv32imac_firmware_toggles_pb12",
+            "ch32_compiled_firmware::every_ch32_compiled_blink_toggles_its_pin_and_only_its_pin",
         ),
     },
     // CH32V006K8U6 (QingKe V2C, RV32EmC). SIM-DERIVED: no silicon capture,
@@ -1237,7 +1281,7 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/ch32v006k8u6.yaml",
         reset_oracle: None,
         behavior_gate: Some(
-            "ch32v006_compiled_firmware::ch32v006_compiled_rv32e_firmware_toggles_pb0",
+            "ch32_compiled_firmware::every_ch32_compiled_blink_toggles_its_pin_and_only_its_pin",
         ),
     },
     // CH32V203C8T6 (QingKe V4B, RV32IMAC). SIM-DERIVED: no silicon capture,
@@ -1247,7 +1291,7 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/ch32v203c8t6.yaml",
         reset_oracle: None,
         behavior_gate: Some(
-            "ch32v203_compiled_firmware::ch32v203_compiled_rv32imac_firmware_toggles_pc13",
+            "ch32_compiled_firmware::every_ch32_compiled_blink_toggles_its_pin_and_only_its_pin",
         ),
     },
     // CH32V003 package variants (QFN20 F4U6, SOP16 A4M6, SOP8 J4M6). Same
@@ -1291,10 +1335,11 @@ const CHIPS: &[ChipConf] = &[
             "ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin",
         ),
     },
-    // ESP32-H2/C5/C61/P4/S2 UART0-only board profiles. SIM-DERIVED: no silicon
-    // capture, so no reset_oracle. Their board smokes run as CLI scripts in
-    // core-board-ci / core-onboarding-smoke, not as Rust integration tests, so
-    // no behavior_gate can resolve yet.
+    // ESP32-H2/C5/P4/S2 UART0-only board profiles; C61 also includes its
+    // narrow GPIO4 output-register head. SIM-DERIVED: no silicon capture, so
+    // no reset_oracle. Board smokes run as CLI scripts in core-board-ci /
+    // core-onboarding-smoke, not as Rust integration tests, so no behavior_gate
+    // can resolve yet.
     ChipConf {
         name: "esp32h2",
         yaml: "configs/chips/esp32h2.yaml",
@@ -1341,6 +1386,16 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: None,
     },
+    // Arduino matrix profile of the same S2 die on its genuine mask ROM.
+    // SIM-DERIVED: no silicon capture. Stock Arduino-ESP32 L0 boots through
+    // ESP-IDF and FreeRTOS and prints over UART0; the test has an
+    // erased-partition-table negative control.
+    ChipConf {
+        name: "esp32s2-arduino",
+        yaml: "configs/chips/esp32s2-arduino.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("esp32s2_arduino_boot::stock_arduino_l0_prints_over_uart0"),
+    },
     // Adafruit Feather RP2040 variant of the rp2040 die. Its BME280 I2C1 smoke
     // runs as a CLI script in core-onboarding-smoke, not as a Rust test.
     ChipConf {
@@ -1364,6 +1419,15 @@ const CHIPS: &[ChipConf] = &[
     ChipConf {
         name: "stm32h723zg",
         yaml: "configs/chips/stm32h723zg.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    // NUCLEO-H753ZI (RM0433). SIM-DERIVED: no silicon capture. Its stock
+    // stm32duino row runs in core-arduino-matrix-smoke, not as a Rust test,
+    // so no behavior_gate resolves.
+    ChipConf {
+        name: "stm32h753zi",
+        yaml: "configs/chips/stm32h753zi.yaml",
         reset_oracle: None,
         behavior_gate: None,
     },
@@ -2169,6 +2233,7 @@ fn t() {}
 
 fn dummy_manifest(path: &str) -> SystemManifest {
     SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),

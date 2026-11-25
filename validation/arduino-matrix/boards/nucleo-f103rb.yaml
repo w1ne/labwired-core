@@ -1,0 +1,15 @@
+id: nucleo-f103rb
+chip: stm32f103rb
+system: systems/nucleo-f103rb.yaml
+# Pinned like the other STM32 rows (ststm32 20.0.0 makes SPI.begin() a no-op).
+pio: { platform: ststm32@19.7.1, board: nucleo_f103rb, framework: arduino }
+max_steps: 10000000
+budget_reason: "NUCLEO-F103RB, measured 2026-11-21: L0 0.08M, L1 0.15M, L2 0.21M, L3 0.28M, L7 0.27M, L6 2.0M"
+# LD2 = PA5 (UM1724 §6.4).
+led_watch: "gpioa:5"
+led_min_edges: 2
+# L6 drives TIM2_CH1 on PA0: LD2/PA5 has no timer channel on the F103.
+pwm_watch: "gpioa:0"
+pwm_min_edges: 20
+family: stm32
+notes: "Stock stm32duino NUCLEO_F103RB; console = USART2 (ST-LINK VCP); L8 bxCAN loopback"

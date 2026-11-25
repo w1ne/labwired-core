@@ -363,6 +363,10 @@ pub struct Solver {
     saved_sink_point: Vec<[f64; 3]>,
     saved_output_limit_point: Vec<f64>,
     saved_slew_limit_point: Vec<f64>,
+    /// Leaf-first KCL rows whose diode series resistance is eliminated without
+    /// forming the large 1/RS conductance. Cyclic/aliased rows retain that stamp.
+    diode_series_order: Vec<usize>,
+    diode_series_reduced: Vec<bool>,
     /// Conductance from every node to ground, siemens; nonzero only inside
     /// [`Solver::gmin_stepping`].
     node_shunt: f64,
@@ -396,6 +400,44 @@ pub struct Solver {
     /// The next internal step must not trust the stored derivatives: a source
     /// or switch changed, or the state was just set by the operating point.
     restart: bool,
+}
+
+/// Series-resistor edges form trees rooted at external anodes. Eliminate a
+/// leaf before its parent so each internal KCL row still includes its children.
+/// Explicit references to generated internal nodes can make cycles or aliases;
+/// those edges keep their original conductance stamps instead of losing a row.
+fn diode_series_reduction_order(circuit: &Circuit) -> Vec<usize> {
+    let mut owners = vec![0usize; circuit.node_count()];
+    for diode in &circuit.diodes {
+        if diode.model.rs > 0.0 {
+            if let Some(junction) = diode.junction_anode {
+                owners[junction] += 1;
+            }
+        }
+    }
+    let mut pending: Vec<_> = circuit
+        .diodes
+        .iter()
+        .enumerate()
+        .filter_map(|(index, diode)| {
+            let junction = diode.junction_anode?;
+            (diode.model.rs.is_finite()
+                && diode.model.rs > 0.0
+                && diode.anode != Some(junction)
+                && owners[junction] == 1)
+                .then_some(index)
+        })
+        .collect();
+    let mut order = Vec::with_capacity(pending.len());
+    while let Some(position) = pending.iter().position(|&index| {
+        let junction = circuit.diodes[index].junction_anode;
+        !pending
+            .iter()
+            .any(|&other| circuit.diodes[other].anode == junction)
+    }) {
+        order.push(pending.remove(position));
+    }
+    order
 }
 
 impl Solver {
@@ -440,6 +482,11 @@ impl Solver {
         let nonlinear = circuit.is_nonlinear();
         let has_waveforms = circuit.has_waveforms();
         let diodes = circuit.diodes.len();
+        let diode_series_order = diode_series_reduction_order(&circuit);
+        let mut diode_series_reduced = vec![false; diodes];
+        for &index in &diode_series_order {
+            diode_series_reduced[index] = true;
+        }
         let bjts = circuit.bjts.len();
         let mosfets = circuit.mosfets.len();
         let jfets = circuit.jfets.len();
@@ -508,6 +555,8 @@ impl Solver {
             saved_sink_point: vec![[0.0; 3]; sinks],
             saved_output_limit_point: vec![0.0; output_limits],
             saved_slew_limit_point: vec![0.0; slew_limits],
+            diode_series_order,
+            diode_series_reduced,
             node_shunt: 0.0,
             limiter_clamped: false,
             nonlinear,
@@ -1583,6 +1632,41 @@ impl Solver {
                 self.matrix[node * dim + node] += self.node_shunt;
             }
         }
+        self.reduce_diode_series_rows();
+    }
+
+    /// Eliminate each series resistor from its two KCL rows without 1/RS.
+    ///
+    /// Before this transform the resistor alone is unstamped. Its equations
+    /// are Fa + (va-vj)/R = 0 and Fj + (vj-va)/R = 0. Replace them by
+    /// Fa + Fj = 0 and s*Fj + (s/R)*(vj-va) = 0, where s=min(R,1).
+    /// This invertible row operation preserves every other stamp, including
+    /// charge, dependent-source branch currents and gmin. It avoids subtracting
+    /// ampere-scale conductance terms to recover picoampere leakage currents.
+    fn reduce_diode_series_rows(&mut self) {
+        let dim = self.dim();
+        for &index in &self.diode_series_order {
+            let diode = &self.circuit.diodes[index];
+            let junction = diode
+                .junction_anode
+                .expect("series reduction owns a junction row");
+            if let Some(anode) = diode.anode {
+                for column in 0..dim {
+                    self.matrix[anode * dim + column] += self.matrix[junction * dim + column];
+                }
+                self.rhs[anode] += self.rhs[junction];
+            }
+            let scale = diode.model.rs.min(1.0);
+            for column in 0..dim {
+                self.matrix[junction * dim + column] *= scale;
+            }
+            self.rhs[junction] *= scale;
+            let coefficient = scale / diode.model.rs;
+            self.matrix[junction * dim + junction] += coefficient;
+            if let Some(anode) = diode.anode {
+                self.matrix[junction * dim + anode] -= coefficient;
+            }
+        }
     }
 
     /// SPICE's gmin stepping, the operating point's fallback when plain Newton
@@ -1837,12 +1921,17 @@ impl Solver {
         self.previous[..dim].fill(f64::NAN);
         self.limiter_clamped = true;
 
-        for _ in 1..=MAX_NEWTON_ITERATIONS {
+        for iteration in 1..=MAX_NEWTON_ITERATIONS {
             self.build(stamp);
             self.factorize()?;
             self.solve();
             if self.newton_converged() {
                 return Ok(());
+            }
+            // Preserve the previous iterate for the failure diagnostic. There
+            // is no next iteration to seed after the final failed solve.
+            if iteration == MAX_NEWTON_ITERATIONS {
+                break;
             }
             self.previous[..dim].copy_from_slice(&self.solution[..dim]);
             self.relinearise();
@@ -2103,7 +2192,7 @@ impl Solver {
         let rhs = &mut self.rhs;
 
         for (index, diode) in self.circuit.diodes.iter().enumerate() {
-            if diode.model.rs > 0.0 {
+            if diode.model.rs > 0.0 && !self.diode_series_reduced[index] {
                 conductance(
                     matrix,
                     dim,

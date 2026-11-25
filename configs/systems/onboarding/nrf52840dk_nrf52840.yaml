@@ -6,3 +6,15 @@
 
 name: nrf52840dk_nrf52840
 chip: ../../chips/onboarding/nrf52840dk_nrf52840.yaml
+# nRF52840 DK board IO (PCA10056 user guide, "Buttons and LEDs"): LED1-4 on
+# P0.13-16 and Button 1-4 on P0.11/12/24/25, all active low. The buttons short
+# the pin to GND; firmware enables the internal pull-up.
+board_io:
+  - { id: "led1", kind: "led", peripheral: "gpio0", pin: 13, signal: "output", active_high: false }
+  - { id: "led2", kind: "led", peripheral: "gpio0", pin: 14, signal: "output", active_high: false }
+  - { id: "led3", kind: "led", peripheral: "gpio0", pin: 15, signal: "output", active_high: false }
+  - { id: "led4", kind: "led", peripheral: "gpio0", pin: 16, signal: "output", active_high: false }
+  - { id: "button1", kind: "button", peripheral: "gpio0", pin: 11, signal: "input", active_high: false }
+  - { id: "button2", kind: "button", peripheral: "gpio0", pin: 12, signal: "input", active_high: false }
+  - { id: "button3", kind: "button", peripheral: "gpio0", pin: 24, signal: "input", active_high: false }
+  - { id: "button4", kind: "button", peripheral: "gpio0", pin: 25, signal: "input", active_high: false }

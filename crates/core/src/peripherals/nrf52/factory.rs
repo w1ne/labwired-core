@@ -28,13 +28,24 @@ pub fn try_build(
     chip_map: crate::peripherals::chip_map::ChipMap<'_>,
 ) -> Option<Box<dyn Peripheral>> {
     let dev: Box<dyn Peripheral> = match canonical_type {
-        "nrf52840_uart" => Box::new(
-            crate::peripherals::nrf52::uarte::Nrf52Uarte::with_interconnects(
+        "nrf52840_uart" => {
+            let uarte = crate::peripherals::nrf52::uarte::Nrf52Uarte::with_interconnects(
                 p_cfg.base_address,
                 chip_map.base_of("ppi"),
                 chip_map.base_of("dppic"),
-            ),
-        ),
+            );
+            // `bootloader_rx_running: true`: see `with_bootloader_rx_running`.
+            let handed_over = p_cfg
+                .config
+                .get("bootloader_rx_running")
+                .and_then(|v| v.as_bool())
+                == Some(true);
+            Box::new(if handed_over {
+                uarte.with_bootloader_rx_running()
+            } else {
+                uarte
+            })
+        }
         "nrf5340_dppic" => Box::new(crate::peripherals::nrf52::dppic::NrfDppic::new()),
         "nrf52840_rtc" | "nrf52_rtc" => {
             // RTC1/RTC2 have 4 CC; RTC0 has 3 (default).
@@ -70,7 +81,25 @@ pub fn try_build(
             Box::new(crate::peripherals::nrf52::temp::Nrf52Temp::new())
         }
         "nrf52840_adc" | "nrf52840_saadc" | "nrf52_saadc" => {
-            Box::new(crate::peripherals::nrf52::saadc::Nrf52Saadc::new())
+            let mut saadc = crate::peripherals::nrf52::saadc::Nrf52Saadc::new();
+            // Board-level static input voltages: `input_mv: { <AIN 0..7>: <mV> }`.
+            if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
+                for (k, v) in map {
+                    let set = match (k.as_u64(), v.as_u64()) {
+                        (Some(ain), Some(mv)) if ain < 8 && mv <= u64::from(u16::MAX) => {
+                            saadc.set_adc_channel_input(ain as u8, mv as u16)
+                        }
+                        _ => false,
+                    };
+                    if !set {
+                        tracing::error!(
+                            "saadc '{}': input_mv wants {{ <AIN 0..7>: <mV> }}",
+                            p_cfg.id
+                        );
+                    }
+                }
+            }
+            Box::new(saadc)
         }
         "nrf52840_pwm" | "nrf52_pwm" => Box::new(crate::peripherals::nrf52::pwm::Nrf52Pwm::new()),
         "nrf52840_qspi" | "nrf52_qspi" => {
@@ -81,7 +110,13 @@ pub fn try_build(
         }
         "nrf51_ficr" => Box::new(crate::peripherals::nrf52::ficr::Nrf52Ficr::nrf51822()),
         "nrf52840_ficr" | "nrf52_ficr" => {
-            Box::new(crate::peripherals::nrf52::ficr::Nrf52Ficr::new())
+            // `part_code` / `part_revision`: the words at 0x130 / 0x134.
+            let word =
+                |key: &str| p_cfg.config.get(key).and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+            Box::new(
+                crate::peripherals::nrf52::ficr::Nrf52Ficr::new()
+                    .with_part_revision(word("part_code"), word("part_revision")),
+            )
         }
         "nrf52840_uicr" | "nrf52_uicr" => {
             Box::new(crate::peripherals::nrf52::uicr::Nrf52Uicr::new())
@@ -119,7 +154,20 @@ pub fn try_build(
             Box::new(crate::peripherals::nrf52::radio::Nrf52Radio::new())
         }
         "nrf52840_usbd" | "nrf52_usbd" => {
-            Box::new(crate::peripherals::nrf52::usbd::Nrf52Usbd::new())
+            let flag = |key: &str| p_cfg.config.get(key).and_then(|v| v.as_bool()) == Some(true);
+            let mut usbd = crate::peripherals::nrf52::usbd::Nrf52Usbd::new()
+                .with_power(chip_map.base_of("clock"));
+            usbd.set_anomaly_187(flag("anomaly_187"));
+            // `host: true` plugs the cable in (VBUS and a scripted host).
+            usbd.set_host_enabled(flag("host"));
+            // `host_steps:` run after enumeration (usb_host::parse_host_steps).
+            if let Some(steps) = p_cfg.config.get("host_steps") {
+                match crate::peripherals::usb_host::parse_host_steps(steps) {
+                    Ok(steps) => usbd.queue_host_steps(steps),
+                    Err(e) => tracing::error!("nrf52_usbd host_steps: {e}"),
+                }
+            }
+            Box::new(usbd)
         }
         "nrf52840_acl" | "nrf52_acl" => Box::new(crate::peripherals::nrf52::acl::Nrf52Acl::new()),
         "nrf52840_cryptocell" | "nrf52_cryptocell" => {

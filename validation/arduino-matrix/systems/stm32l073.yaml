@@ -16,4 +16,15 @@ external_devices:
     connection: "spi1"
     config:
       cs_pin: "PA4"
+# Matrix L5_adc: A0 (PA0 = ADC_IN0, variant PeripheralPins.c) held at
+# 1651 mV. 12-bit against VREF+ = 3.3 V is 2048. Stock analogRead(A0) on the
+# NUCLEO-L073RZ must return exactly 512 on stm32duino 2.x (10-bit read) and
+# 511 on 3.x (12-bit read, mapped with ((v + 1) >> 2) - 1). The unheld fixed
+# source would read 930; no conversion 0.
+peripherals:
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012400
+    config:
+      input_mv: { 0: 1651 }
 board_io: []

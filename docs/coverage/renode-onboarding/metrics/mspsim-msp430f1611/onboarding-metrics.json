@@ -1,0 +1,38 @@
+{
+  "target_id": "mspsim-msp430f1611",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 399999,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/msp430f1611-uart-smoke.yaml",
+  "system": "configs/systems/onboarding/mspsim-msp430f1611.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-19T23:08:20Z",
+  "finished_at_utc": "2026-11-19T23:08:24Z",
+  "elapsed_seconds": 4,
+  "elapsed_ms": 3923,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 3.422,
+    "build_firmware": null,
+    "run_smoke": 0.465
+  },
+  "stages_ms": {
+    "build_cli": 3422,
+    "build_firmware": null,
+    "run_smoke": 465
+  },
+  "prebuilt_firmware": "tests/fixtures/msp430f1611-uart-smoke.elf"
+}

@@ -114,8 +114,8 @@ jobs:
           # and every STM32 L4 cell then spins on a null SPI instance.
           # espressif32 7.0.1 is the build the matrix was green on.
           case "${{ matrix.board }}" in
-            stm32*)      platform=ststm32@19.7.1 ;;
-            nrf*)        platform=nordicnrf52 ;;
+            stm32*|nucleo-*) platform=ststm32@19.7.1 ;;
+            nrf*|nano-33-ble) platform=nordicnrf52 ;;
             rp2040)      platform=raspberrypi ;;
             # Pico 2 / arduino-pico: Max Gerhardt's platform, pinned (the
             # registry `raspberrypi` has no RP2350 boards). Same string as
@@ -125,14 +125,18 @@ jobs:
             # so it alone takes espressif32 8.0.0; every other ESP32 row
             # stays on the 7.0.1 build it was green on.
             esp32c6)     platform=espressif32@8.0.0 ;;
-            esp32*)      platform=espressif32@7.0.1 ;;
+            # The S2 row was measured on espressif32 8.0.0 (arduino-esp32 3.3).
+            esp32s2)     platform=espressif32@8.0.0 ;;
+            esp32*) platform=espressif32@7.0.1 ;;
+            # The Nano ESP32 example pins 8.0.0 (examples/arduino-nano-esp32/platformio.ini).
+            arduino_nano_esp32|xiao_esp32s3) platform=espressif32@8.0.0 ;;
             # The Leonardo row was measured on the same pin (ArduinoCore-avr 5.4.0).
             atmega328p|atmega2560|arduino-leonardo) platform=atmelavr@5.3.0 ;;
             # The Nano Every row was measured on atmelmegaavr 1.10.0
             # (ArduinoCore-megaavr 1.8.8).
             arduino-nano-every) platform=atmelmegaavr@1.10.0 ;;
             # The Zero row was measured on atmelsam 9.0.0 (ArduinoCore-samd).
-            arduino-zero) platform=atmelsam@9.0.0 ;;
+            arduino-zero|nano-33-iot) platform=atmelsam@9.0.0 ;;
             # The UNO R4 WiFi row was measured on renesas-ra 1.9.0
             # (ArduinoCore-renesas 1.6.0).
             uno-r4-*)    platform=renesas-ra@1.9.0 ;;

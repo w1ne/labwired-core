@@ -156,8 +156,8 @@ static int twim_read_reg(uint8_t addr, uint8_t reg, uint8_t n)
     /* Kick TX; the LASTTX short chains into the RX leg, LASTRX short STOPs. */
     TWIM_TASKS_DMA_TX_START(TWIM21_BASE) = 1;
 
-    /* Both success and NACK raise EVENTS_STOPPED, so this terminates either
-     * way. Bounded to avoid a hang if the model ever failed to complete. */
+    /* Success raises EVENTS_STOPPED. A NACK raises only EVENTS_ERROR (bus
+     * held until TASKS_STOP below), so the bound ends that case. */
     for (uint32_t spin = 0; spin < 1000000u; spin++) {
         if (TWIM_EVENTS_STOPPED(TWIM21_BASE) != 0) {
             break;

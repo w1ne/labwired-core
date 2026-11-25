@@ -3,10 +3,10 @@
     "targets_total": 1,
     "pass": 1,
     "fail": 0,
-    "median_elapsed_ms": 63279,
+    "median_elapsed_ms": 2043,
     "threshold_seconds": 3600,
     "threshold_met": 1,
-    "median_elapsed_seconds": 63.279
+    "median_elapsed_seconds": 2.043
   },
   "targets": [
     {
@@ -14,27 +14,27 @@
       "status": "pass",
       "crate": "firmware-esp32h2-demo",
       "target_triple": "riscv32imc-unknown-none-elf",
-      "script": "examples/esp32h2-devkitm-1-n4s/uart-smoke.yaml",
+      "script": "examples/esp32h2-devkitm-1-n4s/io-smoke.yaml",
       "system": "configs/systems/esp32h2-devkitm-1-n4s.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-11T17:27:54Z",
-      "finished_at_utc": "2026-11-11T17:28:57Z",
-      "elapsed_seconds": 64,
-      "elapsed_ms": 63279,
+      "started_at_utc": "2026-11-17T10:59:54Z",
+      "finished_at_utc": "2026-11-17T10:59:56Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2043,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 62.353,
-        "build_firmware": 0.594,
-        "run_smoke": 0.294
+        "build_cli": 0.673,
+        "build_firmware": 0.874,
+        "run_smoke": 0.453
       },
       "stages_ms": {
-        "build_cli": 62353,
-        "build_firmware": 594,
-        "run_smoke": 294
+        "build_cli": 673,
+        "build_firmware": 874,
+        "run_smoke": 453
       },
       "_artifact_path": "examples/esp32h2-devkitm-1-n4s/evidence"
     }

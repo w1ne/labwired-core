@@ -6,3 +6,4 @@
 
 name: s32k118
 chip: ../../chips/onboarding/s32k118.yaml
+debug_uart: "lpuart0"

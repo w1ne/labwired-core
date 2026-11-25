@@ -1,0 +1,15 @@
+# Bounded CPU/memory profile for the imported iCE40 UltraPlus MDP system.
+# Renode's board REPL includes the Fomu VexRiscv CPU profile: RV32IM, an 8 KiB
+# ROM at zero, 128 KiB SRAM at 0x10000000, and timer0 (LiteX_Timer). LiteX_I2C
+# and its sensors, SPI flash, USB, and board I/O are omitted because this
+# engine profile does not model them.
+# Sources: https://github.com/renode/renode/blob/master/platforms/boards/ice40up5k-mdp-evn.repl
+#          https://github.com/renode/renode/blob/master/platforms/cpus/fomu.repl
+name: ice40up5k-mdp-evn
+arch: riscv
+core: rv32im
+flash: { base: 0x00000000, size: "8KB" }
+flash_boot_alias: false
+ram: { base: 0x10000000, size: "128KB" }
+# NEGATIVE CONTROL: timer0 removed.
+peripherals: []

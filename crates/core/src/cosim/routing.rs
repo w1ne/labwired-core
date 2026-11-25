@@ -779,6 +779,10 @@ enum WriteBinding {
     /// comparator sampling the pad (`SystemBus::set_analog_pad_mv`).
     AnalogPad {
         pad: String,
+        // Retain the validated ADC identity for physical writer ownership.
+        // Applying this binding still drives the complete pad fan-out.
+        connection: String,
+        channel: u8,
     },
     /// The chip's VDD, fed to its supply supervisor.
     SupplyVdd,
@@ -810,6 +814,23 @@ enum WriteBinding {
     Ina219BusV {
         id: String,
     },
+}
+
+impl WriteBinding {
+    fn adc_endpoint(&self) -> Option<(&str, u8)> {
+        match self {
+            Self::AdcChannel {
+                connection,
+                channel,
+            }
+            | Self::AnalogPad {
+                connection,
+                channel,
+                ..
+            } => Some((connection.as_str(), *channel)),
+            _ => None,
+        }
+    }
 }
 
 /// Routes manifest signal paths between a running machine and the co-sim
@@ -1127,6 +1148,8 @@ impl SignalRouter {
                 check_adc_channel(bus, path, &connection, channel)?;
                 Ok(WriteBinding::AnalogPad {
                     pad: pad.to_ascii_uppercase(),
+                    connection,
+                    channel,
                 })
             }
             SignalPath::AdcChannel {
@@ -1245,10 +1268,12 @@ impl SignalRouter {
     /// `board.analog.pa0_volts` and `adc.adc1.0_volts` can name one ADC input.
     pub(crate) fn validate_unique_writers(&self) -> Result<(), String> {
         for (index, (path, binding)) in self.writes.iter().enumerate() {
-            if let Some((other, _)) = self.writes[..index]
-                .iter()
-                .find(|(_, previous)| previous == binding)
-            {
+            if let Some((other, _)) = self.writes[..index].iter().find(|(_, previous)| {
+                previous == binding
+                    || binding
+                        .adc_endpoint()
+                        .is_some_and(|endpoint| previous.adc_endpoint() == Some(endpoint))
+            }) {
                 return Err(format!(
                     "world analog routes '{other}' and '{path}' have multiple output writers for one hardware endpoint"
                 ));
@@ -1470,7 +1495,7 @@ impl SignalRouter {
                         });
                     }
                 }
-                WriteBinding::AnalogPad { pad } => {
+                WriteBinding::AnalogPad { pad, .. } => {
                     let Some(volts) = signal_as_f64(value) else {
                         errors.push(RoutingError::TypeMismatch {
                             path: path.clone(),
@@ -1749,7 +1774,8 @@ fn output_carries_volts(config: &CosimModelConfig, model_signal: &str) -> bool {
             Some(serde_yaml::Value::Number(number))
                 if number.as_i64().is_none() && number.as_f64().is_some()
         ),
-        ManifestCosimAdapter::ExternalProcess
+        ManifestCosimAdapter::Behavior
+        | ManifestCosimAdapter::ExternalProcess
         | ManifestCosimAdapter::Fmi
         | ManifestCosimAdapter::Ngspice => false,
     }
@@ -2043,6 +2069,14 @@ impl CosimSession {
         if configs.is_empty() {
             return Ok(None);
         }
+        // Checked before any adapter starts: a machine session sends no
+        // `(0, 0)` initialization step.
+        if let Some(refusal) = configs
+            .iter()
+            .find_map(crate::cosim::ngspice::machine_sampling_refusal)
+        {
+            return Err(SimulationError::Other(refusal));
+        }
         let mut models = Vec::with_capacity(configs.len());
         for config in configs {
             models.push(crate::cosim::CosimRunnerModel::new(
@@ -2126,6 +2160,12 @@ impl CosimSession {
         self.configs
             .iter()
             .any(|config| config.adapter == ManifestCosimAdapter::Ngspice)
+    }
+
+    /// Why a machine runtime snapshot must not be taken or applied with this
+    /// session; see [`super::ngspice::runtime_snapshot_refusal`].
+    pub fn runtime_snapshot_refusal(&self) -> Option<&'static str> {
+        super::ngspice::runtime_snapshot_refusal(&self.configs)
     }
 
     /// The runner's analog waveform ring. Every `adapter: analog` model writes

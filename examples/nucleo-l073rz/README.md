@@ -6,7 +6,8 @@
 > firmware's clock/GPIO/USART bring-up was confirmed by reading registers back
 > over SWD, and the board's captured UART matches the simulator **byte-for-byte**
 > (see [`captures/`](captures/)). Peripherals beyond the GPIO/USART smoke path
-> (RCC clock tree, I2C/SPI/ADC) remain family-model approximations. See
+> (RCC clock tree, I2C/SPI) remain family-model approximations; the ADC is
+> the L0 CHSELR model. See
 > [`VALIDATION.md`](VALIDATION.md) for the full evidence and fidelity limits,
 > and [`REQUIRED_DOCS.md`](REQUIRED_DOCS.md) for the sources.
 
@@ -84,8 +85,9 @@ captures these L0-specific facts that an L4 copy-paste would get wrong:
 
 See [`docs/boards/nucleo-l073rz.md`](../../docs/boards/nucleo-l073rz.md) for
 the full fidelity table. In short: core + SysTick + GPIO + USART (smoke
-path) are exercised; RCC/I2C/SPI/ADC/timers are present as register models
-reused from the L4 family and are **not** L0-tuned; USB/LCD/COMP/crypto are
+path) are exercised; RCC/I2C/SPI/timers are present as register models
+reused from the L4 family and are **not** L0-tuned (the ADC is the L0
+CHSELR model); USB/LCD/COMP/crypto are
 stubs.
 
 ## Hardware setup (real board)

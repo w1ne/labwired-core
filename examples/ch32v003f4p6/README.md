@@ -64,3 +64,44 @@ The committed `tests/fixtures/ch32v003f4p6-uart-hello.elf` was built by
 These fixtures exercise the local simulator's RV32E/RV32EC, reset/flash
 loading, RCC, GPIO and USART1 paths. CH32V003 is not yet a hosted LabWired
 verifier target, so this is not a hosted `model_verified` result or hardware confirmation.
+
+## Stock WCH noneos-sdk firmware
+
+`tests/fixtures/ch32v003f4p6-noneos-sdk.elf` is built by PlatformIO
+(`platform = ch32v`, `board = ch32v003f4p6_evt_r0`, `framework = noneos-sdk`)
+from `tests/fixtures/ch32v003f4p6-noneos-sdk/`, with no change for the
+simulator. It runs the vendor startup and `SystemInit` (HSI PLL to 48 MHz),
+then prints over USART1 with `printf` between four `Delay_Ms(10)` calls:
+
+```sh
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v003f4p6/noneos-sdk-smoke.yaml \
+  --output-dir out/boards/ch32v003f4p6/noneos-sdk-smoke --no-uart-stdout
+```
+
+That path needs three QingKe V2 parts of the model: the `INTSYSCR` CSR
+(0x804, accepted and discarded), the WCH XW compressed byte/halfword loads
+and stores (`-march=rv32ecxw`), and the `STK` system timer (`qingke_stk`)
+that `Delay_Ms` polls. Interrupts go through the QingKe PFIC
+(`cpu/qingke_pfic.rs`): STK raises vector 12 and USART1 raises vector 32.
+
+## Official openwch Arduino core
+
+`tests/fixtures/ch32v003f4p6-arduino-openwch.elf` is an Arduino sketch built
+by PlatformIO with the official openwch core (`framework = arduino`,
+`board_build.core = openwch`) from `tests/fixtures/ch32v003f4p6-arduino-openwch/`,
+with no change for the simulator. It uses `Serial`, `pinMode`,
+`digitalWrite`, `digitalRead` and `delay()`/`millis()`. The core counts
+milliseconds in a `WCH-Interrupt-fast` SysTick handler, so the sketch needs
+the PFIC and the hardware register save (HPE). It prints
+`CH32V003_ARDUINO_PASS` only when `millis()` measures four `delay(10)` calls
+as 40..42 ms:
+
+```sh
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v003f4p6/arduino-openwch-smoke.yaml \
+  --output-dir out/boards/ch32v003f4p6/arduino-openwch-smoke
+```
+
+This is a local CLI result. It is not a hosted `model_verified` result or
+hardware confirmation.

@@ -1,0 +1,16 @@
+schema_version: "1.2"
+inputs:
+  firmware: "build/firmware.elf"
+  system: "../../configs/systems/esp32c5-devkitc-1-n8r8-bme280.yaml"
+limits:
+  max_steps: 1000000
+assertions:
+  - uart_contains: "C5_BME280_OK"
+  - uart_contains: "C5_RGB_OK"
+  - gpio_edges:
+      pin: "gpio:5"
+      min_edges: 4
+  - gpio_edges:
+      pin: "gpio:27"
+      min_edges: 16
+  - expected_stop_reason: max_steps

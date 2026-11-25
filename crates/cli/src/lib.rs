@@ -687,6 +687,12 @@ struct TestArgs {
     #[arg(long)]
     vcd: Option<PathBuf>,
 
+    /// Export actual engine I2C/SPI byte events from the same test run.
+    /// .json preserves cycle-stamped events; other extensions export VCD.
+    /// This is a diagnostic capture, never a synthetic waveform or assertion.
+    #[arg(long = "bus-trace-out", value_name = "PATH")]
+    bus_trace_out: Option<PathBuf>,
+
     /// Optional path for the in-core analog engine's waveform trace (`.csv`
     /// writes `time_ns,<channel>...`, any other extension writes VCD `real`
     /// vars). Empty unless a co-simulation runner is attached to the run.
@@ -1486,6 +1492,8 @@ fn handle_load_error<C: labwired_core::Cpu>(
         None,
         // Load/reset failed before the run loop, so no stimulus was attempted.
         Vec::new(),
+        // Nor was any UART input attempted.
+        &[],
         // Load failed: no successful machine run for footprint/paint/metrics.
         None,
         None,
@@ -1914,11 +1922,18 @@ fn assertion_observation_batch_size(
     {
         return DISPLAY_POLL_BATCH.min(max_steps);
     }
-    // A `gpio_edges` oracle reads cumulative per-channel totals that push-mode
-    // capture stamps at the write sites, so a batch boundary cannot step over
-    // an edge. An S3 prove has no serial and nothing else to watch; polling it
-    // per instruction halved the step rate and handed back what the early stop
-    // saves. Only scripts made of batch-safe clauses qualify.
+    // Batch-safe clauses read state that only accumulates, so a batch boundary
+    // cannot step over what they wait for: `gpio_edges` reads cumulative
+    // per-channel totals stamped at the write sites, and the UART clauses read
+    // an append-only capture. Checking them on the batch grid moves the latch
+    // by at most one batch, which the settle window already tolerates.
+    //
+    // Polling them per instruction instead pins the advance fuel to one step,
+    // and that disarms poll-loop fast-forward (a timer-poll skip needs a window
+    // of at least 1024 cycles). A `delay()` sketch with a `uart_contains`
+    // early stop then interprets every idle cycle: 37.9M steps in 6.8 s where
+    // the same run without the early stop takes 0.04 s. Only scripts made of
+    // batch-safe clauses qualify.
     let batch_safe = |a: &TestAssertion| {
         matches!(
             a,
@@ -1929,11 +1944,7 @@ fn assertion_observation_batch_size(
                 | TestAssertion::ExpectedStopReason(_)
         )
     };
-    if assertions
-        .iter()
-        .any(|a| matches!(a, TestAssertion::GpioEdges(_)))
-        && assertions.iter().all(batch_safe)
-    {
+    if assertions.iter().all(batch_safe) {
         return 10_000.min(max_steps);
     }
     1
@@ -2765,10 +2776,8 @@ mod tests {
         assert!(shutdown_latency_passes(&details, &stimuli, &uart));
     }
 
-    /// A display is polled on the batch grid rather than per instruction, and
-    /// ONLY a display changes that: every script that existed before this
-    /// assertion must keep the batch width it had, or a latched observation
-    /// somewhere else silently moves.
+    /// A display is polled on the batch grid rather than per instruction, at
+    /// its own width; batching off and short budgets still win.
     #[test]
     fn display_region_relaxes_the_poll_grid_without_touching_other_scripts() {
         let display = [TestAssertion::DisplayRegion(
@@ -2799,10 +2808,10 @@ mod tests {
             assertion_observation_batch_size(true, true, &display, 50_000_000),
             DISPLAY_POLL_BATCH
         );
-        // Unchanged: the same script shape without a display still polls per step.
+        // A UART-only early stop reads an append-only capture: batch grid.
         assert_eq!(
             assertion_observation_batch_size(true, true, &uart, 50_000),
-            1
+            10_000
         );
         // Unchanged: no early stop => the ordinary 10k batch, display or not.
         assert_eq!(

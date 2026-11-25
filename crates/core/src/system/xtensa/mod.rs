@@ -18,6 +18,8 @@ mod esp32;
 pub use esp32::*;
 mod esp32_rom_console;
 pub use esp32_rom_console::*;
+mod esp32s2;
+pub use esp32s2::*;
 mod esp32s3;
 pub use esp32s3::*;
 
@@ -483,6 +485,7 @@ mod tests {
         // manifest's external_devices through the generic factory, exactly as the
         // app/CLI do. Declare it, attach it, then probe below.
         let manifest = labwired_config::SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -581,6 +584,7 @@ mod tests {
             serde_yaml::Value::String("GPIO5".to_string()),
         );
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -866,6 +870,7 @@ board_io: []
             serde_yaml::Value::String("GPIO10".to_string()),
         );
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -925,6 +930,7 @@ board_io: []
         use labwired_config::{ExternalDevice, SystemManifest};
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),

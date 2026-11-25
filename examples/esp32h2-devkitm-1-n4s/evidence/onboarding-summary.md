@@ -1,8 +1,8 @@
 # Onboarding Smoke: esp32h2-devkitm-1-n4s
 
 - status: `pass`
-- elapsed_seconds: `64`
-- elapsed_ms: `63279`
+- elapsed_seconds: `3`
+- elapsed_ms: `2043`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`

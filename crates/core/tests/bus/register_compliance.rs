@@ -47,6 +47,7 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
 
     // Create Manual System Manifest
     let dummy_manifest = labwired_config::SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
@@ -93,6 +94,13 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
                 let cpu = system::xtensa::configure_xtensa(&mut bus);
                 let mut machine = Machine::new(cpu, bus);
                 validate_registers(&mut machine, &chip)?;
+            } else if chip.is_esp32s2() {
+                // S2 uses its descriptor-only map, as in the S2 system
+                // builder. Installing the classic bank would replace its
+                // EXTMEM model with the classic part's different window.
+                let cpu = labwired_core::cpu::XtensaLx7::new();
+                let mut machine = Machine::new(cpu, bus);
+                validate_registers(&mut machine, &chip)?;
             } else {
                 let cpu = system::xtensa::configure_xtensa_esp32(&mut bus);
                 let mut machine = Machine::new(cpu, bus);
@@ -133,6 +141,13 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
             // No SVD-backed register list for the RX parts yet.
             println!(
                 "Skipping RX register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
+        Arch::Msp430 => {
+            // No SVD-backed register list for the MSP430 parts yet.
+            println!(
+                "Skipping MSP430 register compliance for {:?} (no SVD map)",
                 path
             );
         }

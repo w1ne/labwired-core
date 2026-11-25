@@ -93,7 +93,9 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 2
+          # PR event bases can precede the tested merge's first parent by
+          # multiple commits; ancestry admission needs that complete history.
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           persist-credentials: false
       - name: Test path and source-history admission
         run: python3 scripts/perf/test_pr_hotpath_gate.py
@@ -214,6 +216,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v5
         with:
+          retention-days: 7
           name: board-throughput-report
           path: |
             perf-report.txt

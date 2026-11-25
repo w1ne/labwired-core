@@ -1113,6 +1113,7 @@ mod esp_spi_uart_waveform_tests {
         // The same minimal manifest `crates/core/tests/bus/bus_visibility.rs` uses,
         // so this test and the scoreboard measure the same construction path.
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -1190,6 +1191,7 @@ mod esp_spi_uart_waveform_tests {
             .join("configs/chips/esp32.yaml");
         let chip = ChipDescriptor::from_file(&path).expect("load esp32.yaml");
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),

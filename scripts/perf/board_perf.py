@@ -386,12 +386,30 @@ WAIVED: dict[str, str] = {
         "fixture is linked for this memory map, so no throughput claim is made "
         "for this part (examples/esp32p4x-c5-function-ev-board)."
     ),
+    "esp32c2": (
+        "ESP8684-DevKitM-1-H4X fast-boot profile: a bare-ELF UART0 and GPIO0 "
+        "smoke (flash 0x42000000, RAM 0x3FCA0000). The ESP32-C3 fixture uses a "
+        "different RAM base and no C2 perf-spin fixture is built; no throughput "
+        "claim is made for this profile (examples/esp8684-devkitm-1-h4x)."
+    ),
     "esp32s2": (
         "ESP32-S2-DevKitC-1 N8R2 fast-boot profile: a bare-ELF UART0 smoke "
         "(flash 0x40080000, RAM 0x3FFB0000). The Xtensa perf-spin fixtures are "
         "linked for the ESP32 and ESP32-S3 maps and no S2 build exists, so no "
         "throughput claim is made for this part "
         "(examples/esp32s2-devkitc-1-n8r2)."
+    ),
+    "esp32s2-arduino": (
+        "ESP32-S2 stock Arduino-ESP32 profile: genuine mask ROM plus external "
+        "flash through the S2 MMU (flash 0x40080000, RAM 0x3FFB0000), proven by "
+        "the Arduino matrix row. Same LX7 map as esp32s2, for which no Xtensa "
+        "perf-spin build exists, so no throughput claim is made for this part."
+    ),
+    "mspm0g3507": (
+        "LP-MSPM0G3507 is a narrow UART0 smoke profile, not a representative "
+        "throughput workload. CI has no perf-spin fixture linked for its "
+        "0x00000000 flash / 0x20200000 RAM map; no throughput claim is made "
+        "for this profile yet (examples/lp-mspm0g3507-launchpad)."
     ),
     "atmega1281": (
         "The committed -mmcu=atmega1281 firmware validates boot, USART0 and GPIO, "

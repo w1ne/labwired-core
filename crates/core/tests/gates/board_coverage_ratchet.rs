@@ -191,6 +191,12 @@ const SHIPPED: &[Board] = &[
         display_lab: false,
     },
     Board {
+        chip: "stm32h533re",
+        aliases: &["stm32h533re", "h533re", "nucleo-h533re"],
+        yaml_stem: "stm32h533re",
+        display_lab: false,
+    },
+    Board {
         chip: "nrf52840",
         aliases: &["nrf52840", "nrf52_", "nrf52 "],
         yaml_stem: "nrf52840",
@@ -578,10 +584,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         "atmega2561",
         // ATmega4809 (megaAVR 0-series, Arduino Nano Every). Has a chip
         // descriptor, a system manifest, an io-smoke example and an Arduino
-        // matrix row (stock ArduinoCore-megaavr L0/L1/L2/L5/L7) — but no
-        // bundled-configs.ts catalog board, no silicon oracle and no
-        // executing-fidelity differential. TWI0, SPI0 and the TCA/TCB
-        // waveform outputs are not modelled.
+        // matrix row (stock ArduinoCore-megaavr L0/L1/L2/L3/L4/L5/L7) — but
+        // no bundled-configs.ts catalog board, no silicon oracle and no
+        // executing-fidelity differential. The TCA/TCB waveform outputs are
+        // not modelled.
         "atmega4809",
         // Arduino Leonardo / Micro (ATmega32U4). Has a chip descriptor, a
         // system manifest and an Arduino matrix row (stock ArduinoCore-avr
@@ -596,6 +602,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // catalog board, no silicon oracle and no executing-fidelity
         // differential. LPSPI, QuadTimer PWM and FlexCAN are not modelled.
         "mimxrt1062-teensy41",
+        // LP-MSPM0G3507 LaunchPad is an onboarding-matrix profile, not a
+        // bundled-configs.ts catalog board. Its narrow UART0 smoke is in CI;
+        // it has no silicon oracle or executing-fidelity differential yet.
+        "mspm0g3507",
         // First Microchip part in the engine. Has a chip descriptor, an
         // io-smoke executed by the coverage matrix and the strict-onboarding
         // gate, and a peripheral-estate test — but it is NOT a
@@ -622,10 +632,18 @@ fn every_shipped_descriptor_is_ratcheted() {
         "atsamd21j16a",
         "atsamd21j17a",
         "atsamd21j18a",
-        "esp32",        // classic Xtensa, separate e2e lane, not a catalog board
-        "esp32s3-zero", // board variant of esp32s3 (covered by esp32s3)
+        "esp32", // classic Xtensa, separate e2e lane, not a catalog board
+        // ESP8684/C2 LaunchPad smoke profile is in onboarding CI but not the
+        // bundled-configs.ts catalog and has no executing-fidelity differential.
+        "esp32c2",
+        "esp32s3-zero",                // board variant of esp32s3 (covered by esp32s3)
         "esp32s3-devkitc-1-n16r8-adc", // narrow N16R8 ADC profile of esp32s3
-        "stm32f401cdu6", // BlackPill variant of stm32f401 (covered by stm32f401)
+        "stm32f401cdu6",               // BlackPill variant of stm32f401 (covered by stm32f401)
+        // ESP32-S2 (Xtensa LX7) on its genuine mask ROM: stock Arduino-ESP32
+        // runs in the Arduino matrix (`esp32s2` row) and
+        // tests/esp/esp32s2_arduino_boot.rs; no Playground catalog board or
+        // physical-silicon differential.
+        "esp32s2-arduino",
         // Exact STM32 order-code geometries for the F103/F401/F407 engines.
         // These are core chip descriptors, not Playground boards in
         // bundled-configs.ts; their family behavior is shared with the three
@@ -821,6 +839,12 @@ fn every_shipped_descriptor_is_ratcheted() {
         // board and has no silicon oracle or executing-fidelity differential.
         // Same bar as stm32f446re above.
         "stm32l432kc",
+        // NUCLEO-L031K6 (STM32L031K6, RM0377 L0x1). Runs a PR-gated raw-register
+        // USART2 / LD3 smoke (examples/nucleo-l031k6) on the dedicated L031
+        // models, but it is not a bundled-configs.ts catalog board and has no
+        // silicon oracle or executing-fidelity differential. Same bar as
+        // stm32l432kc above.
+        "stm32l031k6",
         "stm32g474re", // G4 peripheral models in progress, not shipped
         "stm32wb55",   // BLE not modelled, not shipped
         "stm32wba52",  // WBA early onboarding, not shipped
@@ -957,12 +981,17 @@ fn every_shipped_descriptor_is_ratcheted() {
         "ch32v003f4u6",
         "ch32v003a4m6",
         "ch32v003j4m6",
-        // ESP32-H2/C5/P4/S2 UART0-only board profiles. Each has a descriptor,
-        // a system manifest and a board smoke that asserts a UART0 token, but
-        // no bundled-configs.ts catalog board, no silicon oracle and no
-        // executing-fidelity differential. Promote when all three exist.
+        // ESP32-H2/C5/P4/S2 UART0-only board profiles; C61 also checks the
+        // GPIO4 output-register head. Each has a descriptor, system manifest,
+        // and committed board smoke, but no bundled-configs.ts catalog board,
+        // silicon oracle, or executing-fidelity differential.
         "esp32h2",
         "esp32c5",
+        // ESP32-C2 (ESP8684H4X) bare-ELF slice: UART0, GPIO, SYSTIMER and
+        // TIMG0 on the C3 engines (offset-identical in esp-idf v5.3). Booted
+        // by a committed ELF. No catalog board, no silicon oracle, no
+        // differential.
+        "esp32c2",
         "esp32c61",
         "esp32p4",
         "esp32s2",
@@ -987,6 +1016,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // LD1 + USART3 smoke runs in core-onboarding-smoke. No catalog board,
         // no silicon oracle, no differential. Promote when all three exist.
         "stm32h723zg",
+        // NUCLEO-H753ZI slice of the STM32H753ZI (Cortex-M7, RM0433). Its
+        // stock stm32duino row runs in core-arduino-matrix-smoke. No catalog
+        // board, no silicon oracle, no differential. Promote when all three
+        // exist.
+        "stm32h753zi",
         // Seeed XIAO ESP32-C6 package variant (ESP32-C6FH4, 4 MB flash). The
         // yaml copies esp32c6.yaml and changes only the flash size; its
         // GPIO15 LED smoke runs in core-onboarding-smoke. No catalog board,

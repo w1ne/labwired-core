@@ -32,4 +32,12 @@ pub struct EventResult {
     /// itself while it has active work, then stop by returning `None`. The
     /// `Machine` drain loop owns the idx needed to reschedule.
     pub reschedule_delay: Option<u64>,
+    /// The `reschedule_delay: Some(1)` re-arm exists only to keep re-pending
+    /// held LEVEL lines (the ones this result raises); nothing else in the
+    /// model advances on it. While every such line already stands in the NVIC
+    /// (enabled, pending, level-marked) a re-pend changes nothing, so the
+    /// machine parks the chain instead of waking each cycle, and the bus
+    /// re-arms it on the cycle after exception entry consumes the pend
+    /// (`SystemBus::clear_nvic_pending`).
+    pub level_hold: bool,
 }

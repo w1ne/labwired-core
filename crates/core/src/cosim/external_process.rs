@@ -630,6 +630,14 @@ fn json_to_step_result(value: Value) -> SimResult<CosimStepResult> {
     let object = value.as_object().ok_or_else(|| {
         SimulationError::Other("co-sim response must be a JSON object".to_string())
     })?;
+    // A model that cannot answer says why in one `{"error": "..."}` frame;
+    // `"error": null` is no error.
+    if let Some(message) = object.get("error").filter(|value| !value.is_null()) {
+        return Err(SimulationError::Other(format!(
+            "co-sim model reported an error: {}",
+            message.as_str().unwrap_or("(non-string error field)")
+        )));
+    }
     let outputs = object
         .get("outputs")
         .and_then(|value| value.as_object())
@@ -666,5 +674,32 @@ fn json_to_signal(value: &Value) -> SimResult<CosimSignalValue> {
         _ => Err(SimulationError::Other(format!(
             "unsupported co-sim signal value '{value}'"
         ))),
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_null_error_field_is_not_a_model_error() {
+        let result = json_to_step_result(serde_json::json!({
+            "error": null,
+            "outputs": { "v_out": 1.5, "high": true }
+        }))
+        .expect("a null error field is absent");
+        assert_eq!(
+            result.outputs.get("v_out"),
+            Some(&CosimSignalValue::F64(1.5))
+        );
+        assert_eq!(
+            result.outputs.get("high"),
+            Some(&CosimSignalValue::Bool(true))
+        );
+        // Negative control: a string error is still a model error.
+        let error = json_to_step_result(serde_json::json!({ "error": "solver failed" }))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("solver failed"), "{error}");
     }
 }

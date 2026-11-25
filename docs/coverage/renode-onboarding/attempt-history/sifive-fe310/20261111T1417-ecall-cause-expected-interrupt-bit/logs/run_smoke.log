@@ -1,0 +1,6 @@
+2026-11-11T14:17:49.064206Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sifive-fe310.yaml
+2026-11-11T14:17:49.077310Z  INFO labwired_loader: ELF Entry Point: 0x20000000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+2026-11-11T14:17:49.083047Z  WARN labwired_core::cpu::riscv: ECALL/EBREAK encountered at 0x200008d0
+2026-11-11T14:17:49.118260Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["cpu=rv32im uart=sifive", "mul=00000143", "ecall trap mcause=8000000b mepc_match=1 count=00000001 entry_mie=0 entry_mpie=1 return_mie=1 ok", "gpio=PASS input_en=00080000 output_en=00080000 output_val=00080000 input_val=00080000"] }) (captured len=239)
+FAIL  3/4 checks · sifive-fe310-smoke · 100000 steps · 0.04s

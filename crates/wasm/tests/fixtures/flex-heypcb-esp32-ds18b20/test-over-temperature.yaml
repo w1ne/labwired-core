@@ -1,0 +1,49 @@
+# `labwired test --script test-over-temperature.yaml`. The firmware reads U4's
+# ROM code, writes TH 30 °C, TL 28 °C and 12-bit resolution, and reads them
+# back. Each `loop` sends CONVERT T, polls the busy status with read slots
+# 1.07 ms apart, reads the scratchpad and checks its CRC. The test bench steps
+# the probe 25 -> 31.0625 -> 29 -> 27.5 -> -10.125 °C. The indicator goes on
+# at TH, stays on at 29 °C (between TL and TH) and goes off below TL.
+# `loop` returns the 1/16 °C count as 16 bits plus 0x10000 while it is on.
+# All expected values were calculated from the DS18B20 descriptor and AN126
+# slot times before the first run.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: dq_drive }, { port: dq }, { port: user_led_drive }, { number: 0x28 }, { number: 12 }] }
+  - call: { export: loop }
+  - set: { port: probe_c, value: 31.0625 }
+  - call: { export: loop }
+  - set: { port: probe_c, value: 29 }
+  - call: { export: loop }
+  - set: { port: probe_c, value: 27.5 }
+  - call: { export: loop }
+  - set: { port: probe_c, value: -10.125 }
+  - call: { export: loop }
+limits:
+  max_steps: 50000000
+  max_time_ns: 5000000000
+assertions:
+  # -10.125 °C = 0xFF5E, the datasheet's Table 1 encoding.
+  - entry_result: { equals: 65374 }
+  - entry_result: { equals: 0, step: 0 }
+  - entry_result: { equals: 400, step: 1 }
+  - entry_result: { equals: 66033, step: 3 }
+  - entry_result: { equals: 66000, step: 5 }
+  - entry_result: { equals: 440, step: 7 }
+  - device_state: { device: source-u4-ds18b20, key: last_function, equals: READ_SCRATCHPAD }
+  # WRITE and READ SCRATCHPAD in `setup`, CONVERT T and READ SCRATCHPAD per `loop`.
+  - device_state: { device: source-u4-ds18b20, key: functions_run, equals: 12 }
+  - port_value: { port: user_led_state, equals: 0 }
+  # `setup` takes 16.88 ms: three 960 µs resets, READ ROM and 8 bytes,
+  # SKIP ROM + WRITE SCRATCHPAD + 3 bytes, SKIP ROM + READ SCRATCHPAD + 9
+  # bytes, 70 µs per slot. Each `loop` takes 759.34 ms: the conversion ends
+  # 750 ms after the falling edge of the last CONVERT T bit (2.01 ms into the
+  # loop); poll 701 opens at 752.15 ms and reads 1; then the scratchpad read.
+  - digital_edges: { port: user_led_drive, times_ns: [1535560000, 3054240000] }
+  - digital_edges: { port: user_led_state, times_ns: [1535561000, 3054241000] }
+  - final_time_ns: { equals: 3813580000 }
+  - console_contains: "ROM 28 01 00 00 00 00 00 29\nDS18B20 12-bit, TH 30 C, TL 28 C\nT=25.0000 C after 701 polls\nT=31.0625 C after 701 polls HIGH\nT=29.0000 C after 701 polls HIGH\nT=27.5000 C after 701 polls\nT=-10.1250 C after 701 polls\n"

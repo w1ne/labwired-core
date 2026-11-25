@@ -60,8 +60,8 @@
     "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "stm32f767.elf": {
-    "sha256": "6510613ecb53e407960dc56a3a3a155016490337597c71de8a6f6a354bdc09e7",
-    "source_rev": "96ed4c6a01647736bd33ac8a5445b2fd0a2d4b35"
+    "sha256": "b8704bb0a7ddc4d6f74970fdee72e5a993a3b2101b737c33b0f60f4378d713bd",
+    "source_rev": "45e1e4c2d3c5726de0d8ce07b0a7911868cf0cb1"
   },
   "stm32g071.elf": {
     "sha256": "706e1f6cbc37c7d81885cbe785f6962123a710597eba2c39fc4e7bd3c225e92e",
@@ -84,8 +84,8 @@
     "source_rev": "5fd5fc595bc0009465f7a7acf3ab2da821d77444"
   },
   "stm32l073.elf": {
-    "sha256": "7c9fc5840c2b3cc28d937d6c41c078644d72b427ed1321c3317e885c3168b9b5",
-    "source_rev": "9e3d7928996f6ae1940e4ac5b9baefc75a715ac9"
+    "sha256": "f220b4f1526bc7bfe4776b5c5c2077c7ed439564ee17aa4b2df9f9045b35de5a",
+    "source_rev": "068831e055ec5d710cd4d0a4f0ef5c4d207df72d"
   },
   "stm32l476.elf": {
     "sha256": "4488ecf243876606b6cf9b5e71aca929f904cab31ced339209a9bdef31340844",
@@ -132,8 +132,8 @@
     "source_rev": "f396371cc8c647086a636e31d30d441b2a9d8a18"
   },
   "esp32s3-devkitc1-n16r8-bme280.elf": {
-    "sha256": "9731a5b51384eff99179a91d49a6919fb9cde1696009245f76763856dce8a859",
-    "source_rev": "70c26fc6c233759dc670666394cccdb86b01c5ae"
+    "sha256": "5389cffcd3c2d8decf009d4b5db57380c54199a9b8454a6500a528f16ec6a135",
+    "source_rev": "e2511bc989a099feb6a8dd46b824adc674eeff63"
   },
   "seeed-xiao-esp32c3-bme280.elf": {
     "sha256": "7d877c363ea6395666ba06b63773ea5e2801527c4e342b046ba31cc77b71bba1",
@@ -142,5 +142,21 @@
   "seeed-xiao-esp32c3-bme280.partitions.bin": {
     "sha256": "148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1",
     "source_rev": "2b8bed09df23d29a0f81dddb29c89011d2c5a522"
+  },
+  "esp32-devkitm-1-bme280.elf": {
+    "sha256": "e558d962e50833d0de8de2ca91d0f905b2d01852f226e383a94816c4695e57f3",
+    "source_rev": "23b2cf49c5c1407e2c8fa2d5318962b96c7be0fd"
+  },
+  "arduino-nano-esp32-bme280.elf": {
+    "sha256": "2950d0a83a1e751b4cc58d6696b4606088d917aa43918d427013cfc25d6712ae",
+    "source_rev": "a371ab90c421efbbaace184e022d634bcbfa98f1"
+  },
+  "arduino-uno-r4-minima-bme280.elf": {
+    "sha256": "04bd8c84c636cba2f772ed7fc02f5b6909c0c110f364075f3b1bcb1500b92ee5",
+    "source_rev": "0fe44b1a8b0a47ed611ada3de72d618655e9d441"
+  },
+  "esp32s3-lcd-ev-ft5x06.elf": {
+    "sha256": "7ba63d2245aae0513b22f77fcb8a23650e847ca933ee3009fe19a94952038e32",
+    "source_rev": "3c304d84b3f4847bb6fa8dc0c87bd74978438c27"
   }
 }

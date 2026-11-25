@@ -559,18 +559,64 @@ interconnects:
 
 #[test]
 fn output_aliases_and_missing_probes_cannot_silently_replace_observations() {
-    let aliased = MODEL.replace("node.b.adc.adc1.0_volts", "node.a.board.analog.pa0_volts");
-    let error = world(&["a", "b"], &aliased)
-        .err()
-        .expect("aliases must refuse")
-        .to_string();
-    assert!(error.contains("multiple output writers"), "{error}");
+    for (first, second) in [
+        ("node.a.adc.adc1.0_volts", "node.a.board.analog.pa0_volts"),
+        ("node.a.board.analog.PA0_volts", "node.a.adc.adc1.0_volts"),
+        ("node.a.board.analog.pa1_volts", "node.a.adc.adc1.1_volts"),
+    ] {
+        let aliased = MODEL
+            .replace("node.a.adc.adc1.0_volts", first)
+            .replace("node.b.adc.adc1.0_volts", second);
+        let error = world(&["a", "b"], &aliased)
+            .err()
+            .expect("aliases must refuse")
+            .to_string();
+        assert!(error.contains("multiple output writers"), "{error}");
+    }
     let missing_probe = MODEL.replace("sense_a: v(a)", "unrouted: v(a)");
     let error = world(&["a", "b"], &missing_probe)
         .err()
         .expect("missing probe must refuse")
         .to_string();
     assert!(error.contains("no solved probe"), "{error}");
+}
+
+#[test]
+fn distinct_adc_sinks_accept_mixed_pad_and_channel_routes() {
+    // Equal channel numbers on different controllers remain distinct. A pad
+    // and another channel on one controller also have separate ownership.
+    for (first, second) in [
+        ("node.a.board.analog.pa0_volts", "node.b.adc.adc1.0_volts"),
+        ("node.a.board.analog.pa0_volts", "node.a.adc.adc1.1_volts"),
+        ("node.a.adc.adc1.0_volts", "node.a.board.analog.pa1_volts"),
+    ] {
+        let model = MODEL
+            .replace("node.a.adc.adc1.0_volts", first)
+            .replace("node.b.adc.adc1.0_volts", second);
+        let mut w = world(&["a", "b"], &model).expect("distinct sinks must bind");
+        drive(&mut w, "a", true);
+        drive(&mut w, "b", false);
+        step(&mut w);
+        let (other_node, other_channel) = if second.starts_with("node.b.") {
+            ("b", 0)
+        } else {
+            ("a", 1)
+        };
+        for (node, channel, active) in [("a", 0, true), (other_node, other_channel, false)] {
+            let m = w.machines.get_mut(node).unwrap().as_mut();
+            wr(m, 0x4002_3844, 1 << 8); // APB2 ADC1 clock
+            wr(m, ADC + 0x34, channel); // Select the actual resolved channel.
+            wr(m, ADC + 0x08, 1);
+            wr(m, ADC + 0x08, (1 << 30) | 1);
+            step(&mut w);
+            let sample = rd(w.machines[node].as_ref(), ADC + 0x4c);
+            if active {
+                assert!((3301..3450).contains(&sample), "active ADC sample {sample}");
+            } else {
+                assert_eq!(sample, 0, "the distinct off-branch observation stays zero");
+            }
+        }
+    }
 }
 
 fn digital_wire(latency_ns: u64) -> String {

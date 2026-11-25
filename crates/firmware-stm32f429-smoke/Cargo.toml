@@ -1,0 +1,29 @@
+[package]
+name = "firmware-stm32f429-smoke"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team"]
+license = "MIT"
+
+[features]
+stm32f429-m4f-fpu = []
+stm32f429-adc1 = []
+stm32f429-adc-ovr = []
+stm32f429-adc-scan = []
+stm32f429-adc-injected = []
+stm32f429-tim2 = []
+stm32f429-spi1 = []
+stm32f429-i2c1 = []
+stm32f429-usart2-rx = []
+stm32f412-adc1 = []
+stm32f412-adc-scan = []
+
+[dependencies]
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-stm32f429-smoke"
+path = "src/main.rs"
+test = false
+bench = false

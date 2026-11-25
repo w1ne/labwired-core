@@ -364,6 +364,11 @@ pub fn validate_part_pack(pack: &DeviceDescriptor, origin: &str) -> Result<()> {
     if pack.r#type.trim().is_empty() {
         anyhow::bail!("part pack {origin} has an empty `type:`");
     }
+    if let Some(power) = &pack.behavior.power {
+        power
+            .validate()
+            .with_context(|| format!("part pack {origin}"))?;
+    }
     if pack.behavior.primitive.trim().is_empty() {
         anyhow::bail!(
             "part pack '{}' ({origin}) has an empty `behavior.primitive:`",
@@ -700,6 +705,13 @@ pub struct I2cSpec {
     /// byte-addressable `register_file:`.
     #[serde(default = "default_pointer_width")]
     pub pointer_width: u8,
+    /// A register-mode device may accept a frame containing only the first
+    /// data byte for a wider big-endian register. When true, that byte updates
+    /// the register's most-significant byte when the frame ends at STOP or a
+    /// repeated START, preserving all lower bytes. This is opt-in because most
+    /// devices require a complete register word.
+    #[serde(default)]
+    pub update_msb_on_short_write: bool,
     /// **Write page size in bytes** for a memory-like part. A sequential write
     /// that runs past a page boundary wraps to the START of the same page
     /// instead of spilling into the next one — the single most surprising real
@@ -1236,6 +1248,56 @@ pub struct LinearMap {
     /// Optional inclusive `[lo, hi]` clamp.
     #[serde(default)]
     pub clamp: Option<(f64, f64)>,
+}
+
+/// `behavior.power`: the supply rails a declarative device requires and how
+/// long it takes to start answering after power-on. Bus-agnostic: every
+/// declarative primitive that supports routed supply reads this one block.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct DevicePowerSpec {
+    /// Required supply rails and their operating envelopes (datasheet
+    /// electrical characteristics). A rail's `name` is the key a placement's
+    /// `supply_rails` and a `board.device.<id>.power.<name>_volts` route use.
+    pub rails: Vec<DevicePowerRail>,
+    /// Power-up time in microseconds: after a power-on reset the part ignores
+    /// the bus (as if unpowered) until this much device time has elapsed.
+    #[serde(default)]
+    pub startup_us: u64,
+}
+
+impl DevicePowerSpec {
+    /// Static checks every consumer of the block needs: at least one rail, named
+    /// uniquely, with `0 <= min_v < max_v`.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(!self.rails.is_empty(), "behavior.power declares no rails");
+        for (i, rail) in self.rails.iter().enumerate() {
+            anyhow::ensure!(
+                !rail.name.is_empty() && rail.min_v >= 0.0 && rail.max_v > rail.min_v,
+                "behavior.power.rails[{i}] '{}' needs a name and 0 <= min_v < max_v",
+                rail.name
+            );
+            anyhow::ensure!(
+                !self.rails[..i].iter().any(|r| r.name == rail.name),
+                "behavior.power.rails[{i}]: duplicate rail '{}'",
+                rail.name
+            );
+        }
+        Ok(())
+    }
+}
+
+/// One required supply rail of a [`DevicePowerSpec`].
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct DevicePowerRail {
+    pub name: String,
+    /// Package/canvas pin that feeds this rail (e.g. `VDD`). Not interpreted by
+    /// the SPI engine; carried for the diagram compiler.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pin: Option<String>,
+    pub min_v: f64,
+    pub max_v: f64,
 }
 
 /// The `behavior.spi` section of a declarative `spi_device` — datasheet-shaped
@@ -2515,6 +2577,11 @@ pub struct DeviceBehavior {
     /// and artifact contract. Absent for every other primitive.
     #[serde(default)]
     pub led_strip: Option<LedStripSpec>,
+    /// For the `onewire_device` primitive: a 1-Wire slave's ROM code, memory
+    /// and function commands. See [`crate::OneWireSpec`]. Absent for every
+    /// other primitive.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub onewire: Option<crate::OneWireSpec>,
     /// For the `uart_device` primitive: the part's frame shape, its command
     /// table and what it says unprompted. See [`UartSpec`]. Absent for every
     /// other primitive.
@@ -2576,6 +2643,14 @@ pub struct DeviceBehavior {
     /// clock of its own, which is every descriptor written before this existed.
     #[serde(default)]
     pub timers: Vec<DeviceTimer>,
+    /// **Routed supply and power-on reset.** Present ⇒ the part can take its
+    /// powered state from routed rail voltages (`board.device.<id>.power.<rail>_volts`):
+    /// each power-up is a power-on reset (registers, bus mode, timers and rule
+    /// state back to their descriptor initial values) followed by a start-up
+    /// interval during which the part does not answer. Absent ⇒ the part does
+    /// not support routed supply, exactly as before this key existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power: Option<DevicePowerSpec>,
     /// **What this part SHOWS** — the artifact a reader (the browser, `inspect`,
     /// `panel_artifact_evidence`) can paint, rendered from the part's own RAM
     /// by the engine rather than by a hand-written model. See [`ArtifactSpec`].
@@ -3241,8 +3316,9 @@ pub struct AnalogSpec {
     #[serde(default)]
     pub below_first: AnalogBelowFirst,
     /// Behaviour above the last curve point: hold a named floor voltage
-    /// (`floor_mv`, e.g. the GP2Y0A21's ~0.4 V far floor — far is NOT zero)
-    /// or hold the last point's voltage (`hold_last`).
+    /// (`floor_mv`, e.g. the GP2Y0A21 model's 0.4 V endpoint, extended beyond
+    /// its 80 cm data-sheet range as an explicit assumption) or hold the last
+    /// point's voltage (`hold_last`).
     #[serde(default)]
     pub above_last: AnalogAboveLast,
     /// A RATIOMETRIC part (a potentiometer, a divider across the supply)
@@ -3546,6 +3622,25 @@ pub enum DisplayMetaField {
         #[serde(default, rename = "as")]
         published_as: Option<String>,
     },
+    /// FRAME MEMORY READ AS TEXT: each row is `len` bytes from `offset`,
+    /// printable ASCII kept and anything else shown as `?`. For a character
+    /// display, whose frame memory holds character codes, not pixels.
+    ///
+    /// Written `- { text: [{ offset: 0, len: 16 }, { offset: 64, len: 16 }] }`
+    /// (key `text`, a list of row strings).
+    Text {
+        text: Vec<DisplayTextRow>,
+        #[serde(default, rename = "as")]
+        published_as: Option<String>,
+    },
+}
+
+/// One row of a [`DisplayMetaField::Text`] entry.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DisplayTextRow {
+    pub offset: u32,
+    pub len: u32,
 }
 
 /// Which copy of a plane a [`DisplayMetaField::Plane`] entry counts.
@@ -3582,7 +3677,15 @@ impl DisplayMetaField {
         match self {
             Self::Flag(f) => Some(*f),
             Self::Renamed { flag, .. } => Some(*flag),
-            Self::Var { .. } | Self::Plane { .. } => None,
+            Self::Var { .. } | Self::Plane { .. } | Self::Text { .. } => None,
+        }
+    }
+
+    /// The text rows this entry reads, or `None`.
+    pub fn text(&self) -> Option<&[DisplayTextRow]> {
+        match self {
+            Self::Text { text, .. } => Some(text),
+            _ => None,
         }
     }
 
@@ -3632,7 +3735,14 @@ impl DisplayMetaField {
             | Self::Plane {
                 published_as: Some(k),
                 ..
+            }
+            | Self::Text {
+                published_as: Some(k),
+                ..
             } => Cow::Borrowed(k.as_str()),
+            Self::Text {
+                published_as: None, ..
+            } => Cow::Borrowed("text"),
             // `black` → `black_ink_bytes`; `of: screen` → `screen_black_ink_bytes`.
             Self::Plane {
                 plane,
@@ -4059,6 +4169,9 @@ pub struct DisplayDc {
     /// default would have silently changed one panel's picture.
     #[serde(default)]
     pub unwired: DisplayDcUnwired,
+    /// `strobed_nibbles` only: which expander port bit carries which line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nibble: Option<DisplayNibbleBus>,
 }
 
 /// See [`DisplayDc::unwired`].
@@ -4099,6 +4212,28 @@ pub enum DisplayDcSource {
     /// drives it), and requires exactly one of them. Neither is inference: both
     /// are wires, and which one is connected is a fact about the board.
     HwDcx,
+    /// A 4-bit parallel bus whose lines are the pins of an I²C port expander:
+    /// every I²C byte is a snapshot of the expander port, and the controller
+    /// latches the data nibble, RS and RW on the FALLING edge of E (the
+    /// HD44780 behind a PCF8574 backpack). Two nibbles make one byte, high
+    /// nibble first; RS = 0 frames a command, RS = 1 a data byte. Which port
+    /// bit is which line is the backpack's wiring, stated in
+    /// [`DisplayDc::nibble`].
+    StrobedNibbles,
+}
+
+/// Port-bit positions of a [`DisplayDcSource::StrobedNibbles`] bus.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DisplayNibbleBus {
+    /// Register select: 0 = command, 1 = data.
+    pub rs_bit: u8,
+    /// Read/write: 1 = the controller drives the bus (a read; not latched).
+    pub rw_bit: u8,
+    /// Enable strobe; the nibble is latched on its falling edge.
+    pub e_bit: u8,
+    /// Port bit of data line D4; D5..D7 follow it.
+    pub data_shift: u8,
 }
 
 /// Which addressing modes the controller implements and which one it powers on

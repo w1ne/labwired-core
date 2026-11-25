@@ -224,12 +224,23 @@ peripherals:
   # core 1 is not modeled yet).
   # SIO with the RP2350 GPIO map (each register has a HI twin at +4, so
   # OUT_SET is 0x18 and OE is 0x30, not the RP2040's 0x14 / 0x20).
+  # PADS_BANK0 (datasheet §9.11.3): one word per pad with PUE (bit 3) / PDE
+  # (bit 2), reset 0x116 (pulled down). Inside the clk_rst window; the greatest
+  # start wins. The SIO names it as its pad_control block, so the pull firmware
+  # writes (pinMode INPUT_PULLUP, gpio_pull_up) holds a pad nothing drives.
+  - id: "pads_bank0"
+    type: "declarative"
+    base_address: 0x40038000
+    size: "4KB"
+    config:
+      path: "../peripherals/rp2350/pads_bank0.yaml"
   - id: "sio"
     type: "rp2040_sio"
     base_address: 0xD0000000
     size: "4KB"
     config:
       debug_schema: "../peripherals/rp2350/sio.yaml"
+      pad_control: "pads_bank0"
       profile: "rp2350"
   # Cortex-M33 SCS ACTLR (0xE000E008), a plain register: pico-sdk's
   # spinlock_set_extexclall() sets EXTEXCLALL during runtime init.

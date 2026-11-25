@@ -67,6 +67,7 @@ pub(crate) fn decode_at(sim: &WasmSimulator, pc: u32) -> String {
         }
         MachineFamily::CortexA => "Cortex-A disassembly unavailable in the browser".to_owned(),
         MachineFamily::CortexR => "Cortex-R disassembly unavailable in the browser".to_owned(),
+        MachineFamily::Arm7Tdmi => "ARM7TDMI disassembly unavailable in the browser".to_owned(),
         MachineFamily::CortexM => {
             let pc = pc & !1;
             match machine.bus.read_u16(pc as u64) {
@@ -98,6 +99,7 @@ pub(crate) fn decode_at(sim: &WasmSimulator, pc: u32) -> String {
         MachineFamily::Aarch64 => "AArch64 (no wasm disassembly yet)".to_string(),
         MachineFamily::Rx => "RX (no wasm disassembly yet)".to_string(),
         MachineFamily::Mips => "MIPS (no wasm disassembly yet)".to_string(),
+        MachineFamily::Msp430 => "MSP430 (no wasm disassembly yet)".to_string(),
     }
 }
 

@@ -35,6 +35,20 @@ io_voltage_v: 5.0
 gpio_input_thresholds:
   vil: 0.3
   vih: 0.6
+# GPIO pad output resistance, ohms: a driven pad is VCC (or 0 V) behind it.
+# Atmel-2549Q (ATmega640/1280/1281/2560/2561, 02/2014), section 31.1 "DC
+# Characteristics", VCC = 5 V, except RESET pin: VOH min 4.2 V at
+# IOH = -20 mA, VOL max 0.9 V at IOL = 20 mA. Source side
+# (5.0 - 4.2) V / 20 mA = 40 ohm (sink side 0.9 V / 20 mA = 45 ohm).
+# Guaranteed limits, so a typical pad is stiffer.
+# Read by the diagram compiler, which places it as the pad driver's
+# on-resistance in the analog netlist.
+gpio_output_ohms: 40
+# Absolute maximum DC current per I/O pin, mA. Atmel-2549Q section 31
+# "Absolute Maximum Ratings": DC Current per I/O Pin 40.0 mA. A run reports a
+# pad whose simulated current went past it; the simulation does not stop or
+# clamp it.
+gpio_abs_max_ma: 40
 
 flash:
   base: 0x00000000

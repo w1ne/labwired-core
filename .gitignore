@@ -6,6 +6,7 @@ target/
 # otherwise makes the link itself show up as an untracked file to commit.
 /target
 examples/*/target/
+/examples/lp-mspm0g3507-launchpad/build/
 # Generated test fixtures (build artifacts) — but allow committed reference
 # binaries like the Espressif ESP32 BROM ELF in crates/*/tests/fixtures/
 # and the workspace-root tier1 fixture tree.

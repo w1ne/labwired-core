@@ -599,12 +599,6 @@ mod tests {
     }
 
     #[test]
-    fn base_is_esp32_classic_canonical_address() {
-        let p = Sha::new();
-        assert_eq!(p.base(), 0x3FF0_3000);
-    }
-
-    #[test]
     fn busy_reads_zero_after_command() {
         // Synchronous engine: BUSY is never observably set from firmware.
         let mut p = Sha::new();

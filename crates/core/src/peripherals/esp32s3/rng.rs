@@ -28,6 +28,8 @@ const RND_OFFSET: u64 = 0x7C;
 #[derive(Debug)]
 pub struct Esp32s3Rng {
     state: AtomicU32,
+    /// Offset of `WDEV_RND_REG` in the window (S3: 0x7C; S2: 0x110).
+    rnd_offset: u64,
 }
 
 impl Default for Esp32s3Rng {
@@ -41,6 +43,16 @@ impl Esp32s3Rng {
         // Fixed non-zero seed → deterministic, reproducible entropy stream.
         Self {
             state: AtomicU32::new(0x2545_F491),
+            rnd_offset: RND_OFFSET,
+        }
+    }
+
+    /// The ESP32-S2's `WDEV_RND_REG` is at `0x6003_5110`, offset 0x110 from
+    /// the same 0x6003_5000 window (`esp_hw_support/hw_random.c`).
+    pub fn new_esp32s2() -> Self {
+        Self {
+            rnd_offset: 0x110,
+            ..Self::new()
         }
     }
 
@@ -64,7 +76,7 @@ impl Peripheral for Esp32s3Rng {
     }
 
     fn read(&self, offset: u64) -> SimResult<u8> {
-        if offset & !3 == RND_OFFSET {
+        if offset & !3 == self.rnd_offset {
             let word = self.next();
             return Ok(((word >> ((offset & 3) * 8)) & 0xFF) as u8);
         }
@@ -77,7 +89,7 @@ impl Peripheral for Esp32s3Rng {
     }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
-        if offset & !3 == RND_OFFSET {
+        if offset & !3 == self.rnd_offset {
             return Ok(self.next());
         }
         Ok(0)

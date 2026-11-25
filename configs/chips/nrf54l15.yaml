@@ -151,13 +151,35 @@ peripherals:
 
   # ── TIMER ──────────────────────────────────────────────────────────────
   # cc-num differs per instance on this family (DT `cc-num`): TIMER10 has 8,
-  # TIMER20..22 have 6. The nRF52 model defaults to 4, so both are explicit.
+  # every other instance has 6. The nRF52 model defaults to 4, so both are
+  # explicit.
+  #
+  # nrf54l_05_10_15.dtsi defines SEVEN timers on this part: TIMER00,
+  # TIMER10 and TIMER20..24. The vendor SVD (tests/fixtures/real_world/
+  # nrf54l15.svd) lists the same seven instances with the same bases and IRQs.
+  # Omitting one is a bus fault (`MemoryViolation`) for any firmware whose
+  # devicetree aliases it, and `svd_conformance` cannot see the omission: it
+  # only checks instances a descriptor already declares.
+  - id: "timer00"
+    type: "nrf52840_timer"
+    base_address: 0x50055000
+    size: "4KB"
+    irq: 85
+    config:
+      # TIMER00 is clocked from HF PLL (128 MHz, the core clock); DT
+      # `clocks = <&hfpll>`. Spelled out so the base clock is never inferred.
+      peripheral_hz: 128000000
+      debug_schema: "../peripherals/nrf54l15/global_timer00_s.yaml"
+      num_cc: 6
   - id: "timer10"
     type: "nrf52840_timer"
     base_address: 0x50085000
     size: "4KB"
     irq: 133
     config:
+      # TIMER10 is clocked from HFXO (32 MHz), not the 128 MHz core; see
+      # nrf54l15_application_peripherals.h `TIMER10_PCLK_MHZ 32`.
+      peripheral_hz: 32000000
       debug_schema: "../peripherals/nrf54l15/global_timer10_s.yaml"
       num_cc: 8
   - id: "timer20"
@@ -166,6 +188,8 @@ peripherals:
     size: "4KB"
     irq: 202
     config:
+      # TIMER2x is clocked from PCLK16M, not the 128 MHz core.
+      peripheral_hz: 16000000
       debug_schema: "../peripherals/nrf54l15/global_timer20_s.yaml"
       num_cc: 6
   - id: "timer21"
@@ -174,6 +198,7 @@ peripherals:
     size: "4KB"
     irq: 203
     config:
+      peripheral_hz: 16000000
       debug_schema: "../peripherals/nrf54l15/global_timer21_s.yaml"
       num_cc: 6
   - id: "timer22"
@@ -182,7 +207,27 @@ peripherals:
     size: "4KB"
     irq: 204
     config:
+      peripheral_hz: 16000000
       debug_schema: "../peripherals/nrf54l15/global_timer22_s.yaml"
+      num_cc: 6
+  - id: "timer23"
+    type: "nrf52840_timer"
+    base_address: 0x500CD000
+    size: "4KB"
+    irq: 205
+    config:
+      # TIMER2x is clocked from PCLK16M, not the 128 MHz core.
+      peripheral_hz: 16000000
+      debug_schema: "../peripherals/nrf54l15/global_timer23_s.yaml"
+      num_cc: 6
+  - id: "timer24"
+    type: "nrf52840_timer"
+    base_address: 0x500CE000
+    size: "4KB"
+    irq: 206
+    config:
+      peripheral_hz: 16000000
+      debug_schema: "../peripherals/nrf54l15/global_timer24_s.yaml"
       num_cc: 6
 
   # ── GPIO ───────────────────────────────────────────────────────────────

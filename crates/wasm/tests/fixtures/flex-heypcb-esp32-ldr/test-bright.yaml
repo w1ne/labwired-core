@@ -1,0 +1,23 @@
+# `labwired test --script test-bright.yaml`. 100,000 lx: the registered `ldr` kit output reads above half scale and the firmware pulses the IO48 LED.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+entry:
+  export: run
+  args:
+    - { port: lux }
+    - { port: sensor_mv }
+    - { port: user_led_drive }
+    - { port: user_led_state }
+    - { number: 100000 }
+limits:
+  max_steps: 100000
+  max_time_ns: 10000
+assertions:
+  - entry_result: { equals: 4087 }
+  - port_value: { port: sensor_mv, equals: 3294 }
+  - port_value: { port: user_led_state, equals: 0 }
+  - digital_edges: { port: user_led_drive, count: 2 }
+  - digital_edges: { port: user_led_state, count: 2 }

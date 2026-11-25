@@ -56,6 +56,19 @@ use std::sync::mpsc::{Receiver, Sender};
 pub trait I2cSlaveHost {
     fn attach_slave(&mut self, device: Box<dyn I2cDevice>);
 
+    /// Attach a slave with its declared physical route. Fixed-pin hosts keep
+    /// their existing behavior; matrix-routed hosts override this capability
+    /// and validate the route before accepting the attachment. The bus never
+    /// needs to downcast a concrete I2C controller for this operation.
+    fn attach_slave_with_route(
+        &mut self,
+        device: Box<dyn I2cDevice>,
+        _route: Option<&std::collections::BTreeMap<String, String>>,
+    ) -> anyhow::Result<()> {
+        self.attach_slave(device);
+        Ok(())
+    }
+
     /// How this controller reaches pads through a GPIO output matrix, for a
     /// controller on a part where any I²C can drive any pad (the ESP32
     /// family). `None` — the default — for a controller with fixed pins.
@@ -84,9 +97,16 @@ pub trait I2cDevice: Send {
     fn start(&mut self) {}
     fn stop(&mut self) {}
 
-    /// Width in microseconds of the pulse this device currently drives on PWM
-    /// output `channel`, or `None` when the channel is not producing a pulse
-    /// (never written, full-off, sleeping) or the device has no PWM outputs.
+    /// Whether this device is an I2C bus switch with downstream devices.
+    /// This describes its topology even when a supply wrapper is off.
+    fn is_i2c_mux(&self) -> bool {
+        false
+    }
+
+    /// Modeled pulse width in microseconds for PWM output `channel`. `None`
+    /// includes static, absent, unsupported, and unknown outputs; it is not
+    /// proof of silence. The query does not establish output-enable, servo
+    /// power, or physical signal delivery.
     /// A servo declared with `source_address` / `source_channel` reads this.
     fn pwm_channel_pulse_us(&self, _channel: u8) -> Option<f64> {
         None

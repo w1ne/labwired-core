@@ -1,0 +1,12 @@
+2026-11-08T15:24:40.567860Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/efm32wg995-negctl.yaml
+2026-11-08T15:24:40.568768Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-08T15:24:40.569334Z ERROR labwired_cli::execute: --watch-gpio: peripheral "gpioe" not found on the bus; channel will stay flat
+2026-11-08T15:24:40.573856Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["gpio pe2/pe3 pushpull set=1 tgl=1 clr=1 wo=1 ok", "gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok", "gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok", "gpio pa pinlockn reset=ffff after=fffe ok", "tim0 up of=1 pend=1 released=1 running=1 ok", "tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok", "tim2 cc0 hit=1 topbv=1 of=1 top=03e8->01f4 ok", "tim3 updown of=1 dir_down=1 uf=1 up_again=1 ok", "EFM32WG PASS"] }) (captured len=25)
+2026-11-08T15:24:40.573879Z ERROR labwired_cli::execute: Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "gpioe:2", min_edges: 4 } }) (captured len=25)
+2026-11-08T15:24:40.573891Z ERROR labwired_cli::execute: Memory assertion failed at 0x20007f00 (size 4): expected 0xef3200ff, got 0x0 (mask 0xffffffff)
+2026-11-08T15:24:40.573895Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536903424, expected_value: 4013031679, mask: None, size: Some(4), node: None } }) (captured len=25)
+FAIL  2/5 checks · efm32wg995-negctl-smoke · 400000 steps · 0.00s
+FAULT  HardFault escalated from a precise BusFault: data access at 0x4000_6094 (BFAR valid), at PC 0x0800_0522 in `core::ptr::write_volatile` (mod.rs:2178), called from `firmware_efm32wg995_smoke::__cortex_m_rt_main`.
+       HFSR=0x40000000 CFSR=0x00008200 [FORCED PRECISERR] BFAR=0x40006094

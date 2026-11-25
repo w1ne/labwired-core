@@ -22,6 +22,9 @@ impl DeviceDescriptor {
                 meta.inputs = meta.inputs.iter().flat_map(|i| i.expand()).collect();
             }
         }
+        if let Some(power) = &desc.behavior.power {
+            power.validate()?;
+        }
         Ok(desc)
     }
 
@@ -172,6 +175,14 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         include_str!("../../../configs/devices/pcf8574.yaml"),
     ),
     (
+        &["hd44780_pcf8574"],
+        include_str!("../../../configs/devices/hd44780_pcf8574.yaml"),
+    ),
+    (
+        &["ds18b20"],
+        include_str!("../../../configs/devices/ds18b20.yaml"),
+    ),
+    (
         &["vl53l0x"],
         include_str!("../../../configs/devices/vl53l0x.yaml"),
     ),
@@ -280,6 +291,10 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         include_str!("../../../configs/devices/gc9a01.yaml"),
     ),
     (
+        &["ft5x06"],
+        include_str!("../../../configs/devices/ft5x06.yaml"),
+    ),
+    (
         &["oled-ssd1309"],
         include_str!("../../../configs/devices/ssd1309.yaml"),
     ),
@@ -322,6 +337,14 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
     (
         &["tmp36"],
         include_str!("../../../configs/devices/tmp36.yaml"),
+    ),
+    (
+        &["mcp9700"],
+        include_str!("../../../configs/devices/mcp9700.yaml"),
+    ),
+    (
+        &["mcp9701"],
+        include_str!("../../../configs/devices/mcp9701.yaml"),
     ),
     (&["mq-6"], include_str!("../../../configs/devices/mq6.yaml")),
     (

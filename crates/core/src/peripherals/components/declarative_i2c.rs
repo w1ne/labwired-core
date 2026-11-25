@@ -10,7 +10,9 @@
 //! tree, and this device is byte-compatible with each:
 //!   * **register-pointer** (`registers:`) — the master writes a 1-byte pointer
 //!     then streams a fixed-width LE/BE word; rw registers accumulate + echo the
-//!     master's writes. This is the VEML7700 protocol
+//!     master's writes. An opt-in descriptor field handles parts that commit an
+//!     MSB-only update when a wider big-endian write ends after one data byte.
+//!     This is the VEML7700 protocol
 //!     ([`super::veml7700`]).
 //!   * **command** (`commands:`) — the master writes a 16-bit big-endian
 //!     command, then reads N words each followed by a CRC-8 byte. This is the
@@ -211,6 +213,9 @@ pub struct GenericI2cDevice {
     /// Page size a sequential WRITE wraps within, for a memory-like part. See
     /// [`labwired_config::I2cSpec::write_page`].
     write_page: Option<u16>,
+    /// Whether a terminated register write containing only the first data
+    /// byte updates the MSB of a wider big-endian word.
+    update_msb_on_short_write: bool,
     /// Register-pointer-mode self-driving update rules (e.g. TMP102 drift).
     updates: Vec<UpdateRule>,
     /// Pointerless wire shape (`pointer_bytes: 0`): the part has ONE register
@@ -228,6 +233,19 @@ pub struct GenericI2cDevice {
     /// register-file device (PCA9685-style); the register/command fields above
     /// are unused. `None` ⇒ a register-pointer or command device.
     file: Option<Vec<u8>>,
+    /// PCA9685 LED register bytes currently committed to its outputs.
+    /// Register reads still see the live file while OCH=0 stages changes.
+    pca9685_led_output: Option<Box<[u8; 64]>>,
+    // Global channel writes have effects that this output model does not yet emulate.
+    pca9685_global_output_unknown: bool,
+    // EXTCLK cannot switch back to the internal oscillator without reset.
+    pca9685_external_clock_unknown: bool,
+    // Invalid prescaler writes are not modeled; a later legal write restores it.
+    pca9685_prescale_unknown: bool,
+    /// LED bytes written since the previous OCH=1 channel update. The
+    /// datasheet does not specify whether partial writes survive START/STOP;
+    /// this model retains them until the channel updates or OCH=0 STOP.
+    pca9685_ack_written: [u8; 16],
     file_pointer: u16,
     file_writes_since_frame: u32,
     file_pointer_mask: u16,
@@ -382,6 +400,21 @@ impl GenericI2cDevice {
                 required_reads(rule, reset)
             })
             .collect();
+        // Only the exact built-in behavior establishes PCA9685 register
+        // semantics; unrelated declarative models may reuse observable names.
+        let pca9685_led_output = if descriptor.r#type == "pca9685"
+            && matches!(
+                (serde_json::to_value(&descriptor.behavior), serde_json::to_value(&PCA9685_KIT.descriptor.behavior)),
+                (Ok(actual), Ok(builtin)) if actual == builtin
+            ) {
+            file.as_ref().and_then(|f| f.get(0x06..0x46)).map(|leds| {
+                let mut output = Box::new([0; 64]);
+                output.copy_from_slice(leds);
+                output
+            })
+        } else {
+            None
+        };
         let mut device = Self {
             address,
             registers: spec.registers.clone(),
@@ -427,11 +460,17 @@ impl GenericI2cDevice {
             reg_pointer_mask: spec.pointer_mask.unwrap_or(default_pointer_mask),
             pointer_width,
             write_page: spec.write_page,
+            update_msb_on_short_write: spec.update_msb_on_short_write,
             reg_pointerless: spec.pointer_bytes == 0,
             updates: spec.updates.clone(),
             reg_auto_increment: spec.auto_increment,
             reg_unmapped_byte: spec.unmapped_byte.unwrap_or(0xFF),
             file,
+            pca9685_led_output,
+            pca9685_global_output_unknown: false,
+            pca9685_external_clock_unknown: false,
+            pca9685_prescale_unknown: false,
+            pca9685_ack_written: [0; 16],
             file_pointer: 0,
             file_writes_since_frame: 0,
             file_pointer_mask,
@@ -1592,6 +1631,62 @@ impl GenericI2cDevice {
         self.rules.as_ref()
     }
 
+    fn commit_register_write(&mut self, reg: &I2cRegister, written: u32) {
+        let name = reg.name.clone();
+        let prev = self.reg_values.get(&name).copied().unwrap_or(0);
+        let stored = if write_is_translated(reg) {
+            self.commit_translated_write(reg, written)
+        } else {
+            apply_write(reg, prev, written)
+        };
+        self.reg_values.insert(name.clone(), stored);
+        if !self.timers.is_empty() {
+            self.timers.start_on_write(&name, stored, self.elapsed_us);
+            self.refresh_field_driven_periods();
+        }
+        if !self.data_ready.is_empty() {
+            // Acknowledge first, then start: a part whose start and clear
+            // registers are the same would otherwise clear the conversion it
+            // just started.
+            self.clear_on_write(&name);
+            self.start_conversions(&name, stored);
+        }
+        self.raise_and_settle(
+            Event::Write {
+                register: name,
+                field: None,
+            },
+            i64::from(written),
+        );
+    }
+
+    fn commit_short_msb_write(&mut self) {
+        if !self.update_msb_on_short_write || self.command_mode || self.reg_pointerless {
+            return;
+        }
+        let pointer_bytes = usize::from(self.pointer_width);
+        if self.write_buf.len() != pointer_bytes + 1 {
+            return;
+        }
+        let Some(pointer) = self.pointer else { return };
+        let Some(reg) = self
+            .find_register(pointer)
+            .filter(|reg| reg.access == I2cAccess::Rw && reg.width > 1 && reg.endian == Endian::Be)
+            .cloned()
+        else {
+            return;
+        };
+        let shift = u32::from(reg.width - 1) * 8;
+        if shift >= u32::BITS {
+            return;
+        }
+        let byte_mask = 0xFFu32 << shift;
+        let mut partial_reg = reg.clone();
+        partial_reg.write_mask = Some(reg.write_mask.unwrap_or(u32::MAX) & byte_mask);
+        let written = u32::from(self.write_buf[pointer_bytes]) << shift;
+        self.commit_register_write(&partial_reg, written);
+    }
+
     /// The wire write itself, split out so the framing counter above can store
     /// the byte and then raise `frame` without holding a borrow.
     fn write_inner(&mut self, data: u8) {
@@ -1614,6 +1709,32 @@ impl GenericI2cDevice {
             } else if !regs.is_empty() {
                 let idx = self.file_pointer as usize % regs.len();
                 regs[idx] = data;
+                if self.pca9685_led_output.is_some() {
+                    if (0xfa..=0xfd).contains(&idx) {
+                        self.pca9685_global_output_unknown = true;
+                    }
+                    if idx == 0xfe {
+                        self.pca9685_prescale_unknown = regs[0] & 0x10 == 0 || data < 3;
+                    }
+                    if idx == 0 && data & 0x40 != 0 {
+                        self.pca9685_external_clock_unknown = true;
+                    }
+                }
+                // OCH=1 commits a channel only after all four PWM bytes
+                // have been written, on the final acknowledged byte.
+                if (0x06..0x46).contains(&idx) && regs.get(1).is_some_and(|mode2| mode2 & 0x08 != 0)
+                {
+                    if let Some(output) = self.pca9685_led_output.as_mut() {
+                        let offset = idx - 0x06;
+                        let channel = offset / 4;
+                        self.pca9685_ack_written[channel] |= 1 << (offset % 4);
+                        if self.pca9685_ack_written[channel] == 0x0f {
+                            let base = channel * 4;
+                            output[base..base + 4].copy_from_slice(&regs[0x06 + base..0x0a + base]);
+                            self.pca9685_ack_written[channel] = 0;
+                        }
+                    }
+                }
                 if Self::file_ai_enabled(&self.file_auto_increment, regs) {
                     self.file_pointer =
                         Self::next_write_pointer(self.file_pointer, self.write_page);
@@ -1689,74 +1810,46 @@ impl GenericI2cDevice {
         {
             return;
         }
-        let (name, endian) = (reg.name.clone(), reg.endian);
         let reg = reg.clone();
-        let written = unpack(&self.write_buf[pointer_bytes..], endian);
-        // `write_mask` protects the bits silicon owns (a model-driven status
-        // flag, a hardwired bit): those keep their current value. Absent ⇒ the
-        // whole word is replaced, exactly as before the mask existed. What the
-        // masked bits then DO is `on_write` — a plain store unless the
-        // datasheet says write-1-to-clear / zero-to-clear / one-to-set.
-        let prev = self.reg_values.get(&name).copied().unwrap_or(0);
-        let stored = if write_is_translated(&reg) {
-            self.commit_translated_write(&reg, written)
-        } else {
-            apply_write(&reg, prev, written)
-        };
-        self.reg_values.insert(name.clone(), stored);
-        if !self.timers.is_empty() {
-            self.timers.start_on_write(&name, stored, self.elapsed_us);
-            self.refresh_field_driven_periods();
-        }
-        if !self.data_ready.is_empty() {
-            // Acknowledge first, then start: a part whose start and clear
-            // registers are the same would otherwise clear the conversion it
-            // just started. Ordering it this way makes "write 1 to clear, then
-            // write 1 to start" behave like the two operations it is.
-            self.clear_on_write(&name);
-            self.start_conversions(&name, stored);
-        }
-        // Tier 2 LAST, so a rule sees the post-side-effect register.
-        self.raise_and_settle(
-            Event::Write {
-                register: name,
-                field: None,
-            },
-            i64::from(written),
-        );
+        let written = unpack(&self.write_buf[pointer_bytes..], reg.endian);
+        self.commit_register_write(&reg, written);
     }
 }
 
 impl I2cDevice for GenericI2cDevice {
-    /// PCA9685-shaped parts (a `servo_angle` observable over the LEDn block):
+    /// Exact built-in PCA9685 output latch:
     /// `((OFF - ON) mod 4096)` counts of a `4096 * (PRE_SCALE + 1) / 25 MHz`
-    /// frame (datasheet Rev. 4 §7.3.1). `None` while MODE1.SLEEP is set, for a
-    /// channel never written, and for LEDn full-OFF. Full-ON drives the whole frame.
+    /// frame (datasheet Rev. 4 §7.3.1). `None` covers sleep, static levels,
+    /// and unsupported output configurations. `None` also covers
+    /// unknown output, so callers must not interpret it as evidence of silence.
     fn pwm_channel_pulse_us(&self, channel: u8) -> Option<f64> {
-        if channel >= 16 || !self.observables.iter().any(|o| o.name == "servo_angle") {
+        if channel >= 16
+            || self.pca9685_global_output_unknown
+            || self.pca9685_external_clock_unknown
+            || self.pca9685_prescale_unknown
+        {
             return None;
         }
         let file = self.file.as_ref()?;
-        if file.first()? & 0x10 != 0 {
+        // Open-drain has no modeled pull-up; INVRT is not modeled.
+        let mode2 = *file.get(1)?;
+        if file.first()? & 0x50 != 0 || mode2 & 0x10 != 0 || mode2 & 0x04 == 0 {
             return None;
         }
         let frame_us = 4096.0 * (f64::from(*file.get(0xFE)?) + 1.0) / 25.0;
-        let base = 0x06usize + usize::from(channel) * 4;
-        let (on_l, on_h, off_l, off_h) = (
-            *file.get(base)?,
-            *file.get(base + 1)?,
-            *file.get(base + 2)?,
-            *file.get(base + 3)?,
-        );
+        // This latch is populated only for the exact built-in PCA descriptor.
+        let output = self.pca9685_led_output.as_ref()?;
+        let i = usize::from(channel) * 4;
+        let (on_l, on_h, off_l, off_h) = (output[i], output[i + 1], output[i + 2], output[i + 3]);
         if off_h & 0x10 != 0 {
             return None;
         }
         if on_h & 0x10 != 0 {
-            return Some(frame_us);
+            return None; // FULL_ON is a static level, not a pulse.
         }
         let on = u32::from(on_l) | (u32::from(on_h & 0x0F) << 8);
         let off = u32::from(off_l) | (u32::from(off_h & 0x0F) << 8);
-        if on == 0 && off == 0 {
+        if on == off {
             return None;
         }
         let counts = (off + 4096 - on) % 4096;
@@ -1867,6 +1960,7 @@ impl I2cDevice for GenericI2cDevice {
         // (Re)START frames a new phase within the transaction: rewind the read
         // cursor and clear the register latch and the write accumulator. The
         // pointer (register mode) and any pending delayed response survive.
+        self.commit_short_msb_write();
         self.write_buf.clear();
         self.read_idx = 0;
         self.latched = false;
@@ -1883,12 +1977,23 @@ impl I2cDevice for GenericI2cDevice {
     }
 
     fn stop(&mut self) {
+        // STOP commits staged output only in OCH=0. OCH=1 waits for
+        // all four bytes of each channel, including across repeated STARTs.
+        if let (Some(output), Some(file)) = (&mut self.pca9685_led_output, &self.file) {
+            if file.get(1).is_some_and(|mode2| mode2 & 0x08 == 0) {
+                if let Some(leds) = file.get(0x06..0x46) {
+                    output.copy_from_slice(leds);
+                    self.pca9685_ack_written = [0; 16];
+                }
+            }
+        }
         // End of transaction: clear the write accumulator so the next command /
         // pointer starts fresh (the C3 controller only calls start() on a
         // repeated START, so the real reset happens here — same as veml7700 /
         // scd41). The read latch is the same kind of transaction state: the
         // next read, even with no new START, must sample the pointer again
         // rather than continue off the end of the word just clocked out.
+        self.commit_short_msb_write();
         self.write_buf.clear();
         self.latched = false;
         self.read_idx = 0;
@@ -1962,7 +2067,11 @@ impl I2cDevice for GenericI2cDevice {
             return v;
         }
         if self.command_mode {
-            if self.pending.is_some() && self.elapsed_us >= self.ready_at_us {
+            // Readiness is decided at the first byte of a read phase. The
+            // part NACKs a read header before its response is ready, so a
+            // phase that starts early carries no data even if the response
+            // becomes ready while its bytes are clocked.
+            if self.read_idx == 0 && self.pending.is_some() && self.elapsed_us >= self.ready_at_us {
                 self.read_buf = self.pending.take().unwrap();
                 self.read_idx = 0;
             }
@@ -2526,6 +2635,29 @@ fn validate_spec(spec: &I2cSpec) -> Result<()> {
             "behavior.i2c declares more than one of registers / commands / register_file \
              (a device is exactly one shape)"
         ),
+    }
+    if spec.update_msb_on_short_write {
+        if !has_regs || has_cmds || has_file || spec.pointer_bytes == 0 {
+            bail!(
+                "behavior.i2c update_msb_on_short_write requires a pointer-addressed register map"
+            );
+        }
+        let wide_rw = spec
+            .registers
+            .iter()
+            .filter(|r| r.access == I2cAccess::Rw && r.width > 1)
+            .collect::<Vec<_>>();
+        if wide_rw.is_empty()
+            || wide_rw.iter().any(|r| {
+                r.endian != Endian::Be
+                    || r.calendar.is_some()
+                    || r.encode.as_ref().is_some_and(|encode| encode.bcd)
+            })
+        {
+            bail!(
+                "behavior.i2c update_msb_on_short_write requires writable, multi-byte big-endian storage registers"
+            );
+        }
     }
     // `observables` read the byte register file; `updates` drive a wide register.
     if !spec.observables.is_empty() && !has_file {

@@ -1,0 +1,37 @@
+{
+  "target_id": "arvsom",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": false,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 0,
+    "stop_reason": "config_error"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-arvsom-rv64-cpu-smoke",
+  "target_triple": "riscv64imac-unknown-none-elf",
+  "script": "examples/renode-onboarding/arvsom-rv64-cpu-smoke.yaml",
+  "system": "configs/systems/onboarding/arvsom.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T00:40:28Z",
+  "finished_at_utc": "2026-11-06T00:40:36Z",
+  "elapsed_seconds": 9,
+  "elapsed_ms": 8618,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-06T00:40:36.892231Z ERROR labwired_cli::commands::test: Failed to parse Chip Descriptor YAML: missing field `flash` at line 7 column 1",
+  "failure_hint": "Simulation failed. Inspect logs/run_smoke.log and fix the first failing operation only.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 7.836,
+    "build_firmware": 0.497,
+    "run_smoke": 0.268
+  },
+  "stages_ms": {
+    "build_cli": 7836,
+    "build_firmware": 497,
+    "run_smoke": 268
+  }
+}

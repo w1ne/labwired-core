@@ -36,10 +36,46 @@ pub(super) const MOTOR_INVERTER_FAULT_INPUT: crate::sim_input::InputChannel =
         default: None,
     };
 
+/// A continuous load law, not a sampled signed torque. The native shaft
+/// evaluates k * omega * abs(omega) at each integration step.
+pub(super) const MOTOR_QUADRATIC_DRAG_INPUT: crate::sim_input::InputChannel =
+    crate::sim_input::InputChannel {
+        key: std::borrow::Cow::Borrowed("quadratic-drag-nm-per-rad-s2"),
+        label: std::borrow::Cow::Borrowed("Quadratic shaft drag"),
+        unit: std::borrow::Cow::Borrowed("N m/(rad/s)^2"),
+        min: 0.0,
+        max: f64::MAX,
+        default: Some(0.0),
+    };
+
+/// Explicit injection of the existing latched motor fault; zero cannot clear it.
+pub(super) const MOTOR_OVERCURRENT_FAULT_INPUT: crate::sim_input::InputChannel =
+    crate::sim_input::InputChannel {
+        key: std::borrow::Cow::Borrowed("overcurrent_fault"),
+        label: std::borrow::Cow::Borrowed("Latched overcurrent fault"),
+        unit: std::borrow::Cow::Borrowed("boolean"),
+        min: 1.0,
+        max: 1.0,
+        default: None,
+    };
+
+pub(super) const MOTOR_UNDERVOLTAGE_FAULT_INPUT: crate::sim_input::InputChannel =
+    crate::sim_input::InputChannel {
+        key: std::borrow::Cow::Borrowed("undervoltage_fault"),
+        label: std::borrow::Cow::Borrowed("Undervoltage fault"),
+        unit: std::borrow::Cow::Borrowed("boolean"),
+        min: 0.0,
+        max: 1.0,
+        default: None,
+    };
+
 pub(super) fn motor_input_channel(channel: &str) -> Option<crate::sim_input::InputChannel> {
     match channel {
         "stall" => Some(MOTOR_STALL_INPUT),
+        "quadratic-drag-nm-per-rad-s2" => Some(MOTOR_QUADRATIC_DRAG_INPUT),
         "inverter_fault" => Some(MOTOR_INVERTER_FAULT_INPUT),
+        "overcurrent_fault" => Some(MOTOR_OVERCURRENT_FAULT_INPUT),
+        "undervoltage_fault" => Some(MOTOR_UNDERVOLTAGE_FAULT_INPUT),
         _ => None,
     }
 }
@@ -202,6 +238,9 @@ pub(super) struct PwmPhaseCursor {
 /// `MotorSnapshot.kind` for STEP/DIR steppers folded from ObservedDevice.
 /// Keep in sync with the filter in wasm `get_actuator_states`.
 pub const STEPPER_SNAPSHOT_KIND: &str = "stepper";
+/// Snapshot fault of a motor whose driving stage has no usable supply
+/// (`powered: false` on its placement): the stage is off, so it cannot turn.
+pub const UNPOWERED_FAULT: &str = "unpowered";
 
 /// Timing of a circuit-driven shaft. Unknown until the model primes at time zero.
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
@@ -234,6 +273,9 @@ pub struct MotorSnapshot {
     pub control_state: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub coupling: Option<MotorCoupling>,
+    /// Continuous native shaft load coefficient, with explicit SI units.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quadratic_drag_nm_per_rad_s2: Option<f64>,
     pub faults: Vec<String>,
 }
 
@@ -263,6 +305,9 @@ pub(super) enum MotorRuntime {
         /// constants and the plant is advanced from the routed current.
         circuit: Option<CircuitWinding>,
         series: Box<MotorSeries>,
+        /// False when the placement says the stage driving this winding has
+        /// no usable supply (`powered: false`): the enable is held low.
+        powered: bool,
     },
     Bldc {
         id: String,
@@ -614,6 +659,10 @@ impl SystemBus {
             }
             _ => None,
         };
+        // ABSENT MEANS POWERED (components::supply). An explicit false is a
+        // driver with no usable supply: its output stage stays off whatever
+        // the firmware does with the control pins.
+        let powered = c.powered != Some(false);
         Ok(MotorRuntime::Dc {
             pwm: self.resolve_motor_control(&c.id, "pwm", &c.pwm_pin)?,
             steering: self.resolve_dc_steering(&c)?,
@@ -622,6 +671,7 @@ impl SystemBus {
                 None => MotorControlSource::Constant(false),
             },
             enable: match c.enable_pin.as_deref() {
+                _ if !powered => MotorControlSource::Constant(false),
                 Some(p) => self.resolve_motor_control(&c.id, "enable", p)?,
                 None => MotorControlSource::Constant(true),
             },
@@ -654,6 +704,7 @@ impl SystemBus {
             encoder: QuadratureEncoder::new(c.encoder_cpr)?,
             circuit: None,
             series: MotorSeries::new(&c.id),
+            powered,
             id: c.id,
             plant: Box::new(plant),
         })
@@ -706,6 +757,7 @@ impl SystemBus {
             encoder: QuadratureEncoder::new(c.encoder_cpr)?,
             circuit: Some(CircuitWinding::default()),
             series: MotorSeries::new(&c.id),
+            powered: true,
             id: c.id,
             plant: Box::new(plant),
         })
@@ -1086,14 +1138,18 @@ impl SystemBus {
                         *control_state = format!("{state:?}").to_ascii_lowercase();
                         if let Ok(command) = command {
                             let params = plant.params();
-                            for step_s in stable_substeps(
-                                dt_s,
+                            match plant.service_timestep_s(
                                 0.25 * params.inductance_h / params.resistance_ohm,
                             ) {
-                                if let Err(error) = plant.step(command, step_s) {
-                                    series.live_error = Some(error.to_string());
-                                    break;
+                                Ok(max_step_s) => {
+                                    for step_s in stable_substeps(dt_s, max_step_s) {
+                                        if let Err(error) = plant.step(command, step_s) {
+                                            series.live_error = Some(error.to_string());
+                                            break;
+                                        }
+                                    }
                                 }
+                                Err(error) => series.live_error = Some(error.to_string()),
                             }
                         } else if let Err(error) = command {
                             series.live_error = Some(error.to_string());
@@ -1641,6 +1697,7 @@ impl SystemBus {
                     speed_extremes,
                     control_state,
                     circuit,
+                    powered,
                     ..
                 } => {
                     let s = plant.snapshot();
@@ -1669,11 +1726,13 @@ impl SystemBus {
                         commutation_sector: None,
                         control_state: control_state.clone(),
                         coupling: None,
+                        quadratic_drag_nm_per_rad_s2: Some(plant.quadratic_drag_nm_per_rad_s2()),
                         faults: s
                             .faults
                             .stalled
                             .then(|| "stalled".to_owned())
                             .into_iter()
+                            .chain((!powered).then(|| UNPOWERED_FAULT.to_owned()))
                             .collect(),
                     }
                 }
@@ -1747,6 +1806,7 @@ impl SystemBus {
                         },
                         commutation_sector: Some(s.commutation_sector),
                         control_state: control_state.clone(),
+                        quadratic_drag_nm_per_rad_s2: Some(plant.quadratic_drag_nm_per_rad_s2()),
                         coupling: circuit.as_ref().map(|w| MotorCoupling {
                             mode: "interval-start-zero-order-hold",
                             step_ns: w.step_ns,
@@ -1790,7 +1850,12 @@ impl SystemBus {
                     "idle".to_owned()
                 },
                 coupling: None,
-                faults: Vec::new(),
+                quadratic_drag_nm_per_rad_s2: None,
+                faults: if m.is_powered() {
+                    Vec::new()
+                } else {
+                    vec![UNPOWERED_FAULT.to_owned()]
+                },
             });
         }
         // IN1..IN4 unipolar steppers (28BYJ-48 behind a ULN2003) are also
@@ -1823,6 +1888,7 @@ impl SystemBus {
                     "idle".to_owned()
                 },
                 coupling: None,
+                quadratic_drag_nm_per_rad_s2: None,
                 faults: Vec::new(),
             });
         }
@@ -1879,6 +1945,12 @@ impl SystemBus {
         // Validate on a copy: a rejected host request must not consume time or
         // change the old command. The real update follows the prior interval.
         match (&self.motors[index], name) {
+            (MotorRuntime::Dc { plant, .. }, "quadratic-drag-nm-per-rad-s2") => {
+                plant.clone().set_quadratic_drag_nm_per_rad_s2(value)
+            }
+            (MotorRuntime::Bldc { plant, .. }, "quadratic-drag-nm-per-rad-s2") => {
+                plant.clone().set_quadratic_drag_nm_per_rad_s2(value)
+            }
             (MotorRuntime::Dc { plant, .. }, "load-torque-nm") => {
                 plant.clone().set_load_torque_nm(value)
             }
@@ -1896,6 +1968,12 @@ impl SystemBus {
         .map_err(|error| error.to_string())?;
         self.service_motor_models();
         match (&mut self.motors[index], name) {
+            (MotorRuntime::Dc { plant, .. }, "quadratic-drag-nm-per-rad-s2") => {
+                plant.set_quadratic_drag_nm_per_rad_s2(value)
+            }
+            (MotorRuntime::Bldc { plant, .. }, "quadratic-drag-nm-per-rad-s2") => {
+                plant.set_quadratic_drag_nm_per_rad_s2(value)
+            }
             (MotorRuntime::Dc { plant, .. }, "load-torque-nm") => plant.set_load_torque_nm(value),
             (MotorRuntime::Bldc { plant, .. }, "load-torque-nm") => plant.set_load_torque_nm(value),
             (MotorRuntime::Dc { plant, .. }, "supply-voltage-v") => {
@@ -1995,7 +2073,7 @@ impl SystemBus {
 
     /// Count matching virtual motor inputs by component and channel. The
     /// inverter fault exists only on BLDC runtimes; brushed motors still expose
-    /// only mechanical stall. This count is used by BOTH discovery and dispatch.
+    /// mechanical stall and shaft drag. This count is used by BOTH discovery and dispatch.
     pub(super) fn matching_motor_inputs(&self, component: Option<&str>, channel: &str) -> usize {
         if motor_input_channel(channel).is_none() {
             return 0;
@@ -2006,7 +2084,10 @@ impl SystemBus {
                 let id = match motor {
                     MotorRuntime::Dc { id, .. } | MotorRuntime::Bldc { id, .. } => id,
                 };
-                (channel != "inverter_fault" || matches!(motor, MotorRuntime::Bldc { .. }))
+                (!matches!(
+                    channel,
+                    "inverter_fault" | "overcurrent_fault" | "undervoltage_fault"
+                ) || matches!(motor, MotorRuntime::Bldc { .. }))
                     && component.is_none_or(|component| component == id)
             })
             .count()
@@ -2041,13 +2122,19 @@ impl SystemBus {
                     MotorRuntime::Dc { id, .. } | MotorRuntime::Bldc { id, .. } => id,
                 };
                 (component.is_none_or(|component| component == id)
-                    && (channel != "inverter_fault" || matches!(motor, MotorRuntime::Bldc { .. })))
+                    && (!matches!(
+                        channel,
+                        "inverter_fault" | "overcurrent_fault" | "undervoltage_fault"
+                    ) || matches!(motor, MotorRuntime::Bldc { .. })))
                 .then(|| id.clone())
             })
             .expect("exactly one matching motor was counted");
         let result = match channel {
             "stall" => self.set_motor_stalled(&id, value >= 0.5),
+            "quadratic-drag-nm-per-rad-s2" => self.set_motor_named_input(&id, channel, value),
             "inverter_fault" => self.set_motor_named_fault(&id, "inverter", value >= 0.5),
+            "overcurrent_fault" => self.set_motor_named_fault(&id, "overcurrent", true),
+            "undervoltage_fault" => self.set_motor_named_fault(&id, "undervoltage", value >= 0.5),
             _ => unreachable!("motor_input_channel accepted only these channels"),
         };
         result.map_err(|_| SimInputError::NoDevice(format!("{id}/{channel}")))?;
@@ -2250,8 +2337,12 @@ fn service_circuit_winding(
         CIRCUIT_NO_CURRENT.clone_into(control_state);
         return;
     };
+    let Ok(max_step_s) = plant.service_timestep_s(CIRCUIT_WINDING_MAX_STEP_S) else {
+        "circuit:fault".clone_into(control_state);
+        return;
+    };
     CIRCUIT_DRIVEN.clone_into(control_state);
-    for step_s in stable_substeps(dt_s, CIRCUIT_WINDING_MAX_STEP_S) {
+    for step_s in stable_substeps(dt_s, max_step_s) {
         if plant.step_with_winding_current(current_a, step_s).is_err() {
             "circuit:fault".clone_into(control_state);
             break;

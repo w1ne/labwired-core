@@ -21,6 +21,11 @@ pub const UART1_INTR_SOURCE_ID: u32 = 48;
 pub const CPU_CLOCK_HZ: u64 = 240_000_000;
 
 pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<dyn Peripheral>> {
+    if canonical_type == "esp32c5_gpio" {
+        return Some(Box::new(
+            crate::peripherals::esp32c3::gpio::Esp32c3Gpio::for_esp32c5(),
+        ));
+    }
     if canonical_type != "esp32c5_uart" {
         return None;
     }
@@ -49,7 +54,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
     ))
 }
 
-pub const SUPPORTED_TYPES: &[&str] = &["esp32c5_uart"];
+pub const SUPPORTED_TYPES: &[&str] = &["esp32c5_gpio", "esp32c5_uart"];
 
 #[cfg(test)]
 mod tests {

@@ -29,7 +29,48 @@ if (!existsSync(pkgPath)) {
   console.error(`[lab-tools] ${pkgPath} missing — run wasm-pack build --target nodejs --dev --out-dir pkg in crates/wasm first.`);
   process.exit(1);
 }
-const { WasmSimulator } = await import(pkgPath);
+const { WasmSimulator, WasmWorld } = await import(pkgPath);
+
+// World snapshots retain typed root/CPU objects and sorted peripheral Maps.
+// An idle STM32 RTC has rsf_due=u64::MAX; preserve its exact value as text.
+{
+  const environment = `schema_version: "1.0"
+name: world-snapshot
+nodes:
+  - id: mcu
+    system: resolved.yaml
+    firmware: resolved.elf
+interconnects: []
+`;
+  const world = WasmWorld.new_from_resolved(environment, [{
+    id: 'mcu',
+    chip_yaml: readFileSync(resolve(repoRoot, 'configs/chips/stm32f103.yaml'), 'utf8'),
+    system_yaml: readFileSync(resolve(repoRoot, 'examples/nrf52840-obd2-scanner/ecu/system.yaml'), 'utf8'),
+    firmware: Array.from(readFileSync(resolve(repoRoot, 'tests/fixtures/stm32f103-blinky.elf'))),
+  }]);
+  try {
+    const snapshot = world.node_snapshot('mcu');
+    assert.equal(snapshot.schema_version, 1);
+    assert.equal(snapshot.cpu.type, 'arm');
+    assert.equal(snapshot.cpu.pc, world.get_pc('mcu'));
+    assert.equal(snapshot.cpu.pending_exceptions, 0);
+    assert.ok(snapshot.peripherals instanceof Map, 'peripheral maps keep their existing JS shape');
+    const keys = [...snapshot.peripherals.keys()];
+    assert.deepEqual(keys, [...keys].sort(), 'peripheral key ordering remains deterministic');
+    const rtc = snapshot.peripherals.get('rtc');
+    assert.ok(rtc instanceof Map, 'nested peripheral JSON objects remain Maps');
+    assert.equal(rtc.get('rsf_due'), '18446744073709551615');
+    assert.equal(rtc.get('anchor_cycle'), 0, 'safe integers stay numbers');
+    assert.equal(rtc.get('running'), false);
+    assert.equal(world.total_cycles('mcu'), 0n, 'reading a snapshot does not run the machine');
+    assert.deepEqual(world.node_snapshot('mcu'), snapshot, 'normalization does not mutate live state');
+    assert.throws(() => world.node_snapshot('missing'), /unknown world node 'missing'/);
+    assert.deepEqual(world.node_snapshot('mcu'), snapshot, 'an error leaves the World usable');
+    console.log('[lab-tools] World snapshot: exact RTC sentinel, numeric safe values, stable objects and Maps');
+  } finally {
+    world.free();
+  }
+}
 
 const systemYaml = readFileSync(resolve(repoRoot, 'examples/nrf54l15-smart-ring/system.yaml'), 'utf8');
 const chipYaml = readFileSync(resolve(repoRoot, 'configs/chips/nrf54l15.yaml'), 'utf8');

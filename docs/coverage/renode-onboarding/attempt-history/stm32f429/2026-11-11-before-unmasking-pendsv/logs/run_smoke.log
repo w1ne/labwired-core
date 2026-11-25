@@ -1,0 +1,7 @@
+2026-11-11T21:41:28.437707Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f429.yaml
+2026-11-11T21:41:28.439571Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-11T21:41:28.604329Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok" }) (captured len=131)
+2026-11-11T21:41:28.604354Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "STM32F429 PSP tailchain PASS" }) (captured len=131)
+FAIL  3/5 checks · stm32f429-smoke · 800000 steps · 0.16s

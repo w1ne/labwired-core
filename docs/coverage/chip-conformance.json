@@ -10,6 +10,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "esp32c2",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "esp32c6",
     "reg_match": 0
   },
@@ -626,6 +633,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "stm32h533re",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "stm32u575",
     "reg_match": 0
   },
@@ -669,6 +683,13 @@
     "excluded": 0,
     "level": 0,
     "name": "stm32l432kc",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32l031k6",
     "reg_match": 0
   },
   {
@@ -735,9 +756,9 @@
     "reg_match": 0
   },
   {
-    "behavior": false,
+    "behavior": true,
     "excluded": 0,
-    "level": 0,
+    "level": 1,
     "name": "atmega4809",
     "reg_match": 0
   },
@@ -781,6 +802,13 @@
     "excluded": 0,
     "level": 0,
     "name": "atsamd51-pybadge",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "mspm0g3507",
     "reg_match": 0
   },
   {
@@ -1008,6 +1036,13 @@
     "reg_match": 0
   },
   {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "esp32s2-arduino",
+    "reg_match": 0
+  },
+  {
     "behavior": false,
     "excluded": 0,
     "level": 0,
@@ -1026,6 +1061,13 @@
     "excluded": 0,
     "level": 0,
     "name": "stm32h723zg",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32h753zi",
     "reg_match": 0
   },
   {

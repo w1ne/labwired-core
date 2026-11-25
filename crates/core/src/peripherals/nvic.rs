@@ -22,14 +22,14 @@ pub struct NvicState {
     pub ispr: [AtomicU32; 8],
     pub iabr: [AtomicU32; 8],
     pub ipr: [AtomicU32; 240], // Priority registers (simplified)
-    /// Which ISPR bits were set by a LEVEL source (a peripheral whose
-    /// `irq_line_level()` is `Some(..)`), so the bus can drop them again
-    /// when that line deasserts. On silicon a level-sensitive interrupt's
-    /// pending state follows the line: firmware that clears the status flag
-    /// inside the handler must not be re-entered for the same event. Bits
-    /// set by a software ISPR write are NOT marked here and are never
-    /// auto-cleared — a software pend of a low line is taken once, as on
-    /// hardware.
+    /// Which ISPR bits were set by an asserted LEVEL source (a peripheral
+    /// whose `irq_line_level()` is `Some(..)`). The bus drops them when that
+    /// line deasserts; clearing a still-asserted source through ICPR immediately
+    /// re-pends it. On silicon a level-sensitive interrupt's pending state
+    /// follows the line: firmware that clears the status flag inside the
+    /// handler must not be re-entered for the same event. Bits set by a
+    /// software ISPR write are NOT marked here and are never auto-cleared — a
+    /// software pend of a low line is taken once, as on hardware.
     pub level_pended: [AtomicU32; 8],
 }
 
@@ -41,15 +41,17 @@ impl NvicState {
         }
     }
 
-    /// Clear pending bits, then restore those whose level source is still asserted.
+    /// Clear pending bits, then immediately restore any bit whose level source
+    /// remains asserted. The `level_pended` marker is cleared separately when
+    /// the bus observes that source deasserting.
     pub fn clear_pending(&self, word: usize, mask: u32) {
         if word >= self.ispr.len() {
             return;
         }
         self.ispr[word].fetch_and(!mask, Ordering::SeqCst);
-        let asserted = self.level_pended[word].load(Ordering::SeqCst) & mask;
-        if asserted != 0 {
-            self.pend(word, asserted);
+        let active_levels = self.level_pended[word].load(Ordering::SeqCst) & mask;
+        if active_levels != 0 {
+            self.pend(word, active_levels);
         }
     }
 
@@ -111,7 +113,8 @@ impl Nvic {
             let idx = ((irq - 16) / 32) as usize;
             let bit = (irq - 16) % 32;
             if idx < 8 {
-                // Clear pending, set active
+                // Clear pending, set active. Entry does not re-pend a level
+                // source; see `SystemBus::clear_nvic_pending`.
                 self.state.ispr[idx].fetch_and(!(1 << bit), Ordering::SeqCst);
                 self.state.iabr[idx].fetch_or(1 << bit, Ordering::SeqCst);
             }
@@ -151,13 +154,25 @@ impl Peripheral for Nvic {
         let reg_idx = (offset / 4) as usize;
         let byte_offset = (offset % 4) as usize;
 
+        // ISER and ICER share a read view, as do ISPR and ICPR: a read of the
+        // clear-enable / clear-pending register returns the current enable /
+        // pending mask (ARMv7-M ARM DDI 0403E, B3.4.3). Firmware that saves
+        // the enable state from ICER, writes a mask, then restores through
+        // ISER (FreeRTOS tickless idle) depends on this. A read-as-zero ICER
+        // made that save 0, so the restore never re-enabled IRQ 17.
         let val = if offset < 0x20 {
             // ISER0-7
             self.state.iser[reg_idx].load(Ordering::SeqCst)
+        } else if (0x80..0xA0).contains(&offset) {
+            // ICER0-7: same read value as ISER
+            self.state.iser[((offset - 0x80) / 4) as usize].load(Ordering::SeqCst)
         } else if (0x100..0x120).contains(&offset) {
             // ISPR0-7
             let real_idx = (offset - 0x100) / 4;
             self.state.ispr[real_idx as usize].load(Ordering::SeqCst)
+        } else if (0x180..0x1A0).contains(&offset) {
+            // ICPR0-7: same read value as ISPR
+            self.state.ispr[((offset - 0x180) / 4) as usize].load(Ordering::SeqCst)
         } else if (0x200..0x220).contains(&offset) {
             // IABR0-7
             let real_idx = (offset - 0x200) / 4;
@@ -203,7 +218,8 @@ impl Peripheral for Nvic {
             let real_idx = reg_idx - 0x100 / 4;
             self.state.pend(real_idx, mask);
         } else if (0x180..0x1A0).contains(&offset) {
-            // ICPR clears pending; an asserted level source immediately re-pends.
+            // ICPR: Writing 1 clears edge/software pending bits. An asserted
+            // level source immediately re-pends, as it does on the NVIC.
             let real_idx = reg_idx - 0x180 / 4;
             self.state.clear_pending(real_idx, mask);
         } else if (0x300..0x6BC).contains(&offset) {
@@ -251,7 +267,7 @@ impl Peripheral for Nvic {
 }
 
 #[cfg(test)]
-mod level_repend_tests {
+mod tests {
     use super::*;
 
     #[test]
@@ -261,17 +277,93 @@ mod level_repend_tests {
         let mask = 1 << 6;
         state.pend(0, mask);
         state.level_pended[0].store(mask, Ordering::SeqCst);
+
         nvic.write(0x180, mask as u8).unwrap();
+
         assert_eq!(state.ispr[0].load(Ordering::SeqCst) & mask, mask);
+        assert_eq!(state.level_pended[0].load(Ordering::SeqCst) & mask, mask);
+    }
+
+    /// Exception entry clears pending even while the level source is still
+    /// asserted: the handler has not cleared the flag yet. Re-pending here
+    /// re-entered a USART RX handler 102,067 times in the uart-chain world.
+    #[test]
+    fn entry_clears_pending_of_an_asserted_level_source() {
+        let state = Arc::new(NvicState::default());
+        let nvic = Nvic::new(Arc::clone(&state));
+        let mask = 1 << 5;
+        state.pend(0, mask);
+        state.level_pended[0].store(mask, Ordering::SeqCst);
+
+        nvic.acknowledge_interrupt(16 + 5);
+
+        assert_eq!(state.ispr[0].load(Ordering::SeqCst) & mask, 0);
+        assert_eq!(state.iabr[0].load(Ordering::SeqCst) & mask, mask);
     }
 
     #[test]
-    fn icpr_clears_software_pending_without_a_level_source() {
+    fn icpr_still_clears_software_pending_bits() {
         let state = Arc::new(NvicState::default());
         let mut nvic = Nvic::new(Arc::clone(&state));
         let mask = 1 << 7;
         state.pend(0, mask);
+
         nvic.write(0x180, mask as u8).unwrap();
+
         assert_eq!(state.ispr[0].load(Ordering::SeqCst) & mask, 0);
+        assert_eq!(state.level_pended[0].load(Ordering::SeqCst) & mask, 0);
+    }
+
+    #[test]
+    fn writing_iser_sets_irq_17_and_icer_reads_the_same_mask() {
+        let state = Arc::new(NvicState::default());
+        let mut nvic = Nvic::new(Arc::clone(&state));
+        let irq17 = 1u32 << 17;
+        nvic.write_u32(0, irq17).unwrap();
+        assert_eq!(nvic.read_u32(0).unwrap(), irq17);
+        assert_eq!(
+            nvic.read_u32(0x80).unwrap(),
+            irq17,
+            "ICER must read back the enable state, not zero"
+        );
+    }
+
+    #[test]
+    fn icer_write_clears_irq_17_after_a_save_of_its_read_value() {
+        // The FreeRTOS tickless-idle sequence: load ICER, AND with a mask,
+        // store the mask to ICER (disabling those bits), then later restore
+        // the saved bits through ISER.
+        let state = Arc::new(NvicState::default());
+        let mut nvic = Nvic::new(Arc::clone(&state));
+        let irq17 = 1u32 << 17;
+        let irq0 = 1u32;
+        nvic.write_u32(0, irq17 | irq0).unwrap();
+        let mask = 0xBDFF_06FC;
+        let saved = nvic.read_u32(0x80).unwrap() & mask;
+        assert_eq!(saved, irq17, "IRQ 17 is in the mask and must be saved");
+        nvic.write_u32(0x80, mask).unwrap();
+        assert_eq!(
+            nvic.read_u32(0).unwrap() & irq17,
+            0,
+            "ICER write must clear IRQ 17"
+        );
+        assert_eq!(
+            nvic.read_u32(0).unwrap() & irq0,
+            irq0,
+            "IRQ 0 is outside the mask"
+        );
+        nvic.write_u32(0, saved).unwrap();
+        assert_eq!(nvic.read_u32(0).unwrap() & irq17, irq17);
+        assert_eq!(nvic.read_u32(0).unwrap() & irq0, irq0);
+    }
+
+    #[test]
+    fn icpr_reads_back_the_pending_mask() {
+        let state = Arc::new(NvicState::default());
+        let nvic = Nvic::new(Arc::clone(&state));
+        let irq17 = 1u32 << 17;
+        state.pend(0, irq17);
+        assert_eq!(nvic.read_u32(0x100).unwrap(), irq17);
+        assert_eq!(nvic.read_u32(0x180).unwrap(), irq17);
     }
 }

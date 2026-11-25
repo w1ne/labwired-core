@@ -1,0 +1,28 @@
+# Negative control for test-overtemp-alarm.yaml: the ambient rises to 39.9 °C,
+# just below the 40.0 °C threshold. Calculated before the first run: SNS_AN1
+# settles at 1.215343 V, the firmware reads 1215 mV and 39.9 °C, and the
+# indicator stays off with no edge on either LED signal.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: sensor_v }, { port: user_led_drive }] }
+  - set: { port: ambient_c, value: 26 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 36 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 39.9 }
+  - call: { export: loop }
+limits:
+  max_steps: 1000000
+  max_time_ns: 1000000000
+assertions:
+  - entry_result: { equals: 103990 }
+  # 40.0 °C would read 1212 mV; the node never falls that far.
+  - analog_crossings: { port: sensor_v, level: 1.2127, direction: falling, count: 0 }
+  - analog_window: { port: sensor_v, min: 1.21534, max: 1.65001 }
+  - digital_edges: { port: user_led_drive, count: 0 }
+  - digital_edges: { port: user_led_state, count: 0 }
+  - final_time_ns: { equals: 300000000 }
+  - console_contains: "T=26.0 C mV=1618\nT=36.0 C mV=1321\nT=39.9 C mV=1215\n"

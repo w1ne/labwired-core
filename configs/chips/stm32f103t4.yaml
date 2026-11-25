@@ -57,6 +57,19 @@ gpio_pin_count: 26
 adc_channels: 10
 variant: "x4"
 orderable_suffixes: ["U6", "U6TR", "U6A", "U6ATR", "U7", "U7TR", "U7A", "U7ATR"]
+# GPIO pad output resistance, ohms: a driven pad is VDD (or 0 V) behind it.
+# DocID15060 Rev 7 (STM32F103x4/x6), section 5.3.13, Table 36 "Output voltage
+# characteristics", CMOS port, 2.7 V < VDD < 3.6 V: VOH min VDD - 0.4 V and VOL
+# max 0.4 V at IIO = 8 mA (8 pins at once). (VDD - VOH) / IIO = 0.4 V / 8 mA =
+# 50 ohm, both sides. Guaranteed limits, so a typical pad is stiffer. Read by
+# the diagram compiler, which places it as the pad driver's on-resistance in
+# the analog netlist.
+gpio_output_ohms: 50
+# Absolute maximum current sunk or sourced by any I/O and control pin, mA.
+# DocID15060 Rev 7, Table 7 "Current characteristics": IIO 25 (sunk) and -25
+# (sourced). A run reports a pad whose simulated current went past it; the
+# simulation does not stop or clamp it.
+gpio_abs_max_ma: 25
 
 flash:
   base: 0x08000000
@@ -277,6 +290,7 @@ peripherals:
     size: "1KB"
     config:
       debug_schema: "../peripherals/stm32f103/pwr.yaml"
+      profile: stm32f1  # PWR_CR/PWR_CSR reset 0; DBP gates BKP
   - id: "iwdg"
     type: "iwdg"
     base_address: 0x40003000
@@ -293,8 +307,10 @@ peripherals:
     type: "rtc_f1"
     base_address: 0x40002800
     size: "1KB"
+    irq: 3  # RTC global (SECF/ALRF/OWF)
     config:
       debug_schema: "../peripherals/stm32f103/rtc.yaml"
+      alarm_irq: 41  # RTC_Alarm via EXTI line 17
   - id: "crc"
     type: "crc"
     base_address: 0x40023000
@@ -319,10 +335,17 @@ peripherals:
     size: "1KB"
     config:
       debug_schema: "../peripherals/stm32f103/usb.yaml"
+  # BKP backup registers (RM0008 §6): DR1..DR10 survive a system reset and
+  # are write-protected until PWR_CR.DBP is set. Low/medium density = 10 DRs.
+  # No debug_schema: ST's SVD starts the block at DR1 (0x40006C04).
   - id: "bkp"
-    type: "stub"
+    type: "bkp_f1"
     base_address: 0x40006C00
     size: "1KB"
+    # RCC_APB1ENR.BKPEN (bit 27), RM0008 §7.3.8. Unclocked out of reset.
+    clock: { reg: "apb1enr", bit: 27 }
+    config:
+      data_registers: 10
   # Timers & ADC — modelled (the timer model is width-configurable, 16-bit =
   # F1 general-purpose layout; the ADC model defaults to its Stm32F1 layout).
   # Reset values silicon-confirmed on STM32F103 over SWD: TIM2 ARR=0xFFFF,
@@ -332,10 +355,15 @@ peripherals:
     type: "timer"
     base_address: 0x40012C00
     size: "1KB"
+    # TIM1_UP_IRQn = 25, TIM1_CC_IRQn = 27 (stm32f103xb.h).
+    # BRK (24) and TRG/COM (26) route BIF and TIF/COMIF.
     irq: 25
     # RCC_APB2ENR.TIM1EN (bit 11), RM0008 §7.3.7. Unclocked out of reset.
     clock: { reg: "apb2enr", bit: 11 }
     config:
+      capture_compare_irq: 27
+      trigger_com_irq: 26
+      break_irq: 24
       debug_schema: "../peripherals/stm32f103/tim1.yaml"
       advanced: true
   - id: "tim2"
@@ -381,6 +409,8 @@ peripherals:
     type: "adc"
     base_address: 0x40012800
     size: "1KB"
+    # ADC1_2_IRQn = 18 (stm32f103xb.h), shared with ADC1.
+    irq: 18
     # RCC_APB2ENR.ADC2EN (bit 10), RM0008 §7.3.7. Unclocked out of reset.
     clock: { reg: "apb2enr", bit: 10 }
     config:

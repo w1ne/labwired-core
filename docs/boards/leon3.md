@@ -23,7 +23,7 @@
 | `apbController` | `0x800ff000` | `gaislerapbcontroller` |
 | `esaMemController` | `0x80000000` | `esamemorycontroller` |
 | `uart` | `0x80000100` | `gaislerapbuart` |
-| `timer` | `0x80000300` | `gaisler_gptimer` |
+| `timer` | `0x80000300` | `stub` |
 | `eth` | `0x80000b00` | `gaislereth` |
 | `gpio` | `0x80000800` | `gaisler_gpio` |
 | `phy` | `0x00000000` | `ethernetphysicallayer` |

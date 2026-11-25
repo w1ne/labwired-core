@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 11316915,
-  "cycles": 11316915,
-  "instructions": 11316915,
+  "steps_executed": 11330000,
+  "cycles": 11330000,
+  "instructions": 11330000,
   "stop_reason": "assertions_passed",
   "stop_reason_details": {
     "triggered_stop_condition": "assertions_passed",
@@ -45,11 +45,11 @@
       0,
       0,
       0,
-      536883184,
+      536883192,
       134239541,
-      134239904
+      134239532
     ],
-    "pc": 134239904,
+    "pc": 134239532,
     "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
@@ -64,9 +64,9 @@
   },
   "firmware_hash": "1a5e6e33e15609899de6126586b822fe89bca2dcb9e41c41021c760985aa2c48",
   "config": {
-    "firmware": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L3_i2c_sensor/firmware.elf",
-    "system": "/home/andrii/worktrees/labwired-core-c031/validation/arduino-matrix/systems/stm32c031c6.yaml",
-    "script": "/home/andrii/worktrees/labwired-core-c031/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L3_i2c_sensor/test.yaml"
+    "firmware": "/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L3_i2c_sensor/firmware.elf",
+    "system": "/data/worktrees/legacy-migrated/labwired-hw-onboarding/validation/arduino-matrix/systems/stm32c031c6.yaml",
+    "script": "/data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/nucleo-c031c6/evidence/arduino-matrix/stm32c031c6/L3_i2c_sensor/test.yaml"
   },
   "inspect": {
     "peripherals": [
@@ -302,6 +302,13 @@
         "artifacts": []
       },
       {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "dwt",
         "kind": "native",
         "base": 3758100480,
@@ -382,19 +389,22 @@
     "lines": [
       {
         "text": "LW_L3_BOOT",
-        "cycle_lo": 51398,
-        "cycle": 51399,
-        "end_cycle": 52822
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
       },
       {
         "text": "LW_L3_OK",
-        "cycle_lo": 11315340,
-        "cycle": 11315341,
-        "end_cycle": 11316600
+        "cycle_lo": 11310000,
+        "cycle": 11320000,
+        "end_cycle": 11320000
       }
     ],
     "dropped_lines": 0
   },
+  "i2c_addresses": [
+    64
+  ],
   "footprint": {
     "method": "elf_section_totals_v1",
     "text_bytes": 25512,
@@ -427,77 +437,77 @@
     "heap_top": 536883200
   },
   "metrics": {
-    "cycles": 11316915,
-    "instructions": 11316915,
-    "steps_executed": 11316915,
-    "memory_reads": 3515615,
-    "memory_writes": 1150524,
-    "peripheral_accesses": 1657,
+    "cycles": 11330000,
+    "instructions": 11330000,
+    "steps_executed": 11330000,
+    "memory_reads": 3497241,
+    "memory_writes": 1142056,
+    "peripheral_accesses": 1641,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134236490,
-        "count": 1499
+        "pc": 134236498,
+        "count": 3747
       },
       {
-        "pc": 134236570,
-        "count": 1481
-      },
-      {
-        "pc": 134236596,
-        "count": 1472
-      },
-      {
-        "pc": 134236572,
-        "count": 1470
-      },
-      {
-        "pc": 134236582,
-        "count": 1469
-      },
-      {
-        "pc": 134236578,
-        "count": 1464
-      },
-      {
-        "pc": 134236484,
-        "count": 1457
-      },
-      {
-        "pc": 134236574,
-        "count": 1457
+        "pc": 134236562,
+        "count": 3715
       },
       {
         "pc": 134236568,
-        "count": 1454
+        "count": 3359
       },
       {
-        "pc": 134236580,
-        "count": 1453
-      },
-      {
-        "pc": 134236586,
-        "count": 1450
-      },
-      {
-        "pc": 134236588,
-        "count": 1450
-      },
-      {
-        "pc": 134236558,
-        "count": 1449
-      },
-      {
-        "pc": 134236494,
-        "count": 1448
-      },
-      {
-        "pc": 134236488,
-        "count": 1447
+        "pc": 134236574,
+        "count": 3320
       },
       {
         "pc": 134236492,
-        "count": 1447
+        "count": 3319
+      },
+      {
+        "pc": 134236486,
+        "count": 2850
+      },
+      {
+        "pc": 134236580,
+        "count": 2655
+      },
+      {
+        "pc": 134236596,
+        "count": 2304
+      },
+      {
+        "pc": 134236586,
+        "count": 2188
+      },
+      {
+        "pc": 134236590,
+        "count": 1640
+      },
+      {
+        "pc": 134236584,
+        "count": 1563
+      },
+      {
+        "pc": 134236592,
+        "count": 1449
+      },
+      {
+        "pc": 134236482,
+        "count": 1171
+      },
+      {
+        "pc": 134236578,
+        "count": 900
+      },
+      {
+        "pc": 134236572,
+        "count": 743
+      },
+      {
+        "pc": 134236496,
+        "count": 742
       }
     ]
   }

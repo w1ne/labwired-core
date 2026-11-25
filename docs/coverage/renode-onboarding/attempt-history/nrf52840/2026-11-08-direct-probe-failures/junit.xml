@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="1" errors="0" time="0.604466">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="b4637f39977cdfa85ee772d67d8a8bfd38a4817e5355390b511abbdbc9d090b9"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.604466">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: NRF52840 PASS" time="0.000000">
+    <failure message="assertion failed">assertion 1: uart_contains: NRF52840 PASS
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=400000
+stop_reason_details.observed.steps_executed=400000
+steps_executed=400000
+cycles=400000
+instructions=400000
+limits:
+  - max_steps=400000
+firmware_hash=b4637f39977cdfa85ee772d67d8a8bfd38a4817e5355390b511abbdbc9d090b9
+firmware=/home/andrii/worktrees/labwired-core/renode/target/thumbv7em-none-eabi/release/firmware-nrf52840-renode-smoke
+system=/home/andrii/worktrees/labwired-core/renode/configs/systems/onboarding/nrf52840.yaml
+script=/tmp/nrfsmoke/probe.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;NRF52840 PASS&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

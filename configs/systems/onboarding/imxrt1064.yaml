@@ -6,3 +6,11 @@
 
 name: imxrt1064
 chip: ../../chips/onboarding/imxrt1064.yaml
+# Bare-platform smoke fixture: a 25% potentiometer drives ADC1 channel 0.
+# It is external test equipment, not a component on an EVK board.
+external_devices:
+  - id: "adc1_pot"
+    type: "potentiometer"
+    connection: "adc"
+    config:
+      channel: 0

@@ -22,6 +22,18 @@ arch: "riscv"
 core: "rv32ec"
 cpu_hz: 48_000_000
 
+# GPIO supply and digital input thresholds, so a co-simulation circuit voltage
+# becomes the level the firmware reads. WCH CH32V003 datasheet
+# (CH32V003DS0 V1.8), Table 3-16 "General I/O static characteristics", VDD
+# 2.7-5.5 V, standard and FT pads alike:
+#   VIL(max) = 0.19*(VDD - 2.7) + 0.65 V = 0.19*VDD + 0.137 V
+#   VIH(min) = 0.22*(VDD - 2.7) + 1.55 V = 0.22*VDD + 0.956 V
+# These are the guaranteed limits, not the 150 mV typical Schmitt hysteresis.
+# The nominal rail is 3.3 V (0.764 V / 1.682 V); a routed VDD replaces it at
+# each model boundary (5.0 V gives 1.087 V / 2.056 V).
+io_voltage_v: 3.3
+gpio_input_thresholds: { vil: 0.19, vih: 0.22, vil_offset_v: 0.137, vih_offset_v: 0.956 }
+
 # WCH's flash view at 0x08000000 is also aliased at address 0 for reset fetch.
 flash:
   base: 0x08000000
@@ -54,6 +66,18 @@ pins:
   PD5: { gpio: "gpiod", bit: 5 }
   PD6: { gpio: "gpiod", bit: 6 }
   PD7: { gpio: "gpiod", bit: 7 }
+
+# ADC pads (ch32v00x.h ADC_Channel): the variant's analog-capable pins.
+# `set_analog_pad_mv` and cosim `analog_pins:` routes drive these channels.
+analog_pins:
+  PA2: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }
+  PC4: { peripheral: "adc1", channel: 2 }
+  PD2: { peripheral: "adc1", channel: 3 }
+  PD3: { peripheral: "adc1", channel: 4 }
+  PD5: { peripheral: "adc1", channel: 5 }
+  PD6: { peripheral: "adc1", channel: 6 }
+  PD4: { peripheral: "adc1", channel: 7 }
 
 peripherals:
   - id: "rcc"
@@ -90,10 +114,84 @@ peripherals:
   # USART1 (ch32v00x.h): USART1_BASE = APB2PERIPH_BASE + 0x3800, RCC_USART1EN =
   # APB2PCENR bit 14. USART_TypeDef is STATR, DATAR, BRR, CTLR1, CTLR2, CTLR3,
   # GPR at 4-byte strides, the same layout as the STM32F1 USART, so the default
-  # `stm32f1` UART layout serves it. No `irq`: the PFIC is not modelled, so
-  # USART1_IRQn (32) has no controller to reach. TX is polled only.
+  # `stm32f1` UART layout serves it. With CTLR1.RXNEIE/TXEIE set the UART
+  # pends USART1_IRQn (32, ch32v00x.h) in the PFIC.
   - id: "usart1"
     type: "uart"
     base_address: 0x40013800
     size: "1KB"
     clock: { reg: "apb2pcenr", bit: 14 }
+    irq: 32
+
+  # AFIO (ch32v00x.h): AFIO_BASE = APB2PERIPH_BASE + 0x0000, RCC_AFIOEN =
+  # APB2PCENR bit 0. AFIO_TypeDef is RESERVED0, PCFR1, EXTICR; EXTICR holds a
+  # 2-bit port select per EXTI line 0..7 (GPIO_EXTILineConfig), profile
+  # `wch_v00x`.
+  - id: "afio"
+    type: "afio"
+    base_address: 0x40010000
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 0 }
+    config:
+      profile: "wch_v00x"
+
+  # EXTI (ch32v00x.h): EXTI_BASE = APB2PERIPH_BASE + 0x0400. EXTI_TypeDef is
+  # INTENR, EVENR, RTENR, FTENR, SWIEVR, INTFR, the STM32F1 EXTI register
+  # file. Lines 0..7 are GPIO, 8 is PVD, 9 is AWU (ch32v00x_exti.h). A pending
+  # unmasked GPIO line pends EXTI7_0_IRQn (20) in the PFIC; PVD and AWU
+  # vectors are not wired.
+  - id: "exti"
+    type: "exti"
+    base_address: 0x40010400
+    size: "1KB"
+    config:
+      profile: "wch_v00x"
+      lines: 10
+
+  # ADC1 (ch32v00x.h): ADC1_BASE = APB2PERIPH_BASE + 0x2400, RCC_ADC1EN =
+  # APB2PCENR bit 9. ADC_TypeDef is STATR, CTLR1, CTLR2, SAMPTR1/2, IOFR1-4,
+  # WDHTR, WDLTR, RSQR1-3, ISQR, IDATAR1-4, RDATAR at the STM32F1 offsets
+  # (CTLR2.ADON bit 0, SWSTART bit 22, STATR.EOC bit 1), plus DLYR at 0x50,
+  # which is not modelled. The SAR is 10 bits (variant ADC_RESOLUTION 10),
+  # profile `wch_v00x`. Pads: PA2 IN0, PA1 IN1, PC4 IN2, PD2 IN3, PD3 IN4,
+  # PD5 IN5, PD6 IN6, PD4 IN7. IN8 (V_REFINT) and IN9 (V_cal) are internal
+  # and not modelled, and IN10..IN18 do not exist on this part. ADC_IRQn = 29.
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012400
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 9 }
+    irq: 29
+    config:
+      profile: "wch_v00x"
+
+  # QingKe V2 system timer STK (core_riscv.h): SysTick_Type at 0xE000F000 is
+  # CTLR, SR, CNT, reserved, CMP. The vendor noneos-sdk `Delay_Us`/`Delay_Ms`
+  # poll SR.CNTIF. The STK is a core block (no RCC gate). With CTLR.STIE set a
+  # compare match pends SysTick_IRQn (12, ch32v00x.h) in the core-decoded PFIC
+  # at 0xE000E000.
+  - id: "stk"
+    type: "qingke_stk"
+    base_address: 0xE000F000
+    size: "32B"
+    irq: 12
+
+  # FLASH interface (ch32v00x.h): FLASH_R_BASE = AHBPERIPH_BASE + 0x2000.
+  # FLASH_TypeDef starts ACTLR, KEYR, OBKEYR, STATR, CTLR, ADDR, as the STM32F1
+  # FLASH block; `SystemInit` sets the ACTLR wait state. Programming beyond
+  # that layout (MODEKEYR fast mode) is not modelled.
+  - id: "flash_ctrl"
+    type: "flash"
+    base_address: 0x40022000
+    size: "1KB"
+    config:
+      profile: "stm32f1"
+
+  # VENDOR_CFG0 (ch32v00x.h, 0x1FFFF7D4): `SystemInit` reads its low byte as
+  # an HSI trim and applies it unless it reads 0xFF. A `stub` reads zero, so
+  # SystemInit writes HSITRIM = 0; the model does not derive the HSI rate
+  # from HSITRIM, so that write has no effect on timing.
+  - id: "vendor_cfg0"
+    type: "stub"
+    base_address: 0x1FFFF7D4
+    size: "4B"

@@ -86,6 +86,7 @@ fn two_potentiometers_are_individually_addressable() {
     let chip_path = root("configs/chips/stm32f103.yaml");
     let chip = ChipDescriptor::from_file(&chip_path).expect("load chip descriptor");
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
@@ -203,6 +204,7 @@ fn c3_gp2y0a21_attaches_and_distance_drives_apb_saradc() {
     let mut config = std::collections::HashMap::new();
     config.insert("channel".to_string(), serde_yaml::Value::from(1u64));
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
@@ -237,19 +239,20 @@ fn c3_gp2y0a21_attaches_and_distance_drives_apb_saradc() {
         "distance channel missing: {inputs:?}"
     );
 
-    // 100 mm → datasheet 3100 mV → ~3847 counts on 12-bit / 3.3 V.
+    // 100 mm → Sharp typical 2300 mV → 2854 counts on 12-bit / 3.3 V.
     bus.set_input(Some("vlA"), "distance", 100.0)
         .expect("set near");
     let near = adc_channel_count(&mut bus, "apb_saradc", 1);
-    assert!(
-        near > 3500,
-        "near distance should be high counts, got {near}"
+    assert_eq!(
+        near,
+        (2300u32 * 4095 / 3300) as u16,
+        "10 cm should use the datasheet typical point"
     );
 
     bus.set_input(Some("vlA"), "distance", 800.0)
         .expect("set far");
     let far = adc_channel_count(&mut bus, "apb_saradc", 1);
-    assert!(far < 1000, "far distance should be low counts, got {far}");
+    assert_eq!(far, (400u32 * 4095 / 3300) as u16);
     assert!(near > far, "near={near} must exceed far={far}");
 }
 
@@ -263,6 +266,7 @@ fn lipo_charger_inputs_reach_the_attached_adc_channel() {
     let mut config = std::collections::HashMap::new();
     config.insert("channel".to_string(), serde_yaml::Value::from(2u64));
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         cosim_models: Vec::new(),
         motor_models: Vec::new(),

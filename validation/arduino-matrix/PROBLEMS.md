@@ -37,7 +37,8 @@ Full matrix: **16 boards × 9 sketches (L0–L8) = 144 cells** — report as
 | G474 PWM | ~~PA5 DAC fault~~ | **Fixed** — L6 uses PA0 (TIM2), not LED/DAC |
 | ESP32-S3 ADC | ~~L5 skip~~ | **Fixed** — `sar_adc_s3` programmatic model + chip yaml; `analogRead` green |
 | WBA ADC | L5 skip | ADC4 undeclared (SmartRun AHB4 clock domain not in stm32v2 RCC) |
-| CAN (no-controller chips) | L8 skip | Honest: nRF/RP2040/AVR/L0/F401/G474/WB/WBA/C3 (C3 TWAI declarative-only) |
+| CAN (no-controller chips) | L8 skip | Honest: nRF/RP2040/AVR/L0/F401/WB/WBA/C3 (C3 TWAI declarative-only) |
+| G474 FDCAN | ~~L8 skip~~ | **Fixed** 2026-11-16 — FDCAN1 on the shared `fdcan` model + SRAMCAN mirror (G0B1 pattern); evidence `evidence/nucleo-g474re/` |
 
 ## BRD2709A (Silicon Labs xG26 Explorer Kit, EFR32MG26)
 
@@ -185,3 +186,45 @@ prints `LW_L3_FAIL nack`; L4 with no MAX31855 prints
 `LW_L4_FAIL frame=0x00000000`, and on the old SPI stub hangs after BOOT; L0 on the old `ra_sysc` or without the reset offset
 faults. L5's oracle accepts equal samples (0/0), so it was proved separately:
 2.5 V on A0 (AN009) reads 511/511, and 127/127 without `adc14`.
+
+## Arduino Nano 33 BLE Rev2 (nRF52840, `nano-33-ble`)
+
+Stock ArduinoCore-mbed 4.6.0 (`nordicnrf52` 11.0.0). `Serial` is USB CDC, so
+no cell printed before the USB device model existed. Eight of nine cells now
+pass; L8 (no CAN) is the only skip. What the runs found:
+
+| Symptom | Cause | Fixed by |
+|---------|-------|----------|
+| Reset entered the ELF header | The sketch is linked at 0x10000, above the board's bootloader | `memory_overrides.reset_vector_offset` in the board manifest |
+| `initVariant()` waited for UARTE0 `RXTO` forever | The core stops the receiver the bootloader left running; the model started with it idle | `bootloader_rx_running: true` on `uart0` |
+| `while (!Serial)` never ended | USBD was a register file with no host | `nrf52840_usbd`: EasyDMA endpoints, the nrfx start-up sequence (anomalies 171 and 187, POWER USB events) and the scripted host |
+| BusFault at 0x40036FFF on every USB bus reset | Mbed OS `USBPhy_Nordic.cpp` clears a truncated event offset; the window decodes on silicon | declared stub over peripheral ID 54 |
+| L3 `LW_L3_FAIL nack` | Mbed OS `Wire` uses the nrfx TWI driver: TWI0 with byte registers (`ENABLE = 5`). Only TWIM (`ENABLE = 6`) was modelled | TWI master personality in the TWIM model (`twi_legacy.rs`) |
+| L5 read 0 | no input on A0 | `input_mv` on the SAADC: 1650 mV on AIN2 reads 512 |
+
+Open: **L6 is not pad-proven.** `analogWrite(LED_BUILTIN)` configures PWM0
+(COUNTERTOP 2000 at 1 MHz, `PSEL.OUT[0]` = P0.13, compare 1003) and the model
+schedules an edge every 1 ms. A matrix run with `pwm_watch: "gpio0:13"` still
+counted 2 edges, not 30. Cause: an nRF pad follows a peripheral through its
+pin claim, and the logic capture registers with the claiming wire only on a
+GPIO write. The PWM claims the pad when its sequence starts, after the last
+GPIO write, and a watch armed at reset stays on the GPIO latch. The row
+therefore runs L6 without `pwm_watch` (UART marker only). The same gap applies
+to any nRF PWM pad watched from reset.
+
+Controls: L3 with no INA219 prints `LW_L3_FAIL nack`; the BME280 example
+without a host prints nothing, and without a sensor prints
+`BME280 not found at 0x77` (`examples/arduino-nano-33-ble-bme280/controls/`).
+
+
+## NUCLEO-C031C6 (STM32C031C6, `stm32c031c6`)
+
+Stock STM32duino (`ststm32@19.7.1`, Arduino_Core_STM32 2.12). Eight of nine
+cells pass; L8 (no CAN) is the only skip. The L5 history:
+
+| Symptom | Cause | Fixed by |
+|---------|-------|----------|
+| `analogRead(A0)` returned `0 0` on every pin | ADC1 was declared with `profile: stm32l4`. The L4 block has SQRx, not CHSELR, so the C0's regular-group bitmap was never read | `profile: stm32g0` on `adc1` (RM0490 §18; the C0 and G0 ADC are the same IP). The row skipped L5 rather than pass a vacuous `0 == 0` |
+| L5 still read 0 after the layout fix | the matrix system declared no board voltage on A0 | `input_mv: { 0: 1651 }` for ADC1 channel 0 (PA0 = ADC1_IN0); 12-bit 2048, stm32duino returns 10 bits: `LW_L5_VAL 512 512` |
+
+Control: with the L4 profile the same firmware prints `LW_L5_FAIL 0 0`.

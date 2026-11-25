@@ -4,10 +4,18 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+mod analog_source;
+mod behavior;
 mod external_process;
+mod gpio_device;
+mod onewire_device;
+pub(crate) use behavior::{build_part_adapter, catalog_descriptor};
 mod registry;
 pub mod routing;
 pub mod shm;
+
+// `adapter: ngspice`: the contract shared by the browser and native hosts.
+pub mod ngspice;
 
 pub use external_process::{ExternalProcessCosimAdapter, ExternalProcessCosimOptions};
 pub use registry::{
@@ -25,8 +33,60 @@ pub use routing::{
 };
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
+use serde::Serialize;
 use std::any::Any;
 use std::collections::BTreeMap;
+
+/// The exact source an adapter loaded for a model, so a run can be pinned to
+/// the circuit it actually solved.
+///
+/// The manifest hash covers the manifest text. An external netlist lives in a
+/// second file, and editing that file must change something a run records.
+/// Adapters that read a source report it here; adapters that own no external
+/// source leave [`CosimAdapter::source_pin`] at its `None` default.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CosimSourcePin {
+    /// What the source is. Today the only value is `spice_netlist`.
+    pub kind: &'static str,
+    /// Where the bytes came from: `file` or `inline`.
+    pub origin: &'static str,
+    /// The source's size in bytes.
+    pub bytes: usize,
+    /// SHA-256 of the exact bytes the adapter parsed.
+    pub sha256: String,
+    /// The path as the manifest declared it, for a file source. Absent inline.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+}
+
+impl CosimSourcePin {
+    /// A SPICE netlist read from a file the manifest names.
+    pub fn spice_netlist_file(path: impl Into<String>, netlist: &str) -> Self {
+        Self {
+            kind: "spice_netlist",
+            origin: "file",
+            bytes: netlist.len(),
+            sha256: netlist_sha256(netlist),
+            path: Some(path.into()),
+        }
+    }
+
+    /// A SPICE netlist carried inline in the manifest.
+    pub fn spice_netlist_inline(netlist: &str) -> Self {
+        Self {
+            kind: "spice_netlist",
+            origin: "inline",
+            bytes: netlist.len(),
+            sha256: netlist_sha256(netlist),
+            path: None,
+        }
+    }
+}
+
+fn netlist_sha256(netlist: &str) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(netlist.as_bytes()))
+}
 
 /// Scalar value exchanged at a co-simulation boundary.
 #[derive(Debug, Clone, PartialEq)]
@@ -109,11 +169,11 @@ pub trait CosimAdapter: Send {
     /// Adopt the runner's shared analog-sample ring, naming this model's
     /// channels `<channel_prefix><name>`.
     ///
-    /// Only the in-core analog engine implements this; every other adapter
-    /// produces no waveform of its own, and a default that fabricated one
-    /// would put a line on the oscilloscope that nothing measured. The runner
-    /// calls it on every model, so an adapter that later grows a waveform has
-    /// one place to publish it.
+    /// The circuit solver records its probes, and registered analog-source
+    /// adapters record their modeled scalar output. Discrete behavior adapters
+    /// leave this empty: a Boolean signal alone is not an electrical waveform.
+    /// The runner calls this on every model so each producer can publish into
+    /// the existing oscilloscope ring.
     fn attach_analog_trace(&mut self, trace: &AnalogTraceHandle, channel_prefix: &str) {
         let _ = (trace, channel_prefix);
     }
@@ -124,12 +184,35 @@ pub trait CosimAdapter: Send {
         None
     }
 
+    /// Unit of a numeric input, when the adapter knows it. Values are passed
+    /// without implicit conversion; Boolean voltage drives use their explicit
+    /// adapter Vdd conversion instead.
+    fn input_unit(&self, name: &str) -> Option<&str> {
+        let _ = name;
+        None
+    }
+
     /// The value shape model input `name` expects, or `None` when this adapter
     /// cannot say (it ignores the input, or passes it to a process it does not
     /// understand). See [`CosimInputKind`].
     fn input_kind(&self, name: &str) -> Option<CosimInputKind> {
         let _ = name;
         None
+    }
+
+    /// The source bytes this adapter loaded, when it loaded any. A manifest's
+    /// hash cannot cover an external netlist, so a reproducibility report asks
+    /// the adapter that read it. Adapters with no such source return `None`.
+    fn source_pin(&self) -> Option<CosimSourcePin> {
+        None
+    }
+
+    /// What the model's part holds, as inspect artifacts: a part's state that
+    /// is not a routed signal (a display's text, a sensor's memory). Most
+    /// adapters publish everything as signals and leave this empty.
+    fn artifacts(&self, id: &str) -> Vec<crate::inspect::Artifact> {
+        let _ = id;
+        Vec::new()
     }
 }
 

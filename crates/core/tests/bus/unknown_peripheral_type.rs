@@ -28,6 +28,7 @@ fn repo_root() -> PathBuf {
 
 fn manifest_for(chip_path: &str) -> SystemManifest {
     SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".into(),
@@ -264,6 +265,25 @@ fn known_stub_allowlist_has_no_stale_entries() {
         "{} known-stub allowlist entr(ies) are no longer named by any shipped chip \
          descriptor. Delete them — this list may only shrink: {stale:?}",
         stale.len()
+    );
+}
+
+/// An allowlisted type that the generic factory models never reaches the stub
+/// arm: the factory builds it first. Such an entry is dead debt that the
+/// declared-type check above cannot see, and it makes the onboarding
+/// scoreboard count a modelled window as a zero window.
+#[test]
+fn known_stub_allowlist_names_no_modelled_type() {
+    let modelled: Vec<&str> = KNOWN_STUBBED_PERIPHERAL_TYPES
+        .iter()
+        .map(|(t, _)| *t)
+        .filter(|t| labwired_core::peripherals::generic_factory::is_canonical_model_type(t))
+        .collect();
+
+    assert!(
+        modelled.is_empty(),
+        "known-stub allowlist entr(ies) name types the generic factory models. \
+         Delete them: {modelled:?}"
     );
 }
 

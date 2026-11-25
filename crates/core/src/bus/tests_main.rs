@@ -238,22 +238,50 @@ fn timer_poll_coalesce_uses_peripheral_access_class_not_chip_names() {
     for i in 1..=3 {
         bus.note_mmio_activity(sys_idx, 0x04);
         assert!(
-            !bus.take_timer_poll_coalesce_eligible(),
+            !bus.take_timer_poll_coalesce_eligible(0x1000),
             "split time_us_64 ({i}/3 TIMERAW loads) must not skip"
         );
         bus.reset_mmio_activity_counters();
     }
     bus.note_mmio_activity(sys_idx, 0x04);
     assert!(
-        bus.take_timer_poll_coalesce_eligible(),
+        bus.take_timer_poll_coalesce_eligible(0x1000),
         "a second time_us_64 (4th consecutive timer-only access) should coalesce"
     );
+
+    // Four split reads in straight-line code (pico-sdk alarm handler:
+    // `time_us_64`, then one more TIMERAWL load in `ta_set_timeout`) never
+    // come back to a site, so they are not a polling loop.
+    for site in [0x2000, 0x2004, 0x2006, 0x2040, 0x2044] {
+        bus.reset_mmio_activity_counters();
+        bus.note_mmio_activity(sys_idx, 0x04);
+        assert!(
+            !bus.take_timer_poll_coalesce_eligible(site),
+            "a split timer read at new site {site:#x} must not skip"
+        );
+    }
+    // The same streak coalesces as soon as a read comes back to a site.
+    bus.reset_mmio_activity_counters();
+    bus.note_mmio_activity(sys_idx, 0x04);
+    assert!(bus.take_timer_poll_coalesce_eligible(0x2040));
+    // A side-effecting access ends the streak and forgets its sites.
+    bus.reset_mmio_activity_counters();
+    bus.note_mmio_activity(gpio_idx, 0x00);
+    assert!(!bus.take_timer_poll_coalesce_eligible(0x2040));
+    for i in 1..=3 {
+        bus.reset_mmio_activity_counters();
+        bus.note_mmio_activity(sys_idx, 0x04);
+        assert!(
+            !bus.take_timer_poll_coalesce_eligible(0x2040),
+            "after a side effect the loop needs four reads again ({i}/3)"
+        );
+    }
 
     bus.reset_mmio_activity_counters();
     bus.note_mmio_activity(sys_idx, 0x04); // poll class (model decides)
     bus.note_mmio_activity(sys_idx, 0x44); // poll class
     assert!(
-        bus.take_timer_poll_coalesce_eligible(),
+        bus.take_timer_poll_coalesce_eligible(0x1000),
         "pure freerunning-timer polls should coalesce"
     );
 
@@ -261,7 +289,7 @@ fn timer_poll_coalesce_uses_peripheral_access_class_not_chip_names() {
     bus.note_mmio_activity(sys_idx, 0x04);
     bus.note_mmio_activity(sys_idx, 0x44);
     bus.note_mmio_activity(gpio_idx, 0x00); // side-effecting
-    assert!(!bus.take_timer_poll_coalesce_eligible());
+    assert!(!bus.take_timer_poll_coalesce_eligible(0x1000));
 }
 
 /// Resource metrics P1: successful RAM/flash/extra_mem accesses increment
@@ -378,6 +406,58 @@ fn max_safe_tick_interval_relaxes_only_walk_deleted_buses() {
         bus.max_safe_tick_interval(),
         1,
         "the test-only legacy-pin override must force interval 1"
+    );
+}
+
+/// Host CAN test devices are serviced on the tick grid, even when their
+/// controller uses the scheduler. Their normal timeout cadence must not change
+/// when a browser asks for the recommended interval.
+#[test]
+fn can_tester_recommendation_preserves_tick_counted_timeout() {
+    let mut bus = SystemBus::new();
+    bus.legacy_walk_disabled = true;
+    let relaxed = bus.max_safe_tick_interval();
+    let mut tester = CanUdsTester::new("tester".into(), "not-yet-attached".into());
+    tester.max_ticks = 3;
+    bus.can_uds_testers.push(tester);
+    let interval = bus.max_safe_tick_interval();
+    for cycle in 1..=4 {
+        bus.current_cycle = cycle;
+        if cycle % u64::from(interval) == 0 {
+            bus.service_can_uds_testers();
+        }
+    }
+    assert_eq!(bus.can_uds_testers[0].ticks, 4);
+    assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Failed);
+    assert!(bus.can_uds_testers[0]
+        .failure
+        .as_deref()
+        .unwrap()
+        .contains("3 tester ticks"));
+    bus.can_uds_testers.clear();
+    assert_eq!(
+        bus.max_safe_tick_interval(),
+        relaxed,
+        "unattached systems retain their batching default"
+    );
+}
+
+#[test]
+fn one_shot_can_tester_keeps_its_service_grid_without_overriding_forced_intervals() {
+    let mut bus = SystemBus::new();
+    bus.legacy_walk_disabled = true;
+    bus.can_diagnostic_testers.push(CanDiagnosticTester {
+        id: "tester".into(),
+        connection: "fdcan1".into(),
+        request_id: 0x7e0,
+        request_data: vec![3, 0x22, 0xf1, 0x90],
+        sent: false,
+    });
+    assert_eq!(bus.max_safe_tick_interval(), 1);
+    assert_eq!(
+        bus.clamp_peripheral_tick_interval(1024),
+        1024,
+        "an explicit diagnostic interval remains an explicit choice"
     );
 }
 
@@ -624,6 +704,54 @@ fn an_inactive_walk_model_is_deleted_and_restored_when_enabled() {
         "adding an active walk-capable model must restore the walk"
     );
     assert_eq!(bus.legacy_tick_indices, vec![1]);
+}
+
+/// Two dynamic models that go idle with no bus write between them (a system
+/// reset clears both enables): the first one leaving deletes the walk, and
+/// the second then stays in the tick index. The walk must step over it; a
+/// regression here is a hang, not a failed assertion.
+#[test]
+fn two_dynamic_models_going_idle_in_one_pass_end_the_walk() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    #[derive(Debug)]
+    struct SharedWalk(Arc<AtomicBool>);
+    impl crate::Peripheral for SharedWalk {
+        fn read(&self, _offset: u64) -> SimResult<u8> {
+            Ok(0)
+        }
+        fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+            Ok(())
+        }
+        fn legacy_tick_active(&self) -> bool {
+            self.0.load(Ordering::Relaxed)
+        }
+        fn legacy_tick_dynamic(&self) -> bool {
+            true
+        }
+    }
+
+    let active = Arc::new(AtomicBool::new(true));
+    let mut bus = SystemBus::empty();
+    for (name, base) in [("first", 0x1000), ("second", 0x2000)] {
+        bus.add_peripheral(
+            name,
+            base,
+            0x100,
+            None,
+            Box::new(SharedWalk(active.clone())),
+        );
+    }
+    assert_eq!(bus.legacy_tick_indices, vec![0, 1]);
+    assert!(!bus.legacy_walk_disabled);
+
+    active.store(false, Ordering::Relaxed);
+    bus.tick_peripherals_fully();
+    assert!(
+        bus.legacy_walk_disabled,
+        "both models are idle, so the walk is deleted"
+    );
 }
 
 #[test]
@@ -1156,6 +1284,7 @@ fn test_from_config_attaches_adxl345_external_device_to_i2c() {
         serde_yaml::Value::Number(0x53.into()),
     );
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
@@ -1310,9 +1439,14 @@ board_io: []
     let mut bus = SystemBus::from_config(&chip, &manifest).expect("build C3 bus with servo");
 
     const LEDC: u64 = 0x6001_9000;
+    const GPIO: u64 = 0x6000_4000;
     // ledcSetup(ch 2, 50 Hz, 14 bit) on timer 1, channel bound to timer 1.
     bus.write_u32(LEDC + 0xA0 + 8, 14).unwrap();
     bus.write_u32(LEDC + 2 * 0x14, 1).unwrap();
+    // Route LEDC low-speed channel 2 to GPIO7 and enable its output driver.
+    // The servo was attached before firmware configured this matrix route.
+    bus.write_u32(GPIO + 0x24, 1 << 7).unwrap();
+    bus.write_u32(GPIO + 0x554 + 4 * 7, 45 + 2).unwrap();
     // ESP32Servo write(angle) on a 500..2400 us attach: ticks = us * 2^14 / 20000.
     for angle in [155u32, 46, 25] {
         let us = 500 + angle * 1900 / 180;
@@ -1335,8 +1469,7 @@ board_io: []
 #[test]
 fn test_from_config_attaches_ili9341_16bit_parallel_panel() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    // Classic ESP32: `install_gpio_observer` wires Esp32Gpio (C3 has no
-    // observer path for this model yet).
+    // Classic ESP32: `install_gpio_observer` wires its GPIO output observer.
     let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32.yaml"))
         .expect("read ESP32 chip descriptor");
 
@@ -1391,7 +1524,7 @@ board_io: []
         assert_eq!(pins.cs, 15);
         assert_eq!(pins.rs, 2);
         assert_eq!(pins.wr, 4);
-        assert_eq!(pins.rd, 5);
+        assert_eq!(pins.rd, Some(5));
         assert_eq!(pins.rst, 33);
         assert_eq!(pins.db[0], 12);
         assert_eq!(pins.db[15], 35);
@@ -1767,6 +1900,7 @@ fn test_esp32c3_i2c_gpio_matrix_distinguishes_gpio45_from_gpio67() {
             serde_yaml::Value::Number(0x3C.into()),
         );
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -2004,6 +2138,7 @@ fn esp32c3_i2c0_manifest(
     use std::collections::{BTreeMap, HashMap};
 
     SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
@@ -2920,6 +3055,7 @@ peripherals:
 
 fn empty_manifest() -> SystemManifest {
     SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
@@ -3559,6 +3695,7 @@ motor_models:
                     timed_cycles: None,
                     internally_committed_cycles: false,
                 },
+                false,
             )
             .unwrap();
         assert_eq!(machine.bus.motor_service_anchor(), expected_anchor);
@@ -3578,6 +3715,7 @@ motor_models:
                     timed_cycles: None,
                     internally_committed_cycles: false,
                 },
+                false,
             )
             .unwrap();
         assert_eq!(coincident.bus.motor_service_anchor(), expected_anchor);
@@ -3723,6 +3861,7 @@ fn manifest_with_external_device(
     config: std::collections::HashMap<String, serde_yaml::Value>,
 ) -> labwired_config::SystemManifest {
     labwired_config::SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
@@ -3964,7 +4103,13 @@ fn test_flash_boot_alias_read_and_write() {
         config: crate::SimulationConfig::default(),
         cpu_hz: 0,
         riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
+        riscv_clint: None,
+        riscv_plic: None,
+        riscv_pfic: false,
+        native_code_identity: crate::bus::construct::next_native_code_identity(),
         bit_band_enabled: true,
+        armv6m: false,
+        armv8m_baseline: false,
         pending_cpu_irqs: [0; 2],
         esp32s3_irq_audit: None,
         dport_idx: None,
@@ -3984,6 +4129,7 @@ fn test_flash_boot_alias_read_and_write() {
         legacy_tick_indices: Vec::new(),
         bus_tick_indices: Vec::new(),
         scheduler_driver_indices: Vec::new(),
+        irq_input_receiver_indices: Vec::new(),
         exti_line_driver_indices: Vec::new(),
         matrix_source_scratch: Vec::new(),
         peripheral_hint: Cell::new(None),
@@ -3996,8 +4142,10 @@ fn test_flash_boot_alias_read_and_write() {
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
+        parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
+        timer_poll_sites: std::cell::Cell::new([None; 8]),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4006,6 +4154,7 @@ fn test_flash_boot_alias_read_and_write() {
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
         legacy_walk_pinned_on: false,
+        max_peripheral_tick_interval: None,
         legacy_tick_candidate_mask: Vec::new(),
         legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
@@ -4018,6 +4167,7 @@ fn test_flash_boot_alias_read_and_write() {
         resident_tick_interval_override: None,
         gpio_devices: Vec::new(),
         device_pin_pads: Vec::new(),
+        device_output_observers: Vec::new(),
         device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
@@ -4026,6 +4176,7 @@ fn test_flash_boot_alias_read_and_write() {
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
         analog_muxes: Vec::new(),
+        spi_cs_watches: Vec::new(),
         can_diagnostic_testers: Vec::new(),
         can_uds_testers: Vec::new(),
         can_log_players: Vec::new(),
@@ -4039,6 +4190,7 @@ fn test_flash_boot_alias_read_and_write() {
         gpio_edge_observers: false,
         timer_capture_wired: false,
         wire_inputs_live: false,
+        pad_watch_live: false,
         resident_scheduling_disabled: false,
         flash_error_flags_idx: None,
         u5_program_gate_idx: None,
@@ -4106,7 +4258,13 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         config: crate::SimulationConfig::default(),
         cpu_hz: 0,
         riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
+        riscv_clint: None,
+        riscv_plic: None,
+        riscv_pfic: false,
+        native_code_identity: crate::bus::construct::next_native_code_identity(),
         bit_band_enabled: false,
+        armv6m: false,
+        armv8m_baseline: false,
         pending_cpu_irqs: [0; 2],
         esp32s3_irq_audit: None,
         dport_idx: None,
@@ -4126,6 +4284,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         legacy_tick_indices: Vec::new(),
         bus_tick_indices: Vec::new(),
         scheduler_driver_indices: Vec::new(),
+        irq_input_receiver_indices: Vec::new(),
         exti_line_driver_indices: Vec::new(),
         matrix_source_scratch: Vec::new(),
         peripheral_hint: Cell::new(None),
@@ -4138,8 +4297,10 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
+        parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
+        timer_poll_sites: std::cell::Cell::new([None; 8]),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4148,6 +4309,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
         legacy_walk_pinned_on: false,
+        max_peripheral_tick_interval: None,
         legacy_tick_candidate_mask: Vec::new(),
         legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
@@ -4160,6 +4322,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         resident_tick_interval_override: None,
         gpio_devices: Vec::new(),
         device_pin_pads: Vec::new(),
+        device_output_observers: Vec::new(),
         device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
@@ -4168,6 +4331,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
         analog_muxes: Vec::new(),
+        spi_cs_watches: Vec::new(),
         can_diagnostic_testers: Vec::new(),
         can_uds_testers: Vec::new(),
         can_log_players: Vec::new(),
@@ -4181,6 +4345,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         gpio_edge_observers: false,
         timer_capture_wired: false,
         wire_inputs_live: false,
+        pad_watch_live: false,
         resident_scheduling_disabled: false,
         flash_error_flags_idx: None,
         u5_program_gate_idx: None,
@@ -4401,7 +4566,13 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         config: crate::SimulationConfig::default(),
         cpu_hz: 0,
         riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
+        riscv_clint: None,
+        riscv_plic: None,
+        riscv_pfic: false,
+        native_code_identity: crate::bus::construct::next_native_code_identity(),
         bit_band_enabled: false,
+        armv6m: false,
+        armv8m_baseline: false,
         pending_cpu_irqs: [0; 2],
         esp32s3_irq_audit: None,
         dport_idx: None,
@@ -4421,6 +4592,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         legacy_tick_indices: Vec::new(),
         bus_tick_indices: Vec::new(),
         scheduler_driver_indices: Vec::new(),
+        irq_input_receiver_indices: Vec::new(),
         exti_line_driver_indices: Vec::new(),
         matrix_source_scratch: Vec::new(),
         peripheral_hint: Cell::new(None),
@@ -4433,8 +4605,10 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
+        parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
+        timer_poll_sites: std::cell::Cell::new([None; 8]),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4443,6 +4617,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
         legacy_walk_pinned_on: false,
+        max_peripheral_tick_interval: None,
         legacy_tick_candidate_mask: Vec::new(),
         legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
@@ -4455,6 +4630,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         resident_tick_interval_override: None,
         gpio_devices: Vec::new(),
         device_pin_pads: Vec::new(),
+        device_output_observers: Vec::new(),
         device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
@@ -4463,6 +4639,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
         analog_muxes: Vec::new(),
+        spi_cs_watches: Vec::new(),
         can_diagnostic_testers: Vec::new(),
         can_uds_testers: Vec::new(),
         can_log_players: Vec::new(),
@@ -4476,6 +4653,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         gpio_edge_observers: false,
         timer_capture_wired: false,
         wire_inputs_live: false,
+        pad_watch_live: false,
         resident_scheduling_disabled: false,
         flash_error_flags_idx: None,
         u5_program_gate_idx: None,
@@ -4692,7 +4870,13 @@ fn test_peripheral_range_index_lookup() {
         config: crate::SimulationConfig::default(),
         cpu_hz: 0,
         riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
+        riscv_clint: None,
+        riscv_plic: None,
+        riscv_pfic: false,
+        native_code_identity: crate::bus::construct::next_native_code_identity(),
         bit_band_enabled: true,
+        armv6m: false,
+        armv8m_baseline: false,
         pending_cpu_irqs: [0; 2],
         esp32s3_irq_audit: None,
         dport_idx: None,
@@ -4712,6 +4896,7 @@ fn test_peripheral_range_index_lookup() {
         legacy_tick_indices: Vec::new(),
         bus_tick_indices: Vec::new(),
         scheduler_driver_indices: Vec::new(),
+        irq_input_receiver_indices: Vec::new(),
         exti_line_driver_indices: Vec::new(),
         matrix_source_scratch: Vec::new(),
         peripheral_hint: Cell::new(None),
@@ -4724,8 +4909,10 @@ fn test_peripheral_range_index_lookup() {
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
+        parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
+        timer_poll_sites: std::cell::Cell::new([None; 8]),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4734,6 +4921,7 @@ fn test_peripheral_range_index_lookup() {
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
         legacy_walk_pinned_on: false,
+        max_peripheral_tick_interval: None,
         legacy_tick_candidate_mask: Vec::new(),
         legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
@@ -4746,6 +4934,7 @@ fn test_peripheral_range_index_lookup() {
         resident_tick_interval_override: None,
         gpio_devices: Vec::new(),
         device_pin_pads: Vec::new(),
+        device_output_observers: Vec::new(),
         device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
@@ -4754,6 +4943,7 @@ fn test_peripheral_range_index_lookup() {
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
         analog_muxes: Vec::new(),
+        spi_cs_watches: Vec::new(),
         can_diagnostic_testers: Vec::new(),
         can_uds_testers: Vec::new(),
         can_log_players: Vec::new(),
@@ -4767,6 +4957,7 @@ fn test_peripheral_range_index_lookup() {
         gpio_edge_observers: false,
         timer_capture_wired: false,
         wire_inputs_live: false,
+        pad_watch_live: false,
         resident_scheduling_disabled: false,
         flash_error_flags_idx: None,
         u5_program_gate_idx: None,
@@ -4839,7 +5030,13 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         config: crate::SimulationConfig::default(),
         cpu_hz: 0,
         riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
+        riscv_clint: None,
+        riscv_plic: None,
+        riscv_pfic: false,
+        native_code_identity: crate::bus::construct::next_native_code_identity(),
         bit_band_enabled: true,
+        armv6m: false,
+        armv8m_baseline: false,
         pending_cpu_irqs: [0; 2],
         esp32s3_irq_audit: None,
         dport_idx: None,
@@ -4859,6 +5056,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         legacy_tick_indices: Vec::new(),
         bus_tick_indices: Vec::new(),
         scheduler_driver_indices: Vec::new(),
+        irq_input_receiver_indices: Vec::new(),
         exti_line_driver_indices: Vec::new(),
         matrix_source_scratch: Vec::new(),
         peripheral_hint: Cell::new(None),
@@ -4871,8 +5069,10 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
+        parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
+        timer_poll_sites: std::cell::Cell::new([None; 8]),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4881,6 +5081,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
         legacy_walk_disabled: false,
         legacy_walk_pinned_on: false,
+        max_peripheral_tick_interval: None,
         legacy_tick_candidate_mask: Vec::new(),
         legacy_tick_peer_write_indices: Vec::new(),
         reset_vector_offset: 0,
@@ -4893,6 +5094,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         resident_tick_interval_override: None,
         gpio_devices: Vec::new(),
         device_pin_pads: Vec::new(),
+        device_output_observers: Vec::new(),
         device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
@@ -4901,6 +5103,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
         analog_muxes: Vec::new(),
+        spi_cs_watches: Vec::new(),
         can_diagnostic_testers: Vec::new(),
         can_uds_testers: Vec::new(),
         can_log_players: Vec::new(),
@@ -4914,6 +5117,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         gpio_edge_observers: false,
         timer_capture_wired: false,
         wire_inputs_live: false,
+        pad_watch_live: false,
         resident_scheduling_disabled: false,
         flash_error_flags_idx: None,
         u5_program_gate_idx: None,
@@ -7130,6 +7334,71 @@ board_io: []
     let motor: &StepDirMotor = bus.observed_of().next().unwrap();
     assert_eq!(motor.steps(), 1);
     assert!(!motor.is_enabled());
+}
+
+/// The same A4988 with `powered: false` on its placement (the compiler emits
+/// that when VMOT is outside the datasheet's 8-35 V window, e.g. on a 3V3
+/// pin): STEP pulses from the firmware move nothing, and the motor evidence
+/// says why. With the key absent the identical pulses step (test above).
+#[test]
+fn stm32f4_step_dir_kit_without_supply_ignores_step_edges() {
+    use crate::peripherals::components::step_dir_motor::StepDirMotor;
+    use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
+    use crate::peripherals::kit::{AttachCtx, PeripheralKit};
+
+    const GPIOB: u64 = 0x4002_0400;
+    const BSRR: u64 = GPIOB + 0x18;
+    let mut bus = SystemBus::new();
+    bus.add_peripheral(
+        "gpiob",
+        GPIOB,
+        0x400,
+        None,
+        Box::new(GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2)),
+    );
+    bus.refresh_peripheral_index();
+    let manifest: SystemManifest = serde_yaml::from_str(
+        r#"
+name: stm32-step-dir-unpowered
+chip: unused
+external_devices:
+  - id: x_driver
+    type: a4988
+    connection: gpio
+    config:
+      powered: false
+      step_pin: PB0
+      dir_pin: PB1
+board_io: []
+"#,
+    )
+    .unwrap();
+    let ext = &manifest.external_devices[0];
+    let mut ctx = AttachCtx::new(&mut bus, ext);
+    crate::peripherals::components::step_dir_motor::STEP_DIR_MOTOR_KIT
+        .attach(&mut ctx)
+        .expect("an unpowered A4988 still attaches");
+    bus.write_u32(GPIOB, (1 << 0) | (1 << 2)).unwrap();
+    bus.write_u32(BSRR, 1 << 1).unwrap();
+    for cycle in 0..4 {
+        bus.set_current_cycle(cycle * 10 + 1);
+        bus.write_u32(BSRR, 1 << 0).unwrap();
+        bus.write_u32(BSRR, 1 << 16).unwrap();
+    }
+    let motor: &StepDirMotor = bus.observed_of().next().expect("observed A4988");
+    assert_eq!(motor.steps(), 0, "no supply, no steps");
+    assert!(!motor.is_enabled());
+    let snapshot = bus
+        .motor_snapshots()
+        .into_iter()
+        .find(|m| m.id == "x_driver")
+        .expect("the stepper is still in the motor evidence");
+    assert_eq!(snapshot.position_rad, 0.0);
+    assert_eq!(snapshot.control_state, "idle");
+    assert_eq!(
+        snapshot.faults,
+        vec![crate::bus::motors::UNPOWERED_FAULT.to_owned()]
+    );
 }
 
 /// An observer on an STM32 pad that a timer drives in alternate-function mode

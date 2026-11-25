@@ -254,15 +254,50 @@ impl Rig for Efr32 {
     }
     fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
         // MODEL nibble: 1 INPUT, 2 INPUTPULL (DOUT picks the rail),
-        // 4 PUSHPULL, 6 WIREDOR (released for a 1 in this model).
+        // 4 PUSHPULL, 8 WIREDAND (open-drain: drives only a 0).
         let (nibble, dout) = match mode {
             Mode::Input(Pull::None) => (1, false),
             Mode::Input(Pull::Up) => (2, true),
             Mode::Input(Pull::Down) => (2, false),
             Mode::PushPull(level) => (4, level),
-            Mode::OpenDrain(level) => (6, level),
+            Mode::OpenDrain(level) => (8, level),
         };
         bit_to(port, 0x10, pin, dout);
+        rmw(port, 0x04, 0xF << (pin * 4), nibble << (pin * 4));
+        true
+    }
+}
+
+/// One rig for both EFM32 maps: `true` builds the Series-1 port.
+struct Efm32s0(bool);
+impl Rig for Efm32s0 {
+    fn name(&self) -> &'static str {
+        if self.0 {
+            "GpioPort efm32s1"
+        } else {
+            "GpioPort efm32s0"
+        }
+    }
+    fn build(&mut self) -> Box<dyn Peripheral> {
+        use crate::peripherals::gpio::GpioRegisterLayout;
+        let layout = if self.0 {
+            GpioRegisterLayout::Efm32s1
+        } else {
+            GpioRegisterLayout::Efm32s0
+        };
+        Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(layout))
+    }
+    fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
+        // MODEL nibble: 1 INPUT, 2 INPUTPULL (DOUT picks the rail),
+        // 4 PUSHPULL, 8 WIREDAND (open-drain: drives only a 0).
+        let (nibble, dout) = match mode {
+            Mode::Input(Pull::None) => (1, false),
+            Mode::Input(Pull::Up) => (2, true),
+            Mode::Input(Pull::Down) => (2, false),
+            Mode::PushPull(level) => (4, level),
+            Mode::OpenDrain(level) => (8, level),
+        };
+        bit_to(port, 0x0C, pin, dout);
         rmw(port, 0x04, 0xF << (pin * 4), nibble << (pin * 4));
         true
     }
@@ -295,6 +330,133 @@ impl Rig for Sam {
                 pincfg(port, 0x2);
                 bit_to(port, 0x10, pin, level);
                 bit_to(port, 0x00, pin, true);
+            }
+            Mode::OpenDrain(_) => return false,
+        }
+        true
+    }
+}
+
+struct Lpc2xxx;
+impl Rig for Lpc2xxx {
+    fn name(&self) -> &'static str {
+        "GpioPort lpc2xxx"
+    }
+    fn build(&mut self) -> Box<dyn Peripheral> {
+        Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(
+            crate::peripherals::gpio::GpioRegisterLayout::Lpc2xxx,
+        ))
+    }
+    fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
+        // IOSET @0x4 / IOCLR @0xC are write-one; IODIR @0x8. No pulls and no
+        // open drain in the model.
+        match mode {
+            Mode::Input(Pull::None) => bit_to(port, 0x08, pin, false),
+            Mode::PushPull(level) => {
+                w32(port, if level { 0x04 } else { 0x0C }, 1 << pin);
+                bit_to(port, 0x08, pin, true);
+            }
+            Mode::Input(_) | Mode::OpenDrain(_) => return false,
+        }
+        true
+    }
+}
+
+struct Max32650;
+impl Rig for Max32650 {
+    fn name(&self) -> &'static str {
+        "GpioPort max32650"
+    }
+    fn build(&mut self) -> Box<dyn Peripheral> {
+        Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(
+            crate::peripherals::gpio::GpioRegisterLayout::Max32650,
+        ))
+    }
+    fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
+        // MSDK MXC_GPIO_Config: IN_EN on, EN_SET (GPIO function), then
+        // OUT_EN_SET/CLR; pulls in PDPU_SEL0 (up) / PDPU_SEL1 (down). No open
+        // drain in the model.
+        bit_to(port, 0x30, pin, true);
+        w32(port, 0x04, 1 << pin);
+        match mode {
+            Mode::Input(pull) => {
+                bit_to(port, 0x60, pin, pull == Pull::Up);
+                bit_to(port, 0x64, pin, pull == Pull::Down);
+                w32(port, 0x14, 1 << pin);
+            }
+            Mode::PushPull(level) => {
+                w32(port, if level { 0x1C } else { 0x20 }, 1 << pin);
+                w32(port, 0x10, 1 << pin);
+            }
+            Mode::OpenDrain(_) => return false,
+        }
+        true
+    }
+}
+
+struct Da14;
+impl Rig for Da14 {
+    fn name(&self) -> &'static str {
+        "GpioPort da14"
+    }
+    fn build(&mut self) -> Box<dyn Peripheral> {
+        Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(
+            crate::peripherals::gpio::GpioRegisterLayout::Da14,
+        ))
+    }
+    fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
+        // Zephyr gpio_smartbond_pin_configure: latch through SET/RESET first,
+        // then Px_yy_MODE PUPD (0 in, 1 up, 2 down, 3 out); PPOD bit 10.
+        let mode_reg = 0x18 + 4 * u64::from(pin);
+        let (word, bit) = (u64::from(pin / 16) * 4, pin % 16);
+        let latch = |port: &mut dyn Peripheral, level: bool| {
+            w32(port, if level { 0x08 } else { 0x10 } + word, 1 << bit)
+        };
+        match mode {
+            Mode::Input(Pull::None) => w32(port, mode_reg, 0x000),
+            Mode::Input(Pull::Up) => w32(port, mode_reg, 0x100),
+            Mode::Input(Pull::Down) => w32(port, mode_reg, 0x200),
+            Mode::PushPull(level) => {
+                latch(port, level);
+                w32(port, mode_reg, 0x300);
+            }
+            Mode::OpenDrain(level) => {
+                latch(port, level);
+                w32(port, mode_reg, 0x700);
+            }
+        }
+        true
+    }
+}
+
+struct Cmsdk;
+impl Rig for Cmsdk {
+    fn name(&self) -> &'static str {
+        "GpioPort cmsdk"
+    }
+    fn build(&mut self) -> Box<dyn Peripheral> {
+        Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(
+            crate::peripherals::gpio::GpioRegisterLayout::Cmsdk,
+        ))
+    }
+    fn set_mode(&mut self, port: &mut dyn Peripheral, pin: u8, mode: Mode) -> bool {
+        // UT32M0R500 app note: PULL_ENABLE @0x40 + PULL_UP_DOWN @0x44 (1 up),
+        // OUTENSET/CLR @0x10/0x14, latch through the masked byte array. No
+        // open drain in the model.
+        match mode {
+            Mode::Input(pull) => {
+                bit_to(port, 0x40, pin, pull != Pull::None);
+                bit_to(port, 0x44, pin, pull == Pull::Up);
+                w32(port, 0x14, 1 << pin);
+            }
+            Mode::PushPull(level) => {
+                let mask = 1u32 << pin; // pin < 8: MASKLOWBYTE
+                w32(
+                    port,
+                    0x400 + 4 * u64::from(mask),
+                    if level { mask } else { 0 },
+                );
+                w32(port, 0x10, mask);
             }
             Mode::OpenDrain(_) => return false,
         }
@@ -794,9 +956,15 @@ fn rigs() -> Vec<Box<dyn Rig>> {
         Box::new(Nrf52),
         Box::new(Kinetis::default()),
         Box::new(Efr32),
+        Box::new(Efm32s0(false)),
+        Box::new(Efm32s0(true)),
         Box::new(Sam),
         Box::new(RaPort::default()),
         Box::new(Imxrt::default()),
+        Box::new(Lpc2xxx),
+        Box::new(Max32650),
+        Box::new(Da14),
+        Box::new(Cmsdk),
         Box::new(Avr),
         Box::new(Pic24),
         Box::new(Rp2040),

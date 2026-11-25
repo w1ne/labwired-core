@@ -5,6 +5,17 @@ core: "cortex-m4"
 # scale their datasheet microseconds by it; a slower board overrides it.
 # nRF52840 runs its Cortex-M4F at a fixed 64 MHz.
 cpu_hz: 64_000_000
+# GPIO pad output resistance, ohms: a driven pad is VDD (or 0 V) behind it.
+# nRF52840 Product Specification v1.11 (4413_417), section 6.9.3.1 "GPIO
+# Electrical Specification", standard drive (PIN_CNF[n].DRIVE reset value
+# S0S1), VDD >= 1.7 V: IOH,SD = 1 / 2 / 4 mA (min / typ / max) at VDD - 0.4 V,
+# and IOL,SD the same at VSS + 0.4 V. Typical: 0.4 V / 2 mA = 200 ohm (the
+# minimum current bounds it at 0.4 V / 1 mA = 400 ohm).
+# Read by the diagram compiler, which places it as the pad driver's
+# on-resistance in the analog netlist.
+gpio_output_ohms: 200
+# gpio_abs_max_ma is not stated: section 9, Table 101 "Absolute maximum
+# ratings" gives no GPIO pin current (only the NFC antenna pins, 80 mA).
 
 flash:
   base: 0x00000000
@@ -22,6 +33,13 @@ memory_regions:
   - name: "nrf_errata_probe"
     base: 0xF0000000
     size: "4KB"
+  # Undocumented test registers that the published workarounds for USBD
+  # anomalies 171 and 187 write (0x4006EC00 unlock key, 0x4006EC14,
+  # 0x4006ED14). They store what firmware writes; the USBD model reads
+  # 0x4006ED14 to decide whether the core starts (anomaly 187).
+  - name: "usbd_anomaly_test"
+    base: 0x4006E000
+    size: "4KB"
 peripherals:
   # SysTick: an ARMv6-M/ARMv7-M/ARMv8-M core peripheral every Cortex-M on
   # this family has. The Nordic SVD starts above the PPB, so it is declared
@@ -31,6 +49,27 @@ peripherals:
     type: "systick"
     base_address: 0xE000E010
     size: "16B"
+
+  # Architectural Cortex-M4F FPU register window in the System Control Space.
+  # nRF52840 Product Specification v1.11, CPU chapter
+  # (https://docs.nordicsemi.com/r/bundle/ps_nrf52840/page/cpu.html):
+  # the core is an Arm Cortex-M4 processor with a single-precision FPU, and
+  # the "CPU and support module configuration" table lists FPU as implemented.
+  # That chapter points at the Cortex-M4 Devices Generic User Guide for the
+  # FPU registers; the addresses (FPCCR at 0xE000EF34, and the 28-byte window
+  # starting at 0xE000EF30) and the FPv4-SP feature-register reset values are
+  # Arm Cortex-M4 TRM DDI 0439B, Table 7-4. This is not the Nordic FPU
+  # interrupt block in the SVD (0x40026000, IRQ 38). The id is
+  # `cortex_m_fpu` so this window is not matched to that SVD instance.
+  - id: "cortex_m_fpu"
+    type: "cortex_m_fpu"
+    base_address: 0xE000EF30
+    size: "28B"
+    config:
+      mvfr0: 0x10110021
+      mvfr1: 0x11000011
+      # MVFR2 is not implemented on Cortex-M4F (DDI 0439B).
+      mvfr2: 0x00000000
 
   - id: "uart0"
     type: "nrf52840_uart"
@@ -50,22 +89,28 @@ peripherals:
   - id: "gpio0"
     type: "gpio"
     base_address: 0x50000000
-    size: "4KB"
+    # P0 implements 0x504..0x77C; P1's registers start at 0x50000800.
+    size: "2048B"
     config:
       debug_schema: "../peripherals/nrf52840/p0.yaml"
       profile: "nrf52"
+  # P1's silicon block base is 0x50000300, but its implemented registers start
+  # at block offset 0x500. Register only that compact window so P1 reaches
+  # firmware at its real addresses and its reserved space cannot hide P0's
+  # PIN_CNF at 0x50000700..0x5000077c.
   - id: "gpio1"
     type: "gpio"
-    base_address: 0x50001000
-    size: "4KB"
+    base_address: 0x50000800
+    size: "768B"
     config:
       debug_schema: "../peripherals/nrf52840/p1.yaml"
       profile: "nrf52"
       num_pins: 16
+      reg_offset: 0x500
   # nRF52840 peripherals — reset values verified against nRF52840 silicon
   # (Seeed XIAO nRF52840 Sense, ST-LINK V2, 2026-06-09). Verified via the
   # nrf52_onboarding_diff register sweep (21 MODELLED + WDT). Addresses are
-  # the sim memory map (P1/gpio1 remapped to 0x50001000 to avoid GPIO0's 4KB window).
+  # the silicon memory map.
   - id: "uart1"
     type: "nrf52840_uart"
     base_address: 0x40028000
@@ -149,6 +194,7 @@ peripherals:
     size: "4KB"
     irq: 8
     config:
+      peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
       debug_schema: "../peripherals/nrf52840/timer0.yaml"
   - id: "timer1"
     type: "nrf52840_timer"
@@ -156,6 +202,7 @@ peripherals:
     size: "4KB"
     irq: 9
     config:
+      peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
       debug_schema: "../peripherals/nrf52840/timer1.yaml"
   - id: "timer2"
     type: "nrf52840_timer"
@@ -163,6 +210,7 @@ peripherals:
     size: "4KB"
     irq: 10
     config:
+      peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
       debug_schema: "../peripherals/nrf52840/timer2.yaml"
   - id: "timer3"
     type: "nrf52840_timer"
@@ -170,6 +218,7 @@ peripherals:
     size: "4KB"
     irq: 26
     config:
+      peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
       debug_schema: "../peripherals/nrf52840/timer3.yaml"
       num_cc: 6
   - id: "timer4"
@@ -178,6 +227,7 @@ peripherals:
     size: "4KB"
     irq: 27
     config:
+      peripheral_hz: 16000000  # TIMER base clock (PS §6.30), not cpu_hz
       debug_schema: "../peripherals/nrf52840/timer4.yaml"
       num_cc: 6
   - id: "i2s"
@@ -279,6 +329,12 @@ peripherals:
     base_address: 0x10000000
     size: "4KB"
     config:
+      # The words nrfx reads to pick anomaly workarounds: 0x08 is the
+      # nRF52840. Revision 3 goes with the modelled build code (INFO.VARIANT
+      # "AAD0"); it is an assumption, not a bench reading. Every value >= 1
+      # selects the same USBD workarounds (nrfx nrf52_erratas.h).
+      part_code: 0x08
+      part_revision: 3
       debug_schema: "../peripherals/nrf52840/ficr.yaml"
   - id: "uicr"
     type: "nrf52840_uicr"
@@ -368,7 +424,18 @@ peripherals:
     size: "4KB"
     irq: 39
     config:
+      # No cable: a board manifest sets `host: true` to plug one in.
+      host: false
+      anomaly_187: true
       debug_schema: "../peripherals/nrf52840/usbd.yaml"
+  # Peripheral ID 54 has no peripheral on this part, yet the window decodes
+  # on silicon: Mbed OS USBPhy_Nordic.cpp clears a truncated event offset
+  # (0xFFFF) on every USB bus reset, a word store at 0x40036FFF, and runs on
+  # the Arduino Nano 33 BLE without a fault. Reads zero, ignores writes.
+  - id: "reserved_id54"
+    type: "stub"
+    base_address: 0x40036000
+    size: "4KB"
   - id: "usbregulator"
     type: "nrf52840_usbregulator"
     base_address: 0x40037000
@@ -378,12 +445,11 @@ peripherals:
   # ACL's registers live in the NVMC page (0x4001E000), which `nvmc` maps, so
   # the inert stub gets a private window at 0x4002E000, a reserved slot (no
   # peripheral ID 46 on this part). It used to sit at 0x4002F000, which is
-  # SPIM3's (below).
+  # SPIM3's (below). ID 30 (ACL/NVMC) has no interrupt line, so none is claimed.
   - id: "acl"
     type: "nrf52840_acl"
     base_address: 0x4002e000
     size: "4KB"
-    irq: 30
     config:
       debug_schema: "../peripherals/nrf52840/acl.yaml"
   # SPIM3 — the 32 MHz SPI master with hardware chip select (PSEL.CSN,

@@ -4,137 +4,64 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# Analog Devices (Maxim) MAX32652, Cortex-M4F. Sources: Renode
+# platforms/cpus/max32652.repl (memory map, instance bases) and the MSDK
+# MAX32650 headers (Libraries/CMSIS/Device/Maxim/MAX32650/Include:
+# uart_regs.h, gpio_regs.h).
+# - flash: 3 MiB at 0x10000000; SRAM: 1 MiB at 0x20000000.
+# - uart0..uart2: MAX32650 UART (STAT 0x08, FIFO 0x1C). Polled only: the
+#   max32650 UART profile has no interrupt lines, so Renode's NVIC 14/15/34
+#   are not declared.
+# - port0..port3: MAX32650 GPIO (EN/OUT_EN/OUT, IN, IN_EN, PDPU_SEL pulls).
+#   Named port* (not gpio*) so the Nordic GPIOTE pass stays off. Port 3 has
+#   10 pins on silicon; the model answers for 32. GPIO interrupts are not
+#   modelled, so Renode's NVIC 24-27/54 are not declared.
+# Not declared (no model in this engine): GCR, WDT0/1, TMR0-5, TPU, I2C0/1,
+# ADC, SPI0-3, RTC, PWRSEQ, DMA, flash controller, caches, USB, TRNG, SDHC,
+# SPIXF/SPIXR/HyperBus and the external memory windows.
 name: max32652
 arch: arm
+core: cortex-m4
 flash:
-  base: 268435456
-  size: 3145728B
+  base: 0x10000000
+  size: 3145728B # 3 MiB
 ram:
-  base: 536870912
-  size: 1048576B
+  base: 0x20000000
+  size: 1048576B # 1 MiB
 peripherals:
-- id: gcr
-  type: max32650_gcr
-  bus: sysbus
-  base_address: 1073741824
-- id: wdt0
-  type: max32650_wdt
-  bus: sysbus
-  base_address: 1073754112
-- id: wdt1
-  type: max32650_wdt
-  bus: sysbus
-  base_address: 1073755136
-- id: timer0
-  type: max32650_timer
-  bus: sysbus
-  base_address: 1073807360
-- id: timer1
-  type: max32650_timer
-  bus: sysbus
-  base_address: 1073811456
-- id: tpu
-  type: max32650_tpu
-  bus: sysbus
-  base_address: 1073745920
-- id: timer2
-  type: max32650_timer
-  bus: sysbus
-  base_address: 1073815552
-- id: timer3
-  type: max32650_timer
-  bus: sysbus
-  base_address: 1073819648
-- id: timer4
-  type: max32650_timer
-  bus: sysbus
-  base_address: 1073823744
-- id: timer5
-  type: max32650_timer
-  bus: sysbus
-  base_address: 1073827840
-- id: i2c0
-  type: stub
-  renode_type: max32650_i2c
-  bus: sysbus
-  base_address: 1073860608
-- id: i2c1
-  type: stub
-  renode_type: max32650_i2c
-  bus: sysbus
-  base_address: 1073864704
-- id: adc
-  type: stub
-  renode_type: max32650_adc
-  bus: sysbus
-  base_address: 1073954816
 - id: uart0
   type: max32650_uart
-  bus: sysbus
-  base_address: 1074012160
+  base_address: 0x40042000
+  size: 4KB
 - id: uart1
   type: max32650_uart
-  bus: sysbus
-  base_address: 1074016256
+  base_address: 0x40043000
+  size: 4KB
 - id: uart2
   type: max32650_uart
-  bus: sysbus
-  base_address: 1074020352
-- id: spi0
-  type: stub
-  renode_type: max32650_spi
-  bus: sysbus
-  base_address: 1074028544
-- id: spi1
-  type: stub
-  renode_type: max32650_spi
-  bus: sysbus
-  base_address: 1074032640
-- id: spi2
-  type: stub
-  renode_type: max32650_spi
-  bus: sysbus
-  base_address: 1074036736
-- id: gpio0
-  type: max32650_gpio
-  bus: sysbus
-  base_address: 1073774592
-- id: gpio1
-  type: max32650_gpio
-  bus: sysbus
-  base_address: 1073778688
-- id: gpio2
-  type: max32650_gpio
-  bus: sysbus
-  base_address: 1073782784
-- id: gpio3
-  type: max32650_gpio
-  bus: sysbus
-  base_address: 1073786880
-- id: spi3
-  type: stub
-  renode_type: max32650_spi
-  bus: sysbus
-  base_address: 1074520064
-- id: rtc
-  type: stub
-  renode_type: max32650_rtc
-  bus: sysbus
-  base_address: 1073766400
-- id: pwrseq
-  type: stub
-  renode_type: max32650_pwrseq
-  bus: sysbus
-  base_address: 1073768448
-- id: dwt
-  type: dwt
-  bus: sysbus
-  base_address: 3758100480
-- id: bitbandPeripherals
-  type: bitbanding
-  bus: sysbus
-  base_address: 1107296256
-- id: bitbandSram
-  type: bitbanding
-  bus: sysbus
-  base_address: 570425344
+  base_address: 0x40044000
+  size: 4KB
+- id: port0
+  type: gpio
+  base_address: 0x40008000
+  size: 4KB
+  config:
+    profile: max32650
+- id: port1
+  type: gpio
+  base_address: 0x40009000
+  size: 4KB
+  config:
+    profile: max32650
+- id: port2
+  type: gpio
+  base_address: 0x4000A000
+  size: 4KB
+  config:
+    profile: max32650
+- id: port3
+  type: gpio
+  base_address: 0x4000B000
+  size: 4KB
+  config:
+    profile: max32650

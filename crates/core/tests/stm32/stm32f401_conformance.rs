@@ -25,6 +25,7 @@ fn f401_bus() -> labwired_core::bus::SystemBus {
         .join("../../configs/chips/stm32f401.yaml");
     let chip = ChipDescriptor::from_file(&path).expect("load chip");
     let manifest = labwired_config::SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         cosim_models: Vec::new(),
         motor_models: Vec::new(),

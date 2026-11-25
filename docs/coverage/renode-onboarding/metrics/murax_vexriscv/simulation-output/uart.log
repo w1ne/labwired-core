@@ -1,0 +1,3 @@
+MURAX RV32IM SMOKE
+cpu=rv32im uart=murax
+mul=00000143

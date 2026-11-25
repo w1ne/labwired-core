@@ -141,8 +141,10 @@ peripherals:
     type: "timer"
     base_address: 0x40012C00
     size: "1KB"
+    # TIM1_BRK_UP_TRG_COM_IRQn = 13, TIM1_CC_IRQn = 14 (CMSIS).
     irq: 13
     config:
+      capture_compare_irq: 14
       pad_map: "stm32c0"
       advanced: true
     clock: { reg: "apbenr2", bit: 11 }
@@ -182,17 +184,17 @@ peripherals:
       pad_map: "stm32c0"
       width: 16
     clock: { reg: "apbenr2", bit: 18 }
-  # ADC: REGISTER FILE ONLY on this part. The L4-shaped engine does not
-  # decode the C0's CFGR1/CHSELR layout; stock analogRead() returns without
-  # hanging but reads 0 on every pin. Declared so the HAL's ADC bring-up has
-  # a window to talk to; the Arduino matrix skips L5 rather than pass it.
+  # ADC1 (RM0490 §18): the G0/C0 CHSELR block at the G0 offsets. The C0 and
+  # G0 ADC are register-for-register the same IP (stm32c031xx.h and
+  # stm32g071xx.h agree), so the `stm32g0` layout serves both. The L4 profile
+  # that used to sit here has no CHSELR and read 0 on every pin.
   - id: "adc1"
     type: "adc"
     base_address: 0x40012400
     size: "1KB"
     irq: 12
     config:
-      profile: "stm32l4"
+      profile: "stm32g0"
     clock: { reg: "apbenr2", bit: 20 }
   - id: "dma1"
     type: "dma"

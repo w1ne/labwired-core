@@ -246,16 +246,14 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
             .ok()
             .and_then(|v| v.parse::<u32>().ok())
             .unwrap_or(labwired_core::bus::RECOMMENDED_TICK_INTERVAL);
-        ctx.machine.config.peripheral_tick_interval = interval;
-        ctx.machine.bus.config.peripheral_tick_interval = interval;
+        ctx.machine.set_peripheral_tick_interval(interval);
     }
 
     // An explicit script limit sets the peripheral tick for this run.
     // Absent leaves the interval set above: one tick per cycle, or the JIT widen.
     if let Some(interval) = ctx.resolved_limits.peripheral_tick_interval {
         if interval > 0 {
-            ctx.machine.config.peripheral_tick_interval = interval;
-            ctx.machine.bus.config.peripheral_tick_interval = interval;
+            ctx.machine.set_peripheral_tick_interval(interval);
         }
     }
 
@@ -310,6 +308,12 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     //   * `--breakpoint` / `--detect-stuck` re-read the PC between calls, and
     //     a WFI spin is exactly a stuck PC,
     //   * `--capture-app-entry` watches for the app-entry PC between calls,
+    //     but only until it has captured. That half is per-iteration (the
+    //     `app_entry_capture.is_none()` check below), not standing: the cold
+    //     rom-boot run the builder makes on every snapshot-cache miss used to
+    //     keep the fuel at one cycle for the WHOLE run, long after the capture
+    //     was written, and ran 7-11x slower in wall clock than the identical
+    //     run without the flag (same steps, same cycles, same UART).
     //   * poll-mode logic capture and ShutdownLatency assertions need
     //     cycle-accurate attribution of events inside the window.
     // Time-triggered stimuli, UART injections and `max_cycles` are NOT in that
@@ -341,7 +345,6 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         && ctx.machine.config.idle_fast_forward_enabled
         && ctx.args.breakpoint.is_empty()
         && detect_stuck.is_none()
-        && ctx.args.capture_app_entry.is_none()
         && !ctx.machine.logic_poll_active()
         && !requires_fine_grained_observation(ctx.assertions);
 
@@ -357,6 +360,16 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     // can never run PAST a boundary and then hand a model pin levels from its
     // future. Everything is synchronous — no threads, no wall clock — so the
     // same firmware produces the same model inputs on every run.
+    // A machine snapshot cannot carry an external solver's state: refuse the
+    // capture or resume before any model process starts.
+    if let Some(reason) = ctx.system.and_then(|system| {
+        labwired_core::cosim::ngspice::runtime_snapshot_refusal(&system.manifest.cosim_models)
+    }) {
+        if ctx.args.capture_app_entry.is_some() || ctx.args.resume_snapshot.is_some() {
+            error!("co-sim: --capture-app-entry / --resume-snapshot refused: {reason}");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    }
     let mut cosim = match ctx.system {
         Some(system) => {
             match labwired_core::cosim::CosimSession::new(
@@ -515,7 +528,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     // threshold, mirroring `apply_stimulus` above. A named UART that isn't
     // found on the bus is a hard config error — silently dropping serial
     // input a script depends on would be a false pass.
-    let mut uart_injection_error = false;
+    let mut uart_injection_errors = Vec::new();
     let apply_uart_injection =
         |machine: &mut labwired_core::Machine<C>, u: &labwired_config::UartInjectionSpec| {
             if let Some(device) = &u.device {
@@ -551,7 +564,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         if let Some(device) = &u.device {
             if let Err(e) = ctx.machine.bus.check_uart_peer(&u.uart, device) {
                 error!("uart_injection: {e}");
-                uart_injection_error = true;
+                uart_injection_errors.push(e);
             }
         }
     }
@@ -559,11 +572,20 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         if matches!(u.trigger, labwired_config::FaultTrigger::AtStart) {
             if let Some(err) = apply_uart_injection(ctx.machine, u) {
                 error!("{err}");
-                uart_injection_error = true;
+                uart_injection_errors.push(err);
             }
         }
     }
-    if uart_injection_error {
+    if !uart_injection_errors.is_empty() {
+        let firmware_path = ctx.firmware_path.to_path_buf();
+        write_config_error_outputs(
+            ctx.args,
+            Some(&firmware_path),
+            ctx.system_path,
+            Some(ctx.firmware_bytes),
+            Some(ctx.resolved_limits),
+            uart_injection_errors.join("; "),
+        );
         return ExitCode::from(EXIT_CONFIG_ERROR);
     }
 
@@ -737,7 +759,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
 
     let mut step = 0;
     let mut heartbeat = Heartbeat::new(ctx.args.heartbeat_file.clone());
-    while step < max_steps {
+    'run: while step < max_steps {
         crate::log_ts::refresh_cycles(ctx.machine.total_cycles);
         heartbeat.tick(step, ctx.machine.total_cycles);
         // JIT-eligible path: mirror the machine's authoritative counters into
@@ -829,6 +851,14 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
                     if cycles >= threshold {
                         if let Some(err) = apply_uart_injection(ctx.machine, u) {
                             error!("{err}");
+                            uart_injection_errors.push(err);
+                            // Host halt after a refused declared input. Preserve
+                            // the real run metrics and fail through the single
+                            // verdict below, even if the script expected a halt.
+                            // An undelivered injection is never marked fired.
+                            stop_reason = StopReason::Halt;
+                            steps_executed = step;
+                            break 'run;
                         }
                         *fired = true;
                     }
@@ -874,6 +904,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
             let chunk = remaining.min(JIT_RUN_CHUNK);
             (u64::from(chunk), chunk)
         } else if idle_ff_wide_observation
+            && app_entry_capture.is_none()
             && !ctx.counter_metrics
             && assertions_first_passed_at.is_none()
             && ctx
@@ -937,7 +968,6 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         // back, so the firmware's next instruction sees the model's answer to
         // the levels it had just driven. Without models this is the plain
         // `Machine::advance` the loop always issued.
-        let poll_skipped_before = ctx.machine.poll_loop_cycles_skipped;
         let advanced = match cosim.as_mut() {
             Some(session) => session.advance(ctx.machine, request),
             None => ctx
@@ -972,25 +1002,23 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         };
 
         // On the counter-metrics path a step is a machine cycle, retired or
-        // skipped (one instruction is one cycle on that core). Fuel counts
+        // skipped (one instruction is one cycle on that core): fuel counts
         // both, so every call ends on the same cycle as a run without any
-        // skip, and so do the checks between calls: assertions, settling,
-        // `max_steps`. The wide-fuel arm above is off there for that reason.
-        // A skipped poll-loop iteration is instructions the core would have
-        // retired, so it counts as steps and `max_steps` stops where it does
-        // without the skip. (Cortex-M retires one per cycle; on the
-        // counter-metrics path idle cycles, poll skips included, already
-        // count.)
-        let poll_skipped = ctx
-            .machine
-            .poll_loop_cycles_skipped
-            .saturating_sub(poll_skipped_before);
-        step += report.primary_steps
-            + if ctx.counter_metrics {
-                report.idle_cycles
-            } else {
-                poll_skipped
-            };
+        // skip, and so do the checks between calls (assertions, settling,
+        // `max_steps`). The wide-fuel arm above is off there for that reason.
+        //
+        // Otherwise a step is a retired instruction. A skipped poll-loop
+        // iteration is instructions the core would have retired, and
+        // `primary_steps` already carries them (`Machine::advance` adds the
+        // skip's instruction count), so `max_steps` stops where it does
+        // without the skip. Adding `poll_loop_cycles_skipped` on top counted
+        // every skipped poll-loop instruction twice and halved the device
+        // time a `max_steps` budget buys on a `delay()` sketch.
+        step += if ctx.counter_metrics {
+            report.fuel_consumed
+        } else {
+            report.primary_steps
+        };
         steps_executed = step;
         // Statistical PC sampling: one histogram hit every
         // PC_SAMPLE_EVERY retired primary steps, using the post-batch
@@ -1650,6 +1678,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     // disagree with. Do not reintroduce a second chain here.
     let verdict = crate::verdict::RunFacts {
         stimuli_rejected: stimuli_rejected > 0,
+        uart_injections_rejected: !uart_injection_errors.is_empty(),
         firmware_declared_failure,
         assertions_failed: !all_passed,
         fault_gate_failed,
@@ -1834,6 +1863,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
             .analog_series()
             .filter(|series| !series.channels.is_empty()),
         stimulus_outcomes,
+        &uart_injection_errors,
         footprint,
         Some(memory),
         ctx.machine.bus.memory_policy_report(),

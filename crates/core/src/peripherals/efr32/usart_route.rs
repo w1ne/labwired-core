@@ -218,6 +218,11 @@ impl Efr32s2UsartRoute {
 }
 
 impl crate::Peripheral for Efr32s2UsartRoute {
+    /// The `*ROUTE` registers name the pads the USART drives.
+    fn claims_pads(&self) -> bool {
+        true
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word = self.read_word(offset & !3);
         Ok(((word >> ((offset % 4) * 8)) & 0xFF) as u8)
@@ -567,6 +572,11 @@ impl Efr32s2I2cRoute {
 }
 
 impl crate::Peripheral for Efr32s2I2cRoute {
+    /// `SDAROUTE`/`SCLROUTE` name the pads the I2C drives.
+    fn claims_pads(&self) -> bool {
+        true
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word = self.read_word(offset & !3);
         Ok(((word >> ((offset % 4) * 8)) & 0xFF) as u8)

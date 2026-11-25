@@ -1,0 +1,162 @@
+{
+  "negative": {
+    "adc_code": 0,
+    "analog_trace": {
+      "channels": [
+        {
+          "name": "source-u4-gl5528.voltage_mv",
+          "port_names": [
+            "sensor_mv"
+          ],
+          "unit": "mV"
+        }
+      ],
+      "dropped": 0,
+      "next_cursor": 3,
+      "samples": [
+        {
+          "cycle": 0,
+          "time_ns": 0,
+          "values": [
+            2751.0
+          ]
+        },
+        {
+          "cycle": 1,
+          "time_ns": 1000,
+          "values": [
+            0.0
+          ]
+        },
+        {
+          "cycle": 2,
+          "time_ns": 2000,
+          "values": [
+            0.0
+          ]
+        }
+      ],
+      "time_unit": "ns"
+    },
+    "led_final": 0.0,
+    "lux": 0.0,
+    "result": 0,
+    "sensor_mv": 0.0,
+    "time_ns": 2000,
+    "trace": {
+      "channels": [
+        {
+          "initial": false,
+          "port_names": [
+            "user_led_state"
+          ],
+          "signal": "source.D1.logic_state"
+        },
+        {
+          "initial": false,
+          "port_names": [
+            "user_led_drive"
+          ],
+          "signal": "source.U3.GPIO48"
+        }
+      ],
+      "dropped": 0,
+      "edges": [],
+      "time_unit": "ns"
+    }
+  },
+  "positive": {
+    "adc_code": 4087,
+    "analog_trace": {
+      "channels": [
+        {
+          "name": "source-u4-gl5528.voltage_mv",
+          "port_names": [
+            "sensor_mv"
+          ],
+          "unit": "mV"
+        }
+      ],
+      "dropped": 0,
+      "next_cursor": 4,
+      "samples": [
+        {
+          "cycle": 0,
+          "time_ns": 0,
+          "values": [
+            2751.0
+          ]
+        },
+        {
+          "cycle": 1,
+          "time_ns": 1000,
+          "values": [
+            3294.0
+          ]
+        },
+        {
+          "cycle": 2,
+          "time_ns": 2000,
+          "values": [
+            3294.0
+          ]
+        },
+        {
+          "cycle": 3,
+          "time_ns": 3000,
+          "values": [
+            3294.0
+          ]
+        }
+      ],
+      "time_unit": "ns"
+    },
+    "led_final": 0.0,
+    "lux": 100000.0,
+    "result": 4087,
+    "sensor_mv": 3294.0,
+    "time_ns": 3000,
+    "trace": {
+      "channels": [
+        {
+          "initial": false,
+          "port_names": [
+            "user_led_state"
+          ],
+          "signal": "source.D1.logic_state"
+        },
+        {
+          "initial": false,
+          "port_names": [
+            "user_led_drive"
+          ],
+          "signal": "source.U3.GPIO48"
+        }
+      ],
+      "dropped": 0,
+      "edges": [
+        {
+          "signal": "source.U3.GPIO48",
+          "time_ns": 1000,
+          "value": 1
+        },
+        {
+          "signal": "source.D1.logic_state",
+          "time_ns": 2000,
+          "value": 1
+        },
+        {
+          "signal": "source.U3.GPIO48",
+          "time_ns": 2000,
+          "value": 0
+        },
+        {
+          "signal": "source.D1.logic_state",
+          "time_ns": 3000,
+          "value": 0
+        }
+      ],
+      "time_unit": "ns"
+    }
+  }
+}

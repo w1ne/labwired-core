@@ -1335,3 +1335,59 @@ cosim_models:
         "{second}"
     );
 }
+
+/// The browser Flex constructor builds its models through the same factory as
+/// `WasmSimulator`: without a callback an `adapter: ngspice` model is refused
+/// with the same message (no native solver host is started), and a model of
+/// another adapter is built and primed as before (negative control).
+#[test]
+fn browser_flex_builds_ngspice_through_the_shared_factory() {
+    const NGSPICE: &str = r#"
+schema_version: 1
+name: flex-ngspice-callback
+ports:
+  - { name: enable, signal: fw.enable, access: write, kind: bool, initial: 0 }
+  - { name: volts, signal: plant.volts, access: read, kind: number, unit: V }
+cosim_models:
+  - id: plant
+    adapter: ngspice
+    model: rc.cir
+    step_ns: 100000
+    inputs: { supply: fw.enable }
+    outputs: { v_out: plant.volts }
+    config:
+      input_sources: { supply: { element: Vsup, scale: 3.3, offset: 0 } }
+      output_nodes: { v_out: { node: out, scale: 1, offset: 0 } }
+"#;
+    let error = crate::flex::WasmFlexRuntime::build_for_test(NGSPICE)
+        .err()
+        .expect("no callback: refused");
+    assert!(
+        error
+            .to_string()
+            .contains("plant needs an ngspice callback"),
+        "{error}"
+    );
+    const BEHAVIOR: &str = r#"
+schema_version: 1
+name: flex-behavior
+ports:
+  - { name: command, signal: command, access: write, kind: bool, initial: 1 }
+  - { name: echo, signal: echo, access: read, kind: bool }
+cosim_models:
+  - id: echo
+    adapter: behavior
+    step_ns: 1000
+    inputs: { enable: command }
+    outputs: { echo: echo }
+    config:
+      behavior:
+        primitive: gpio_device
+        outputs: [echo]
+        pin_defaults: { echo: false }
+        rules:
+          - on: { input: enable }
+            do: [{ pin: echo, level: 'input(enable)' }]
+"#;
+    crate::flex::WasmFlexRuntime::build_for_test(BEHAVIOR).expect("behavior builds");
+}

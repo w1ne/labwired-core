@@ -53,6 +53,8 @@ peripherals:
   size: 4KB
   irq: 133
   config:
+    # TIMER10 is clocked from HFXO (32 MHz), not the 128 MHz core.
+    peripheral_hz: 32000000
     num_cc: 8
 
 # GPIO labels for the port widths already cited above from Nordic

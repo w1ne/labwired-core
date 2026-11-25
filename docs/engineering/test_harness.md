@@ -96,22 +96,10 @@ physical rehome is a later PR.
 
 | Bucket | Count | Policy |
 |--------|------:|--------|
-| `diag_*` | 6 | Always `#[ignore]`; never CI |
 | `*differential*` / walk-free | 19 | Many need `event-scheduler`; some full-boot ignored |
 | `e2e_*` / survival / shipped-lab | 17 | Mix of always-on and fixture/feature gated |
 | `*_profile` / bench | 2 | `#[ignore]` + release |
 | other | 65 | Conformance, world, JIT lockstep, onboarding, … |
-
-### diag (manual only)
-
-| Test | ignored | features |
-|------|---------|----------|
-| `diag_c3_yield` | yes | — |
-| `diag_esp32_dual_core_boot` | yes | — |
-| `diag_esp32c3_boot` | yes | — |
-| `diag_esp32c3_panic` | yes | — |
-| `diag_esp32s3_boot` | yes | — |
-| `diag_esp32s3_l2` | yes | — |
 
 ### differential (representative)
 

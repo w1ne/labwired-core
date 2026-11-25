@@ -4,7 +4,9 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use crate::decoder::riscv::{decode_rv32, Instruction};
+use super::qingke_pfic::{PficFrame, QingKePfic, HPE_REGS, INTSYSCR_HWSTKEN};
+use super::riscv64_plic::{Plic, PlicParams};
+use crate::decoder::riscv::{decode_qingke_xw, decode_rv32, Instruction};
 use crate::{Bus, Cpu, SimResult, SimulationObserver};
 use std::sync::Arc;
 
@@ -65,6 +67,129 @@ impl RiscVCoreProfile {
         } else {
             Self::Esp32C3
         }
+    }
+}
+
+const CLINT_SIZE: u32 = 0x1_0000;
+const CLINT_MTIMECMP: u32 = 0x4000;
+const CLINT_MTIME: u32 = 0xBFF8;
+
+/// Imported Renode systems built on `platforms/cpus/miv.repl` (Microchip
+/// Mi-V RV32), which share its CLINT and PLIC.
+fn is_miv(name: &str) -> bool {
+    matches!(
+        name,
+        "miv" | "miv_rv32" | "miv-board" | "miv-board-additional-uarts"
+    )
+}
+
+/// Memory-mapped core-local interruptor of a single-hart RV32 chip, in the
+/// SiFive `clint0` layout that RISC-V `riscv,machine-timer` drivers use:
+/// `msip` at +0x0, `mtimecmp` at +0x4000, `mtime` at +0xBFF8. `msip` drives
+/// `mip.MSIP`, `mtime >= mtimecmp` drives `mip.MTIP`. The window is decoded by
+/// the core, as on the RV64 core, so it never reaches the bus.
+///
+/// `mtime` counts the chip's timer reference, not CPU clocks: it is derived
+/// from the core's retired-cycle count as `cycles * mtime_hz / cpu_hz`, so a
+/// reference that does not divide the CPU clock (FE310: 32 768 Hz from
+/// 62 MHz) keeps its exact long-run rate. A firmware write to `mtime` moves
+/// `mtime_offset`.
+///
+/// Not modelled: AMO and LR/SC accesses to the window (they reach the bus),
+/// other harts' registers (read zero, writes dropped), and `msip` /
+/// `mtime_offset` in CPU snapshots (`mtimecmp` is saved).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rv32Clint {
+    pub base: u32,
+    pub mtime_hz: u64,
+    pub cpu_hz: u64,
+    pub msip: bool,
+    pub mtime_offset: u64,
+}
+
+impl Rv32Clint {
+    pub fn new(base: u32, mtime_hz: u64, cpu_hz: u64) -> Self {
+        Self {
+            base,
+            mtime_hz: mtime_hz.max(1),
+            cpu_hz: cpu_hz.max(1),
+            msip: false,
+            mtime_offset: 0,
+        }
+    }
+
+    /// The CLINT a chip descriptor's core complex carries, if any.
+    ///
+    /// Keyed by chip name, as [`crate::cpu::riscv64::Rv64Params`] is: the
+    /// block belongs to the core complex, not to a board.
+    pub fn for_chip(chip: &labwired_config::ChipDescriptor) -> Option<Self> {
+        let name = chip.name.to_ascii_lowercase();
+        if name == "sifive-fe310" && chip.cpu_hz != 0 {
+            // FE310-G002: CLINT at 0x0200_0000 (Zephyr `riscv32-fe310.dtsi`
+            // `clint@2000000`, Renode `sifive-fe310.repl`). `mtime` runs from
+            // the 32 768 Hz lfclk (Zephyr `soc/sifive/sifive_freedom/fe300`
+            // Kconfig.defconfig). Renode clocks it at 62 MHz instead.
+            return Some(Self::new(0x0200_0000, 32_768, chip.cpu_hz));
+        }
+        if is_miv(&name) && chip.cpu_hz != 0 {
+            // Mi-V: CoreLevelInterruptor at 0x4400_0000, clocked at the
+            // 66 MHz CPU clock (Renode `platforms/cpus/miv.repl`
+            // `clint ... frequency: 66000000`, `[0, 1] -> cpu@[3, 7]`).
+            return Some(Self::new(0x4400_0000, chip.cpu_hz, chip.cpu_hz));
+        }
+        None
+    }
+
+    /// The PLIC a chip descriptor's core complex carries, if any. Keyed by
+    /// chip name, as [`Self::for_chip`] is. The bus forwards a peripheral's
+    /// raw `irq:` number, which on these chips is its PLIC source ID.
+    pub fn plic_for_chip(chip: &labwired_config::ChipDescriptor) -> Option<PlicParams> {
+        let name = chip.name.to_ascii_lowercase();
+        if name == "sifive-fe310" {
+            // FE310-G002: PLIC at 0x0C00_0000 with sources 1..52, 7 priority
+            // levels (3-bit fields) and one context, hart 0 M-mode (FE310-G002
+            // Manual v1p1 Ch. 8; Zephyr `riscv32-fe310.dtsi`
+            // `interrupt-controller@c000000` `riscv,ndev = <52>`; Renode
+            // `sifive-fe310.repl` `numberOfSources: 52`, `numberOfContexts: 1`,
+            // uart0 `IRQ -> plic@3`).
+            return Some(PlicParams {
+                base: 0x0C00_0000,
+                num_sources: 53, // Plic stores the one-past-last ID.
+                num_contexts: 1,
+                priority_bits: 3,
+                context: 0,
+            });
+        }
+        if is_miv(&name) {
+            // Mi-V: PLIC at 0x4000_0000 with sources 1..31, no priority
+            // levels and one context (Renode `platforms/cpus/miv.repl`
+            // `numberOfSources: 31`, `numberOfContexts: 1`,
+            // `prioritiesEnabled: false`, `0 -> cpu@11`; timer0 and timer1
+            // drive sources 30 and 31).
+            return Some(PlicParams {
+                base: 0x4000_0000,
+                num_sources: 32, // Plic stores the one-past-last ID.
+                num_contexts: 1,
+                priority_bits: 0,
+                context: 0,
+            });
+        }
+        None
+    }
+
+    fn mtime(&self, cycles: u64) -> u64 {
+        let ticks = u128::from(cycles) * u128::from(self.mtime_hz) / u128::from(self.cpu_hz);
+        (ticks as u64).wrapping_add(self.mtime_offset)
+    }
+
+    /// First retired-cycle count at which `mtime >= cmp`.
+    fn first_cycle_at(&self, cmp: u64) -> u64 {
+        let Some(ticks) = cmp.checked_sub(self.mtime_offset) else {
+            return 0;
+        };
+        let cycles =
+            (u128::from(ticks) * u128::from(self.cpu_hz)).div_ceil(u128::from(self.mtime_hz));
+        u64::try_from(cycles).unwrap_or(u64::MAX)
     }
 }
 
@@ -170,9 +295,24 @@ pub struct RiscV {
     pub mcause: u32,
     pub mtval: u32,
 
-    // CLINT-like internal state (minimal)
+    // CLINT-like internal state (minimal). `mtime` is the retired-cycle
+    // count; with a memory-mapped [`Rv32Clint`] `mtimecmp` compares against
+    // the CLINT's own `mtime` instead.
     pub mtime: u64,
     pub mtimecmp: u64,
+    /// Memory-mapped CLINT of a chip that declares one ([`Rv32Clint::for_chip`]).
+    pub clint: Option<Rv32Clint>,
+    /// Memory-mapped PLIC of a chip that declares one
+    /// ([`Rv32Clint::plic_for_chip`]). It drives `mip.MEIP`; peripheral IRQs
+    /// pend its sources through [`Cpu::set_exception_pending`].
+    pub plic: Option<Plic>,
+    /// WCH QingKe V2 PFIC of a CH32V00x part ([`QingKePfic::for_chip`]).
+    /// Peripheral IRQs pend its lines through [`Cpu::set_exception_pending`];
+    /// the core takes them itself, through the mtvec vector table.
+    pub pfic: Option<QingKePfic>,
+    /// QingKe INTSYSCR (CSR 0x804). Stored only while a PFIC is attached;
+    /// `HWSTKEN` enables the hardware prologue/epilogue (HPE).
+    pub intsyscr: u32,
 
     /// Active LR/SC reservation address. `None` means no outstanding
     /// reservation; the next SC.W to any address will fail. On a single
@@ -263,6 +403,10 @@ impl RiscV {
             mtval: 0,
             mtime: 0,
             mtimecmp: 0,
+            clint: None,
+            plic: None,
+            pfic: None,
+            intsyscr: 0,
             reservation: None,
             triggers: trigger::TriggerModule::default(),
             waiting_for_interrupt: false,
@@ -462,12 +606,245 @@ impl RiscV {
         Self::new_for(RiscVCoreProfile::Esp32C3)
     }
 
+    /// Map a CLINT at `clint.base`. `mtimecmp` resets to all-ones, which keeps
+    /// MTIP low until firmware arms it, as SiFive-derived drivers assume.
+    pub fn attach_clint(&mut self, clint: Rv32Clint) {
+        self.clint = Some(clint);
+        self.mtimecmp = u64::MAX;
+        self.refresh_timer_lines();
+    }
+
+    /// Map a PLIC. Every source resets disabled at priority 0, so MEIP stays
+    /// low until firmware enables a source.
+    pub fn attach_plic(&mut self, params: PlicParams) {
+        self.plic = Some(Plic::new(params));
+        self.refresh_meip();
+    }
+
+    /// Map a QingKe V2 PFIC at 0xE000E000. Every line resets disabled.
+    pub fn attach_pfic(&mut self) {
+        self.pfic = Some(QingKePfic::new());
+    }
+
+    /// Take PFIC interrupt `irq`, with `mepc = next_pc`. QingKe mtvec bit 0
+    /// selects the vector table; bit 1 makes each entry an absolute handler
+    /// address (vendor startup: `_start | 3`) instead of a jump instruction.
+    fn enter_pfic_interrupt(&mut self, bus: &mut dyn Bus, irq: u32, next_pc: u32) -> SimResult<()> {
+        if let Some(pfic) = self.pfic.as_mut() {
+            pfic.take(irq);
+        }
+        self.handle_trap(0x8000_0000 | irq, next_pc);
+        if self.mtvec & 1 != 0 {
+            let slot = (self.mtvec & !3).wrapping_add(irq.wrapping_mul(4));
+            self.pc = if self.mtvec & 2 != 0 {
+                bus.read_u32(u64::from(slot))? & !1
+            } else {
+                slot
+            };
+        }
+        Ok(())
+    }
+
+    /// True when the attached PFIC has an interrupt the core would take.
+    #[inline]
+    fn pfic_ready(&self) -> bool {
+        self.pfic.as_ref().is_some_and(QingKePfic::has_ready)
+    }
+
+    /// Drive `mip.MEIP` from the PLIC's notification to this hart's context.
+    fn refresh_meip(&mut self) {
+        if let Some(plic) = &self.plic {
+            if plic.meip() {
+                self.mip |= 1 << 11;
+            } else {
+                self.mip &= !(1 << 11);
+            }
+        }
+    }
+
+    /// True when the core decodes a memory-mapped window itself (CLINT or
+    /// PLIC), so bus-only fast paths would miss its accesses.
+    #[inline]
+    fn decodes_core_mmio(&self) -> bool {
+        self.clint.is_some() || self.plic.is_some() || self.pfic.is_some()
+    }
+
+    #[inline]
+    fn plic_offset(&self, addr: u32) -> Option<u64> {
+        self.plic.as_ref()?.offset(u64::from(addr))
+    }
+
+    /// PLIC load: its registers are 32-bit, so a narrower load returns the
+    /// addressed lanes of the containing word. A claim read is a side effect.
+    fn plic_read(&mut self, off: u64, size: u32) -> u32 {
+        let Some(plic) = self.plic.as_mut() else {
+            return 0;
+        };
+        let word = plic.read_u32(off & !3);
+        self.refresh_meip();
+        let v = word >> ((off & 3) * 8);
+        if size >= 4 {
+            v
+        } else {
+            v & ((1u32 << (size * 8)) - 1)
+        }
+    }
+
+    /// PLIC store. Narrower stores write the zero-extended value to the
+    /// containing word, as SiFive's 32-bit-only register file does.
+    fn plic_write(&mut self, off: u64, size: u32, value: u32) {
+        let Some(plic) = self.plic.as_mut() else {
+            return;
+        };
+        let v = if size >= 4 {
+            value
+        } else {
+            (value & ((1u32 << (size * 8)) - 1)) << ((off & 3) * 8)
+        };
+        plic.write_u32(off & !3, v);
+        self.refresh_meip();
+    }
+
     fn update_mtime_after_elapsed_cycles(&mut self, cycles: u64) {
         self.mtime = self.mtime.wrapping_add(cycles);
-        if self.mtime >= self.mtimecmp {
+        self.refresh_timer_lines();
+    }
+
+    fn refresh_timer_lines(&mut self) {
+        let mtip = match &self.clint {
+            None => self.mtime >= self.mtimecmp,
+            Some(c) => {
+                if c.msip {
+                    self.mip |= 1 << 3; // MSIP
+                } else {
+                    self.mip &= !(1 << 3);
+                }
+                c.mtime(self.mtime) >= self.mtimecmp
+            }
+        };
+        if mtip {
             self.mip |= 1 << 7; // MTIP
         } else {
             self.mip &= !(1 << 7);
+        }
+    }
+
+    /// Retired cycles until MTIP rises: `None` when it is already pending,
+    /// `Some(u64::MAX)` when `mtimecmp` is disarmed.
+    fn cycles_until_mtip(&self) -> Option<u64> {
+        if self.mtimecmp == u64::MAX {
+            return Some(u64::MAX);
+        }
+        let target = match &self.clint {
+            None => self.mtimecmp,
+            Some(c) => c.first_cycle_at(self.mtimecmp),
+        };
+        target.checked_sub(self.mtime).filter(|n| *n != 0)
+    }
+
+    #[inline]
+    fn clint_offset(&self, addr: u32) -> Option<u32> {
+        let c = self.clint.as_ref()?;
+        let off = addr.wrapping_sub(c.base);
+        (off < CLINT_SIZE).then_some(off)
+    }
+
+    /// The 64-bit CLINT register containing `off` and its offset.
+    fn clint_reg(&self, off: u32) -> Option<(u32, u64)> {
+        let c = self.clint.as_ref()?;
+        if off < 4 {
+            Some((0, u64::from(c.msip)))
+        } else if (CLINT_MTIMECMP..CLINT_MTIMECMP + 8).contains(&off) {
+            Some((CLINT_MTIMECMP, self.mtimecmp))
+        } else if (CLINT_MTIME..CLINT_MTIME + 8).contains(&off) {
+            Some((CLINT_MTIME, c.mtime(self.mtime)))
+        } else {
+            None
+        }
+    }
+
+    fn clint_read(&self, off: u32, size: u32) -> u32 {
+        let Some((reg_off, value)) = self.clint_reg(off) else {
+            return 0;
+        };
+        let v = (value >> ((off - reg_off) * 8)) as u32;
+        if size >= 4 {
+            v
+        } else {
+            v & ((1u32 << (size * 8)) - 1)
+        }
+    }
+
+    fn clint_write(&mut self, off: u32, size: u32, value: u32) {
+        let Some((reg_off, old)) = self.clint_reg(off) else {
+            return;
+        };
+        let shift = (off - reg_off) * 8;
+        let mask = if size >= 4 {
+            u64::from(u32::MAX) << shift
+        } else {
+            u64::from((1u32 << (size * 8)) - 1) << shift
+        };
+        let new = (old & !mask) | ((u64::from(value) << shift) & mask);
+        let cycles = self.mtime;
+        let Some(c) = self.clint.as_mut() else {
+            return;
+        };
+        match reg_off {
+            0 => c.msip = new & 1 != 0,
+            CLINT_MTIMECMP => self.mtimecmp = new,
+            _ => {
+                let base = c.mtime(cycles).wrapping_sub(c.mtime_offset);
+                c.mtime_offset = new.wrapping_sub(base);
+            }
+        }
+        self.refresh_timer_lines();
+    }
+
+    /// Data load of `size` bytes, decoding the CLINT and PLIC windows before
+    /// the bus.
+    #[inline]
+    fn load(&mut self, bus: &mut dyn Bus, addr: u32, size: u32) -> SimResult<u32> {
+        if let Some(off) = self.clint_offset(addr) {
+            return Ok(self.clint_read(off, size));
+        }
+        if let Some(off) = self.plic_offset(addr) {
+            return Ok(self.plic_read(off, size));
+        }
+        if let Some(pfic) = self.pfic.as_ref() {
+            if let Some(off) = QingKePfic::offset(addr) {
+                return Ok(pfic.read(off, size));
+            }
+        }
+        Ok(match size {
+            1 => u32::from(bus.read_u8(u64::from(addr))?),
+            2 => u32::from(bus.read_u16(u64::from(addr))?),
+            _ => bus.read_u32(u64::from(addr))?,
+        })
+    }
+
+    /// Data store of `size` bytes, decoding the CLINT and PLIC windows before
+    /// the bus.
+    #[inline]
+    fn store(&mut self, bus: &mut dyn Bus, addr: u32, size: u32, value: u32) -> SimResult<()> {
+        if let Some(off) = self.clint_offset(addr) {
+            self.clint_write(off, size, value);
+            return Ok(());
+        }
+        if let Some(off) = self.plic_offset(addr) {
+            self.plic_write(off, size, value);
+            return Ok(());
+        }
+        if let Some(pfic) = self.pfic.as_mut() {
+            if let Some(off) = QingKePfic::offset(addr) {
+                pfic.write(off, size, value);
+                return Ok(());
+            }
+        }
+        match size {
+            1 => bus.write_u8(u64::from(addr), value as u8),
+            2 => bus.write_u16(u64::from(addr), value as u16),
+            _ => bus.write_u32(u64::from(addr), value),
         }
     }
 
@@ -538,6 +915,9 @@ impl RiscV {
         const LOOP_INSNS: u32 = 4;
         if budget < LOOP_INSNS
             // An armed trigger must see every access and fetch individually.
+            // CLINT and PLIC accesses are decoded by the core, not by the
+            // bus reads and writes these windows replay.
+            || self.decodes_core_mmio()
             || self.triggers.armed()
             || self.waiting_for_interrupt
             || (self.mstatus & (1 << 3)) != 0
@@ -664,6 +1044,9 @@ impl RiscV {
     fn try_store_spin_window(&mut self, bus: &mut dyn Bus, budget: u32) -> u32 {
         if budget < 6
             // An armed trigger must see every access and fetch individually.
+            // CLINT and PLIC accesses are decoded by the core, not by the
+            // bus reads and writes these windows replay.
+            || self.decodes_core_mmio()
             || self.triggers.armed()
             || self.waiting_for_interrupt
             || (self.mstatus & (1 << 3)) != 0
@@ -806,6 +1189,12 @@ impl RiscV {
             // ROM. The observed writes discard the old values; any silicon
             // side effects are not modeled.
             0x800 | 0x801 if self.core_profile == RiscVCoreProfile::Esp32C3 => 0,
+            // WCH QingKe V2 INTSYSCR (CH32V003/V005/V006 are the RV32E chips):
+            // the vendor startup writes HWSTKEN|INESTEN before `mret` to main.
+            // With a PFIC attached, HWSTKEN drives the hardware prologue and
+            // INESTEN is stored only. Without one it reads as zero.
+            0x804 if self.pfic.is_some() => self.intsyscr,
+            0x804 if self.core_profile == RiscVCoreProfile::Rv32e => 0,
             // This emulator exposes one hart, whose architectural ID is zero.
             0xF14 => 0,
             // Debug trigger module (hardware breakpoints / watchpoints).
@@ -872,6 +1261,9 @@ impl RiscV {
             0x000 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             // See read_csr: accept the ROM-init writes and discard their values.
             0x800 | 0x801 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
+            // See read_csr: QingKe V2 INTSYSCR (HWSTKEN, INESTEN).
+            0x804 if self.pfic.is_some() => self.intsyscr = val & 0x3,
+            0x804 if self.core_profile == RiscVCoreProfile::Rv32e => {}
             0x7A0..=0x7A5 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
                 return self.triggers.write_csr(csr, val)
             }
@@ -879,7 +1271,11 @@ impl RiscV {
             // See read_csr: medeleg/mideleg RAZ/WI on Esp32C3 profile.
             0x302 | 0x303 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             0x304 => self.mie = val,
-            0x344 => self.mip = val,
+            0x344 => {
+                // MEIP is read-only: the PLIC drives it.
+                self.mip = val;
+                self.refresh_meip();
+            }
             0x305 => self.mtvec = val,
             0x340 => self.mscratch = val,
             0x341 => self.mepc = val,
@@ -924,6 +1320,15 @@ impl RiscV {
                     self.mtvec, self.x[1], self.x[2], self.x[10]
                 );
             }
+        }
+        if let Some(pfic) = self.pfic.as_mut() {
+            // QingKe HPE: with HWSTKEN the hardware saves the caller-saved
+            // registers on entry and `mret` restores them, so vendor
+            // `WCH-Interrupt-fast` handlers save nothing themselves.
+            let saved =
+                (self.intsyscr & INTSYSCR_HWSTKEN != 0).then(|| HPE_REGS.map(|r| self.x[r]));
+            let irq = (cause & 0x8000_0000 != 0).then_some(cause & 0x7FFF_FFFF);
+            pfic.frames.push(PficFrame { irq, saved });
         }
         self.mepc = epc;
         self.mcause = cause;
@@ -1011,7 +1416,9 @@ impl RiscV {
     /// this checks the two rails that do NOT clamp the batch: per-instruction
     /// observers and push-mode logic taps.
     fn jit_gate_allows(&self, bus: &dyn Bus, observers: &[Arc<dyn SimulationObserver>]) -> bool {
-        if !observers.is_empty() {
+        // Compiled blocks access memory through the bus; they would miss the
+        // core-decoded CLINT and PLIC windows.
+        if !observers.is_empty() || self.decodes_core_mmio() {
             return false;
         }
         if bus.logic_tap().is_some_and(|t| t.push_armed()) {
@@ -1068,14 +1475,12 @@ impl RiscV {
         }
         // Something is already pending (or an external line is asserted): the
         // interpreter would trap within one instruction. Do not batch past it.
-        if (self.mip & self.mie) != 0 || bus.external_irq_lines() != 0 {
+        if (self.mip & self.mie) != 0 || bus.external_irq_lines() != 0 || self.pfic_ready() {
             return true;
         }
         // Internal timer edge inside the block's mtime span.
         let timer_unmasked = (self.mie & (1 << 7)) != 0;
-        timer_unmasked
-            && self.mtime < self.mtimecmp
-            && self.mtimecmp <= self.mtime.wrapping_add(n as u64)
+        timer_unmasked && self.cycles_until_mtip().is_some_and(|c| c <= u64::from(n))
     }
 
     /// Drive one batch through the JIT engine, returning the true retired
@@ -1262,8 +1667,18 @@ impl Cpu for RiscV {
         let (instruction, inst_len) = if let Some(entry) = cached {
             (entry.instruction, entry.inst_len as u32)
         } else {
-            let instruction = decode_rv32(opcode);
+            let mut instruction = decode_rv32(opcode);
             let inst_len = if (opcode & 0x3) == 0x3 { 4 } else { 2 };
+            // QingKe V2 (the RV32E chips) also runs WCH's XW compressed
+            // byte/halfword loads and stores; see `decode_qingke_xw`.
+            if inst_len == 2
+                && self.core_profile == RiscVCoreProfile::Rv32e
+                && matches!(instruction, Instruction::Unknown(_))
+            {
+                if let Some(xw) = decode_qingke_xw(opcode as u16) {
+                    instruction = xw;
+                }
+            }
             if _config.decode_cache_enabled {
                 self.decode_cache[cache_idx] = Some(RiscVDecodeCacheEntry {
                     tag: self.pc,
@@ -1358,47 +1773,47 @@ impl Cpu for RiscV {
             }
             Instruction::Lb { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u8(addr as u64)? as i8;
+                let val = self.load(bus, addr, 1)? as u8 as i8;
                 self.write_reg(rd, val as i32 as u32);
             }
             Instruction::Lh { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u16(addr as u64)? as i16;
+                let val = self.load(bus, addr, 2)? as u16 as i16;
                 self.write_reg(rd, val as i32 as u32);
             }
             Instruction::Lw { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u32(addr as u64)?;
+                let val = self.load(bus, addr, 4)?;
                 self.write_reg(rd, val);
             }
             Instruction::Lbu { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u8(addr as u64)?;
-                self.write_reg(rd, val as u32);
+                let val = self.load(bus, addr, 1)?;
+                self.write_reg(rd, val);
             }
             Instruction::Lhu { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u16(addr as u64)?;
-                self.write_reg(rd, val as u32);
+                let val = self.load(bus, addr, 2)?;
+                self.write_reg(rd, val);
             }
             Instruction::Sb { rs1, rs2, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = self.read_reg(rs2) as u8;
-                bus.write_u8(addr as u64, val)?;
+                self.store(bus, addr, 1, u32::from(val))?;
                 self.invalidate_fetch_if_store_overlaps(addr, 1);
                 self.reservation = None;
             }
             Instruction::Sh { rs1, rs2, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = self.read_reg(rs2) as u16;
-                bus.write_u16(addr as u64, val)?;
+                self.store(bus, addr, 2, u32::from(val))?;
                 self.invalidate_fetch_if_store_overlaps(addr, 2);
                 self.reservation = None;
             }
             Instruction::Sw { rs1, rs2, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = self.read_reg(rs2);
-                bus.write_u32(addr as u64, val)?;
+                self.store(bus, addr, 4, val)?;
                 self.invalidate_fetch_if_store_overlaps(addr, 4);
                 self.reservation = None;
             }
@@ -1523,6 +1938,13 @@ impl Cpu for RiscV {
                 // Return from trap. Per the privileged spec:
                 //   MIE <- MPIE, MPIE <- 1 (privilege <- MPP, but we stay M-mode).
                 self.pc = self.mepc;
+                if let Some(frame) = self.pfic.as_mut().and_then(QingKePfic::complete) {
+                    if let Some(saved) = frame.saved {
+                        for (r, v) in HPE_REGS.into_iter().zip(saved) {
+                            self.x[r] = v;
+                        }
+                    }
+                }
                 let mpie = (self.mstatus >> 7) & 1;
                 self.mstatus &= !(1 << 3); // clear MIE
                 self.mstatus |= mpie << 3; // MIE <- MPIE
@@ -1690,27 +2112,27 @@ impl Cpu for RiscV {
             }
             Instruction::CLw { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm);
-                let val = bus.read_u32(addr as u64)?;
+                let val = self.load(bus, addr, 4)?;
                 self.write_reg(rd, val);
             }
             Instruction::CSw { rs2, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm);
                 let val = self.read_reg(rs2);
-                bus.write_u32(addr as u64, val)?;
+                self.store(bus, addr, 4, val)?;
                 self.invalidate_fetch_if_store_overlaps(addr, 4);
                 self.reservation = None;
             }
             Instruction::CLwsp { rd, imm } => {
                 let sp = self.read_reg(2);
                 let addr = sp.wrapping_add(imm);
-                let val = bus.read_u32(addr as u64)?;
+                let val = self.load(bus, addr, 4)?;
                 self.write_reg(rd, val);
             }
             Instruction::CSwsp { rs2, imm } => {
                 let sp = self.read_reg(2);
                 let addr = sp.wrapping_add(imm);
                 let val = self.read_reg(rs2);
-                bus.write_u32(addr as u64, val)?;
+                self.store(bus, addr, 4, val)?;
                 self.invalidate_fetch_if_store_overlaps(addr, 4);
                 self.reservation = None;
             }
@@ -1861,6 +2283,19 @@ impl Cpu for RiscV {
         // asserted sources through the interrupt matrix. OR them into the local
         // mip view so a line stays asserted only while its source does.
         if (self.mstatus & (1 << 3)) != 0 {
+            if let Some(irq) = self.pfic.as_ref().and_then(QingKePfic::next_irq) {
+                if !observers.is_empty() {
+                    crate::emit_trace_event(
+                        observers,
+                        labwired_hw_trace::TraceEvent::InstructionRetired {
+                            pc: retired_pc,
+                            opcode,
+                        },
+                    );
+                }
+                // As below: mepc is the next instruction.
+                return self.enter_pfic_interrupt(bus, irq, next_pc);
+            }
             // Standard machine sources are masked by `mie`; ESP32-C3 external
             // lines arrive already gated (enable + priority/threshold) by the
             // bus, so they bypass `mie` (which the C3 firmware leaves at 0).
@@ -2083,27 +2518,33 @@ impl Cpu for RiscV {
     fn set_sp(&mut self, val: u32) {
         self.write_reg(2, val); // x2 is SP
     }
-    fn set_exception_pending(&mut self, _exception_num: u32) {
-        // For RISC-V Machine mode, external interrupts are routed to MEIP (bit 11).
-        // The specific 'exception_num' (IRQ) would be tracked by a PLIC.
-        // Since we don't have a PLIC yet, we pend a generic external interrupt.
-        self.mip |= 1 << 11;
+    fn set_exception_pending(&mut self, exception_num: u32) {
+        // Without an NVIC the bus forwards a peripheral's raw IRQ number,
+        // which on a chip with a PFIC is its interrupt number and on a chip
+        // with a PLIC is its source ID. Without either the
+        // line pends a generic, sticky machine external interrupt.
+        if let Some(pfic) = self.pfic.as_mut() {
+            pfic.raise(exception_num);
+        } else if let Some(plic) = self.plic.as_mut() {
+            plic.raise(exception_num);
+            self.refresh_meip();
+        } else {
+            self.mip |= 1 << 11;
+        }
     }
 
     fn idle_fast_forward_budget(&self, bus: &dyn Bus) -> Option<u64> {
         if !self.waiting_for_interrupt {
             return None;
         }
-        if ((self.mip & self.mie) | bus.external_irq_lines()) != 0 {
+        if ((self.mip & self.mie) | bus.external_irq_lines()) != 0 || self.pfic_ready() {
             return None;
         }
-        if self.mtimecmp == u64::MAX {
-            return Some(u64::MAX);
+        match self.cycles_until_mtip()? {
+            u64::MAX => Some(u64::MAX),
+            0 | 1 => None,
+            n => Some(n - 1),
         }
-        if self.mtime + 1 >= self.mtimecmp {
-            return None;
-        }
-        Some(self.mtimecmp - self.mtime - 1)
     }
 
     fn fast_forward_idle_cycles(&mut self, cycles: u64) {

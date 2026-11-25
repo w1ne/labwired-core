@@ -62,6 +62,62 @@ use crate::inspect::{AttachedDeviceRef, DeviceEvidence};
 // same name in `inspect` as it does in the stimulus API.
 
 impl SystemBus {
+    /// Qualify the *current modeled* PCA source without changing the last
+    /// servo command. A missing OE declaration is unknown, even though the
+    /// legacy synchronization path assumes it enabled for compatibility.
+    pub fn modeled_servo_source_status(
+        &self,
+        servo: &crate::peripherals::components::servo::Servo,
+    ) -> crate::peripherals::components::servo::ModeledServoSourceStatus {
+        use crate::bus::DevicePins;
+        use crate::peripherals::components::servo::ModeledServoSourceStatus as Status;
+        use crate::peripherals::gpio::GpioMode;
+        let (Some((address, channel)), Some(bus_name), Some((gpio, pin))) = (
+            servo.source(),
+            self.declared_connection(servo.id()),
+            servo.source_oe(),
+        ) else {
+            return Status::Unknown;
+        };
+        let mut matches = 0;
+        let mut pulse = None;
+        let mut nested_route_possible = false;
+        self.for_each_attached_device(&mut |bus, device| {
+            if bus == Some(bus_name)
+                && device.transport == "i2c"
+                && device.mux_address.is_some()
+                && device.evidence.is_some_and(|e| e.is_i2c_mux())
+            {
+                nested_route_possible = true;
+            }
+            if bus == Some(bus_name) && device.transport == "i2c" && device.address == Some(address)
+            {
+                matches += 1;
+                if device.mux_address.is_none() {
+                    pulse = device
+                        .evidence
+                        .and_then(|e| e.pwm_channel_pulse_us(channel));
+                }
+            }
+        });
+        if matches != 1 || nested_route_possible {
+            return Status::Unknown;
+        }
+        let output = self.find_peripheral_index(gpio).is_some_and(|idx| {
+            self.peripherals[idx]
+                .dev
+                .gpio_routing(pin)
+                .is_some_and(|r| r.mode == GpioMode::Output)
+        });
+        if !output {
+            return Status::Unknown;
+        }
+        match self.known_pad_bit(gpio, pin) {
+            Some(true) => Status::Disabled,
+            Some(false) if pulse.is_some_and(|us| us.is_finite() && us > 0.0) => Status::ModeledPwm,
+            _ => Status::Unknown,
+        }
+    }
     /// Walk every attached (off-chip) device on this machine, calling
     /// `f(bus, device)` for each. `bus` is the peripheral the device hangs off
     /// — `Some("i2c0")`, `Some("gpioa")`, `Some("fdcan1")` — or `None` in the
@@ -90,8 +146,10 @@ impl SystemBus {
         self.for_each_bus_resident_device(f);
     }
 
-    /// Pulse width (µs) the I2C PWM controller at `address` drives on `channel`,
-    /// or `None` when no such controller exists or the channel is silent.
+    /// Modeled pulse width (µs) for an I2C controller at `address`. `None`
+    /// includes silent, absent, unsupported, and unknown outputs. This query
+    /// does not prove output-enable, servo power, or physical signal delivery.
+    /// Addresses can be ambiguous across buses; this query does not resolve them.
     pub fn pwm_channel_pulse_us(&self, address: u8, channel: u8) -> Option<f64> {
         let mut found = None;
         self.for_each_attached_device(&mut |_, d| {
@@ -104,12 +162,52 @@ impl SystemBus {
 
     /// Bring every servo wired to a PWM-controller output up to date with the
     /// pulse the firmware last wrote there. Cheap; call before reading servo
-    /// state. A silent channel leaves the servo where it was.
+    /// state. An absent or unknown pulse leaves the servo where it was.
     pub fn sync_pwm_sourced_servos(&self) {
         for servo in self.observed_of::<crate::peripherals::components::servo::Servo>() {
-            if let Some((address, channel)) = servo.source() {
-                if let Some(us) = self.pwm_channel_pulse_us(address, channel) {
-                    servo.apply_pulse_us(us);
+            if let (Some((address, channel)), Some(bus_name)) =
+                (servo.source(), self.declared_connection(servo.id()))
+            {
+                if let Some((addr, bit)) = servo.source_oe() {
+                    use crate::bus::DevicePins;
+                    use crate::peripherals::gpio::GpioMode;
+                    let gpio_output = self.find_peripheral_index(addr).is_some_and(|idx| {
+                        self.peripherals[idx]
+                            .dev
+                            .gpio_routing(bit)
+                            .is_some_and(|routing| routing.mode == GpioMode::Output)
+                    });
+                    // An input, released/open-drain, contended or unknown pad is not an enable.
+                    if !gpio_output || self.known_pad_bit(addr, bit) != Some(false) {
+                        continue;
+                    }
+                }
+                // Match the servo's declared bus, not just the address: the
+                // same I2C address may exist on multiple controllers. A routed
+                // device needs mux/channel wiring evidence that this source
+                // declaration does not yet carry, so do not guess that route.
+                let mut matches = 0;
+                let mut pulse = None;
+                let mut nested_route_possible = false;
+                self.for_each_attached_device(&mut |bus, d| {
+                    if bus == Some(bus_name)
+                        && d.transport == "i2c"
+                        && d.mux_address.is_some()
+                        && d.evidence.is_some_and(|e| e.is_i2c_mux())
+                    {
+                        nested_route_possible = true;
+                    }
+                    if bus == Some(bus_name) && d.transport == "i2c" && d.address == Some(address) {
+                        matches += 1;
+                        if d.mux_address.is_none() {
+                            pulse = d.evidence.and_then(|e| e.pwm_channel_pulse_us(channel));
+                        }
+                    }
+                });
+                if matches == 1 && !nested_route_possible {
+                    if let Some(us) = pulse {
+                        servo.apply_pulse_us(us);
+                    }
                 }
             }
         }

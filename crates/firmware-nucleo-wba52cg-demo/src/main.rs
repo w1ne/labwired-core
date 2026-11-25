@@ -27,6 +27,15 @@ const USART_TDR: *mut u32 = (USART + 0x28) as *mut u32;
 const USART_BRR: *mut u32 = (USART + 0x0C) as *mut u32;
 const USART_CR1: *mut u32 = USART as *mut u32;
 const TXE: u32 = 1 << 7;
+const TC: u32 = 1 << 6;
+const TCIE: u32 = 1 << 6;
+
+// NVIC word 1 covers lines 32..63; USART1 is line 46 (RM0493).
+const NVIC_ICER1: *mut u32 = 0xE000_E184 as *mut u32;
+const NVIC_ISPR1: *const u32 = 0xE000_E204 as *const u32;
+const NVIC_ICPR1: *mut u32 = 0xE000_E284 as *mut u32;
+/// Lines 40..47 (bits 8..15 of word 1) bracket USART1 line 46.
+const NVIC_WINDOW: u32 = 0xFF << 8;
 const GPIOA: u32 = 0x4202_0000;
 const GPIOB: u32 = 0x4202_0400;
 
@@ -90,6 +99,38 @@ fn put_dec(mut v: u32) {
     }
 }
 
+fn put_hex8(v: u32) {
+    for shift in [4, 0] {
+        let d = ((v >> shift) & 0xF) as u8;
+        putc(if d < 10 { b'0' + d } else { b'a' + d - 10 });
+    }
+}
+
+/// With TX idle (TC set), TCIE must pend only USART1's NVIC line 46 in the
+/// window 40..47; clearing TCIE and ICPR must release it. The lines stay
+/// masked in ISER, so no handler runs.
+fn check_usart1_irq() {
+    unsafe {
+        while read_volatile(USART_ISR) & TC == 0 {}
+        write_volatile(NVIC_ICER1, NVIC_WINDOW);
+        write_volatile(NVIC_ICPR1, NVIC_WINDOW);
+        reg_rmw(USART, 0, TCIE);
+        let pend = (read_volatile(NVIC_ISPR1) & NVIC_WINDOW) >> 8;
+        reg_rmw(USART, TCIE, 0);
+        write_volatile(NVIC_ICPR1, NVIC_WINDOW);
+        let rel = (read_volatile(NVIC_ISPR1) & NVIC_WINDOW) >> 8;
+        send(b"usart1 tcie ispr40=");
+        put_hex8(pend);
+        send(b" rel=");
+        put_hex8(rel);
+        send(if pend == 1 << 6 && rel == 0 {
+            b" ok\r\n"
+        } else {
+            b" FAIL\r\n"
+        });
+    }
+}
+
 fn led_drive(base: u32, pin: u32, on: bool) {
     // BSRR: low half sets the pin, high half resets it.
     let high = on == LED_ACTIVE_HIGH;
@@ -125,6 +166,7 @@ fn main() -> ! {
         led_drive(base, pin, false);
     }
     send(b"NUCLEO-WBA52CG ready\r\n");
+    check_usart1_irq();
 
     let mut beat: u32 = 0;
     loop {

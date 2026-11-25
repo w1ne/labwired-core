@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="5" failures="1" errors="0" time="0.004003">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="8aa1e304bc3dcc40c715b0e70760f7b451747efa747eaa077b95ab64d708adea"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.004003">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: NPCX9 UART1 smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfcl…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok" time="0.000000">
+    <failure message="assertion failed">assertion 3: uart_contains: gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=400000
+stop_reason_details.observed.steps_executed=400000
+steps_executed=400000
+cycles=400000
+instructions=400000
+limits:
+  - max_steps=400000
+firmware_hash=8aa1e304bc3dcc40c715b0e70760f7b451747efa747eaa077b95ab64d708adea
+firmware=/tmp/rn680/neg/examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke
+system=/tmp/rn680/neg/examples/renode-onboarding/../../configs/systems/onboarding/nuvoton_npcx9.yaml
+script=/tmp/rn680/neg/examples/renode-onboarding/nuvoton_npcx9-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;NPCX9 UART1 smoke&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

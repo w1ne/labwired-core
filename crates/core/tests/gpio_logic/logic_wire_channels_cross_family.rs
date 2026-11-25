@@ -48,6 +48,7 @@ fn ram_base(chip: &str) -> u64 {
 
 fn dummy_manifest(path: &str) -> SystemManifest {
     SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),

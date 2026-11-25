@@ -51,12 +51,13 @@ peripherals:
       pad_control: "iomuxc"
       pad_control_offset: 0x32C
   # LPUART6 @ 0x40198000 — Teensy Serial1 (MIMXRT1062.h LPUART6_BASE).
-  # DATA @ +0x0C (Kinetis / nxp_lpuart layout).
+  # DATA @ +0x0C (Kinetis / nxp_lpuart layout). IRQ 25 = LPUART6_IRQn
+  # (MIMXRT1064.h, Renode imxrt1064.repl); 21 is LPUART2's line.
   - id: "lpuart6"
     type: "nxp_lpuart"
     base_address: 0x40198000
     size: "4KB"
-    irq: 21
+    irq: 25
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010

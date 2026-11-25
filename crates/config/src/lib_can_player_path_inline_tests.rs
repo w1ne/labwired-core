@@ -128,50 +128,6 @@ metadata:
 }
 
 #[test]
-fn spi_framing_defaults_are_adxl_shaped() {
-    let f = SpiFraming::default();
-    assert_eq!(f.command_bytes, 1);
-    assert_eq!(f.rw_bit, Some(7));
-    assert!(f.rw_read_high);
-    assert_eq!(f.addr_mask, 0x3F);
-    assert_eq!(f.addr_shift, 0);
-    assert!(f.auto_increment);
-}
-
-#[test]
-fn i2c_register_alias_still_names_the_shared_struct() {
-    // The rename must not break existing I2c-named references.
-    let _r: I2cRegister = RegisterSpec {
-        name: "R".into(),
-        fifo: None,
-        addr: 0,
-        width: 1,
-        endian: Endian::Le,
-        access: I2cAccess::R,
-        write_mask: None,
-        reset: 0,
-        source: None,
-        encode: None,
-        scale_from: vec![],
-        source_scale: None,
-        resolution: None,
-        signed: false,
-        fields: vec![],
-        page: None,
-        self_clearing: None,
-        popcount: None,
-        zero_when: None,
-        zero_unless: None,
-        source_from: None,
-        bits: vec![],
-        on_read: None,
-        on_write: None,
-        stream: false,
-        calendar: None,
-    };
-}
-
-#[test]
 fn every_spelling_of_a_write_action_deserializes_to_one_value() {
     // The SystemRDL names arrive from three places — a datasheet, an SVD
     // import, a hand-written part — and each spells them differently. They

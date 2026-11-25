@@ -488,3 +488,27 @@ fn real_type2v_elf_runs_the_same_one_action_uart_fixture() {
     }
     panic!("real firmware did not complete selector7/9: read={seen_read}, write={seen_write}, seven={seen_7}, nine={seen_9}, trace={:?}", attached_master(&mut machine.bus).trace_snapshot());
 }
+
+/// `powered` is the engine-wide supply key: a TIOL112 placement carrying it
+/// attaches (held off when false), while an unknown key is still refused.
+#[test]
+fn tiol112_accepts_the_powered_key_and_still_refuses_unknown_keys() {
+    let chip = ChipDescriptor::from_file(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../configs/chips/stm32g0b1re.yaml"
+    ))
+    .unwrap();
+    let with = |extra: &str| -> anyhow::Result<SystemBus> {
+        let manifest: SystemManifest = serde_yaml::from_str(&format!(
+            "name: phy-supply\nchip: ignored\nexternal_devices:\n- id: phy\n  type: tiol112\n  connection: usart1\n  config: {{en: PA8, {extra}}}\n"
+        ))?;
+        SystemBus::from_config(&chip, &manifest)
+    };
+    assert!(with("powered: false").is_ok());
+    assert!(with("powered: true").is_ok());
+    let err = with("bogus: 1").err().expect("unknown key refused");
+    assert!(
+        format!("{err:#}").contains("unsupported config key"),
+        "{err:#}"
+    );
+}

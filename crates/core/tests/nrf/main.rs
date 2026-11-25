@@ -21,6 +21,7 @@ mod common;
 #[path = "../common/microbit_sensor_guest.rs"]
 mod guest;
 
+mod arduino_nano_33_ble_bme280;
 mod microbit_v2_led_matrix;
 mod microbit_v2_mag_drdy_guest;
 mod microbit_v2_open_drain_guest;
@@ -37,3 +38,5 @@ mod nrf54l15_smart_ring_probe;
 mod nrf54l_gpio_offsets;
 mod nrf54lm20a_peripheral_estate;
 mod nrf_gpio_in_step_vs_run;
+mod nrf_rtc_lfclk_clock;
+mod nrf_timer_base_clock;

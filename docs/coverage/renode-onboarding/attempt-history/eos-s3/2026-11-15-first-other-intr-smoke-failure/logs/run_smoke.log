@@ -1,0 +1,10 @@
+2026-11-15T23:06:27.484023Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/eos-s3.yaml
+2026-11-15T23:06:27.485088Z  INFO labwired_loader: ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-15T23:06:27.486496Z  INFO labwired_cli::execute: uart_injection: 1 byte(s) delivered to 'uart'
+labwired-cli test: idle_ff skipped 99360 of 100000 device cycles (640 interpreted)
+2026-11-15T23:06:27.487656Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "EOS S3 checks PPPPPPPPPPP DONE" }) (captured len=63)
+2026-11-15T23:06:27.487666Z ERROR labwired_cli::execute: Memory assertion failed at 0x2007ff00 (size 4): expected 0xe05307ff, got 0xe05303ff (mask 0xffffffff)
+2026-11-15T23:06:27.487669Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 537394944, expected_value: 3763537919, mask: None, size: Some(4), node: None } }) (captured len=63)
+FAIL  3/5 checks · eos-s3-smoke · 100000 steps · 0.00s

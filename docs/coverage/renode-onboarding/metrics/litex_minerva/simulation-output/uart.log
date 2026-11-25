@@ -1,0 +1,4 @@
+LITEX MINERVA RV32I SMOKE
+cpu=rv32i uart=litex
+timer=running
+timer=zero

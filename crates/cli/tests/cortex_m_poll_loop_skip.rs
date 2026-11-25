@@ -31,11 +31,18 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
+/// Bounded by device time: both runs end on the same cycle by construction.
+const CYCLE_BOUND: &str = "  max_steps: 10000000\n  max_cycles: 400000\n";
+
 fn run(name: &str, skip: bool) -> (serde_json::Value, String) {
     run_fixture("cortex_m_tick_wait/tick_wait.elf", name, skip)
 }
 
 fn run_fixture(elf: &str, name: &str, skip: bool) -> (serde_json::Value, String) {
+    run_limited(elf, name, skip, CYCLE_BOUND)
+}
+
+fn run_limited(elf: &str, name: &str, skip: bool, limits: &str) -> (serde_json::Value, String) {
     let root = workspace_root();
     let dir = labwired_cli::test_support::unique_temp_dir(&format!("labwired-cm-poll-{name}"));
     std::fs::create_dir_all(&dir).unwrap();
@@ -43,7 +50,7 @@ fn run_fixture(elf: &str, name: &str, skip: bool) -> (serde_json::Value, String)
     std::fs::write(
         &script,
         format!(
-            "schema_version: \"1.0\"\ninputs:\n  firmware: \"{}\"\n  system: \"{}\"\nlimits:\n  max_steps: 10000000\n  max_cycles: 400000\n",
+            "schema_version: \"1.0\"\ninputs:\n  firmware: \"{}\"\n  system: \"{}\"\nlimits:\n{limits}",
             root.join("crates/cli/tests/fixtures").join(elf).display(),
             root.join("configs/systems/nucleo-l476rg.yaml").display(),
         ),
@@ -122,6 +129,33 @@ fn a_skipped_idle_hook_loop_that_stores_reports_the_same_run() {
     assert!(
         skipped(&fast_err) > 300_000,
         "the idle-hook waits and `b .` were not skipped:\n{fast_err}"
+    );
+    assert_eq!(
+        observable(fast),
+        observable(reference),
+        "the skip changed the run"
+    );
+}
+
+/// A run bounded by `max_steps` alone ends on the same cycle, with the same
+/// edges, whether the waits are skipped or stepped. Each skipped poll-loop
+/// instruction is one step, counted once: the skip used to be charged twice
+/// (in `primary_steps` and again from `poll_loop_cycles_skipped`), so the same
+/// budget stopped a skipped run at about half the device time.
+#[test]
+fn a_step_budget_buys_the_same_device_time_with_the_skip() {
+    let elf = "cortex_m_tick_wait/tick_wait.elf";
+    let limits = "  max_steps: 300000\n";
+    let (fast, fast_err) = run_limited(elf, "steps-skip", true, limits);
+    let (reference, _) = run_limited(elf, "steps-ref", false, limits);
+    assert!(
+        skipped(&fast_err) > 200_000,
+        "the waits were not skipped:\n{fast_err}"
+    );
+    assert_eq!(fast["steps_executed"], 300_000);
+    assert_eq!(
+        fast["cycles"], reference["cycles"],
+        "the same step budget bought different device time"
     );
     assert_eq!(
         observable(fast),

@@ -32,6 +32,11 @@ pub enum ExtiRegisterLayout {
     /// PR at 0x00..0x14, port mux in `SYSCFG_EXTICRx`), with the Cortex-M0+
     /// grouped vectors: EXTI0_1 = IRQ 5, EXTI2_3 = 6, EXTI4_15 = 7.
     Stm32L0,
+    /// WCH CH32V00x (ch32v00x.h `EXTI_TypeDef`): the F1 register file
+    /// (INTENR/EVENR/RTENR/FTENR/SWIEVR/INTFR at 0x00..0x14) with 8 GPIO
+    /// lines, port mux in `AFIO_EXTICR`, and one vector for all of them:
+    /// EXTI7_0_IRQn = 20 in the QingKe PFIC.
+    WchV00x,
 }
 
 impl FromStr for ExtiRegisterLayout {
@@ -45,8 +50,9 @@ impl FromStr for ExtiRegisterLayout {
             "stm32g0" | "g0" => Ok(Self::Stm32G0),
             "stm32u5" | "u5" => Ok(Self::Stm32U5),
             "stm32l0" | "l0" => Ok(Self::Stm32L0),
+            "wch_v00x" | "ch32v00x" => Ok(Self::WchV00x),
             _ => Err(format!(
-                "unsupported EXTI register layout '{}'; supported: stm32f1, stm32l4, stm32g0, stm32u5, stm32l0",
+                "unsupported EXTI register layout '{}'; supported: stm32f1, stm32l4, stm32g0, stm32u5, stm32l0, wch_v00x",
                 value
             )),
         }
@@ -138,6 +144,9 @@ fn push_line_irqs(active: u32, line_irqs: &[(u8, u32)], irqs: &mut Vec<u32>) {
 /// 2..3 → 6 (EXTI2_3), 4..15 → 7 (EXTI4_15), per the RM0367 and RM0444
 /// vector tables.
 const M0_GPIO_GROUPS: [(u32, u32); 3] = [(0x0003, 5), (0x000c, 6), (0xfff0, 7)];
+
+/// The CH32V00x GPIO vector: lines 0..7 → EXTI7_0_IRQn (20, ch32v00x.h).
+const WCH_V00X_GPIO_GROUPS: [(u32, u32); 1] = [(0x00ff, 20)];
 
 /// Bank-1 GPIO-group NVIC line LEVELS (the level twin of
 /// [`route_bank1_irqs`]): EXTI0..4 → IRQ 6..10, EXTI9_5 → 23, EXTI15_10 → 40.
@@ -272,6 +281,8 @@ pub enum Exti {
     Stm32U5(SplitPendingGpioExti),
     /// The F1 register file with the L0 vector routing.
     Stm32L0(F1Exti),
+    /// The F1 register file with the CH32V00x vector routing.
+    WchV00x(F1Exti),
 }
 
 impl Default for Exti {
@@ -304,6 +315,10 @@ impl Exti {
                 line_mask,
                 ..Default::default()
             }),
+            ExtiRegisterLayout::WchV00x => Self::WchV00x(F1Exti {
+                line_mask,
+                ..Default::default()
+            }),
         }
     }
 
@@ -316,7 +331,7 @@ impl Exti {
                     e.rpr |= 1 << line;
                 }
             }
-            Self::Stm32F1(e) | Self::Stm32L0(e) => {
+            Self::Stm32F1(e) | Self::Stm32L0(e) | Self::WchV00x(e) => {
                 if line < 32 {
                     e.bank1.pr |= 1u32 << line;
                 }
@@ -334,7 +349,7 @@ impl Exti {
     /// any other layout refuses.
     pub fn set_line_irqs(&mut self, line_irqs: Vec<(u8, u32)>) -> Result<(), String> {
         match self {
-            Self::Stm32F1(e) | Self::Stm32L0(e) => {
+            Self::Stm32F1(e) | Self::Stm32L0(e) | Self::WchV00x(e) => {
                 if let Some((line, _)) = line_irqs
                     .iter()
                     .find(|(line, _)| *line < 16 || *line >= 32 || e.line_mask & (1 << line) == 0)
@@ -360,7 +375,7 @@ impl Exti {
         }
         let bit = 1u32 << line;
         let bank = match self {
-            Self::Stm32F1(e) | Self::Stm32L0(e) => {
+            Self::Stm32F1(e) | Self::Stm32L0(e) | Self::WchV00x(e) => {
                 if e.line_mask & bit == 0 {
                     return false;
                 }
@@ -423,7 +438,7 @@ impl Exti {
                 }
                 return false;
             }
-            Self::Stm32F1(e) | Self::Stm32L0(e) => &mut e.bank1,
+            Self::Stm32F1(e) | Self::Stm32L0(e) | Self::WchV00x(e) => &mut e.bank1,
             Self::Stm32L4(e) => &mut e.bank1,
         };
         if line_source != Some(port) {
@@ -440,7 +455,7 @@ impl Exti {
     fn read_reg(&self, offset: u64) -> u32 {
         match self {
             Self::Stm32G0(e) | Self::Stm32U5(e) => e.read(offset),
-            Self::Stm32F1(e) | Self::Stm32L0(e) => match offset {
+            Self::Stm32F1(e) | Self::Stm32L0(e) | Self::WchV00x(e) => match offset {
                 0x00..=0x14 => e.bank1.read(offset),
                 _ => {
                     crate::census_reg!("exti:Exti", offset, "read");
@@ -462,7 +477,7 @@ impl Exti {
         match self {
             Self::Stm32G0(e) => e.write(offset, value, 0x07070707),
             Self::Stm32U5(e) => e.write(offset, value, 0x0f0f0f0f),
-            Self::Stm32F1(e) | Self::Stm32L0(e) => {
+            Self::Stm32F1(e) | Self::Stm32L0(e) | Self::WchV00x(e) => {
                 if (0x00..=0x14).contains(&offset) {
                     let mask = e.line_mask;
                     e.bank1.write(offset, value, mask);
@@ -509,6 +524,18 @@ impl Exti {
                 }
                 push_line_irqs(active, &e.line_irqs, &mut irqs);
             }
+            Self::WchV00x(e) => {
+                // Lines 8 (PVD) and 9 (AWU) stay register-level: their
+                // vectors (PVD_IRQn 17, AWU_IRQn 21) are not wired, and
+                // `line_irqs:` accepts only lines 16+.
+                let active = e.bank1.pr & e.bank1.imr;
+                for (mask, irq) in WCH_V00X_GPIO_GROUPS {
+                    if active & mask != 0 {
+                        irqs.push(irq);
+                    }
+                }
+                push_line_irqs(active, &e.line_irqs, &mut irqs);
+            }
             Self::Stm32F1(e) => {
                 let active1 = e.bank1.pr & e.bank1.imr;
                 if active1 != 0 {
@@ -549,7 +576,9 @@ impl Exti {
     fn active(&self) -> bool {
         match self {
             Self::Stm32G0(e) | Self::Stm32U5(e) => e.active() != 0,
-            Self::Stm32F1(e) | Self::Stm32L0(e) => (e.bank1.pr & e.bank1.imr) != 0,
+            Self::Stm32F1(e) | Self::Stm32L0(e) | Self::WchV00x(e) => {
+                (e.bank1.pr & e.bank1.imr) != 0
+            }
             Self::Stm32L4(e) => (e.bank1.pr & e.bank1.imr) != 0 || (e.bank2.pr & e.bank2.imr) != 0,
         }
     }
@@ -569,7 +598,7 @@ impl Exti {
     fn scheduler_mode(&self) -> bool {
         let clock = match self {
             Self::Stm32G0(e) | Self::Stm32U5(e) => &e.clock,
-            Self::Stm32F1(e) | Self::Stm32L0(e) => &e.clock,
+            Self::Stm32F1(e) | Self::Stm32L0(e) | Self::WchV00x(e) => &e.clock,
             Self::Stm32L4(e) => &e.clock,
         };
         cfg!(feature = "event-scheduler") && clock.is_some()
@@ -578,7 +607,7 @@ impl Exti {
     fn set_chain_live(&mut self, live: bool) {
         match self {
             Self::Stm32G0(e) | Self::Stm32U5(e) => e.chain_live = live,
-            Self::Stm32F1(e) | Self::Stm32L0(e) => e.chain_live = live,
+            Self::Stm32F1(e) | Self::Stm32L0(e) | Self::WchV00x(e) => e.chain_live = live,
             Self::Stm32L4(e) => e.chain_live = live,
         }
     }
@@ -586,7 +615,7 @@ impl Exti {
     fn chain_live(&self) -> bool {
         match self {
             Self::Stm32G0(e) | Self::Stm32U5(e) => e.chain_live,
-            Self::Stm32F1(e) | Self::Stm32L0(e) => e.chain_live,
+            Self::Stm32F1(e) | Self::Stm32L0(e) | Self::WchV00x(e) => e.chain_live,
             Self::Stm32L4(e) => e.chain_live,
         }
     }
@@ -596,7 +625,7 @@ impl Exti {
     pub fn force_legacy_walk(&mut self) {
         match self {
             Self::Stm32G0(e) | Self::Stm32U5(e) => e.clock = None,
-            Self::Stm32F1(e) | Self::Stm32L0(e) => e.clock = None,
+            Self::Stm32F1(e) | Self::Stm32L0(e) | Self::WchV00x(e) => e.clock = None,
             Self::Stm32L4(e) => e.clock = None,
         }
     }
@@ -686,7 +715,7 @@ impl Peripheral for Exti {
     fn attach_cycle_clock(&mut self, clock: CycleClock) {
         match self {
             Self::Stm32G0(e) | Self::Stm32U5(e) => e.clock = Some(clock),
-            Self::Stm32F1(e) | Self::Stm32L0(e) => e.clock = Some(clock),
+            Self::Stm32F1(e) | Self::Stm32L0(e) | Self::WchV00x(e) => e.clock = Some(clock),
             Self::Stm32L4(e) => e.clock = Some(clock),
         }
     }
@@ -758,6 +787,12 @@ impl Peripheral for Exti {
             Self::Stm32L0(e) => {
                 let active = e.bank1.pr & e.bank1.imr;
                 for (mask, irq) in M0_GPIO_GROUPS {
+                    report(irq, active & mask != 0);
+                }
+            }
+            Self::WchV00x(e) => {
+                let active = e.bank1.pr & e.bank1.imr;
+                for (mask, irq) in WCH_V00X_GPIO_GROUPS {
                     report(irq, active & mask != 0);
                 }
             }
@@ -939,6 +974,32 @@ mod external_mux {
         assert_eq!(e.tick().explicit_irqs, Some(vec![40]), "EXTI15_10");
     }
 
+    /// CH32V00x: every GPIO line 0..7 pends EXTI7_0_IRQn (20) in the PFIC,
+    /// never the F1 6..10/23/40 (PFIC slots 6..10 are reserved there).
+    #[test]
+    fn wch_v00x_routes_lines_0_to_7_to_irq_20() {
+        let mut exti = Exti::new_with_layout_lines(ExtiRegisterLayout::WchV00x, 0x3ff);
+        exti.write_u32(0x00, 0xFF).unwrap(); // INTENR
+        exti.write_u32(0x0C, 0xFF).unwrap(); // FTENR
+        let levels = |exti: &Exti| {
+            let mut out = Vec::new();
+            exti.irq_line_levels(&mut |irq, on| out.push((irq, on)));
+            out
+        };
+        assert_eq!(levels(&exti), vec![(20, false)]);
+        for line in 0..8u8 {
+            assert!(exti.gpio_edge_with_source(3, line, true, false, Some(3)));
+            assert_eq!(exti.tick().explicit_irqs, Some(vec![20]), "line {line}");
+            assert_eq!(levels(&exti), vec![(20, true)]);
+            exti.write_u32(0x14, 1 << line).unwrap(); // INTFR rc_w1
+            assert_eq!(exti.tick().explicit_irqs, None);
+        }
+        assert_eq!(
+            "ch32v00x".parse::<ExtiRegisterLayout>(),
+            Ok(ExtiRegisterLayout::WchV00x)
+        );
+    }
+
     /// L0: the F1 register file, but the NVIC lines are the Cortex-M0+
     /// groups 5/6/7, both in the held level and in the levels the bus
     /// reconciles — never the F1 6..10/23/40.
@@ -1108,7 +1169,7 @@ mod scheduler_diff {
         let mut walk = build(layout, false);
         let mut sched = build(layout, true);
         let clock = match &sched {
-            Exti::Stm32F1(e) | Exti::Stm32L0(e) => e.clock.clone(),
+            Exti::Stm32F1(e) | Exti::Stm32L0(e) | Exti::WchV00x(e) => e.clock.clone(),
             Exti::Stm32L4(e) => e.clock.clone(),
             Exti::Stm32G0(e) | Exti::Stm32U5(e) => e.clock.clone(),
         }

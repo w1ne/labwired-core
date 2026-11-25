@@ -230,6 +230,7 @@ mod esp32c3_s3_ledc_waveform_tests {
 
     fn manifest_for(path: &std::path::Path) -> labwired_config::SystemManifest {
         labwired_config::SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),

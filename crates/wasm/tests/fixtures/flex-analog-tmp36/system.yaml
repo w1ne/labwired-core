@@ -1,0 +1,19 @@
+# Held-out portable workload using the existing registered TMP36 analog source.
+schema_version: 1
+name: Reusable TMP36 temperature-source check
+assumptions:
+  - The registered TMP36 catalog equation is used as a deterministic functional analog source.
+  - The portable firmware writes temperature in degrees Celsius and reads the modeled millivolt output.
+unsupported_checks:
+  - Original target-MCU firmware execution, ADC peripheral fidelity, sensor tolerance, and physical measurement are not modeled.
+ports:
+  - { name: temperature_c, signal: environment.temperature_c, access: write, kind: number, unit: "°C", initial: 25 }
+  - { name: temperature_mv, signal: sensor.output_mv, access: read, kind: number, unit: mV }
+cosim_models:
+  - id: tmp36-sensor
+    adapter: behavior
+    step_ns: 1000
+    inputs: { temperature: environment.temperature_c }
+    outputs: { voltage_mv: sensor.output_mv }
+    config:
+      device_type: tmp36

@@ -277,6 +277,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          retention-days: 7
           name: cortex-m-oracle-evidence
           path: oracle-source/oracle-evidence/
 
@@ -384,6 +385,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
+          retention-days: 7
           name: identity-${{ matrix.side }}
           path: out/
 
@@ -552,5 +554,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          retention-days: 7
           name: identity-report
           path: report.txt

@@ -1,20 +1,23 @@
 name: cortex_a53_console
-description: 'cortex_a53_console (root platform, Generic). Architecture: ARMv8-A (AArch64).'
+description: 'Imported Cortex-A53 console target. Measured profile covers one Cortex-A53 PE, DDR and the PL011 UART0 (polled TX); the generic timer and virtio-mmio console are not modeled.'
 family: Generic
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/cortex_a53_console.yaml
 provenance:
   generated_by: scripts/onboard_hw_targets.py
 validation:
-  method: ci-arm-fixture-simulation
-  reason: simulation-ok
+  method: renode-onboarding-aarch64-pl011-smoke
+  reason: bounded AArch64 + PL011 polled-TX smoke; whole platform and other imported peripherals are unverified
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-10-18T14:39:53.496532+00:00'
+    uart0_polled_tx: true
+    other_peripherals: false
+    whole_platform: false
+  timestamp_utc: '2026-11-06T04:19:12Z'
   run_url: ''
-  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/cortex_a53_console.md
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/cortex_a53_console/
