@@ -1,7 +1,7 @@
 {
   "name": "labwired",
-  "version": "0.1.1",
-  "description": "Design electronic circuits, simulate and verify embedded firmware, and lay out supported PCBs with LabWired.",
+  "version": "0.2.0",
+  "description": "Design electronic circuits, simulate and verify embedded firmware, run deterministic CI regressions, export KiCad/BOM/STEP fabrication packs, audit ERC/DRC safety, and lay out supported PCBs with LabWired.",
   "author": {
     "name": "LabWired",
     "url": "https://labwired.com"
@@ -14,13 +14,20 @@
   "repository": "https://github.com/w1ne/labwired-core",
   "license": "MIT",
   "keywords": [
+    "labwired",
+    "mcp",
     "electronics",
     "circuit",
     "firmware",
+    "simulation",
     "pcb",
     "embedded",
     "arduino",
     "esp32",
-    "kicad"
+    "stm32",
+    "kicad",
+    "ci",
+    "erc",
+    "drc"
   ]
 }
