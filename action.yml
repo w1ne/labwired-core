@@ -1,0 +1,427 @@
+name: "LabWired Circuit & Firmware Verification"
+author: "LabWired"
+description: "Drop-in Wokwi diagram.json, KiCad (.kicad_sch/.kicad_pcb), and firmware CI verification with ERC, PCB DRC, PR summary, and live replay links."
+branding:
+  icon: "cpu"
+  color: "green"
+
+inputs:
+  diagram:
+    description: "Path to a Wokwi diagram.json or LabWired diagram.json (auto-detected if omitted)"
+    required: false
+    default: ""
+  kicad_sch:
+    description: "Path to a KiCad .kicad_sch schematic (auto-detected if omitted)"
+    required: false
+    default: ""
+  kicad_pcb:
+    description: "Path to a KiCad .kicad_pcb board file (auto-detected if omitted)"
+    required: false
+    default: ""
+  board_hint:
+    description: "Optional LabWired board id hint for schematic/PCB import (e.g. stm32f411ceu6-blackpill, nucleo-l476rg)"
+    required: false
+    default: ""
+  script:
+    description: "Path to a LabWired test script YAML (auto-detected from tests/labwired.yml, labwired.yml, or tests/firmware-regression.yaml)"
+    required: false
+    default: ""
+  firmware:
+    description: "Optional firmware ELF path override (passed to labwired test --firmware)"
+    required: false
+    default: ""
+  system:
+    description: "Optional system.yaml path override (defaults to lowered Wokwi/KiCad system.yaml when available)"
+    required: false
+    default: ""
+  version:
+    description: "labwired-cli release tag to download from w1ne/labwired-core (default: latest)"
+    required: false
+    default: "latest"
+  fail_on_erc:
+    description: "Fail the workflow if ERC reports errors ('true' or 'false')"
+    required: false
+    default: "true"
+  fail_on_drc:
+    description: "Fail the workflow if PCB DRC reports errors ('true' or 'false')"
+    required: false
+    default: "true"
+  upload:
+    description: "Upload public CI artifacts to api.labwired.com via GitHub OIDC for live replay links and status badges ('true' or 'false')"
+    required: false
+    default: "true"
+  api_url:
+    description: "LabWired API base URL for OIDC upload and status badges"
+    required: false
+    default: "https://api.labwired.com"
+  comment:
+    description: "Post or update a sticky PR comment with ERC/DRC/firmware results ('true' or 'false')"
+    required: false
+    default: "true"
+  comment_tag:
+    description: "Optional tag appended to the sticky PR comment marker so multiple jobs in one PR maintain separate comments"
+    required: false
+    default: ""
+  out_dir:
+    description: "Directory where verification reports and simulation artifacts are written"
+    required: false
+    default: "out/labwired"
+  extra_args:
+    description: "Optional extra whitespace-separated flags passed to labwired test"
+    required: false
+    default: ""
+
+outputs:
+  verdict:
+    description: "Overall verdict: pass, fail, unproven, or error"
+    value: ${{ steps.verdict.outputs.verdict }}
+  summary_line:
+    description: "Single-line summary (e.g. ERC 0/0 · DRC 0/0 · 2/2 firmware assertions passed)"
+    value: ${{ steps.verdict.outputs.summary_line }}
+  erc_errors:
+    description: "Number of ERC errors"
+    value: ${{ steps.verdict.outputs.erc_errors }}
+  erc_warnings:
+    description: "Number of ERC warnings"
+    value: ${{ steps.verdict.outputs.erc_warnings }}
+  drc_errors:
+    description: "Number of PCB DRC errors"
+    value: ${{ steps.verdict.outputs.drc_errors }}
+  drc_warnings:
+    description: "Number of PCB DRC warnings"
+    value: ${{ steps.verdict.outputs.drc_warnings }}
+  assertions_passed:
+    description: "Number of passing firmware assertions"
+    value: ${{ steps.verdict.outputs.assertions_passed }}
+  assertions_total:
+    description: "Total firmware assertions evaluated"
+    value: ${{ steps.verdict.outputs.assertions_total }}
+  report_url:
+    description: "Shareable LabWired live replay URL (when OIDC upload succeeds)"
+    value: ${{ steps.upload.outputs.report_url }}
+  badge_url:
+    description: "Public Verified by LabWired SVG badge URL for this repository"
+    value: ${{ steps.report.outputs.badge_url }}
+  playground_url:
+    description: "LabWired Playground / CI URL for this run"
+    value: ${{ steps.report.outputs.playground_url }}
+  out_dir:
+    description: "Output directory containing circuit-report.json, result.json, and uart.log"
+    value: ${{ inputs.out_dir }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Detect circuit & firmware inputs
+      id: detect
+      shell: bash
+      env:
+        IN_DIAGRAM: ${{ inputs.diagram }}
+        IN_KICAD_SCH: ${{ inputs.kicad_sch }}
+        IN_KICAD_PCB: ${{ inputs.kicad_pcb }}
+        IN_SCRIPT: ${{ inputs.script }}
+        IN_OUTDIR: ${{ inputs.out_dir }}
+      run: |
+        set -euo pipefail
+        mkdir -p "${IN_OUTDIR}"
+
+        diagram="${IN_DIAGRAM}"
+        kicad_sch="${IN_KICAD_SCH}"
+        kicad_pcb="${IN_KICAD_PCB}"
+        script="${IN_SCRIPT}"
+
+        # Only auto-detect from repository root when no explicit circuit input was supplied.
+        if [[ -z "${diagram}" && -z "${kicad_sch}" && -z "${kicad_pcb}" ]]; then
+          if [[ -f "diagram.json" ]]; then
+            diagram="diagram.json"
+          else
+            found_pcb="$(find . -maxdepth 3 -name '*.kicad_pcb' -not -path '*/.git/*' -not -path '*/node_modules/*' | sort | head -n 1 || true)"
+            found_sch="$(find . -maxdepth 3 -name '*.kicad_sch' -not -path '*/.git/*' -not -path '*/node_modules/*' | sort | head -n 1 || true)"
+            if [[ -n "${found_pcb}" ]]; then
+              kicad_pcb="${found_pcb#./}"
+            fi
+            if [[ -n "${found_sch}" ]]; then
+              kicad_sch="${found_sch#./}"
+            fi
+          fi
+        fi
+
+        if [[ -z "${script}" ]]; then
+          for candidate in \
+            "tests/labwired.yml" \
+            "tests/labwired.yaml" \
+            "labwired.yml" \
+            "labwired.yaml" \
+            "tests/firmware-regression.yaml" \
+            "tests/firmware-regression.yml" \
+            "tests/ci.yaml"; do
+            if [[ -f "${candidate}" ]]; then
+              script="${candidate}"
+              break
+            fi
+          done
+        fi
+
+        {
+          echo "diagram=${diagram}"
+          echo "kicad_sch=${kicad_sch}"
+          echo "kicad_pcb=${kicad_pcb}"
+          echo "script=${script}"
+        } >> "${GITHUB_OUTPUT}"
+
+        echo "Detected inputs: diagram='${diagram}' kicad_sch='${kicad_sch}' kicad_pcb='${kicad_pcb}' script='${script}'"
+
+    - name: Verify circuit (Wokwi / KiCad ERC + PCB DRC + twin lowering)
+      id: circuit
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        DIAGRAM: ${{ steps.detect.outputs.diagram }}
+        KICAD_SCH: ${{ steps.detect.outputs.kicad_sch }}
+        KICAD_PCB: ${{ steps.detect.outputs.kicad_pcb }}
+        BOARD_HINT: ${{ inputs.board_hint }}
+        OUTDIR: ${{ inputs.out_dir }}
+      run: |
+        set -euo pipefail
+        if [[ -z "${DIAGRAM}" && -z "${KICAD_SCH}" && -z "${KICAD_PCB}" ]]; then
+          echo "circuit_rc=0" >> "${GITHUB_OUTPUT}"
+          echo "lowered_system=" >> "${GITHUB_OUTPUT}"
+          exit 0
+        fi
+
+        verifier_gz="${ACTION_PATH}/action/dist/labwired-verify-circuit.mjs.gz"
+        verifier_js="${RUNNER_TEMP}/labwired-verify-circuit.mjs"
+        gzip -dc "${verifier_gz}" > "${verifier_js}"
+
+        args=("--out" "${OUTDIR}")
+        if [[ -n "${DIAGRAM}" ]]; then
+          args+=("--diagram" "${DIAGRAM}")
+        fi
+        if [[ -n "${KICAD_SCH}" ]]; then
+          args+=("--kicad-sch" "${KICAD_SCH}")
+        fi
+        if [[ -n "${KICAD_PCB}" ]]; then
+          args+=("--kicad-pcb" "${KICAD_PCB}")
+        fi
+        if [[ -n "${BOARD_HINT}" ]]; then
+          args+=("--board-hint" "${BOARD_HINT}")
+        fi
+
+        set +e
+        node "${verifier_js}" "${args[@]}"
+        rc=$?
+        set -e
+
+        lowered_system="$(python3 - "${OUTDIR}/circuit-report.json" <<'PY'
+        import json, sys
+        from pathlib import Path
+        p = Path(sys.argv[1])
+        if not p.is_file():
+            sys.exit(0)
+        try:
+            d = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            sys.exit(0)
+        low = d.get("lowered") or {}
+        if low.get("ok") and low.get("system_yaml"):
+            print(low["system_yaml"])
+        PY
+        )"
+
+        {
+          echo "circuit_rc=${rc}"
+          echo "lowered_system=${lowered_system}"
+        } >> "${GITHUB_OUTPUT}"
+
+    - name: Install labwired CLI
+      id: install_cli
+      if: ${{ steps.detect.outputs.script != '' }}
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        if command -v labwired >/dev/null 2>&1; then
+          echo "bin=$(command -v labwired)" >> "${GITHUB_OUTPUT}"
+          exit 0
+        fi
+
+        install_dir="${RUNNER_TEMP}/labwired-cli"
+        mkdir -p "${install_dir}"
+
+        os="$(uname -s)"
+        arch="$(uname -m)"
+        case "${os}-${arch}" in
+          Linux-x86_64) target="linux-x86_64" ;;
+          Linux-aarch64|Linux-arm64) target="linux-aarch64" ;;
+          Darwin-arm64) target="darwin-aarch64" ;;
+          Darwin-x86_64) target="darwin-x86_64" ;;
+          *)
+            echo "::error::Unsupported platform ${os}-${arch} for prebuilt labwired CLI"
+            exit 1
+            ;;
+        esac
+
+        resolved="$(python3 - "${VERSION}" "${target}" <<'PY'
+        import json, os, sys, urllib.request
+        want, target = sys.argv[1], sys.argv[2]
+        suffix = f"-{target}.tar.gz"
+        headers = {"Accept": "application/vnd.github+json", "User-Agent": "w1ne-labwired-core-action/v1"}
+        tok = os.environ.get("GH_TOKEN", "").strip()
+        if tok:
+            headers["Authorization"] = f"Bearer {tok}"
+        if want != "latest":
+            url = f"https://api.github.com/repos/w1ne/labwired-core/releases/tags/{want}"
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                rels = [json.loads(resp.read().decode("utf-8"))]
+        else:
+            url = "https://api.github.com/repos/w1ne/labwired-core/releases?per_page=30"
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                rels = json.loads(resp.read().decode("utf-8"))
+        for rel in rels:
+            if rel.get("draft"):
+                continue
+            for asset in rel.get("assets") or []:
+                name = str(asset.get("name") or "")
+                if name.startswith("labwired-") and name.endswith(suffix):
+                    print(f"{rel.get('tag_name', '')}\t{asset.get('browser_download_url', '')}")
+                    sys.exit(0)
+        sys.exit(1)
+        PY
+        )"
+        tag="${resolved%%$'\t'*}"
+        url="${resolved#*$'\t'}"
+        if [[ -z "${url}" ]]; then
+          echo "::error::No labwired release asset found for ${VERSION} (${target})"
+          exit 1
+        fi
+        echo "Downloading ${url} (${tag})"
+        curl -fsSL "${url}" -o "${install_dir}/labwired.tar.gz"
+        tar -xzf "${install_dir}/labwired.tar.gz" -C "${install_dir}"
+        bin_path="$(find "${install_dir}" -type f -name labwired | head -n 1)"
+        if [[ -z "${bin_path}" ]]; then
+          echo "::error::labwired binary not found in ${url}"
+          exit 1
+        fi
+        chmod +x "${bin_path}"
+        "${bin_path}" --version
+        {
+          echo "bin=${bin_path}"
+          echo "cli_version=${tag}"
+        } >> "${GITHUB_OUTPUT}"
+
+    - name: Run firmware simulation & assertions
+      id: sim
+      if: ${{ steps.detect.outputs.script != '' }}
+      shell: bash
+      env:
+        LABWIRED_BIN: ${{ steps.install_cli.outputs.bin }}
+        SCRIPT: ${{ steps.detect.outputs.script }}
+        FIRMWARE: ${{ inputs.firmware }}
+        SYSTEM_OVERRIDE: ${{ inputs.system }}
+        LOWERED_SYSTEM: ${{ steps.circuit.outputs.lowered_system }}
+        OUTDIR: ${{ inputs.out_dir }}
+        EXTRA_ARGS: ${{ inputs.extra_args }}
+      run: |
+        set -euo pipefail
+        args=("test" "--script" "${SCRIPT}" "--output-dir" "${OUTDIR}" "--no-uart-stdout")
+        if [[ -n "${FIRMWARE}" ]]; then
+          args+=("--firmware" "${FIRMWARE}")
+        fi
+
+        chosen_system="${SYSTEM_OVERRIDE}"
+        if [[ -z "${chosen_system}" && -n "${LOWERED_SYSTEM}" ]]; then
+          # Only auto-bind lowered system.yaml when the test script does not declare inputs.system.
+          has_system="$(python3 - "${SCRIPT}" <<'PY'
+        import re, sys
+        from pathlib import Path
+        txt = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+        print("yes" if re.search(r"^\s*system\s*:", txt, re.M) else "no")
+        PY
+        )"
+          if [[ "${has_system}" == "no" ]]; then
+            chosen_system="${LOWERED_SYSTEM}"
+          fi
+        fi
+
+        if [[ -n "${chosen_system}" ]]; then
+          args+=("--system" "${chosen_system}")
+        fi
+
+        if [[ -n "${EXTRA_ARGS}" ]]; then
+          # shellcheck disable=SC2206
+          extra_arr=(${EXTRA_ARGS})
+          args+=("${extra_arr[@]}")
+        fi
+
+        echo "Running: ${LABWIRED_BIN} ${args[*]}"
+        set +e
+        "${LABWIRED_BIN}" "${args[@]}"
+        rc=$?
+        set -e
+        echo "sim_rc=${rc}" >> "${GITHUB_OUTPUT}"
+
+    - name: Compute combined verdict
+      id: verdict
+      if: always()
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        OUTDIR: ${{ inputs.out_dir }}
+        CIRCUIT_RC: ${{ steps.circuit.outputs.circuit_rc }}
+        SIM_RC: ${{ steps.sim.outputs.sim_rc }}
+        FAIL_ON_ERC: ${{ inputs.fail_on_erc }}
+        FAIL_ON_DRC: ${{ inputs.fail_on_drc }}
+      run: |
+        set -euo pipefail
+        python3 "${ACTION_PATH}/action/verdict.py"
+
+    - name: Upload public CI artifacts for live replay
+      id: upload
+      if: always() && inputs.upload == 'true'
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        OUTDIR: ${{ inputs.out_dir }}
+        VERDICT: ${{ steps.verdict.outputs.verdict }}
+        ASSERTIONS_PASSED: ${{ steps.verdict.outputs.assertions_passed }}
+        ASSERTIONS_TOTAL: ${{ steps.verdict.outputs.assertions_total }}
+        CLI_VERSION: ${{ steps.install_cli.outputs.cli_version }}
+        REPO_PRIVATE: ${{ github.event.repository.private }}
+        API_URL: ${{ inputs.api_url }}
+      run: |
+        set -euo pipefail
+        python3 "${ACTION_PATH}/action/upload.py"
+
+    - name: Render Step Summary & PR Comment
+      id: report
+      if: always()
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        OUTDIR: ${{ inputs.out_dir }}
+        VERDICT: ${{ steps.verdict.outputs.verdict }}
+        SUMMARY_LINE: ${{ steps.verdict.outputs.summary_line }}
+        REPORT_URL: ${{ steps.upload.outputs.report_url }}
+        API_URL: ${{ inputs.api_url }}
+        PR_COMMENT: ${{ inputs.comment }}
+        COMMENT_TAG: ${{ inputs.comment_tag }}
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        python3 "${ACTION_PATH}/action/report.py"
+
+    - name: Enforce verification verdict
+      shell: bash
+      env:
+        VERDICT: ${{ steps.verdict.outputs.verdict }}
+        SUMMARY_LINE: ${{ steps.verdict.outputs.summary_line }}
+      run: |
+        set -euo pipefail
+        if [[ "${VERDICT}" != "pass" ]]; then
+          echo "::error title=LabWired verification failed::${SUMMARY_LINE}"
+          exit 1
+        fi

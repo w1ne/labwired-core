@@ -140,6 +140,21 @@ The committed decks are
 [`examples/cosim-ngspice-ldr`](../examples/cosim-ngspice-ldr/README.md) and
 [`examples/cosim-ngspice-ntc`](../examples/cosim-ngspice-ntc/README.md).
 
+The same parity now holds at project level, not only per element. The
+source-pinned HeyPCB ESP32-S3 NTC fixture carries `system-ngspice.yaml` and
+`ntc.cir` beside the in-core `system.yaml`, and three `ngspice-*.yaml` scripts
+repeat the in-core sequences through `labwired test --script`. Measured on
+2026-11-25: every firmware `loop` result, the console text, the asserted scope
+values and the instrument counts are identical on both engines; settled scope
+samples agree within 2·10⁻⁷ V (f32), and the range script's fastest transient
+sample differs by 1.05·10⁻² V because the in-core backward-Euler curve lags the
+analytic one, which ngspice follows within 0.1 mV. The scripts are not named
+`test-*.yaml`
+because the generic fixture matrix and the browser receipt run without a solver
+host; `labwired_test_runs_the_heypcb_ntc_deck_on_ngspice` runs them on both
+engines and also requires the `source.sha256` netlist pin and the 61 °C stop on
+both.
+
 ### Pinning the circuit a Flex run solved
 
 A Flex manifest's `manifest_sha256` covers the manifest bytes. It cannot cover
