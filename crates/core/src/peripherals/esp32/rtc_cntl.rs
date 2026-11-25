@@ -348,6 +348,10 @@ impl RtcCntl {
 }
 
 impl Peripheral for RtcCntl {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     /// A supply reset resets both cores with the same cause.
     fn on_supply_reset(&mut self, cause: crate::power::SupplyResetCause) {
         let code = match cause {

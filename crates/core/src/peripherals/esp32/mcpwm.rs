@@ -168,6 +168,10 @@ impl Mcpwm {
 }
 
 impl Peripheral for Mcpwm {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     fn add_mcpwm_duty_observer(&mut self, obs: Arc<dyn McpwmDutyObserver>) -> bool {
         self.add_duty_observer(obs);
         true

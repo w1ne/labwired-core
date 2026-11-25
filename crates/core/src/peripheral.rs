@@ -442,6 +442,13 @@ pub trait Peripheral: std::fmt::Debug + Send {
         false
     }
 
+    /// True only when every tick path returns zero additional machine cycles.
+    /// Exact external mechanical frontiers require this proof before advancing;
+    /// unknown implementations are refused, not probed after an overrun.
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        false
+    }
+
     fn tick(&mut self) -> PeripheralTickResult {
         PeripheralTickResult::default()
     }

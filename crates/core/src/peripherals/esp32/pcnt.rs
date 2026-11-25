@@ -311,6 +311,10 @@ fn mask_if(bit: u32) -> u32 {
 }
 
 impl Peripheral for Esp32Pcnt {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word = self.reg(offset & !3);
         Ok((word >> ((offset % 4) * 8)) as u8)

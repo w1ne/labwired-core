@@ -206,6 +206,10 @@ impl Efuse {
 }
 
 impl Peripheral for Efuse {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     // Inert walk: eFuse register bank; the CMD handshake settles across the write/next-read pair, and tick() is an explicit no-op ("no time-varying state").
     fn needs_legacy_walk(&self) -> bool {
         false
