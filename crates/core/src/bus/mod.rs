@@ -72,7 +72,11 @@ pub use interrupt_fabric::{
 };
 pub use memory_policy::{CpuWritePolicy, MemoryPolicyReport, RegionPolicyStats, RegionViolation};
 pub(crate) use motors::CircuitMotorLookup;
-pub use motors::{MotorCoupling, MotorSnapshot, STEPPER_SNAPSHOT_KIND};
+pub use motors::{
+    ExternalMechanicalFrame, ExternalMechanicalInput, ExternalMechanicalInterval,
+    ExternalShaftObservation, ExternalShaftState, MotorCoupling, MotorSnapshot,
+    STEPPER_SNAPSHOT_KIND,
+};
 
 impl SystemBus {
     /// Exception entry consumed the pend of NVIC line `irq`: re-arm every
@@ -864,6 +868,9 @@ pub struct SystemBus {
     live_numeric: Option<Box<crate::live_numeric::LiveNumericCapture>>,
     /// Last simulator-cycle boundary applied to `motors`.
     motor_cycle_anchor: u64,
+    /// Last accepted complete external shaft/input frame, or unprimed.
+    external_mechanical_frontier: Option<u64>,
+    external_mechanical_inputs: Vec<(String, String)>,
     /// Circuit-coupled INA219 breakouts: shunt current / bus voltage samples
     /// from the analog island, averaged over the conversion window before
     /// latching into SimInput. Empty when no `board.ina219.*` route binds.

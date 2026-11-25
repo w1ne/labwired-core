@@ -110,6 +110,34 @@ impl Shaft {
         })
     }
 
+    /// Kinematics storage only. The external solver must declare the complete
+    /// inertia and losses; retaining native mechanical parameters is rejected.
+    pub(crate) fn new_external(params: ShaftParams) -> Result<Self, ModelError> {
+        for (field, value) in [
+            ("inertia_kg_m2", params.inertia_kg_m2),
+            (
+                "viscous_friction_nm_per_rad_s",
+                params.viscous_friction_nm_per_rad_s,
+            ),
+            ("coulomb_friction_nm", params.coulomb_friction_nm),
+            ("load_torque_nm", params.load_torque_nm),
+        ] {
+            if value != 0.0 {
+                return Err(ModelError::new(
+                    field,
+                    "must be zero when the external solver owns mechanics",
+                ));
+            }
+        }
+        Ok(Self {
+            params,
+            position_rad: 0.0,
+            angular_velocity_rad_s: 0.0,
+            net_torque_nm: 0.0,
+            quadratic_drag_nm_per_rad_s2: 0.0,
+        })
+    }
+
     pub fn params(&self) -> ShaftParams {
         self.params
     }
@@ -187,6 +215,21 @@ impl Shaft {
             ));
         }
         self.quadratic_drag_nm_per_rad_s2 = value;
+        Ok(())
+    }
+
+    /// Replace kinematics supplied by the one external mechanical owner.
+    pub(crate) fn set_external_state(
+        &mut self,
+        position_rad: f64,
+        angular_velocity_rad_s: f64,
+    ) -> Result<(), ModelError> {
+        validate_finite("position_rad", position_rad)?;
+        validate_finite("angular_velocity_rad_s", angular_velocity_rad_s)?;
+        self.position_rad = position_rad;
+        self.angular_velocity_rad_s = angular_velocity_rad_s;
+        // The external solver owns net mechanical torque as well.
+        self.net_torque_nm = 0.0;
         Ok(())
     }
 

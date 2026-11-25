@@ -1,12 +1,15 @@
 use super::*;
 use crate::physics::motor::{
     BldcMotor, BldcMotorParams, BrushedDcMotor, BrushedMotorParams, GatePair, HBridgeCommand,
-    HBridgeState, InverterCommand, Phase, QuadratureEncoder, ShaftParams,
+    HBridgeState, InverterCommand, Phase, QuadratureEncoder, ShaftOwner, ShaftParams,
 };
 use labwired_config::{
     BldcMotorConfig, BothInputsLow, BrushedMotorConfig, MotorArmature, MotorModelConfig,
-    SystemManifest,
+    MotorShaftOwner, SystemManifest,
 };
+
+mod external;
+pub use external::*;
 
 /// `control_state` of a circuit-driven motor before the netlist has routed
 /// any winding current: the shaft is held, not guessed.
@@ -491,6 +494,8 @@ impl SystemBus {
             }
         }
         self.motor_cycle_anchor = self.current_cycle;
+        self.external_mechanical_frontier = None;
+        self.external_mechanical_inputs.clear();
         Ok(())
     }
 
@@ -613,14 +618,26 @@ impl SystemBus {
             coulomb_friction_nm: c.coulomb_friction_nm,
             load_torque_nm: c.load_torque_nm,
         };
-        let plant = BrushedDcMotor::new(BrushedMotorParams {
+        if c.shaft_owner == MotorShaftOwner::External && c.simulation_clock_hz != self.cpu_hz {
+            anyhow::bail!(
+                "motor '{}': external shaft simulation_clock_hz {} must equal MCU clock {}",
+                c.id,
+                c.simulation_clock_hz,
+                self.cpu_hz
+            );
+        }
+        let params = BrushedMotorParams {
             resistance_ohm: c.resistance_ohm,
             inductance_h: c.inductance_h,
             torque_constant_nm_per_a: c.torque_constant_nm_per_a,
             back_emf_constant_v_per_rad_s: c.back_emf_constant_v_per_rad_s,
             supply_voltage_v: c.supply_voltage_v,
             shaft,
-        })?;
+        };
+        let plant = match c.shaft_owner {
+            MotorShaftOwner::Native => BrushedDcMotor::new(params)?,
+            MotorShaftOwner::External => BrushedDcMotor::new_external_shaft(params)?,
+        };
         // Hardware PWM: the emitter fills both fields only when the PWM pin has
         // a timer alternate function, so either one being absent keeps the
         // legacy ODR path.
@@ -1049,7 +1066,13 @@ impl SystemBus {
                     series,
                     ..
                 } => {
-                    series.live_error = None;
+                    if plant.shaft_owner() == ShaftOwner::Native {
+                        series.live_error = None;
+                    } else if series.live_error.is_some() {
+                        // A lost electrical interval cannot be presented as
+                        // a valid torque impulse on a later frame.
+                        continue;
+                    }
                     let dt_s = elapsed as f64 / *simulation_clock_hz as f64;
                     if let Some(winding) = circuit {
                         service_circuit_winding(plant, winding, dt_s, control_state);
@@ -2003,6 +2026,11 @@ impl SystemBus {
                 })
                 .ok_or_else(|| format!("unknown motor '{id}'"))?;
         match (&self.motors[index], fault) {
+            (MotorRuntime::Dc { plant, .. }, "stall")
+                if plant.shaft_owner() == ShaftOwner::External =>
+            {
+                return Err("stall belongs to the external mechanical owner".to_owned());
+            }
             (_, "stall") => {}
             (MotorRuntime::Dc { .. }, _) => {
                 return Err(format!("fault '{fault}' requires a BLDC motor"));

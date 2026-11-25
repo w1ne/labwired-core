@@ -463,6 +463,10 @@ impl Sha {
 }
 
 impl Peripheral for Sha {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     // Inert walk: SHA ops run atomically at the command-register write (BUSY reads 0); tick() is an explicit no-op.
     fn needs_legacy_walk(&self) -> bool {
         false

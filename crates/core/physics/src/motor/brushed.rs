@@ -19,6 +19,14 @@ pub struct BrushedMotorParams {
     pub shaft: ShaftParams,
 }
 
+/// The only integrator permitted to change shaft position and velocity.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ShaftOwner {
+    #[default]
+    Native,
+    External,
+}
+
 /// Fault inputs applied to the motor model.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct MotorFaults {
@@ -134,6 +142,9 @@ pub struct BrushedDcMotor {
     /// this model's own electrical integration. See
     /// [`Self::new_circuit_driven`].
     circuit_driven: bool,
+    shaft_owner: ShaftOwner,
+    /// Integral of electromagnetic torque since the last external frame.
+    external_torque_impulse_nm_s: f64,
 }
 
 impl BrushedDcMotor {
@@ -230,6 +241,10 @@ impl BrushedDcMotor {
     }
 
     pub fn new(params: BrushedMotorParams) -> Result<Self, ModelError> {
+        Self::new_owned(params, ShaftOwner::Native)
+    }
+
+    fn new_owned(params: BrushedMotorParams, shaft_owner: ShaftOwner) -> Result<Self, ModelError> {
         validate_positive("resistance_ohm", params.resistance_ohm)?;
         validate_positive("inductance_h", params.inductance_h)?;
         validate_positive("torque_constant_nm_per_a", params.torque_constant_nm_per_a)?;
@@ -238,7 +253,10 @@ impl BrushedDcMotor {
             params.back_emf_constant_v_per_rad_s,
         )?;
         validate_positive("supply_voltage_v", params.supply_voltage_v)?;
-        let shaft = Shaft::new(params.shaft)?;
+        let shaft = match shaft_owner {
+            ShaftOwner::Native => Shaft::new(params.shaft)?,
+            ShaftOwner::External => Shaft::new_external(params.shaft)?,
+        };
 
         Ok(Self {
             params,
@@ -251,7 +269,52 @@ impl BrushedDcMotor {
             bridge_state: HBridgeState::Coast,
             faults: MotorFaults::default(),
             circuit_driven: false,
+            shaft_owner,
+            external_torque_impulse_nm_s: 0.0,
         })
+    }
+
+    /// A bridge motor whose shaft is integrated by an external rigid-body solver.
+    /// Electrical current and torque remain native; q/qd are held between frames.
+    pub fn new_external_shaft(params: BrushedMotorParams) -> Result<Self, ModelError> {
+        Self::new_owned(params, ShaftOwner::External)
+    }
+
+    pub fn shaft_owner(&self) -> ShaftOwner {
+        self.shaft_owner
+    }
+
+    /// Validate and atomically replace externally supplied shaft kinematics.
+    /// Back-EMF uses this velocity from the next electrical substep.
+    pub fn set_external_shaft_state(
+        &mut self,
+        position_rad: f64,
+        angular_velocity_rad_s: f64,
+    ) -> Result<(), ModelError> {
+        if self.shaft_owner != ShaftOwner::External {
+            return Err(ModelError {
+                field: "shaft_owner",
+                message: "shaft state is owned by the native integrator".to_owned(),
+            });
+        }
+        let back_emf_v = self.params.back_emf_constant_v_per_rad_s * angular_velocity_rad_s;
+        let speed_rpm = angular_velocity_rad_s * (60.0 / TAU);
+        validate_candidate("back_emf_v", back_emf_v)?;
+        validate_candidate("speed_rpm", speed_rpm)?;
+        self.shaft
+            .set_external_state(position_rad, angular_velocity_rad_s)?;
+        self.back_emf_v = back_emf_v;
+        self.speed_rpm = speed_rpm;
+        Ok(())
+    }
+
+    pub fn external_torque_impulse_nm_s(&self) -> f64 {
+        self.external_torque_impulse_nm_s
+    }
+
+    /// Start the next coupling interval only after its frame has committed.
+    pub fn clear_external_torque_impulse(&mut self) {
+        self.external_torque_impulse_nm_s = 0.0;
     }
 
     pub fn params(&self) -> BrushedMotorParams {
@@ -267,7 +330,7 @@ impl BrushedDcMotor {
     /// Engaging stall immediately clears shaft velocity while retaining the
     /// current position. Releasing stall therefore resumes from rest.
     pub fn set_faults(&mut self, faults: MotorFaults) {
-        if faults.stalled {
+        if faults.stalled && self.shaft_owner == ShaftOwner::Native {
             self.shaft.hold_still();
             self.back_emf_v = 0.0;
             self.speed_rpm = 0.0;
@@ -277,6 +340,7 @@ impl BrushedDcMotor {
 
     /// Continuous passive shaft drag evaluated by the native shaft integrator.
     pub fn set_quadratic_drag_nm_per_rad_s2(&mut self, value: f64) -> Result<(), ModelError> {
+        self.require_native_shaft("quadratic_drag_nm_per_rad_s2")?;
         self.shaft.set_quadratic_drag_nm_per_rad_s2(value)
     }
 
@@ -289,6 +353,9 @@ impl BrushedDcMotor {
     /// Circuit-driven callers retain their own electrical/coupling step cap.
     pub fn service_timestep_s(&self, maximum_s: f64) -> Result<f64, ModelError> {
         validate_positive("dt_s", maximum_s)?;
+        if self.shaft_owner == ShaftOwner::External {
+            return Ok(maximum_s);
+        }
         let rate = 2.0
             * self.shaft.quadratic_drag_nm_per_rad_s2()
             * self.shaft.angular_velocity_rad_s().abs()
@@ -304,6 +371,7 @@ impl BrushedDcMotor {
 
     /// Atomically updates signed shaft load torque.
     pub fn set_load_torque_nm(&mut self, load_torque_nm: f64) -> Result<(), ModelError> {
+        self.require_native_shaft("load_torque_nm")?;
         let mut candidate = self.clone();
         candidate.shaft.set_load_torque_nm(load_torque_nm)?;
         candidate.params.shaft.load_torque_nm = load_torque_nm;
@@ -360,10 +428,14 @@ impl BrushedDcMotor {
         }
         command.validate()?;
         validate_positive("dt_s", dt_s)?;
-        validate_timestep(self.params, command.state, dt_s)?;
+        if self.shaft_owner == ShaftOwner::External {
+            validate_electrical_timestep(self.params, dt_s)?;
+        } else {
+            validate_timestep(self.params, command.state, dt_s)?;
+        }
 
         let mut candidate = self.clone();
-        if candidate.faults.stalled {
+        if candidate.faults.stalled && candidate.shaft_owner == ShaftOwner::Native {
             candidate.shaft.hold_still();
         }
 
@@ -401,7 +473,13 @@ impl BrushedDcMotor {
             "electromagnetic_torque_nm",
             candidate.electromagnetic_torque_nm,
         )?;
-        if !candidate.faults.stalled {
+        if candidate.shaft_owner == ShaftOwner::External {
+            candidate.external_torque_impulse_nm_s += candidate.electromagnetic_torque_nm * dt_s;
+            validate_candidate(
+                "torque_impulse_nm_s",
+                candidate.external_torque_impulse_nm_s,
+            )?;
+        } else if !candidate.faults.stalled {
             candidate
                 .shaft
                 .step(candidate.electromagnetic_torque_nm, dt_s)?;
@@ -413,6 +491,16 @@ impl BrushedDcMotor {
         validate_candidate("speed_rpm", candidate.speed_rpm)?;
         candidate.bridge_state = command.state;
         *self = candidate;
+        Ok(())
+    }
+
+    fn require_native_shaft(&self, field: &'static str) -> Result<(), ModelError> {
+        if self.shaft_owner == ShaftOwner::External {
+            return Err(ModelError {
+                field,
+                message: "mechanical loads belong to the external shaft owner".to_owned(),
+            });
+        }
         Ok(())
     }
 }
@@ -460,11 +548,7 @@ fn validate_candidate(field: &'static str, value: f64) -> Result<(), ModelError>
     }
 }
 
-fn validate_timestep(
-    params: BrushedMotorParams,
-    bridge_state: HBridgeState,
-    dt_s: f64,
-) -> Result<(), ModelError> {
+fn validate_electrical_timestep(params: BrushedMotorParams, dt_s: f64) -> Result<(), ModelError> {
     let electrical_ratio = dt_s * params.resistance_ohm / params.inductance_h;
     if !electrical_ratio.is_finite() || electrical_ratio >= 2.0 {
         return Err(ModelError {
@@ -474,6 +558,16 @@ fn validate_timestep(
                 .to_owned(),
         });
     }
+
+    Ok(())
+}
+
+fn validate_timestep(
+    params: BrushedMotorParams,
+    bridge_state: HBridgeState,
+    dt_s: f64,
+) -> Result<(), ModelError> {
+    validate_electrical_timestep(params, dt_s)?;
 
     let friction = params.shaft.viscous_friction_nm_per_rad_s;
     if friction > 0.0 {
@@ -749,5 +843,104 @@ mod tests {
         let mut motor = BrushedDcMotor::new(motor_params()).unwrap();
         assert!(!motor.is_circuit_driven());
         assert!(motor.step_with_winding_current(0.5, 0.0001).is_err());
+    }
+    fn external_params() -> BrushedMotorParams {
+        let mut params = motor_params();
+        params.shaft = ShaftParams {
+            inertia_kg_m2: 0.0,
+            viscous_friction_nm_per_rad_s: 0.0,
+            coulomb_friction_nm: 0.0,
+            load_torque_nm: 0.0,
+        };
+        params
+    }
+
+    #[test]
+    fn external_owner_rejects_native_mechanics_instead_of_dropping_them() {
+        assert!(BrushedDcMotor::new_external_shaft(motor_params()).is_err());
+        for parameter in 0..4 {
+            let mut params = external_params();
+            match parameter {
+                0 => params.shaft.inertia_kg_m2 = 0.001,
+                1 => params.shaft.viscous_friction_nm_per_rad_s = 0.01,
+                2 => params.shaft.coulomb_friction_nm = 0.01,
+                _ => params.shaft.load_torque_nm = 0.01,
+            }
+            assert!(BrushedDcMotor::new_external_shaft(params).is_err());
+        }
+        assert!(BrushedDcMotor::new_external_shaft(external_params()).is_ok());
+        assert!(BrushedDcMotor::new(external_params()).is_err());
+    }
+
+    #[test]
+    fn external_shaft_holds_kinematics_and_integrates_current_and_impulse() {
+        let params = external_params();
+        let mut motor = BrushedDcMotor::new_external_shaft(params).unwrap();
+        motor.set_external_shaft_state(1.25, 10.0).unwrap();
+        let command = HBridgeCommand::forward(0.6).unwrap();
+        let dt = 0.00001;
+        let mut expected_impulse = 0.0;
+        for _ in 0..100 {
+            motor.step(command, dt).unwrap();
+            let snapshot = motor.snapshot();
+            assert_eq!(snapshot.position_rad, 1.25);
+            assert_eq!(snapshot.angular_velocity_rad_s, 10.0);
+            assert_eq!(
+                snapshot.back_emf_v,
+                params.back_emf_constant_v_per_rad_s * 10.0
+            );
+            expected_impulse += snapshot.electromagnetic_torque_nm * dt;
+        }
+        assert!(motor.snapshot().current_a > 0.0);
+        assert_eq!(motor.external_torque_impulse_nm_s(), expected_impulse);
+        assert!(expected_impulse > 0.0);
+        motor.clear_external_torque_impulse();
+        assert_eq!(motor.external_torque_impulse_nm_s(), 0.0);
+    }
+
+    #[test]
+    fn external_back_emf_changes_winding_current_and_owner_rejects_loads() {
+        let mut resting = BrushedDcMotor::new_external_shaft(external_params()).unwrap();
+        let mut turning = resting.clone();
+        turning.set_external_shaft_state(0.5, 20.0).unwrap();
+        let command = HBridgeCommand::forward(1.0).unwrap();
+        resting.step(command, 0.00001).unwrap();
+        turning.step(command, 0.00001).unwrap();
+        assert!(turning.snapshot().current_a < resting.snapshot().current_a);
+        assert!(turning.set_load_torque_nm(1.0).is_err());
+        assert!(turning.set_quadratic_drag_nm_per_rad_s2(0.1).is_err());
+    }
+
+    #[test]
+    fn external_shaft_invalid_state_is_atomic_and_native_rejects_external_state() {
+        let mut motor = BrushedDcMotor::new_external_shaft(external_params()).unwrap();
+        motor.set_external_shaft_state(1.0, 2.0).unwrap();
+        let before = motor.snapshot();
+        for (position, speed) in [(f64::NAN, 1.0), (1.0, f64::INFINITY), (1.0, f64::MAX)] {
+            assert!(motor.set_external_shaft_state(position, speed).is_err());
+            assert_eq!(motor.snapshot(), before);
+        }
+        let mut native = BrushedDcMotor::new(motor_params()).unwrap();
+        assert_eq!(native.shaft_owner(), super::ShaftOwner::Native);
+        let before = native.snapshot();
+        assert!(native.set_external_shaft_state(1.0, 2.0).is_err());
+        assert_eq!(native.snapshot(), before);
+    }
+
+    #[test]
+    fn external_impulse_accounts_for_all_pwm_phases_not_only_the_last_sample() {
+        let mut motor = BrushedDcMotor::new_external_shaft(external_params()).unwrap();
+        let dt = 0.00001;
+        let command = HBridgeCommand::forward(1.0).unwrap();
+        for _ in 0..100 {
+            motor.step(command, dt).unwrap();
+        }
+        let driven_impulse = motor.external_torque_impulse_nm_s();
+        for _ in 0..2000 {
+            motor.step(HBridgeCommand::coast(), dt).unwrap();
+        }
+        assert!(motor.external_torque_impulse_nm_s() >= driven_impulse);
+        assert!(motor.snapshot().electromagnetic_torque_nm.abs() < 1e-6);
+        assert!(motor.external_torque_impulse_nm_s() > 1e-6);
     }
 }
