@@ -4943,10 +4943,10 @@ Device-only unit tests, ADC register tests with no netlist, files that only
 list fixture paths, and helper tests do not count: they prove the model,
 not the board.</p>
 <ul>
-<li>Profiles in <code>configs/systems/</code>: <strong>439</strong></li>
-<li>Covered end to end: <strong>19</strong></li>
-<li>Not covered: <strong>420</strong></li>
-<li>Not covered but with an <code>analog_pins:</code> map: <strong>50</strong> (these are the
+<li>Profiles in <code>configs/systems/</code>: <strong>440</strong></li>
+<li>Covered end to end: <strong>21</strong></li>
+<li>Not covered: <strong>419</strong></li>
+<li>Not covered but with an <code>analog_pins:</code> map: <strong>51</strong> (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   <code>analog_pins:</code> map, an ADC model, or a digital endpoint first)</li>
 </ul>
@@ -5213,6 +5213,11 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>stm32f411ceu6</code></td>
 <td style="text-align: right;">10</td>
 </tr>
+<tr>
+<td><code>wch-ch32v003evt-bme280</code></td>
+<td><code>ch32v003f4p6</code></td>
+<td style="text-align: right;">8</td>
+</tr>
 </tbody>
 </table>
 <h2 id="not-covered">Not covered</h2>
@@ -5288,16 +5293,6 @@ count is what the generic decks can reach without new routing.</p>
 <tr>
 <td><code>arduino-nano-every</code></td>
 <td><code>atmega4809</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>arduino-uno-r4-minima-bme280</code></td>
-<td><code>ra4m1</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>arduino-uno-r4-minima</code></td>
-<td><code>ra4m1</code></td>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
@@ -7325,6 +7320,11 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>vegaboard-ri5cy</code></td>
 <td style="text-align: right;">0</td>
 </tr>
+<tr>
+<td><code>wch-ch32v003evt-bme280</code></td>
+<td><code>ch32v003f4p6</code></td>
+<td style="text-align: right;">8</td>
+</tr>
 </tbody>
 </table>
 <h2 id="covered">Covered</h2>
@@ -7361,6 +7361,16 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>arduino-nano</code></td>
 <td><code>atmega328p</code></td>
 <td><code>crates/core/tests/analog/cosim_avr_atmega328p_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>arduino-uno-r4-minima-bme280</code></td>
+<td><code>ra4m1</code></td>
+<td><code>crates/core/tests/analog/cosim_ra4m1_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>arduino-uno-r4-minima</code></td>
+<td><code>ra4m1</code></td>
+<td><code>crates/core/tests/analog/cosim_ra4m1_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>arduino-uno</code></td>
