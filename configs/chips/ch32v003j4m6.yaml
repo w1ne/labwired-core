@@ -49,8 +49,8 @@ pin_count: 8
 pins:
   PA1: { gpio: "gpioa", bit: 1 }
   PA2: { gpio: "gpioa", bit: 2 }
-  PC1: { gpio: "gpioc", bit: 1 }
-  PC2: { gpio: "gpioc", bit: 2 }
+  PC1: { gpio: "gpioc", bit: 1, functions: [{ type: i2c, peripheral: "i2c1", role: sda }] }
+  PC2: { gpio: "gpioc", bit: 2, functions: [{ type: i2c, peripheral: "i2c1", role: scl }] }
   PC4: { gpio: "gpioc", bit: 4 }
   PD1: { gpio: "gpiod", bit: 1 }
   PD4: { gpio: "gpiod", bit: 4 }
@@ -186,6 +186,23 @@ peripherals:
     clock: { reg: "apb1pcenr", bit: 0 }
     config:
       pad_map: "wch_v00x"
+
+  # I2C1 (ch32v00x.h): I2C1_BASE = APB1PERIPH_BASE + 0x5400, RCC_I2C1EN =
+  # APB1PCENR bit 21. I2C_TypeDef is the legacy F1 register file at the same
+  # offsets (CTLR1 0x00 .. CKCFGR 0x1C; STAR1 SB=0x01, ADDR=0x02, BTF=0x04,
+  # STOPF=0x10, RXNE=0x40, TXE=0x80, AF=0x400; STAR2 MSL=0x01, BUSY=0x02,
+  # TRA=0x04), so the `i2c` model's default `stm32f1` layout serves
+  # it. Default (non-remapped) pads are SDA PC1 and SCL PC2; the AFIO partial
+  # and full remaps are not modelled. I2C1_EV (30) and I2C1_ER (31) are both
+  # wired because the stock openwch `Wire` library runs the interrupt path.
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 30
+    clock: { reg: "apb1pcenr", bit: 21 }
+    config:
+      irq_error: 31
 
   # QingKe V2 system timer STK (core_riscv.h): SysTick_Type at 0xE000F000 is
   # CTLR, SR, CNT, reserved, CMP. The vendor noneos-sdk `Delay_Us`/`Delay_Ms`

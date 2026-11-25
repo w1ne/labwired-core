@@ -2880,6 +2880,18 @@ impl SystemBus {
             ("i2c2", 'b', 11, LINE_SDA, "I2C2_SDA"),
         ];
 
+        // WCH CH32V003 (GPIO `profile: wch`). CH32V003DS0 and the vendor
+        // `ch32v00x.h`: I2C1's default, non-remapped function is SDA = PC1,
+        // SCL = PC2, which the openwch core selects from `PIN_WIRE_SDA` /
+        // `PIN_WIRE_SCL`. The pads have one CFGLR word and no AF nibble, so
+        // the rows carry `selector: None` like the STM32F1 entries. The AFIO
+        // partial/full remaps (SDA PD0 or PC6, SCL PD1 or PC5) are not
+        // modelled and stay unbound rather than guessed.
+        const WCH_V00X: &[I2cPadF1] = &[
+            ("i2c1", 'c', 2, LINE_SCL, "I2C1_SCL"),
+            ("i2c1", 'c', 1, LINE_SDA, "I2C1_SDA"),
+        ];
+
         // Modern controller on an STM32G0 (`pad_map: stm32g0`): STM32G071
         // DS12232 port A/B alternate-function tables, AF6 column. The L4
         // table's AF4 is not I²C on a G0.
@@ -2941,6 +2953,14 @@ impl SystemBus {
                     (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Stm32V2) => F4,
                     (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Stm32F1) => {
                         for &(i2c, p, pin, line, func) in F1 {
+                            if i2c == i2c_name && p == port {
+                                plan.push((port, pin, None, line, func));
+                            }
+                        }
+                        continue;
+                    }
+                    (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Wch) => {
+                        for &(i2c, p, pin, line, func) in WCH_V00X {
                             if i2c == i2c_name && p == port {
                                 plan.push((port, pin, None, line, func));
                             }

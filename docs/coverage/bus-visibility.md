@@ -51,12 +51,16 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: no UART bring-up for the WCH L103 family in this harness yet; USART1 bytes are proven by ch32_compiled_firmware
 * **ch32v003a4m6**
   * UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware
+  * I2C: F4P6-die package variant: the I2C bring-up machines in this gate are Cortex-M only; master traffic is proven by ch32v003_compiled_firmware
 * **ch32v003f4p6**
   * UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32v003_compiled_firmware
+  * I2C: the I2C bring-up machines in this gate are Cortex-M only; the CH32V003 is RISC-V. Master traffic is proven by ch32v003_compiled_firmware
 * **ch32v003f4u6**
   * UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware
+  * I2C: F4P6-die package variant: the I2C bring-up machines in this gate are Cortex-M only; master traffic is proven by ch32v003_compiled_firmware
 * **ch32v003j4m6**
   * UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware
+  * I2C: F4P6-die package variant: the I2C bring-up machines in this gate are Cortex-M only; master traffic is proven by ch32v003_compiled_firmware
 * **ch32v005f6p6**
   * UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32_compiled_firmware
 * **ch32v006k8u6**
