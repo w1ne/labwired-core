@@ -1,0 +1,50 @@
+# Generic Beta NTC and Shockley diode netlists drive two STM32F407VGT6 ADC1
+# inputs on the STM32F4-Discovery (MB997) through the chip descriptor's pad
+# map.
+#
+# Neither netlist names the board, the ADC, or a channel: each one solves its
+# own circuit and publishes a probe voltage to `board.analog.<pad>_volts`.
+# The descriptor's `analog_pins:` maps PA1 -> adc1/channel 1 and PA6 ->
+# adc1/channel 6, so the same decks that run on the NUCLEO-F407, NUCLEO-F411RE,
+# NUCLEO-F446RE and Feather F405 run here unchanged.
+#
+# PA1 and PA6 are used rather than PA0/PA1: on this board PA0 is the USER
+# button (B1) and PA2/PA3 are the USART2 console pads, so an analog net must
+# not sit on them. PA6 proves a non-adjacent channel index, not just the
+# channel that happens to follow the NTC pad.
+name: "stm32f4-discovery-analog"
+chip: "../../configs/chips/stm32f407vg.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.pa1_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 3.3
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.pa6_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF
+        .model DREF D(IS=2.52n N=1.752 RS=0.568)
+      probes:
+        v_diode: "v(sense)"
+      vdd: 3.3

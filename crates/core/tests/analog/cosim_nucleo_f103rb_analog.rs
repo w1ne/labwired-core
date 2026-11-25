@@ -2,11 +2,16 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Generic MNA devices route through the NUCLEO-F103RB STM32F103 profile into
+//! Generic MNA devices route through the NUCLEO-F103RB STM32F103 profiles into
 //! ADC1. The same two decks already proven on the NUCLEO-F767ZI
 //! (`cosim_nucleo_f767zi_analog`) run here unchanged: a Beta-parameter NTC
 //! divider and a Shockley diode load line name only `board.analog.<pad>_volts`,
 //! and the STM32F1 descriptor's `analog_pins:` map selects the ADC channel.
+//!
+//! Two profiles share the run: the bare NUCLEO-F103RB and the same board with
+//! a Waveshare SSD1680 e-paper on SPI1. The panel occupies PA4/PA5/PA7/PA9,
+//! PB0 and PC7; the generic decks drive PA0/PA1, so an attached display does
+//! not disturb the analog front end and no engine code changes per board.
 
 use crate::common;
 use common::root;
@@ -130,46 +135,38 @@ fn expected_adc_count(voltage_v: f64) -> u32 {
     (millivolts * 4095.0 / 3300.0).floor().clamp(0.0, 4095.0) as u32
 }
 
-#[test]
-fn nucleo_f103rb_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
-    let system_path = root("configs/systems/nucleo-f103rb.yaml");
-    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F103RB profile");
-    assert_eq!(profile.name, "nucleo-f103rb");
-    assert!(profile.external_devices.is_empty());
-    assert!(
-        profile
-            .board_io
-            .iter()
-            .any(|io| io.id == "led_ld2" && io.peripheral == "gpioa" && io.pin == 5),
-        "the mixed-signal run keeps the NUCLEO-F103RB's PA5 user LED"
-    );
-    assert!(
-        profile.board_io.iter().any(|io| {
-            io.id == "button_b1" && io.peripheral == "gpioc" && io.pin == 13 && !io.active_high
-        }),
-        "the mixed-signal run keeps the NUCLEO-F103RB's PC13 user button"
-    );
+fn run_board(profile_name: &str, system: &str) {
+    let system_path = root(system);
+    let mut profile = SystemManifest::from_file(&system_path)
+        .unwrap_or_else(|e| panic!("load {profile_name} profile: {e}"));
+    assert_eq!(profile.name, profile_name);
 
     let analog =
         SystemManifest::from_file(root("examples/nucleo-f103rb/analog-ntc-diode-system.yaml"))
-            .expect("load generic NTC divider and diode netlists");
+            .unwrap_or_else(|e| panic!("load generic decks for {profile_name}: {e}"));
+    assert!(
+        analog.external_devices.is_empty(),
+        "{profile_name}: the generic decks add no external device"
+    );
     profile.cosim_models = analog.cosim_models;
     let chip_path = system_path.parent().unwrap().join(&profile.chip);
-    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F103RB descriptor");
+    let chip = ChipDescriptor::from_file(&chip_path)
+        .unwrap_or_else(|e| panic!("load {profile_name} descriptor: {e}"));
     assert_eq!(chip.analog_pins["PA0"].channel, 0);
     assert_eq!(chip.analog_pins["PA1"].channel, 1);
     assert_eq!(chip.analog_pins["PA0"].peripheral, "adc1");
     assert_eq!(chip.analog_pins["PA1"].peripheral, "adc1");
 
-    let bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F103RB bus");
+    let bus = SystemBus::from_config(&chip, &profile)
+        .unwrap_or_else(|e| panic!("build {profile_name} bus: {e}"));
     let mut machine = board_machine(bus);
     let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &machine.bus)
-        .expect("build analog co-simulation")
-        .expect("fixture carries both analog devices");
+        .unwrap_or_else(|e| panic!("build {profile_name} co-simulation: {e}"))
+        .unwrap_or_else(|| panic!("{profile_name} deck carries both analog devices"));
     assert_eq!(
         session.binding_errors(),
         &[] as &[RoutingError],
-        "the generic netlists must resolve through PA0/PA1 to ADC1 channels 0/1"
+        "{profile_name} generic netlists must resolve through PA0/PA1 to ADC1 channels 0/1"
     );
     let expected_diode_v = diode_load_line_voltage();
     let mut cycles = 0;
@@ -230,5 +227,50 @@ fn nucleo_f103rb_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
     assert_eq!(
         samples[1].2, 2047,
         "the 25 C NTC divider is half scale on the 3.3 V reference"
+    );
+}
+
+#[test]
+fn nucleo_f103rb_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
+    let system_path = root("configs/systems/nucleo-f103rb.yaml");
+    let profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F103RB profile");
+    assert_eq!(profile.name, "nucleo-f103rb");
+    assert!(profile.external_devices.is_empty());
+    assert!(
+        profile
+            .board_io
+            .iter()
+            .any(|io| io.id == "led_ld2" && io.peripheral == "gpioa" && io.pin == 5),
+        "the mixed-signal run keeps the NUCLEO-F103RB's PA5 user LED"
+    );
+    assert!(
+        profile.board_io.iter().any(|io| {
+            io.id == "button_b1" && io.peripheral == "gpioc" && io.pin == 13 && !io.active_high
+        }),
+        "the mixed-signal run keeps the NUCLEO-F103RB's PC13 user button"
+    );
+    run_board("nucleo-f103rb", "configs/systems/nucleo-f103rb.yaml");
+}
+
+/// The NUCLEO-F103RB with a Waveshare SSD1680 e-paper on SPI1. The panel owns
+/// PA4 (CS), PA5/PA7 (SCK/MOSI), PA9 (RST), PB0 (DC) and PC7 (BUSY); the
+/// generic decks drive PA0/PA1, which the panel wiring leaves free, so the
+/// attached display does not disturb the analog front end.
+#[test]
+fn nucleo_f103rb_epaper_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
+    let system_path = root("configs/systems/nucleo-f103rb-epaper.yaml");
+    let profile =
+        SystemManifest::from_file(&system_path).expect("load NUCLEO-F103RB-EPAPER profile");
+    assert_eq!(profile.name, "nucleo-f103rb-epaper");
+    assert!(
+        profile
+            .external_devices
+            .iter()
+            .any(|device| device.id == "epaper"),
+        "the mixed-signal run keeps the SSD1680 panel on SPI1"
+    );
+    run_board(
+        "nucleo-f103rb-epaper",
+        "configs/systems/nucleo-f103rb-epaper.yaml",
     );
 }
