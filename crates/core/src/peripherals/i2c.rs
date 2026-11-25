@@ -750,7 +750,20 @@ impl F1I2c {
             if self.cycles_remaining == 0 {
                 match self.state {
                     I2cState::StartPending => {
-                        self.sr1 = 0x0001; // Only SB set
+                        // RM0008 §26.6.7 (SR2): MSL is "set by hardware as
+                        // soon as the interface is in Master mode (after
+                        // START)" and BUSY is "set by hardware on detection of
+                        // SDA or SCL low". Both are already high when firmware
+                        // first sees SB. The legacy SPL combined event
+                        // `I2C_EVENT_MASTER_MODE_SELECT` (BUSY|MSL|SB =
+                        // 0x0003_0001) therefore matches on the first read.
+                        // Emitting only SB made every combined-event driver —
+                        // including WCH's `I2C_CheckEvent` in the stock openwch
+                        // `Wire` — spin to its timeout although START had
+                        // happened.
+                        self.sr1 = 0x0001; // SB
+                        self.sr2 |= 0x0001; // MSL
+                        self.sr2 |= 0x0002; // BUSY
                         self.cr1 &= !0x0100; // auto-clear START request
                         self.state = I2cState::Idle;
                     }
@@ -2740,6 +2753,25 @@ impl crate::Peripheral for I2c {
         let b2 = self.read(offset + 2)? as u32;
         let b3 = self.read(offset + 3)? as u32;
         Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
+    }
+
+    /// Atomic halfword writes: the WCH SPL stores DATAR as `uint16_t`
+    /// (`I2C_SendData`), and the default `Peripheral::write_u16` byte-slices
+    /// that into a low-byte store plus a zero high-byte store. Both reach
+    /// `F1I2c::write`, which merges the reserved high byte back into the same
+    /// register and re-runs the side effect — so one address or data byte went
+    /// to the slave twice. The stock openwch `Wire` wrote the BME280 pointer
+    /// byte this way, the duplicate advanced the pointer, and the following
+    /// read returned register 0xD1 (0) instead of CHIP_ID 0x60. A halfword
+    /// store is one register write on silicon; apply it once.
+    fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        if let Self::Stm32F1(i) = self {
+            i.write_reg(offset & !1, value);
+            return Ok(());
+        }
+        self.write(offset, (value & 0xFF) as u8)?;
+        self.write(offset + 1, ((value >> 8) & 0xFF) as u8)?;
+        Ok(())
     }
 
     /// Atomic word writes: STM32 HAL stores CR2 as a single STR (START, NBYTES,

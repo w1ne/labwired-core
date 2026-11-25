@@ -1356,3 +1356,105 @@ fn ch32v003_shipped_micros_runs_backwards_and_pulse_in_cannot_measure() {
         pulse_in[1]
     );
 }
+
+const I2C_FIXTURE: &str = "ch32v003f4p6-arduino-openwch-i2c.elf";
+
+/// Runs the stock openwch `Wire` fixture against a BME280 placed on `i2c1`,
+/// until it prints the complete `CH32V003_I2C_DONE` line or `max_steps` pass.
+fn run_i2c_fixture(
+    chip: &ChipDescriptor,
+    device_address: u8,
+    max_steps: u64,
+) -> (String, u64, u32) {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let yaml = format!(
+        "name: \"ch32v003-i2c\"\n\
+         chip: \"{}\"\n\
+         external_devices:\n\
+         \x20 - id: \"bme\"\n\
+         \x20   type: \"bme280\"\n\
+         \x20   connection: \"i2c1\"\n\
+         \x20   route:\n\
+         \x20     sda: \"PC1\"\n\
+         \x20     scl: \"PC2\"\n\
+         \x20   config:\n\
+         \x20     i2c_address: 0x{device_address:02x}\n",
+        root.join("configs/chips/ch32v003f4p6.yaml").display()
+    );
+    let manifest: SystemManifest = serde_yaml::from_str(&yaml).expect("system manifest");
+    let mut bus =
+        SystemBus::from_config(chip, &manifest).expect("CH32V003 peripherals plus the I2C slave");
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+    let image = labwired_loader::load_elf(&root.join("tests/fixtures").join(I2C_FIXTURE))
+        .expect("openwch Arduino Wire ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load CH32V003 ELF");
+    let mut steps = 0;
+    while steps < max_steps {
+        if machine.step().is_err() {
+            break;
+        }
+        steps += 1;
+        if steps % 10_000 == 0 {
+            let out = sink.lock().unwrap();
+            if String::from_utf8_lossy(&out).contains("CH32V003_I2C_DONE") && out.ends_with(b"\n") {
+                break;
+            }
+        }
+    }
+    let out = String::from_utf8_lossy(&sink.lock().unwrap()).into_owned();
+    (out, steps, machine.cpu.mcause)
+}
+
+#[test]
+fn ch32v003_openwch_wire_reads_a_bme280_chip_id_over_i2c1() {
+    // Stock openwch arduino_core_ch32 `Wire` on the default SDA=PC1 / SCL=PC2
+    // pads. The core enables the I2C1 clock (APB1PCENR bit 21), programs
+    // CKCFGR, and runs the EV/ER interrupt path in twi.c. A pointer write of
+    // 0xD0 followed by a one-byte read must return the BME280 chip id 0x60.
+    let chip = load_chip("ch32v003f4p6");
+    let (out, steps, mcause) = run_i2c_fixture(&chip, 0x76, 4_000_000);
+    assert_eq!(
+        out,
+        "CH32V003_I2C_BOOT\r\nerr=0\r\ncount=1\r\nid=0x60\r\n\
+         CH32V003_I2C_PASS\r\nCH32V003_I2C_DONE\r\n",
+        "USART1 TX stream after {steps} steps"
+    );
+    assert_no_fault(mcause);
+}
+
+#[test]
+fn ch32v003_i2c_read_nacks_a_device_at_the_wrong_address() {
+    // Negative control: the same firmware addresses 0x76 while the BME280 is
+    // wired at 0x77, so the address phase must NACK (err != 0) and no chip id
+    // may come back.
+    let chip = load_chip("ch32v003f4p6");
+    let (out, _, mcause) = run_i2c_fixture(&chip, 0x77, 2_000_000);
+    assert!(out.starts_with("CH32V003_I2C_BOOT\r\n"), "{out:?}");
+    assert!(
+        !out.contains("id=0x60"),
+        "wrong-address read returned the id: {out:?}"
+    );
+    assert!(out.contains("CH32V003_I2C_FAIL"), "{out:?}");
+    assert_no_fault(mcause);
+}
+
+#[test]
+fn ch32v003_package_variants_read_the_bme280_over_i2c1() {
+    // F4P6 (TSSOP20), F4U6 (QFN20), A4M6 (SOP16) and J4M6 (SOP8) all bond
+    // PC1/PC2 and declare the same I2C1 block. The stock openwch `Wire`
+    // fixture finds the BME280 at 0x76 and reads CHIP_ID 0x60 on each.
+    for name in [
+        "ch32v003f4p6",
+        "ch32v003f4u6",
+        "ch32v003a4m6",
+        "ch32v003j4m6",
+    ] {
+        let chip = load_chip(name);
+        let (out, _, mcause) = run_i2c_fixture(&chip, 0x76, 4_000_000);
+        assert!(out.contains("CH32V003_I2C_PASS"), "{name}: {out:?}");
+        assert_no_fault(mcause);
+    }
+}
