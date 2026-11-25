@@ -1,0 +1,65 @@
+# Generic Beta NTC and Shockley diode netlists drive two ARDUINO UNO R4 MINIMA
+# analog inputs through the RA4M1 descriptor's P014/P000 channel routes, plus a
+# plain divider on P101 to prove the high (ADANSA1) channel half.
+#
+# No netlist names the board, the ADC, or a channel: each one only solves its
+# own circuit and publishes a probe voltage to `board.analog.<pad>_volts`.
+# The descriptor's `analog_pins:` maps P014 -> adc0/channel 9 (Arduino A0),
+# P000 -> adc0/channel 0 (A1) and P101 -> adc0/channel 21 (A4), so the same
+# decks that run on the STM32, WCH, nRF52, micro:bit and AVR boards run here
+# unchanged at the UNO R4's 5 V AVCC0.
+#
+# A4 (P101) is shared with IIC1 SDA1 on this board, so a profile that runs this
+# deck must not also claim the sensor bus; the BME280 profile runs only the NTC
+# and diode models.
+name: "arduino-uno-r4-minima-analog"
+chip: "../../configs/chips/ra4m1.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.p014_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 5
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 5
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.p000_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 5
+        Rlim supply sense 1k
+        D1 sense 0 DREF
+        .model DREF D(IS=2.52n N=1.752 RS=0.568)
+      probes:
+        v_diode: "v(sense)"
+      vdd: 5
+  # A4 is P101, channel 21: it sits above channel 15, so this divider proves the
+  # ADANSA1 half of the descriptor map through a conversion rather than a claim.
+  - id: "p101_divider"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_p101: "board.analog.p101_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 5
+        Rtop vcc sense 10k
+        Rbottom sense 0 4.7k
+      probes:
+        v_p101: "v(sense)"
+      vdd: 5
