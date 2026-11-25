@@ -4944,8 +4944,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.</p>
 <ul>
 <li>Profiles in <code>configs/systems/</code>: <strong>439</strong></li>
-<li>Covered end to end: <strong>15</strong></li>
-<li>Not covered: <strong>424</strong></li>
+<li>Covered end to end: <strong>18</strong></li>
+<li>Not covered: <strong>421</strong></li>
 <li>Not covered but with an <code>analog_pins:</code> map: <strong>50</strong> (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   <code>analog_pins:</code> map, an ADC model, or a digital endpoint first)</li>
@@ -5296,11 +5296,6 @@ count is what the generic decks can reach without new routing.</p>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
-<td><code>arduino-nano</code></td>
-<td><code>atmega328p</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
 <td><code>arduino-uno-r4-minima-bme280</code></td>
 <td><code>ra4m1</code></td>
 <td style="text-align: right;">0</td>
@@ -5308,11 +5303,6 @@ count is what the generic decks can reach without new routing.</p>
 <tr>
 <td><code>arduino-uno-r4-minima</code></td>
 <td><code>ra4m1</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>arduino-uno</code></td>
-<td><code>atmega328p</code></td>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
@@ -5368,11 +5358,6 @@ count is what the generic decks can reach without new routing.</p>
 <tr>
 <td><code>ci-fixture-unknown-arch</code></td>
 <td><code>ci-fixture-unknown-arch</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>controllino-mini</code></td>
-<td><code>atmega328p</code></td>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
@@ -7373,9 +7358,24 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>crates/core/tests/analog/cosim_nrf52840_family_analog.rs</code></td>
 </tr>
 <tr>
+<td><code>arduino-nano</code></td>
+<td><code>atmega328p</code></td>
+<td><code>crates/core/tests/analog/cosim_avr_atmega328p_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>arduino-uno</code></td>
+<td><code>atmega328p</code></td>
+<td><code>crates/core/tests/analog/cosim_avr_atmega328p_analog.rs</code></td>
+</tr>
+<tr>
 <td><code>at32f421g8u7</code></td>
 <td><code>at32f421g8u7</code></td>
 <td><code>crates/core/tests/analog/cosim_at32f421_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>controllino-mini</code></td>
+<td><code>atmega328p</code></td>
+<td><code>crates/core/tests/analog/cosim_avr_atmega328p_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>feather-f405</code></td>
