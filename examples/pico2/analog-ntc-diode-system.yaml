@@ -12,6 +12,10 @@
 # GP29 (ADC3) is deliberately left unrouted: the test converts it to prove an
 # undriven channel keeps the model's 0 V default instead of reading a
 # neighbouring pad.
+#
+# The same file is loaded by every RP2350 profile (Pico 2, Pico 2 W, RP2350
+# Zero and the Feather RP2350): it names pads, not a board, and every one of
+# them brings ADC0..ADC3 out on GP26..GP29.
 name: "pico2-analog"
 chip: "../../configs/chips/rp2350.yaml"
 external_devices: []
