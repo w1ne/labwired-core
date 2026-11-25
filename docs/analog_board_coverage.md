@@ -14,9 +14,9 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **439**
-- Covered end to end: **11**
-- Not covered: **428**
-- Not covered but with an `analog_pins:` map: **50** (these are the
+- Covered end to end: **12**
+- Not covered: **427**
+- Not covered but with an `analog_pins:` map: **49** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` map, an ADC model, or a digital endpoint first)
 
@@ -77,7 +77,6 @@ count is what the generic decks can reach without new routing.
 | `stm32f401cdu6-blackpill` | `stm32f401cdu6` | 10 |
 | `stm32f401cdu6` | `stm32f401cdu6` | 10 |
 | `stm32f411ceu6-blackpill` | `stm32f411ceu6` | 10 |
-| `wch-ch32v003evt` | `ch32v003f4p6` | 8 |
 
 ## Not covered
 
@@ -510,7 +509,6 @@ count is what the generic decks can reach without new routing.
 | `stm32h735-smoke` | `stm32h735` | 0 |
 | `teensy-41` | `imxrt1064` | 0 |
 | `vegaboard-ri5cy` | `vegaboard-ri5cy` | 0 |
-| `wch-ch32v003evt` | `ch32v003f4p6` | 8 |
 
 ## Covered
 
@@ -527,6 +525,7 @@ count is what the generic decks can reach without new routing.
 | `nucleo-f411re` | `stm32f411re` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `nucleo-f446re` | `stm32f446re` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `nucleo-f767zi` | `stm32f767` | `crates/core/tests/analog/cosim_nucleo_f767zi_analog.rs` |
+| `wch-ch32v003evt` | `ch32v003f4p6` | `crates/core/tests/analog/cosim_ch32v003_analog.rs` |
 
 ## How to add a board
 
