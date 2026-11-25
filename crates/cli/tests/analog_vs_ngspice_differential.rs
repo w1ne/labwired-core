@@ -135,6 +135,153 @@ fn in_core_analog_matches_ngspice_on_the_rc_example() {
     );
 }
 
+/// Run `cosim-step <manifest> --steps N --json` with optional `--set` seeds and
+/// return, for each step, the value `model` publishes on `signal`.
+fn cosim_series(manifest: &Path, steps: u64, sets: &[&str], model: &str, signal: &str) -> Vec<f64> {
+    let mut command = Command::new(cli_binary());
+    command.arg("cosim-step").arg(manifest);
+    for set in sets {
+        command.arg("--set").arg(set);
+    }
+    let output = command
+        .arg("--steps")
+        .arg(steps.to_string())
+        .arg("--json")
+        .current_dir(repo_root())
+        .output()
+        .expect("cosim-step should run");
+    assert!(
+        output.status.success(),
+        "cosim-step {} failed: {}",
+        manifest.display(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let parsed: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("cosim-step --json emits JSON");
+    parsed
+        .as_array()
+        .expect("a JSON array of steps")
+        .iter()
+        .filter(|step| step["model"] == model)
+        .map(|step| {
+            step["outputs"][signal]
+                .as_f64()
+                .unwrap_or_else(|| panic!("{model} does not publish {signal}"))
+        })
+        .collect()
+}
+
+/// The generic Beta NTC divider and Shockley diode load line that 16 board
+/// examples share, solved by `adapter: ngspice` through the same manifest
+/// routing the in-core `adapter: analog` uses. This is the coverage evidence
+/// for the largest class of in-core decks, not only for the Flex fixtures.
+///
+/// Both decks are algebraic: their settled value is compared at three
+/// temperatures, and the temperature must move the NTC output, so agreement on
+/// a flat wrong value cannot pass. The diode needs ngspice's temperature pinned
+/// to the in-core engine's 300.00 K (26.85 degC); the default 27 degC shifts a
+/// forward-biased diode by 0.3 mV, which is 30x the agreement measured here.
+#[test]
+fn ngspice_solves_the_generic_ntc_and_diode_decks_the_in_core_engine_solves() {
+    const STEPS: u64 = 4;
+    const NTC_SIGNAL: &str = "board.analog.pa0_volts";
+    const DIODE_SIGNAL: &str = "board.analog.pa1_volts";
+    let root = repo_root();
+    let analog = root.join("examples/nucleo-f401re/analog-ntc-diode-system.yaml");
+    let spiced = root.join("examples/nucleo-f401re/analog-ntc-diode-ngspice.yaml");
+
+    // The in-core half always runs: a missing ngspice must not hide a deck the
+    // engine can no longer solve.
+    let mut in_core_ntc = Vec::new();
+    for celsius in ["0", "25", "60"] {
+        let set = format!("ui.ntc.temperature_c={celsius}");
+        let series = cosim_series(&analog, STEPS, &[&set], "ntc_divider", NTC_SIGNAL);
+        assert_eq!(series.len() as u64, STEPS);
+        assert!(
+            series.iter().all(|volts| volts.is_finite()),
+            "{celsius} degC: non-finite in-core sample"
+        );
+        in_core_ntc.push(series);
+    }
+    let in_core_diode = cosim_series(&analog, STEPS, &[], "diode_load_line", DIODE_SIGNAL);
+    assert_eq!(in_core_diode.len() as u64, STEPS);
+    // No stimulus must fall back to the netlist's 25 degC default, not 0 degC.
+    let in_core_default = cosim_series(&analog, STEPS, &[], "ntc_divider", NTC_SIGNAL);
+
+    // The three temperatures must not agree with each other, or a differential
+    // on a temperature-insensitive deck would pass while proving nothing.
+    for pair in in_core_ntc.windows(2) {
+        let (cold, warm) = (pair[0].last().unwrap(), pair[1].last().unwrap());
+        assert!(
+            (warm - cold).abs() > 0.1,
+            "the NTC deck does not respond to temperature: {cold} V vs {warm} V"
+        );
+    }
+
+    if !ngspice_available() {
+        eprintln!(
+            "SKIP: libngspice is not loadable on this host, so the ngspice half of the \
+             NTC/diode differential cannot run. Install it (Debian/Ubuntu: \
+             `apt install libngspice0`) or set LABWIRED_NGSPICE_LIB. The in-core decks \
+             produced {STEPS} finite samples each."
+        );
+        return;
+    }
+
+    for (index, celsius) in ["0", "25", "60"].iter().enumerate() {
+        let set = format!("ui.ntc.temperature_c={celsius}");
+        let theirs = cosim_series(&spiced, STEPS, &[&set], "ntc_divider", NTC_SIGNAL);
+        assert_eq!(theirs.len() as u64, STEPS);
+        let ours = &in_core_ntc[index];
+        let worst = ours
+            .iter()
+            .zip(&theirs)
+            .map(|(a, n)| (a - n).abs())
+            .fold(0.0_f64, f64::max);
+        assert!(
+            worst < 1e-5,
+            "{celsius} degC: in-core NTC {ours:?} V vs ngspice {theirs:?} V, \
+             worst {worst:e} V"
+        );
+        eprintln!(
+            "{celsius} degC NTC: in-core {:.9} V, ngspice {:.9} V, worst {worst:e} V",
+            ours.last().unwrap(),
+            theirs.last().unwrap()
+        );
+    }
+
+    let theirs = cosim_series(&spiced, STEPS, &[], "diode_load_line", DIODE_SIGNAL);
+    assert_eq!(theirs.len() as u64, STEPS);
+    let worst = in_core_diode
+        .iter()
+        .zip(&theirs)
+        .map(|(a, n)| (a - n).abs())
+        .fold(0.0_f64, f64::max);
+    assert!(
+        worst < 1e-5,
+        "diode load line: in-core {in_core_diode:?} V vs ngspice {theirs:?} V, \
+         worst {worst:e} V"
+    );
+    eprintln!(
+        "diode load line: in-core {:.9} V, ngspice {:.9} V, worst {worst:e} V",
+        in_core_diode.last().unwrap(),
+        theirs.last().unwrap()
+    );
+
+    let default_spiced = cosim_series(&spiced, STEPS, &[], "ntc_divider", NTC_SIGNAL);
+    assert_eq!(default_spiced.len() as u64, STEPS);
+    let worst = in_core_default
+        .iter()
+        .zip(&default_spiced)
+        .map(|(a, n)| (a - n).abs())
+        .fold(0.0_f64, f64::max);
+    assert!(
+        worst < 1e-5,
+        "NTC default stimulus: in-core {in_core_default:?} V vs ngspice {default_spiced:?} V, \
+         worst {worst:e} V; an absent input must be 25 degC on both engines"
+    );
+}
+
 #[test]
 fn the_analog_manifest_writes_a_waveform_trace() {
     let root = repo_root();
