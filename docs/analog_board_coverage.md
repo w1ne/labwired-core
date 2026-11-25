@@ -13,10 +13,10 @@ Device-only unit tests, ADC register tests with no netlist, files that only
 list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
-- Profiles in `configs/systems/`: **439**
-- Covered end to end: **19**
-- Not covered: **420**
-- Not covered but with an `analog_pins:` map: **50** (these are the
+- Profiles in `configs/systems/`: **440**
+- Covered end to end: **21**
+- Not covered: **419**
+- Not covered but with an `analog_pins:` map: **51** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` map, an ADC model, or a digital endpoint first)
 
@@ -78,6 +78,7 @@ count is what the generic decks can reach without new routing.
 | `stm32f401cdu6-blackpill` | `stm32f401cdu6` | 10 |
 | `stm32f401cdu6` | `stm32f401cdu6` | 10 |
 | `stm32f411ceu6-blackpill` | `stm32f411ceu6` | 10 |
+| `wch-ch32v003evt-bme280` | `ch32v003f4p6` | 8 |
 
 ## Not covered
 
@@ -96,8 +97,6 @@ count is what the generic decks can reach without new routing.
 | `arduino-nano-every-bme280` | `atmega4809` | 0 |
 | `arduino-nano-every-max31855` | `atmega4809` | 0 |
 | `arduino-nano-every` | `atmega4809` | 0 |
-| `arduino-uno-r4-minima-bme280` | `ra4m1` | 0 |
-| `arduino-uno-r4-minima` | `ra4m1` | 0 |
 | `arduino-zero` | `atsamd21g18a` | 0 |
 | `arty-litex-vexriscv` | `arty-litex-vexriscv` | 0 |
 | `atmega1281` | `atmega1281` | 0 |
@@ -503,6 +502,7 @@ count is what the generic decks can reach without new routing.
 | `stm32h735-smoke` | `stm32h735` | 0 |
 | `teensy-41` | `imxrt1064` | 0 |
 | `vegaboard-ri5cy` | `vegaboard-ri5cy` | 0 |
+| `wch-ch32v003evt-bme280` | `ch32v003f4p6` | 8 |
 
 ## Covered
 
@@ -513,6 +513,8 @@ count is what the generic decks can reach without new routing.
 | `arduino-mega-2560` | `atmega2560` | `crates/core/tests/cosim/cosim_pin_routing.rs` |
 | `arduino-nano-33-ble` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
 | `arduino-nano` | `atmega328p` | `crates/core/tests/analog/cosim_avr_atmega328p_analog.rs` |
+| `arduino-uno-r4-minima-bme280` | `ra4m1` | `crates/core/tests/analog/cosim_ra4m1_analog.rs` |
+| `arduino-uno-r4-minima` | `ra4m1` | `crates/core/tests/analog/cosim_ra4m1_analog.rs` |
 | `arduino-uno` | `atmega328p` | `crates/core/tests/analog/cosim_avr_atmega328p_analog.rs` |
 | `at32f421g8u7` | `at32f421g8u7` | `crates/core/tests/analog/cosim_at32f421_analog.rs` |
 | `controllino-mini` | `atmega328p` | `crates/core/tests/analog/cosim_avr_atmega328p_analog.rs` |
