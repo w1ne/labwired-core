@@ -279,6 +279,36 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes \
          are proven by ch32v003_compiled_firmware",
     ),
+    // CH32V003 I2C1: the controller now publishes a PadLines cell (SCL=PC2,
+    // SDA=PC1), but every I2C bring-up arm in this gate builds a
+    // `Machine<CortexM>`; the CH32V003 is RISC-V. The same gap the UART rows
+    // above record. A real master transaction is proven on all four package
+    // variants by
+    // ch32v003_compiled_firmware::ch32v003_openwch_wire_reads_a_bme280_chip_id_over_i2c1.
+    (
+        "ch32v003f4p6",
+        BusKind::I2c,
+        "the I2C bring-up machines in this gate are Cortex-M only; the CH32V003 \
+         is RISC-V. Master traffic is proven by ch32v003_compiled_firmware",
+    ),
+    (
+        "ch32v003f4u6",
+        BusKind::I2c,
+        "F4P6-die package variant: the I2C bring-up machines in this gate are \
+         Cortex-M only; master traffic is proven by ch32v003_compiled_firmware",
+    ),
+    (
+        "ch32v003a4m6",
+        BusKind::I2c,
+        "F4P6-die package variant: the I2C bring-up machines in this gate are \
+         Cortex-M only; master traffic is proven by ch32v003_compiled_firmware",
+    ),
+    (
+        "ch32v003j4m6",
+        BusKind::I2c,
+        "F4P6-die package variant: the I2C bring-up machines in this gate are \
+         Cortex-M only; master traffic is proven by ch32v003_compiled_firmware",
+    ),
     // nRF51822: the bring-up drives the nRF52 EasyDMA personalities (UARTE
     // ENABLE=8, TWIM), which the nRF51 does not have; its UART0 is the legacy
     // UART (ENABLE=4, TXD + EVENTS_TXDRDY) and its TWI is the legacy TWI. No

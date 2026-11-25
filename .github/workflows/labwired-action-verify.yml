@@ -1,0 +1,90 @@
+name: LabWired Action Verify (Wokwi + KiCad)
+
+on:
+  pull_request:
+    paths:
+      - "action.yml"
+      - "action/**"
+      - "examples/ci-wokwi-dropin/**"
+      - "examples/ci-kicad-dropin/**"
+      - ".github/workflows/labwired-action-verify.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "action.yml"
+      - "action/**"
+      - "examples/ci-wokwi-dropin/**"
+      - "examples/ci-kicad-dropin/**"
+      - ".github/workflows/labwired-action-verify.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: labwired-action-verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-wokwi-dropin:
+    name: "Wokwi diagram.json Drop-In Verify"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run LabWired Action on unmodified Wokwi diagram.json
+        id: lw
+        uses: ./
+        with:
+          diagram: examples/ci-wokwi-dropin/diagram.json
+          script: examples/ci-wokwi-dropin/tests/labwired.yml
+          comment_tag: wokwi-dropin
+          out_dir: out/labwired-wokwi
+      - name: Assert Wokwi drop-in outputs
+        shell: bash
+        env:
+          VERDICT: ${{ steps.lw.outputs.verdict }}
+          ERC_ERRORS: ${{ steps.lw.outputs.erc_errors }}
+          PASSED: ${{ steps.lw.outputs.assertions_passed }}
+          TOTAL: ${{ steps.lw.outputs.assertions_total }}
+          SUMMARY: ${{ steps.lw.outputs.summary_line }}
+        run: |
+          set -euo pipefail
+          echo "Summary: ${SUMMARY}"
+          test "${VERDICT}" = "pass"
+          test "${ERC_ERRORS}" = "0"
+          test "${PASSED}" = "2"
+          test "${TOTAL}" = "2"
+
+  verify-kicad-dropin:
+    name: "KiCad .kicad_pcb Drop-In Verify"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run LabWired Action on real KiCad board
+        id: lw
+        uses: ./
+        with:
+          kicad_pcb: examples/ci-kicad-dropin/handheld-carrier.kicad_pcb
+          script: examples/ci-kicad-dropin/tests/labwired.yml
+          comment_tag: kicad-dropin
+          out_dir: out/labwired-kicad
+      - name: Assert KiCad drop-in outputs
+        shell: bash
+        env:
+          VERDICT: ${{ steps.lw.outputs.verdict }}
+          ERC_ERRORS: ${{ steps.lw.outputs.erc_errors }}
+          DRC_ERRORS: ${{ steps.lw.outputs.drc_errors }}
+          PASSED: ${{ steps.lw.outputs.assertions_passed }}
+          TOTAL: ${{ steps.lw.outputs.assertions_total }}
+          SUMMARY: ${{ steps.lw.outputs.summary_line }}
+        run: |
+          set -euo pipefail
+          echo "Summary: ${SUMMARY}"
+          test "${VERDICT}" = "pass"
+          test "${ERC_ERRORS}" = "0"
+          test "${DRC_ERRORS}" = "0"
+          test "${PASSED}" = "2"
+          test "${TOTAL}" = "2"

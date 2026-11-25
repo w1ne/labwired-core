@@ -1223,6 +1223,11 @@ impl Esp32s3Gdma {
             return;
         };
 
+        // Sample the live GPIO D/C pin level right before clocking out DMA
+        // bytes, matching the PIO transfer path so displays see any D/C toggle
+        // performed after SPI_CMD.USR or between coupled GDMA chunks.
+        sys_bus.maybe_latch_dc(spi_idx);
+
         // Swap the SPI out from behind a stub — the same dance the bus uses
         // to lend itself into `tick_with_bus` — so we can hold `&mut` to the
         // SPI and still route descriptor reads/writes through the bus.

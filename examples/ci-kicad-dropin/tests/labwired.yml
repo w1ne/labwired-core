@@ -1,0 +1,8 @@
+schema_version: "1.0"
+inputs:
+  firmware: "../../../tests/fixtures/rtf/f411_timer_uart/firmware.elf"
+limits:
+  max_steps: 500000
+assertions:
+  - uart_contains: "RTF_READY f411_timer_uart"
+  - expected_stop_reason: max_steps

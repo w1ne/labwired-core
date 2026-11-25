@@ -12,11 +12,97 @@
 //! continue to resolve unchanged.
 
 use std::any::Any;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 /// A live analog level, in millivolts (`None` = not driven); see
 /// [`Peripheral::analog_output_probe`].
 pub type AnalogProbe = Arc<dyn Fn() -> Option<u16> + Send + Sync>;
+
+/// Shared physical analog pad bank for chips whose analog input pads are
+/// sampled by more than one MMIO controller (for example, ESP32-S3 RTC `SENS`
+/// at `0x6000_8800` and digital `APB_SARADC` at `0x6004_0000` both sampling
+/// ADC1 CH0..CH9 on GPIO1..GPIO10).
+///
+/// Controllers sharing a physical bank advertise the same
+/// [`Peripheral::shared_adc_bank_key`] and bind to one `Arc<SharedAdcChannelBank>`
+/// during bus assembly (`SystemBus::wire_shared_adc_banks`), with zero concrete
+/// downcasts. Any voltage seeded or cleared on one controller is immediately
+/// visible to every peer sharing the bank.
+#[derive(Debug)]
+pub struct SharedAdcChannelBank {
+    mv: Box<[AtomicU32]>,
+}
+
+impl SharedAdcChannelBank {
+    const UNSET: u32 = u32::MAX;
+
+    pub fn new(channels: usize) -> Self {
+        Self {
+            mv: (0..channels)
+                .map(|_| AtomicU32::new(Self::UNSET))
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.mv.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.mv.is_empty()
+    }
+
+    pub fn get_mv(&self, channel: u8) -> Option<u16> {
+        let raw = self.mv.get(channel as usize)?.load(Ordering::Relaxed);
+        if raw == Self::UNSET {
+            None
+        } else {
+            Some(raw as u16)
+        }
+    }
+
+    pub fn set_mv(&self, channel: u8, millivolts: u16) -> bool {
+        let Some(slot) = self.mv.get(channel as usize) else {
+            return false;
+        };
+        slot.store(u32::from(millivolts), Ordering::Relaxed);
+        true
+    }
+
+    pub fn clear(&self, channel: u8) -> bool {
+        let Some(slot) = self.mv.get(channel as usize) else {
+            return false;
+        };
+        slot.store(Self::UNSET, Ordering::Relaxed);
+        true
+    }
+
+    pub fn snapshot_fixed<const N: usize>(&self) -> [Option<u16>; N] {
+        std::array::from_fn(|ch| self.get_mv(ch as u8))
+    }
+
+    pub fn restore_slice(&self, values: &[Option<u16>]) {
+        for (slot, val) in self.mv.iter().zip(values.iter().copied()) {
+            let encoded = val.map(u32::from).unwrap_or(Self::UNSET);
+            slot.store(encoded, Ordering::Relaxed);
+        }
+    }
+
+    /// Copy any already-seeded channel from `other` into slots that are still
+    /// unset in `self` (used when binding peer controllers after either may
+    /// already have received initial stimulus values).
+    pub fn merge_unset_from(&self, other: &Self) {
+        for (dst, src) in self.mv.iter().zip(other.mv.iter()) {
+            let val = src.load(Ordering::Relaxed);
+            if val != Self::UNSET {
+                let _ =
+                    dst.compare_exchange(Self::UNSET, val, Ordering::Relaxed, Ordering::Relaxed);
+            }
+        }
+    }
+}
 
 use crate::{logic_capture, peripherals, pins, sched, Bus, CycleClock, SimResult, SimulationError};
 
@@ -1521,6 +1607,24 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn set_analog_pad_input(&mut self, _pad: &str, _millivolts: u16) -> bool {
         false
     }
+
+    /// Optional tag naming a physical analog input pad bank shared with peer
+    /// MMIO controllers on the same chip (e.g. `"esp32s3_adc1"`). Controllers
+    /// returning the same key are bound to one [`SharedAdcChannelBank`] by
+    /// `SystemBus::wire_shared_adc_banks`.
+    fn shared_adc_bank_key(&self) -> Option<&'static str> {
+        None
+    }
+
+    /// Export this controller's [`SharedAdcChannelBank`] handle for peer
+    /// binding.
+    fn shared_adc_bank(&self) -> Option<Arc<SharedAdcChannelBank>> {
+        None
+    }
+
+    /// Replace this controller's ADC channel bank with a shared bank,
+    /// preserving any channels already seeded on this peripheral.
+    fn bind_shared_adc_bank(&mut self, _bank: Arc<SharedAdcChannelBank>) {}
 
     /// Whether this peripheral drives internal EXTI lines (a comparator
     /// output). Cached by the bus at attach; only such peripherals are asked

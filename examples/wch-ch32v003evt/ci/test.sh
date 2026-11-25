@@ -8,3 +8,6 @@ cargo run --locked -q -p labwired-cli -- test \
 cargo run --locked -q -p labwired-cli -- test \
   --script examples/wch-ch32v003evt/uart-smoke.yaml \
   --output-dir out/boards/wch-ch32v003evt/uart-smoke --no-uart-stdout
+cargo run --locked -q -p labwired-cli -- test \
+  --script examples/wch-ch32v003evt/i2c-smoke.yaml \
+  --output-dir out/boards/wch-ch32v003evt/i2c-smoke --no-uart-stdout
