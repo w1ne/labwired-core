@@ -5241,7 +5241,7 @@ the run fails with <code>expected 0x3, got 0x22</code> while every UART line sti
 <tr>
 <td>ADC</td>
 <td>✅ behavioural</td>
-<td>Single-ended software conversions, 8/10/12-bit, gain, internal references (<code>samd21_adc</code>)</td>
+<td>Single-ended software conversions, 8/10/12-bit, gain, internal references (<code>samd21_adc</code>); <code>analog_pins:</code> routes <code>board.analog.&lt;pad&gt;_volts</code> into AIN0..AIN7/AIN10/11/AIN16..19 in co-simulation</td>
 </tr>
 <tr>
 <td>TCC0–2</td>
@@ -5291,6 +5291,13 @@ pads out.</p>
 </tr>
 </tbody>
 </table>
+<p>The descriptor also carries a 14-entry <code>analog_pins:</code> map for the AIN inputs
+the 48-pin G package bonds: PA2/AIN0, PA3/AIN1, PB8/AIN2, PB9/AIN3,
+PA4..PA7/AIN4..7, PB2/AIN10, PB3/AIN11 and PA8..PA11/AIN16..19. A board net
+hooked to one of those pads through <code>board.analog.&lt;pad&gt;_volts</code> reaches
+<code>samd21_adc</code> only after <code>PINCFG.PMUXEN</code> and PMUX function B hand the pad to the
+converter, as <code>pinPeripheral(pin, PIO_ANALOG)</code> does. AIN8/9 and AIN12..15 are
+not bonded here and are deliberately absent, so no net can bias them.</p>
 <h2 id="how-to-run">How to run</h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># From a clone, with the released CLI — no toolchain needed:</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>labwired<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
