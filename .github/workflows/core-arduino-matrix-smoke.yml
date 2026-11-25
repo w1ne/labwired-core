@@ -210,8 +210,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: arduino-matrix-${{ matrix.board }}
-          path: validation/arduino-matrix/out-ci/${{ matrix.board }}/
-          retention-days: 2
+          path: |
+            validation/arduino-matrix/out-ci/${{ matrix.board }}/
+            !validation/arduino-matrix/out-ci/${{ matrix.board }}/**/*.elf
+            !validation/arduino-matrix/out-ci/${{ matrix.board }}/**/*.bin
+          retention-days: 1
           if-no-files-found: ignore
 
   arduino-matrix-gate:
