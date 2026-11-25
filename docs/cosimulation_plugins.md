@@ -155,6 +155,15 @@ host; `labwired_test_runs_the_heypcb_ntc_deck_on_ngspice` runs them on both
 engines and also requires the `source.sha256` netlist pin and the 61 °C stop on
 both.
 
+The HeyPCB ESP32-S3 LDR sensor-network fixture repeats the pattern with
+`ldr.cir` and two `ngspice-*.yaml` scripts. Measured on 2026-11-25: the ADC count of both
+scripts and both instrument counts are identical, the bright 3.95 ms sample
+agrees within 4·10⁻⁷ V, and the bright 350 µs transient differs by 3.6·10⁻³ V
+for the same backward-Euler reason. 0, 0.5 and 100000 lx stop both engines.
+`labwired_test_runs_the_heypcb_ldr_network_deck_on_ngspice` requires that,
+plus the `source.sha256` pin; the in-core manifest keeps the committed browser
+receipt because the receipt has no solver host.
+
 ### Pinning the circuit a Flex run solved
 
 A Flex manifest's `manifest_sha256` covers the manifest bytes. It cannot cover

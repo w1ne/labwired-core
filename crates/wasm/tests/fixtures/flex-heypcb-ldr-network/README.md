@@ -1,6 +1,6 @@
 # HeyPCB ESP32-S3 LDR sensor network in Flex
 
-This fixture solves the light-sensor network of the pinned **HeyPCB ESP32-S3 LDR** board, revision A, in the existing in-core analog engine. Portable Rust-to-Wasm firmware reads the SNS_AN1 voltage on the board's GPIO1 endpoint and drives the IO48 user LED. It extends the sibling [`flex-heypcb-esp32-ldr`](../flex-heypcb-esp32-ldr/README.md) slice, which injects millivolts from the generic `ldr` kit and does not model U4, R6, or C7.
+This fixture solves the light-sensor network of the pinned **HeyPCB ESP32-S3 LDR** board, revision A, in the existing in-core analog engine. Portable Rust-to-Wasm firmware reads the SNS_AN1 voltage on the board's GPIO1 endpoint and drives the IO48 user LED. It extends the sibling [`flex-heypcb-esp32-ldr`](../flex-heypcb-esp32-ldr/README.md) slice, which injects millivolts from the generic `ldr` kit and does not model U4, R6, or C7. The same project also runs on ngspice; see [Reference solver](#reference-solver-ngspice).
 
 ## Source
 
@@ -52,6 +52,59 @@ Browser run ([browser.json](browser.json)): Chromium 156.0.8078.79 with Playwrig
 Command-line run: `labwired test --script test-bright.yaml` and `test-dim.yaml` run the same `system.yaml` and the same `firmware.wasm` bytes through the existing test runner, with `inputs.flex` as the explicit choice of portable execution. `crates/cli/tests/flex_test_runner.rs` checks that the digital edges and the 81 analog samples of both cases equal the native reference, and that the dim case fails the bright assertions.
 
 Time-constant check (2026-11-19): the scripts assert the time at which SNS_AN1 passes 63.2 % of its step with `analog_crossings`. Both times were calculated from the pinned values before the run. Bright: U4 is 3.77 kΩ at 100 lx, the time constant with R6 and C7 is 274 µs, and with the 50 µs input latch the first sample at or above 2.001 V is at 350,000 ns. Dim: U4 is 59.7 kΩ at 1 lx, the time constant is 857 µs, and the first sample at or below 0.785 V is at 950,000 ns. The run gave both times. A crossing time is a sample time (50 µs step); the runner does not interpolate. `analog_window` asserts that the node stays between 2.395 V and 2.398 V after 2 ms in bright light.
+
+## Reference solver (ngspice)
+
+`system-ngspice.yaml` is the same project with the R6/U4/C7 network solved by
+ngspice: `ldr.cir` writes U4 as the behavioural current source
+`Bldr = V(3v3,sns_an1) / (15k · (lux / 10)^−0.6)`, and the model declares the
+same 1..100 lx `input_ranges` domain. Ports, firmware, the IO48 behavior model
+and the model sequence are unchanged. The two `ngspice-*.yaml` scripts repeat
+the in-core assertions, except the two bright transient sample bounds that follow the analytic curve; they are not named `test-*.yaml`
+because the generic fixture matrix and the browser receipt have no solver host.
+The native host needs python3 and libngspice (`apt install libngspice0`).
+
+Measured on 2026-11-25 with ngspice-42 through `labwired test --script`:
+
+| Observation | In-core | ngspice |
+| --- | --- | --- |
+| Scripts passing with the same assertions | 2 of 2 | 2 of 2 |
+| ADC count, bright / dim | 2974 / 597 | identical |
+| Scope samples, bright / dim | 81 / 81 | identical |
+| Digital edges, bright / dim | 4 / 0 | identical |
+| Scope deviation, 3.95 ms, bright | — | 4·10⁻⁷ V (f32) |
+| Scope deviation, 3.95 ms, dim | — | 1.2·10⁻⁴ V (still converging) |
+| Fastest transient sample, bright (350 µs; analytic 2.037084 V) | 2.033489 V | 2.037084 V |
+| Fastest transient sample, dim (900 µs; analytic 0.787210 V) | 0.788116 V | 0.787210 V |
+
+- The 3.6 mV gap at the bright 350 µs sample is the in-core engine's
+  first-order backward-Euler lag; ngspice follows the analytic curve. Both
+  cross 2.001 V at the 350 µs sample, and the firmware's single 4 ms reading is
+  identical. In the dim case both cross 0.785 V at the 950 µs sample.
+- The dim case is about 4.7 time constants in 4 ms, so the node is still
+  0.12 mV from settling; ngspice is closer to the divider value, and both
+  truncate to ADC count 597.
+- 0, 0.5 and 100000 lx stop both engines with `status: error`,
+  `stop_reason: model_error`: ``analog input `lux`: photoresistor illuminance
+  must be within 1..100 lx`` in-core and `ngspice model 'source-sns-an1'
+  input 'lux' is 0.5, outside the declared 1..100 lx range` from the shared
+  latch.
+- The run report pins the deck: `source.path: "./ldr.cir"`, `bytes` and
+  `sha256`, next to `manifest_sha256` of `system-ngspice.yaml`.
+
+Reproduce:
+
+```bash
+labwired test --script crates/wasm/tests/fixtures/flex-heypcb-ldr-network/ngspice-bright.yaml --output-dir /tmp/ldr-bright
+LABWIRED_REQUIRE_NGSPICE=1 cargo test -p labwired-cli --test cosim_pin_routing labwired_test_runs_the_heypcb_ldr_network_deck_on_ngspice
+```
+
+The regression test runs both scripts on both engines and requires equal
+`entry_result` and instrument counts, the netlist pin, and both range stops.
+The browser keeps the in-core manifest: the committed browser receipt has no
+ngspice host, and a page must supply the ngspice WASM callback before this deck
+can run there. This is not a chip-parity claim and does not prove the part's
+tolerance or a physical board.
 
 ## Scope
 
