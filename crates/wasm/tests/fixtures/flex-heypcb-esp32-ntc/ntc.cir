@@ -1,0 +1,18 @@
+* SNS_AN1 network of the pinned HeyPCB ESP32-S3 NTC board (revision A),
+* solved by ngspice instead of the in-core engine. Nets and parts come from
+* source-map.json: R6 pad 2, U4 pad 1, C7 pad 1 and U3 pad 39 (IO1) are on
+* SNS_AN1; U4 pad 2 and C7 pad 2 are on GND.
+*
+* Vtemp carries the bench ambient in degrees Celsius (1 V = 1 degC).
+* U4 follows R = R25 * exp(B * (1/(T + 273.15) - 1/298.15)) with R25 = 10 kOhm
+* and B25/50 = 3380 K, the NCP18XH103F03RB row of Murata catalog R44E. The
+* deck states only the 10..60 degC domain where the beta equation stays within
+* 1.7 % of the catalog center-value table; the manifest declares that range.
+* The in-core `thermistors` entry of system.yaml states the same curve.
+V3V3 3v3 0 dc 3.3
+Vtemp temp 0 dc 25
+Bntc sns_an1 0 I = V(sns_an1) / (10k * exp(3380 * (1/(273.15 + V(temp)) - 1/298.15)))
+R6 3v3 sns_an1 10k
+C7 sns_an1 0 100n
+.tran 10u 10
+.end
