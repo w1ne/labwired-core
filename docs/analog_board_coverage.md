@@ -14,9 +14,9 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **440**
-- Covered end to end: **80**
-- Not covered: **360**
-- Not covered but with an `analog_pins:` map: **8** (these are the
+- Covered end to end: **90**
+- Not covered: **350**
+- Not covered but with an `analog_pins:` map: **0** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` map, an ADC model, or a digital endpoint first)
 
@@ -26,16 +26,7 @@ count is what the generic decks can reach without new routing.
 
 ## Next queue: not covered, `analog_pins:` map already present
 
-| Profile | Chip | Analog pad map |
-| --- | --- | ---: |
-| `stm32f103` | `stm32f103` | 2 |
-| `stm32f4` | `stm32f4` | 1 |
-| `stm32f412` | `stm32f412` | 2 |
-| `stm32f429` | `stm32f429` | 2 |
-| `stm32f4_discovery-kit` | `stm32f4_discovery-kit` | 2 |
-| `stm32f4_discovery` | `stm32f4_discovery` | 2 |
-| `stm32f746` | `stm32f746` | 2 |
-| `stm32f401cdu6-blackpill` | `stm32f401cdu6` | 10 |
+None.
 
 ## Not covered
 
@@ -260,7 +251,6 @@ count is what the generic decks can reach without new routing.
 | `murax_vexriscv_verilated_uart` | `murax_vexriscv_verilated_uart` | 0 |
 | `nrf52840` | `nrf52840` | 0 |
 | `nrf52840dk_nrf52840` | `nrf52840dk_nrf52840` | 0 |
-| `nucleo_f767zi` | `nucleo_f767zi` | 0 |
 | `nucleo_h753zi` | `nucleo_h753zi` | 0 |
 | `nucleo_wba52cg` | `nucleo_wba52cg` | 0 |
 | `nuvoton_npcx9` | `nuvoton_npcx9` | 0 |
@@ -346,15 +336,7 @@ count is what the generic decks can reach without new routing.
 | `stm32f042` | `stm32f042` | 0 |
 | `stm32f072` | `stm32f072` | 0 |
 | `stm32f072b_discovery` | `stm32f072b_discovery` | 0 |
-| `stm32f103` | `stm32f103` | 2 |
-| `stm32f4` | `stm32f4` | 1 |
-| `stm32f412` | `stm32f412` | 2 |
-| `stm32f429` | `stm32f429` | 2 |
-| `stm32f4_discovery-kit` | `stm32f4_discovery-kit` | 2 |
-| `stm32f4_discovery` | `stm32f4_discovery` | 2 |
-| `stm32f746` | `stm32f746` | 2 |
-| `stm32f777` | `stm32f777` | 0 |
-| `stm32f7_discovery-bb` | `stm32f7_discovery-bb` | 0 |
+| `stm32f401cdu6-blackpill` | `stm32f401cdu6-blackpill` | 0 |
 | `stm32l071` | `stm32l071` | 0 |
 | `stm32l072` | `stm32l072` | 0 |
 | `stm32l151` | `stm32l151` | 0 |
@@ -396,7 +378,6 @@ count is what the generic decks can reach without new routing.
 | `smart-ring` | `nrf54l15` | 0 |
 | `stm32f072b-disco` | `stm32f072` | 0 |
 | `stm32f103-integrated-test` | `-` | 0 |
-| `stm32f401cdu6-blackpill` | `stm32f401cdu6` | 10 |
 | `stm32f7-discovery` | `stm32f746` | 0 |
 | `stm32h735-smoke` | `stm32h735` | 0 |
 | `teensy-41` | `imxrt1064` | 0 |
@@ -434,7 +415,16 @@ count is what the generic decks can reach without new routing.
 | `nucleo-f411re` | `stm32f411re` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `nucleo-f446re` | `stm32f446re` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `nucleo-f767zi` | `stm32f767` | `crates/core/tests/analog/cosim_nucleo_f767zi_analog.rs` |
-| `stm32f401cdu6-blackpill` | `stm32f401cdu6-blackpill` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `nucleo_f767zi` | `nucleo_f767zi` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f103` | `stm32f103` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f4` | `stm32f4` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f412` | `stm32f412` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f429` | `stm32f429` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f4_discovery-kit` | `stm32f4_discovery-kit` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f4_discovery` | `stm32f4_discovery` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f746` | `stm32f746` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f777` | `stm32f777` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f7_discovery-bb` | `stm32f7_discovery-bb` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `stm32h7` | `stm32h7` | `crates/core/tests/analog/cosim_stm32h7_analog.rs` |
 | `stm32h743` | `stm32h743` | `crates/core/tests/analog/cosim_stm32h7_analog.rs` |
 | `stm32h747-disco` | `stm32h747-disco` | `crates/core/tests/analog/cosim_stm32h7_analog.rs` |
@@ -482,6 +472,7 @@ count is what the generic decks can reach without new routing.
 | `stm32f103-blue-pill-bme280` | `stm32f103` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `stm32f103-blue-pill` | `stm32f103` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `stm32f4-discovery` | `stm32f407vg` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
+| `stm32f401cdu6-blackpill` | `stm32f401cdu6` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `stm32f401cdu6` | `stm32f401cdu6` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `stm32f411ceu6-blackpill` | `stm32f411ceu6` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `wch-ch32v003evt-bme280` | `ch32v003f4p6` | `crates/core/tests/analog/cosim_ch32v003_analog.rs` |

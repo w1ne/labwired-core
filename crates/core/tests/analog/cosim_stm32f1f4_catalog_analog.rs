@@ -2,27 +2,30 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! One generic deck pair drives every other STM32F1 and STM32F4 profile in
-//! `configs/systems/` into ADC1: the exact-part catalog smoke systems
-//! (`stm32-catalog/*.yaml`, one per orderable STM32F103x4/x6/x8 and
-//! STM32F401/STM32F407 density), the F103 bare and blue-pill profiles, the
-//! F401/F411 black pills and the ADXL345 sensor lab.
+//! One generic deck pair drives every STM32F1/F4 profile in the tree into
+//! ADC1: the exact-part catalog smoke systems (`stm32-catalog/*.yaml`, one per
+//! orderable STM32F103x4/x6/x8 and STM32F401/STM32F407 density), the F103
+//! bare, blue-pill and demo profiles, the F401/F411 black pills, the ADXL345
+//! sensor lab and the onboarding part profiles (`onboarding/*.yaml`).
 //!
 //! Nothing here is per-board code. The Beta NTC divider and the Shockley diode
 //! load line name only `board.analog.<pad>_volts`; each profile's chip
-//! descriptor maps PA0 -> `adc1`/0 and PA1 -> `adc1`/1, and the shared STM32F1
-//! or STM32F4 ADC model performs the conversion. The table below supplies
-//! three strings per profile (name, manifest, register family); the solve,
-//! route, conversion and assertion path is identical for all of them.
+//! descriptor maps the published pad to an `adc1` channel, and the shared
+//! STM32F1 or STM32F4 ADC model performs the conversion.
 //!
-//! The two register families differ only in the addresses firmware uses
-//! (RM0008 §11.12 for the F1, RM0368/RM0090 §13 for the F4): ADC1 at
-//! 0x40012400 vs 0x40012000, `RCC_APB2ENR` at 0x40021018 bit 9 vs 0x40023844
-//! bit 8, `CR2.SWSTART` bit 22 vs bit 30. `Family` holds exactly that, so a new
-//! F1 or F4 profile joins the sweep with one table row.
+//! The table supplies what actually differs between profiles:
 //!
-//! This is deliberately the *family* proof, not a re-proof of a single board:
-//! the previously covered nucleo/feather profiles stay in their own files.
+//! * the manifest,
+//! * the register family (`Family`: F1 0x40012400 / `APB2ENR` +0x18 bit 9 /
+//!   `SWSTART` bit 22 from RM0008 §11.12; F4 0x40012000 / `APB2ENR` +0x44
+//!   bit 8 / `SWSTART` bit 30 from RM0368 and RM0090 §13),
+//! * which pads the deck publishes — PA0/PA1 on the nucleo, catalog and
+//!   black-pill boards, PA1/PA2 or PA1/PB1 or PA1 alone on the onboarding
+//!   parts, whose descriptors bond a different pad set.
+//!
+//! The onboarding `stm32f4` profile bonds one analog pad, so it runs the
+//! single-probe deck; that is the point of a generic deck — the part says what
+//! it can convert, the deck only publishes a level.
 
 use crate::common;
 use common::root;
@@ -55,15 +58,20 @@ const DR_OFFSET: u64 = 0x4C;
 /// ADC_SQR3, common offset; SQ1 holds the channel to convert.
 const SQR3_OFFSET: u64 = 0x34;
 
-/// The generic decks, used as a deck source: only their `cosim_models` are
-/// overlaid on each profile, so the deck's own `chip:` is not read.
-const GENERIC_DECKS: &str = "examples/nucleo-f103rb/analog-ntc-diode-system.yaml";
+/// The generic pair as first written for the NUCLEO-F103RB: PA0 and PA1.
+const GENERIC_PAIR: &str = "examples/nucleo-f103rb/analog-ntc-diode-system.yaml";
+/// The same NTC divider, published on PA1 only, for parts that bond one pad.
+const NTC_PA1: &str = "examples/stm32-onboarding-analog/analog-ntc-pa1-system.yaml";
+/// The same pair, published on PA1 and PA2.
+const PA1_PA2: &str = "examples/stm32-onboarding-analog/analog-ntc-diode-pa1-pa2-system.yaml";
+/// The same pair, published on PA1 and PB1.
+const PA1_PB1: &str = "examples/stm32-onboarding-analog/analog-ntc-diode-pa1-pb1-system.yaml";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Family {
     /// STM32F1: ADC1 0x40012400, APB2ENR +0x18 bit 9, SWSTART bit 22.
     F1,
-    /// STM32F4: ADC1 0x40012000, APB2ENR +0x44 bit 8, SWSTART bit 30.
+    /// STM32F4/F7: ADC1 0x40012000, APB2ENR +0x44 bit 8, SWSTART bit 30.
     F4,
 }
 
@@ -115,194 +123,292 @@ struct Profile {
     name: &'static str,
     system: &'static str,
     family: Family,
+    deck: &'static str,
+    /// The pad the NTC divider publishes, and the channel it must select.
+    ntc: (&'static str, u8),
+    /// The pad the diode load line publishes, when the part bonds a second one.
+    diode: Option<(&'static str, u8)>,
 }
 
-/// Every STM32F1/F4 profile whose descriptor declares PA0/PA1 on `adc1` and
-/// that no other analog test already covers.
+/// A profile whose descriptor bonds PA0/PA1, driven by the shared pair.
+const fn pa0_pa1(name: &'static str, system: &'static str, family: Family) -> Profile {
+    Profile {
+        name,
+        system,
+        family,
+        deck: GENERIC_PAIR,
+        ntc: ("PA0", 0),
+        diode: Some(("PA1", 1)),
+    }
+}
+
+/// Every STM32F1/F4 profile that no dedicated test already covers.
 const PROFILES: &[Profile] = &[
     // ── F103: lab, demo board, bare and the blue pills ─────────────────────
-    Profile {
-        name: "adxl345-sensor-lab",
-        system: "configs/systems/adxl345-sensor-lab.yaml",
-        family: Family::F1,
-    },
-    Profile {
-        name: "labwired-demo-board",
-        system: "configs/systems/labwired-demo-board.yaml",
-        family: Family::F1,
-    },
-    Profile {
-        name: "stm32f103-bare",
-        system: "configs/systems/stm32f103-bare.yaml",
-        family: Family::F1,
-    },
-    Profile {
-        name: "stm32f103-blue-pill",
-        system: "configs/systems/stm32f103-blue-pill.yaml",
-        family: Family::F1,
-    },
-    Profile {
-        name: "stm32f103-blue-pill-bme280",
-        system: "configs/systems/stm32f103-blue-pill-bme280.yaml",
-        family: Family::F1,
-    },
+    pa0_pa1(
+        "adxl345-sensor-lab",
+        "configs/systems/adxl345-sensor-lab.yaml",
+        Family::F1,
+    ),
+    pa0_pa1(
+        "labwired-demo-board",
+        "configs/systems/labwired-demo-board.yaml",
+        Family::F1,
+    ),
+    pa0_pa1(
+        "stm32f103-bare",
+        "configs/systems/stm32f103-bare.yaml",
+        Family::F1,
+    ),
+    pa0_pa1(
+        "stm32f103-blue-pill",
+        "configs/systems/stm32f103-blue-pill.yaml",
+        Family::F1,
+    ),
+    pa0_pa1(
+        "stm32f103-blue-pill-bme280",
+        "configs/systems/stm32f103-blue-pill-bme280.yaml",
+        Family::F1,
+    ),
     // ── F103 exact-part catalog: x4/x6 low density, x8 medium density ──────
-    Profile {
-        name: "stm32f103c4-smoke",
-        system: "configs/systems/stm32-catalog/stm32f103c4.yaml",
-        family: Family::F1,
-    },
-    Profile {
-        name: "stm32f103c6-smoke",
-        system: "configs/systems/stm32-catalog/stm32f103c6.yaml",
-        family: Family::F1,
-    },
-    Profile {
-        name: "stm32f103r4-smoke",
-        system: "configs/systems/stm32-catalog/stm32f103r4.yaml",
-        family: Family::F1,
-    },
-    Profile {
-        name: "stm32f103r4h-smoke",
-        system: "configs/systems/stm32-catalog/stm32f103r4h.yaml",
-        family: Family::F1,
-    },
-    Profile {
-        name: "stm32f103r6-smoke",
-        system: "configs/systems/stm32-catalog/stm32f103r6.yaml",
-        family: Family::F1,
-    },
-    Profile {
-        name: "stm32f103r6h-smoke",
-        system: "configs/systems/stm32-catalog/stm32f103r6h.yaml",
-        family: Family::F1,
-    },
-    Profile {
-        name: "stm32f103r8-smoke",
-        system: "configs/systems/stm32-catalog/stm32f103r8.yaml",
-        family: Family::F1,
-    },
-    Profile {
-        name: "stm32f103t4-smoke",
-        system: "configs/systems/stm32-catalog/stm32f103t4.yaml",
-        family: Family::F1,
-    },
-    Profile {
-        name: "stm32f103t6-smoke",
-        system: "configs/systems/stm32-catalog/stm32f103t6.yaml",
-        family: Family::F1,
-    },
+    pa0_pa1(
+        "stm32f103c4-smoke",
+        "configs/systems/stm32-catalog/stm32f103c4.yaml",
+        Family::F1,
+    ),
+    pa0_pa1(
+        "stm32f103c6-smoke",
+        "configs/systems/stm32-catalog/stm32f103c6.yaml",
+        Family::F1,
+    ),
+    pa0_pa1(
+        "stm32f103r4-smoke",
+        "configs/systems/stm32-catalog/stm32f103r4.yaml",
+        Family::F1,
+    ),
+    pa0_pa1(
+        "stm32f103r4h-smoke",
+        "configs/systems/stm32-catalog/stm32f103r4h.yaml",
+        Family::F1,
+    ),
+    pa0_pa1(
+        "stm32f103r6-smoke",
+        "configs/systems/stm32-catalog/stm32f103r6.yaml",
+        Family::F1,
+    ),
+    pa0_pa1(
+        "stm32f103r6h-smoke",
+        "configs/systems/stm32-catalog/stm32f103r6h.yaml",
+        Family::F1,
+    ),
+    pa0_pa1(
+        "stm32f103r8-smoke",
+        "configs/systems/stm32-catalog/stm32f103r8.yaml",
+        Family::F1,
+    ),
+    pa0_pa1(
+        "stm32f103t4-smoke",
+        "configs/systems/stm32-catalog/stm32f103t4.yaml",
+        Family::F1,
+    ),
+    pa0_pa1(
+        "stm32f103t6-smoke",
+        "configs/systems/stm32-catalog/stm32f103t6.yaml",
+        Family::F1,
+    ),
     // ── F4: the two black pills ───────────────────────────────────────────
-    Profile {
-        name: "stm32f401cdu6",
-        system: "configs/systems/stm32f401cdu6.yaml",
-        family: Family::F4,
-    },
-    Profile {
-        name: "stm32f401cdu6-blackpill",
-        system: "configs/systems/stm32f401cdu6-blackpill.yaml",
-        family: Family::F4,
-    },
-    Profile {
-        name: "stm32f411ceu6-blackpill",
-        system: "configs/systems/stm32f411ceu6-blackpill.yaml",
-        family: Family::F4,
-    },
+    pa0_pa1(
+        "stm32f401cdu6",
+        "configs/systems/stm32f401cdu6.yaml",
+        Family::F4,
+    ),
+    pa0_pa1(
+        "stm32f401cdu6-blackpill",
+        "configs/systems/stm32f401cdu6-blackpill.yaml",
+        Family::F4,
+    ),
+    pa0_pa1(
+        "stm32f411ceu6-blackpill",
+        "configs/systems/stm32f411ceu6-blackpill.yaml",
+        Family::F4,
+    ),
     // ── F401 exact-part catalog: 48-pin C, 64-pin R, 100-pin V ────────────
-    Profile {
-        name: "stm32f401cb-smoke",
-        system: "configs/systems/stm32-catalog/stm32f401cb.yaml",
-        family: Family::F4,
-    },
-    Profile {
-        name: "stm32f401cc-smoke",
-        system: "configs/systems/stm32-catalog/stm32f401cc.yaml",
-        family: Family::F4,
-    },
-    Profile {
-        name: "stm32f401cd-smoke",
-        system: "configs/systems/stm32-catalog/stm32f401cd.yaml",
-        family: Family::F4,
-    },
-    Profile {
-        name: "stm32f401ce-smoke",
-        system: "configs/systems/stm32-catalog/stm32f401ce.yaml",
-        family: Family::F4,
-    },
-    Profile {
-        name: "stm32f401rb-smoke",
-        system: "configs/systems/stm32-catalog/stm32f401rb.yaml",
-        family: Family::F4,
-    },
-    Profile {
-        name: "stm32f401rc-smoke",
-        system: "configs/systems/stm32-catalog/stm32f401rc.yaml",
-        family: Family::F4,
-    },
-    Profile {
-        name: "stm32f401rd-smoke",
-        system: "configs/systems/stm32-catalog/stm32f401rd.yaml",
-        family: Family::F4,
-    },
-    Profile {
-        name: "stm32f401re-smoke",
-        system: "configs/systems/stm32-catalog/stm32f401re.yaml",
-        family: Family::F4,
-    },
-    Profile {
-        name: "stm32f401vb-smoke",
-        system: "configs/systems/stm32-catalog/stm32f401vb.yaml",
-        family: Family::F4,
-    },
-    Profile {
-        name: "stm32f401vc-smoke",
-        system: "configs/systems/stm32-catalog/stm32f401vc.yaml",
-        family: Family::F4,
-    },
-    Profile {
-        name: "stm32f401vd-smoke",
-        system: "configs/systems/stm32-catalog/stm32f401vd.yaml",
-        family: Family::F4,
-    },
-    Profile {
-        name: "stm32f401ve-smoke",
-        system: "configs/systems/stm32-catalog/stm32f401ve.yaml",
-        family: Family::F4,
-    },
+    pa0_pa1(
+        "stm32f401cb-smoke",
+        "configs/systems/stm32-catalog/stm32f401cb.yaml",
+        Family::F4,
+    ),
+    pa0_pa1(
+        "stm32f401cc-smoke",
+        "configs/systems/stm32-catalog/stm32f401cc.yaml",
+        Family::F4,
+    ),
+    pa0_pa1(
+        "stm32f401cd-smoke",
+        "configs/systems/stm32-catalog/stm32f401cd.yaml",
+        Family::F4,
+    ),
+    pa0_pa1(
+        "stm32f401ce-smoke",
+        "configs/systems/stm32-catalog/stm32f401ce.yaml",
+        Family::F4,
+    ),
+    pa0_pa1(
+        "stm32f401rb-smoke",
+        "configs/systems/stm32-catalog/stm32f401rb.yaml",
+        Family::F4,
+    ),
+    pa0_pa1(
+        "stm32f401rc-smoke",
+        "configs/systems/stm32-catalog/stm32f401rc.yaml",
+        Family::F4,
+    ),
+    pa0_pa1(
+        "stm32f401rd-smoke",
+        "configs/systems/stm32-catalog/stm32f401rd.yaml",
+        Family::F4,
+    ),
+    pa0_pa1(
+        "stm32f401re-smoke",
+        "configs/systems/stm32-catalog/stm32f401re.yaml",
+        Family::F4,
+    ),
+    pa0_pa1(
+        "stm32f401vb-smoke",
+        "configs/systems/stm32-catalog/stm32f401vb.yaml",
+        Family::F4,
+    ),
+    pa0_pa1(
+        "stm32f401vc-smoke",
+        "configs/systems/stm32-catalog/stm32f401vc.yaml",
+        Family::F4,
+    ),
+    pa0_pa1(
+        "stm32f401vd-smoke",
+        "configs/systems/stm32-catalog/stm32f401vd.yaml",
+        Family::F4,
+    ),
+    pa0_pa1(
+        "stm32f401ve-smoke",
+        "configs/systems/stm32-catalog/stm32f401ve.yaml",
+        Family::F4,
+    ),
     // ── F407 exact-part catalog: 100/144-pin I, 100/144-pin Z, V ───────────
+    pa0_pa1(
+        "stm32f407ie-smoke",
+        "configs/systems/stm32-catalog/stm32f407ie.yaml",
+        Family::F4,
+    ),
+    pa0_pa1(
+        "stm32f407ig-smoke",
+        "configs/systems/stm32-catalog/stm32f407ig.yaml",
+        Family::F4,
+    ),
+    pa0_pa1(
+        "stm32f407ve-smoke",
+        "configs/systems/stm32-catalog/stm32f407ve.yaml",
+        Family::F4,
+    ),
+    pa0_pa1(
+        "stm32f407vg-smoke",
+        "configs/systems/stm32-catalog/stm32f407vg.yaml",
+        Family::F4,
+    ),
+    pa0_pa1(
+        "stm32f407ze-smoke",
+        "configs/systems/stm32-catalog/stm32f407ze.yaml",
+        Family::F4,
+    ),
+    pa0_pa1(
+        "stm32f407zg-smoke",
+        "configs/systems/stm32-catalog/stm32f407zg.yaml",
+        Family::F4,
+    ),
+    // ── Onboarding part profiles: the pad sets these parts bond ────────────
+    pa0_pa1(
+        "stm32f103",
+        "configs/systems/onboarding/stm32f103.yaml",
+        Family::F1,
+    ),
     Profile {
-        name: "stm32f407ie-smoke",
-        system: "configs/systems/stm32-catalog/stm32f407ie.yaml",
+        // One analog pad only (PA1), so the NTC runs alone.
+        name: "stm32f4",
+        system: "configs/systems/onboarding/stm32f4.yaml",
         family: Family::F4,
+        deck: NTC_PA1,
+        ntc: ("PA1", 1),
+        diode: None,
     },
     Profile {
-        name: "stm32f407ig-smoke",
-        system: "configs/systems/stm32-catalog/stm32f407ig.yaml",
+        name: "stm32f412",
+        system: "configs/systems/onboarding/stm32f412.yaml",
         family: Family::F4,
+        deck: PA1_PA2,
+        ntc: ("PA1", 1),
+        diode: Some(("PA2", 2)),
     },
     Profile {
-        name: "stm32f407ve-smoke",
-        system: "configs/systems/stm32-catalog/stm32f407ve.yaml",
+        name: "stm32f429",
+        system: "configs/systems/onboarding/stm32f429.yaml",
         family: Family::F4,
+        deck: PA1_PA2,
+        ntc: ("PA1", 1),
+        diode: Some(("PA2", 2)),
     },
     Profile {
-        name: "stm32f407vg-smoke",
-        system: "configs/systems/stm32-catalog/stm32f407vg.yaml",
+        name: "stm32f746",
+        system: "configs/systems/onboarding/stm32f746.yaml",
         family: Family::F4,
+        deck: PA1_PA2,
+        ntc: ("PA1", 1),
+        diode: Some(("PA2", 2)),
     },
     Profile {
-        name: "stm32f407ze-smoke",
-        system: "configs/systems/stm32-catalog/stm32f407ze.yaml",
+        name: "stm32f4_discovery",
+        system: "configs/systems/onboarding/stm32f4_discovery.yaml",
         family: Family::F4,
+        deck: PA1_PB1,
+        ntc: ("PA1", 1),
+        diode: Some(("PB1", 9)),
     },
     Profile {
-        name: "stm32f407zg-smoke",
-        system: "configs/systems/stm32-catalog/stm32f407zg.yaml",
+        name: "stm32f4_discovery-kit",
+        system: "configs/systems/onboarding/stm32f4_discovery-kit.yaml",
         family: Family::F4,
+        deck: PA1_PB1,
+        ntc: ("PA1", 1),
+        diode: Some(("PB1", 9)),
+    },
+    // The F7 part profiles include the STM32F746 silicon surface (ADC1 on
+    // PA1/IN1 and PA2/IN2); the F76x/F77x leaves only add memory and
+    // peripherals this deck does not touch.
+    Profile {
+        name: "nucleo_f767zi",
+        system: "configs/systems/onboarding/nucleo_f767zi.yaml",
+        family: Family::F4,
+        deck: PA1_PA2,
+        ntc: ("PA1", 1),
+        diode: Some(("PA2", 2)),
+    },
+    Profile {
+        name: "stm32f7_discovery-bb",
+        system: "configs/systems/onboarding/stm32f7_discovery-bb.yaml",
+        family: Family::F4,
+        deck: PA1_PA2,
+        ntc: ("PA1", 1),
+        diode: Some(("PA2", 2)),
+    },
+    Profile {
+        name: "stm32f777",
+        system: "configs/systems/onboarding/stm32f777.yaml",
+        family: Family::F4,
+        deck: PA1_PA2,
+        ntc: ("PA1", 1),
+        diode: Some(("PA2", 2)),
     },
 ];
 
-/// Beta-parameter NTC resistance, the model card in the shared deck.
+/// Beta-parameter NTC resistance, the model card in every deck.
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
 }
@@ -334,8 +440,9 @@ fn diode_load_line_voltage() -> f64 {
     junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
 }
 
-fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
-    match session.signals().get(path) {
+fn signal_voltage(session: &CosimSession, pad: &str) -> f64 {
+    let path = format!("board.analog.{}_volts", pad.to_ascii_lowercase());
+    match session.signals().get(&path) {
         Some(CosimSignalValue::F64(volts)) => *volts,
         other => panic!("expected solved voltage at {path}, got {other:?}"),
     }
@@ -387,6 +494,19 @@ fn expected_adc_count(voltage_v: f64) -> u32 {
     (millivolts * 4095.0 / 3300.0).floor().clamp(0.0, 4095.0) as u32
 }
 
+/// The lowest channel no deck publishes: a conversion there must show the
+/// model's fallback, never a routed level.
+fn idle_channel(profile: &Profile) -> u8 {
+    let published = [profile.ntc.1];
+    let published = match profile.diode {
+        Some((_, channel)) => [published[0], channel],
+        None => [published[0], published[0]],
+    };
+    (0u8..16)
+        .find(|channel| !published.contains(channel))
+        .expect("a 16-channel converter leaves one channel free")
+}
+
 fn run_profile(profile: &Profile) {
     let system_path = root(profile.system);
     let mut manifest = SystemManifest::from_file(&system_path)
@@ -397,12 +517,13 @@ fn run_profile(profile: &Profile) {
         profile.system
     );
 
-    let decks = SystemManifest::from_file(root(GENERIC_DECKS))
+    let decks = SystemManifest::from_file(root(profile.deck))
         .unwrap_or_else(|e| panic!("load the generic decks for {}: {e}", profile.name));
     assert_eq!(
         decks.cosim_models.len(),
-        2,
-        "the shared deck must carry the NTC divider and the diode load line"
+        if profile.diode.is_some() { 2 } else { 1 },
+        "{}: the deck must carry one model per published pad",
+        profile.name
     );
     manifest.cosim_models = decks.cosim_models;
 
@@ -410,16 +531,20 @@ fn run_profile(profile: &Profile) {
     let chip = ChipDescriptor::from_file(&chip_path)
         .unwrap_or_else(|e| panic!("load {} descriptor: {e}", profile.name));
 
-    // The deck publishes PA0 and PA1, so both must resolve to ADC1 channels
-    // 0 and 1 on every part in the sweep, by descriptor data alone.
-    for (pad, channel) in [("PA0", 0), ("PA1", 1)] {
+    // The deck publishes these pads, so each must resolve to ADC1 by
+    // descriptor data alone.
+    let mut expected = vec![profile.ntc];
+    if let Some(diode) = profile.diode {
+        expected.push(diode);
+    }
+    for (pad, channel) in &expected {
         let pin = chip
             .analog_pins
-            .get(pad)
+            .get(*pad)
             .unwrap_or_else(|| panic!("{} must map {pad} to an ADC input", profile.name));
         assert_eq!(
             (pin.peripheral.as_str(), pin.channel),
-            ("adc1", channel),
+            ("adc1", *channel),
             "{}: {pad} must resolve to adc1 channel {channel}",
             profile.name
         );
@@ -447,15 +572,17 @@ fn run_profile(profile: &Profile) {
     let mut machine = board_machine(bus);
     let mut session = CosimSession::new(&manifest.cosim_models, Path::new("."), &machine.bus)
         .unwrap_or_else(|e| panic!("build {} co-simulation: {e}", profile.name))
-        .unwrap_or_else(|| panic!("{} deck carries both analog devices", profile.name));
+        .unwrap_or_else(|| panic!("{} deck carries its analog devices", profile.name));
     assert_eq!(
         session.binding_errors(),
         &[] as &[RoutingError],
-        "{} generic decks must resolve through PA0/PA1 to ADC1 channels 0/1",
-        profile.name
+        "{} generic decks must resolve through {:?} to ADC1",
+        profile.name,
+        expected
     );
 
     let expected_diode_v = diode_load_line_voltage();
+    let idle = idle_channel(profile);
     let mut cycles = 0;
     let mut samples = Vec::new();
     for temperature_c in [-20.0_f64, 25.0, 85.0] {
@@ -468,8 +595,8 @@ fn run_profile(profile: &Profile) {
             .unwrap_or_else(|e| panic!("solve {} analog decks: {e}", profile.name));
         assert_eq!(
             steps.len(),
-            2,
-            "{}: both decks cross the 1 us boundary",
+            expected.len(),
+            "{}: every deck crosses the 1 us boundary",
             profile.name
         );
         assert!(
@@ -478,40 +605,45 @@ fn run_profile(profile: &Profile) {
             profile.name
         );
 
-        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let ntc_v = signal_voltage(&session, profile.ntc.0);
         let expected_ntc_v = 3.3 * 10_000.0 / (ntc_resistance_ohms(temperature_c) + 10_000.0);
         assert!(
             (ntc_v - expected_ntc_v).abs() < 1e-9,
-            "{} at {temperature_c} C: Beta divider should be {expected_ntc_v} V, got {ntc_v} V",
-            profile.name
-        );
-        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
-        assert!(
-            (diode_v - expected_diode_v).abs() < 2e-5,
-            "{}: Shockley load line should be {expected_diode_v} V, got {diode_v} V",
-            profile.name
+            "{} at {temperature_c} C: Beta divider on {} should be {expected_ntc_v} V, got {ntc_v} V",
+            profile.name,
+            profile.ntc.0
         );
 
-        let ntc_count = adc1_convert(&mut machine, profile.family, 0);
+        let ntc_count = adc1_convert(&mut machine, profile.family, profile.ntc.1);
         assert_eq!(
             ntc_count,
             expected_adc_count(ntc_v),
-            "{}: firmware-visible ADC1 channel 0 must report the solved NTC voltage",
-            profile.name
+            "{}: firmware-visible ADC1 channel {} must report the solved NTC voltage",
+            profile.name,
+            profile.ntc.1
         );
-        let diode_count = adc1_convert(&mut machine, profile.family, 1);
-        assert_eq!(
-            diode_count,
-            expected_adc_count(diode_v),
-            "{}: firmware-visible ADC1 channel 1 must report the solved diode voltage",
-            profile.name
-        );
+        let mut last_count = ntc_count;
+        if let Some((pad, channel)) = profile.diode {
+            let diode_v = signal_voltage(&session, pad);
+            assert!(
+                (diode_v - expected_diode_v).abs() < 2e-5,
+                "{}: Shockley load line on {pad} should be {expected_diode_v} V, got {diode_v} V",
+                profile.name
+            );
+            last_count = adc1_convert(&mut machine, profile.family, channel);
+            assert_eq!(
+                last_count,
+                expected_adc_count(diode_v),
+                "{}: firmware-visible ADC1 channel {channel} must report the solved diode voltage",
+                profile.name
+            );
+        }
         // An unrouted channel reports the code after the previous DR value, so
         // this assertion also proves the neighbour did not take a routed input.
         assert_eq!(
-            adc1_convert(&mut machine, profile.family, 2),
-            (diode_count + 1) & 0xfff,
-            "{}: the undriven neighbouring channel uses its fallback",
+            adc1_convert(&mut machine, profile.family, idle),
+            (last_count + 1) & 0xfff,
+            "{}: the undriven channel {idle} uses its fallback",
             profile.name
         );
         samples.push((temperature_c, ntc_v, ntc_count));
@@ -541,6 +673,15 @@ fn every_stm32f1f4_profile_routes_the_generic_decks_to_adc1_end_to_end() {
     }
 }
 
+/// The ADC layout the descriptor asks for, from its `adc1` `config.profile`.
+fn adc1_layout(chip: &ChipDescriptor) -> Option<&str> {
+    chip.peripherals
+        .iter()
+        .find(|peripheral| peripheral.id == "adc1")
+        .and_then(|peripheral| peripheral.config.get("profile"))
+        .and_then(|value| value.as_str())
+}
+
 /// The sweep must stay honest: a profile that gains an analog deck of its own,
 /// or a new STM32F1/F4 profile that appears in `configs/systems/`, must be
 /// added here rather than silently missing from the matrix.
@@ -550,6 +691,8 @@ fn sweep_covers_every_uncovered_stm32f1f4_profile_with_an_adc1_pad_map() {
     // without removing it below only costs a duplicate run, never a false
     // claim; leaving it out of both lists is what this test refuses.
     let covered_elsewhere = [
+        "at32f421g8u7",
+        "feather-f405",
         "nucleo-f103rb",
         "nucleo-f103rb-epaper",
         "nucleo-f401re",
@@ -557,7 +700,6 @@ fn sweep_covers_every_uncovered_stm32f1f4_profile_with_an_adc1_pad_map() {
         "nucleo-f411re",
         "nucleo-f446re",
         "nucleo-f767zi",
-        "feather-f405",
         "stm32f4-discovery",
     ];
     let mut found = Vec::new();
@@ -575,49 +717,46 @@ fn sweep_covers_every_uncovered_stm32f1f4_profile_with_an_adc1_pad_map() {
         let Ok(chip) = ChipDescriptor::from_file(&chip_path) else {
             continue;
         };
-        let is_f1f4 = matches!(
-            chip.name.as_str(),
-            n if n.starts_with("stm32f1") || n.starts_with("stm32f4")
-        );
-        let has_pa0 = chip
-            .analog_pins
-            .get("PA0")
-            .is_some_and(|pin| pin.peripheral == "adc1" && pin.channel == 0);
-        if is_f1f4 && has_pa0 {
+        // The layout the descriptor requests, not the part's name: the
+        // STM32F746 asks for `stm32f4` registers, and a name test would miss
+        // it while catching parts named `stm32f4...` that use another block.
+        if !matches!(adc1_layout(&chip), Some("stm32f1" | "stm32f4")) {
+            continue;
+        }
+        let publishes_a_bonded_pad = ["PA0", "PA1"]
+            .iter()
+            .any(|pad| chip.analog_pins.contains_key(*pad));
+        if publishes_a_bonded_pad {
             found.push(manifest.name);
         }
     }
     assert!(
         found.is_empty(),
-        "these STM32F1/F4 profiles declare PA0 on ADC1 but no analog test loads them: {found:?}"
+        "these STM32F1/F4 profiles declare an ADC1 pad but no analog test loads them: {found:?}"
     );
 }
 
-/// Every system manifest at the top level and in `stm32-catalog/`, as paths
-/// relative to `configs/systems/`.
+/// Every system manifest the sweep can reach: the top level, the exact-part
+/// catalog and the onboarding tree.
 fn config_files() -> Vec<String> {
     let mut files = Vec::new();
-    for entry in std::fs::read_dir(root("configs/systems")).expect("list configs/systems") {
-        let path = entry.expect("read configs/systems entry").path();
-        if path.extension().is_some_and(|ext| ext == "yaml") {
-            files.push(
-                path.file_name()
-                    .expect("manifest has a file name")
-                    .to_string_lossy()
-                    .into_owned(),
-            );
-        }
-    }
-    let catalog = root("configs/systems/stm32-catalog");
-    for entry in std::fs::read_dir(&catalog).expect("list configs/systems/stm32-catalog") {
-        let path = entry.expect("read stm32-catalog entry").path();
-        if path.extension().is_some_and(|ext| ext == "yaml") {
-            files.push(format!(
-                "stm32-catalog/{}",
-                path.file_name()
-                    .expect("catalog manifest has a file name")
-                    .to_string_lossy()
-            ));
+    for (directory, prefix) in [
+        ("configs/systems", ""),
+        ("configs/systems/stm32-catalog", "stm32-catalog/"),
+        ("configs/systems/onboarding", "onboarding/"),
+    ] {
+        for entry in
+            std::fs::read_dir(root(directory)).unwrap_or_else(|e| panic!("list {directory}: {e}"))
+        {
+            let path = entry.expect("read manifest entry").path();
+            if path.extension().is_some_and(|ext| ext == "yaml") {
+                files.push(format!(
+                    "{prefix}{}",
+                    path.file_name()
+                        .expect("manifest has a file name")
+                        .to_string_lossy()
+                ));
+            }
         }
     }
     files

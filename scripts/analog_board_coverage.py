@@ -74,20 +74,20 @@ def analog_pad_count(chip: Path | None) -> int:
 def resolve_profile_keys() -> tuple[dict[str, Path], list[str]]:
     """Translate manifest references and example directories to manifest paths.
 
-    A test names a manifest either by its path relative to `configs/systems/`
-    (`configs/systems/stm32-catalog/stm32f103c4.yaml`) or by bare file stem
-    (`configs/systems/nucleo-f103rb.yaml`). Both forms are registered: the
-    relative path first so a nested manifest is never shadowed by a same-stem
-    file elsewhere, then the stem for the long-standing short form.
+    The key is the manifest's path relative to `configs/systems/`, always. A
+    top-level manifest keeps the long-standing short form
+    (`configs/systems/nucleo-f103rb.yaml` names `nucleo-f103rb`); a nested one
+    must be named with its directory
+    (`configs/systems/stm32-catalog/stm32f103c4.yaml` names
+    `stm32-catalog/stm32f103c4`). Registering a bare stem for a nested file as
+    well would make `stm32f401cdu6-blackpill` ambiguous: the onboarding tree
+    keeps a file of that name whose chip declares no analog pad at all.
     """
     by_key: dict[str, Path] = {}
     names: list[str] = []
     for name, path in profiles():
-        relative = path.relative_to(SYSTEMS).with_suffix("").as_posix()
+        by_key[path.relative_to(SYSTEMS).with_suffix("").as_posix()] = path
         names.append(name)
-        if relative != path.stem:
-            by_key[relative] = path
-        by_key.setdefault(path.stem, path)
     return by_key, names
 
 
