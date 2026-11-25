@@ -14,8 +14,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **439**
-- Covered end to end: **15**
-- Not covered: **424**
+- Covered end to end: **19**
+- Not covered: **420**
 - Not covered but with an `analog_pins:` map: **50** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` map, an ADC model, or a digital endpoint first)
@@ -89,7 +89,6 @@ count is what the generic decks can reach without new routing.
 | `adafruit-feather-rp2350` | `rp2350-feather` | 0 |
 | `adxl345-sensor-lab` | `stm32f103` | 10 |
 | `apollo4p-evb` | `amap42kp` | 0 |
-| `arduino-leonardo` | `atmega32u4` | 0 |
 | `arduino-nano-33-ble-bme280` | `nrf52840` | 8 |
 | `arduino-nano-33-iot-bme280` | `atsamd21g18a` | 0 |
 | `arduino-nano-esp32-bme280` | `esp32s3` | 0 |
@@ -97,10 +96,8 @@ count is what the generic decks can reach without new routing.
 | `arduino-nano-every-bme280` | `atmega4809` | 0 |
 | `arduino-nano-every-max31855` | `atmega4809` | 0 |
 | `arduino-nano-every` | `atmega4809` | 0 |
-| `arduino-nano` | `atmega328p` | 0 |
 | `arduino-uno-r4-minima-bme280` | `ra4m1` | 0 |
 | `arduino-uno-r4-minima` | `ra4m1` | 0 |
-| `arduino-uno` | `atmega328p` | 0 |
 | `arduino-zero` | `atsamd21g18a` | 0 |
 | `arty-litex-vexriscv` | `arty-litex-vexriscv` | 0 |
 | `atmega1281` | `atmega1281` | 0 |
@@ -112,7 +109,6 @@ count is what the generic decks can reach without new routing.
 | `ci-fixture-riscv-uart1` | `ci-fixture-riscv` | 0 |
 | `ci-fixture-uart1` | `ci-fixture-cortex-m3-uart1` | 0 |
 | `ci-fixture-unknown-arch` | `ci-fixture-unknown-arch` | 0 |
-| `controllino-mini` | `atmega328p` | 0 |
 | `curiosity-pic32mz-ef` | `pic32mz2048efm144` | 0 |
 | `dspic33fj32mc202-demo` | `dspic33fj32mc202` | 0 |
 | `dspic33fj32mc204-demo` | `dspic33fj32mc204` | 0 |
@@ -513,9 +509,13 @@ count is what the generic decks can reach without new routing.
 | Profile | Chip | Evidence |
 | --- | --- | --- |
 | `adafruit-feather-esp32-v2` | `esp32` | `crates/core/tests/analog/cosim_esp32_analog_diode.rs` |
+| `arduino-leonardo` | `atmega32u4` | `crates/core/tests/analog/cosim_avr_atmega32u4_analog.rs` |
 | `arduino-mega-2560` | `atmega2560` | `crates/core/tests/cosim/cosim_pin_routing.rs` |
 | `arduino-nano-33-ble` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
+| `arduino-nano` | `atmega328p` | `crates/core/tests/analog/cosim_avr_atmega328p_analog.rs` |
+| `arduino-uno` | `atmega328p` | `crates/core/tests/analog/cosim_avr_atmega328p_analog.rs` |
 | `at32f421g8u7` | `at32f421g8u7` | `crates/core/tests/analog/cosim_at32f421_analog.rs` |
+| `controllino-mini` | `atmega328p` | `crates/core/tests/analog/cosim_avr_atmega328p_analog.rs` |
 | `feather-f405` | `stm32f405` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `microbit-v2` | `nrf52833` | `crates/core/tests/analog/cosim_microbit_v2_analog.rs` |
 | `nrf52840-dk` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |

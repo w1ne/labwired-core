@@ -32,6 +32,26 @@ gpio_output_ohms: 25
 # pin); the simulation does not stop or clamp it.
 gpio_abs_max_ma: 40
 
+# Regular ADC inputs by chip pad, from DS40002061B "Pin Configurations" and
+# Table 24-4 (ADMUX MUX[3:0] channel selection): ADC0..ADC5 are PC0..PC5, and
+# ADC6/ADC7 are dedicated inputs on the TQFP/QFN packages (the DIP-28 Uno has
+# no pin for them; the converter still has the mux positions). The Arduino
+# Nano headers expose A0..A7 in this order; the Uno exposes A0..A5 only.
+# `avr_adc` is the bus-side input window; the converter registers stay on the
+# AVR CPU.
+# Consumed by co-simulation `board.analog.<pad>_volts`; pads not listed are
+# refused. The pad label is the chip name, not the Arduino header name, so a
+# deck that names `pc0` reads A0 on every ATmega328P board.
+analog_pins:
+  PC0: { peripheral: "adc", channel: 0 }
+  PC1: { peripheral: "adc", channel: 1 }
+  PC2: { peripheral: "adc", channel: 2 }
+  PC3: { peripheral: "adc", channel: 3 }
+  PC4: { peripheral: "adc", channel: 4 }
+  PC5: { peripheral: "adc", channel: 5 }
+  ADC6: { peripheral: "adc", channel: 6 }
+  ADC7: { peripheral: "adc", channel: 7 }
+
 # Microchip DS40002061B, "System and Reset Characteristics":
 # typical POR rising/falling 1.4/1.3 V; BOD centers 1.8, 2.7, 4.3 V with
 # 50 mV hysteresis (VBOT +/- VHYST/2). Fuse-selected BOD is disabled unless
