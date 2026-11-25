@@ -56,6 +56,17 @@ coprocessors: [rp2350_dcp, rp2350_gpioc]
 # Atomic SET/CLR/XOR aliases, same scheme as RP2040 (rp2350 addressmap.h
 # REG_ALIAS_*_BITS).
 atomic_register_aliases: true
+# Analog inputs. RP2350A (the 30-GPIO QFN-60 on the Pico 2) exposes ADC0..ADC3
+# on GPIO26..GPIO29, as the RP2040 did; the extra ADC4..ADC7 inputs exist only
+# on the 48-GPIO RP2350B package (GPIO40..47), which no profile here uses.
+# ADC selects the channel through `CS.AINSEL`; the shared `rp2040_adc` model
+# implements inputs 0..3 plus the on-die temperature sensor on input 4, so only
+# the four external pads are listed.
+analog_pins:
+  GP26: { peripheral: "adc", channel: 0 }
+  GP27: { peripheral: "adc", channel: 1 }
+  GP28: { peripheral: "adc", channel: 2 }
+  GP29: { peripheral: "adc", channel: 3 }
 peripherals:
   # SYSINFO (CHIP_ID 0x30004927 = revision 3, part 0x0004, manufacturer 0x927
   # — rp2350 sysinfo.h). The pico-sdk USB errata workaround asserts the

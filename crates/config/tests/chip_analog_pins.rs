@@ -68,7 +68,7 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
             Some(p)
                 if !matches!(
                     p.r#type.as_str(),
-                    "adc" | "nrf52840_saadc" | "avr_adc" | "ra_adc12"
+                    "adc" | "nrf52840_saadc" | "avr_adc" | "ra_adc12" | "rp2040_adc"
                 ) =>
             {
                 problems.push(format!(
@@ -92,6 +92,10 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
             .peripherals
             .iter()
             .any(|p| &p.id == peripheral && p.r#type == "ra_adc12");
+        let rp2040 = desc
+            .peripherals
+            .iter()
+            .any(|p| &p.id == peripheral && p.r#type == "rp2040_adc");
         if ra {
             // `ra_adc12` has one data register per channel, ADDR0-ADDR28, so a
             // channel number above 28 addresses nothing (see the `CHANNELS`
@@ -179,6 +183,29 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
                         "{chip}: {pad} is not a P<port><bit> or ADC<n> label"
                     )),
                 },
+            }
+        } else if rp2040 {
+            // RP2040 datasheet §4.9.2 and RP2350 datasheet §12.5: the SAR
+            // converter's inputs 0..3 are the pads GPIO26..GPIO29 in order, and
+            // input 4 is the on-die temperature sensor, which `CS.TS_EN`
+            // selects. There is no pad behind input 4, so a descriptor that
+            // names it would let a board net bias the die sensor.
+            match rp2040_pad_bit(pad) {
+                Some(bit) if *channel < 4 => {
+                    let expected_bit = 26 + u32::from(*channel);
+                    if u32::from(bit) != expected_bit {
+                        problems.push(format!(
+                            "{chip}: {pad} must be GPIO{expected_bit} for ADC channel {channel}"
+                        ));
+                    }
+                }
+                Some(_) => problems.push(format!(
+                    "{chip}: {pad} names channel {channel}; only inputs 0..3 are pads, \
+                     input 4 is the on-die temperature sensor"
+                )),
+                None => problems.push(format!(
+                    "{chip}: {pad} is not a GP<n> pad label (the RP2040/RP2350A pinout form)"
+                )),
             }
         } else {
             match pad_port_and_bit(pad, nordic) {
@@ -277,6 +304,17 @@ fn pad_port_and_bit(pad: &str, nordic: bool) -> Option<(String, u8)> {
             digits.parse().ok()?,
         ))
     }
+}
+
+/// RP2040/RP2350A pad labels: `GP<n>` (`GP26` is the Pico pinout form the
+/// descriptor's `pins:` block and the playground emit both use).
+fn rp2040_pad_bit(pad: &str) -> Option<u8> {
+    let upper = pad.to_ascii_uppercase();
+    let digits = upper.strip_prefix("GP")?;
+    if digits.is_empty() || !digits.bytes().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse().ok()
 }
 
 /// RA pad labels: `P<port><bit:02>`, e.g. `P014` -> port0 bit 14 and `P101` ->
@@ -585,5 +623,61 @@ fn avr_validation_rejects_bad_models_ports_channels_and_pads() {
             channel: 7,
         },
     );
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+}
+
+/// RP2040 datasheet §4.9.2: the SAR converter's pads are ADC0..ADC3 on
+/// GPIO26..GPIO29; input 4 is the on-die temperature sensor. RP2350A keeps the
+/// same four pads (the extra ADC4..ADC7 inputs belong to the 48-GPIO B
+/// package). Every Pico-family descriptor must carry exactly that map, because
+/// a missing entry is a board whose nets cannot reach the converter and a
+/// wrong one silently sends a level to a channel firmware never converts.
+#[test]
+fn pico_family_analog_pins_match_the_datasheet_pads() {
+    for chip in ["rp2040", "rp2040-feather", "rp2350", "rp2350-feather"] {
+        let desc = load(chip);
+        let expected = [("GP26", 0u8), ("GP27", 1), ("GP28", 2), ("GP29", 3)];
+        assert_eq!(desc.analog_pins.len(), expected.len(), "{chip}");
+        for (pad, channel) in expected {
+            let mapping = &desc.analog_pins[pad];
+            assert_eq!(mapping.peripheral, "adc", "{chip}: {pad}");
+            assert_eq!(mapping.channel, channel, "{chip}: {pad}");
+        }
+        assert!(
+            analog_pin_problems(chip, &desc).is_empty(),
+            "{chip} must pass the pad/channel consistency check"
+        );
+    }
+}
+
+#[test]
+fn rp2040_validation_rejects_bad_pads_channels_and_the_temperature_input() {
+    let original = load("rp2040");
+    for bad_pad in ["GP30x", "P26", "GPIO26", "GP", "GP26.0", "gp_26"] {
+        let mut desc = original.clone();
+        let mapping = desc.analog_pins.remove("GP26").unwrap();
+        desc.analog_pins.insert(bad_pad.to_string(), mapping);
+        assert!(
+            !analog_pin_problems("bad", &desc).is_empty(),
+            "accepted {bad_pad}"
+        );
+    }
+    // Inside the label grammar, off the datasheet's pad/channel pairing: ADC0
+    // is GPIO26, so naming GPIO27 on channel 0 would route a solved node to a
+    // different pin than the firmware converts.
+    let mut desc = original.clone();
+    desc.analog_pins.get_mut("GP26").unwrap().channel = 1;
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+    // Input 4 is the temperature sensor, gated by `CS.TS_EN`, with no pad.
+    let mut desc = original.clone();
+    desc.analog_pins.get_mut("GP29").unwrap().channel = 4;
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+    // The converter must still be an ADC.
+    let mut desc = original.clone();
+    desc.peripherals
+        .iter_mut()
+        .find(|p| p.id == "adc")
+        .unwrap()
+        .r#type = "uart".into();
     assert!(!analog_pin_problems("bad", &desc).is_empty());
 }

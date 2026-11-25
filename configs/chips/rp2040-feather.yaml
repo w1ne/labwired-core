@@ -75,6 +75,14 @@ pins:
   GP27: { gpio: sio, bit: 27 }
   GP28: { gpio: sio, bit: 28 }
   GP29: { gpio: sio, bit: 29 }
+# Analog inputs (RP2040 datasheet §4.9.2): ADC0..ADC3 are GPIO26..GP29, ADC4 is
+# the on-die temperature sensor, which `CS.TS_EN` selects instead of a pad. The
+# Feather RP2040 breaks A0..A3 out on GP26..GP29 (Adafruit pinout).
+analog_pins:
+  GP26: { peripheral: "adc", channel: 0 }
+  GP27: { peripheral: "adc", channel: 1 }
+  GP28: { peripheral: "adc", channel: 2 }
+  GP29: { peripheral: "adc", channel: 3 }
 peripherals:
   # SYSINFO (datasheet §2.21). Read-only identity block; the only load-bearing
   # register is CHIP_ID, which the pico-sdk USB errata-E5 workaround reads (from

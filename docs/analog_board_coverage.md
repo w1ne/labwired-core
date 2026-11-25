@@ -14,8 +14,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **440**
-- Covered end to end: **21**
-- Not covered: **419**
+- Covered end to end: **34**
+- Not covered: **406**
 - Not covered but with an `analog_pins:` map: **51** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` map, an ADC model, or a digital endpoint first)
@@ -85,9 +85,6 @@ count is what the generic decks can reach without new routing.
 | Profile | Chip | Analog pad map |
 | --- | --- | ---: |
 | `adafruit-feather-esp32-v2-bme280` | `esp32` | 0 |
-| `adafruit-feather-rp2040-bme280` | `rp2040-feather` | 0 |
-| `adafruit-feather-rp2040` | `rp2040-feather` | 0 |
-| `adafruit-feather-rp2350` | `rp2350-feather` | 0 |
 | `adxl345-sensor-lab` | `stm32f103` | 10 |
 | `apollo4p-evb` | `amap42kp` | 0 |
 | `arduino-nano-33-ble-bme280` | `nrf52840` | 8 |
@@ -442,17 +439,7 @@ count is what the generic decks can reach without new routing.
 | `pic16f1829-curiosity` | `pic16f1829` | 0 |
 | `pic16f877a-demo` | `pic16f877a` | 0 |
 | `pic18f4520-demo` | `pic18f4520` | 0 |
-| `pico-bme280` | `rp2040` | 0 |
-| `pico-selftest` | `rp2040` | 0 |
-| `pico-w-bme280` | `rp2040` | 0 |
-| `pico` | `rp2040` | 0 |
-| `pico2-bme280` | `rp2350` | 0 |
-| `pico2` | `rp2350` | 0 |
 | `pybadge` | `atsamd51-pybadge` | 0 |
-| `rp2040-pico` | `rp2040` | 0 |
-| `rp2350-zero` | `rp2350` | 0 |
-| `rpi-pico-2-w-bme280` | `rp2350` | 0 |
-| `rpi-pico-2-w` | `rp2350` | 0 |
 | `s32k388-evb` | `s32k388` | 0 |
 | `sam-e70-xplained` | `same70q21b` | 0 |
 | `sam4s-xplained` | `sam4s16c` | 0 |
@@ -509,6 +496,9 @@ count is what the generic decks can reach without new routing.
 | Profile | Chip | Evidence |
 | --- | --- | --- |
 | `adafruit-feather-esp32-v2` | `esp32` | `crates/core/tests/analog/cosim_esp32_analog_diode.rs` |
+| `adafruit-feather-rp2040-bme280` | `rp2040-feather` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `adafruit-feather-rp2040` | `rp2040-feather` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `adafruit-feather-rp2350` | `rp2350-feather` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
 | `arduino-leonardo` | `atmega32u4` | `crates/core/tests/analog/cosim_avr_atmega32u4_analog.rs` |
 | `arduino-mega-2560` | `atmega2560` | `crates/core/tests/cosim/cosim_pin_routing.rs` |
 | `arduino-nano-33-ble` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
@@ -527,6 +517,16 @@ count is what the generic decks can reach without new routing.
 | `nucleo-f411re` | `stm32f411re` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `nucleo-f446re` | `stm32f446re` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `nucleo-f767zi` | `stm32f767` | `crates/core/tests/analog/cosim_nucleo_f767zi_analog.rs` |
+| `pico-bme280` | `rp2040` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `pico-selftest` | `rp2040` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `pico-w-bme280` | `rp2040` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `pico` | `rp2040` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `pico2-bme280` | `rp2350` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `pico2` | `rp2350` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `rp2040-pico` | `rp2040` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `rp2350-zero` | `rp2350` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `rpi-pico-2-w-bme280` | `rp2350` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `rpi-pico-2-w` | `rp2350` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
 | `seeed-xiao-nrf52840-sense` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
 | `wch-ch32v003evt` | `ch32v003f4p6` | `crates/core/tests/analog/cosim_ch32v003_analog.rs` |
 
