@@ -1,0 +1,30 @@
+# Generic Beta NTC divider, published to `board.analog.pa1_volts`.
+#
+# One deck per pad set the onboarding part profiles actually bond: `stm32f4`
+# brings out only PA1 on ADC1 (INP1), so the two-probe pair used on the
+# nucleo/catalog boards has nowhere to put the diode. Neither netlist names the
+# board, the ADC or a channel; the chip descriptor's `analog_pins:` map turns
+# `pa1` into a channel. Any other part that bonds PA1 to an ADC input can load
+# this file unchanged.
+name: "stm32-onboarding-analog-ntc-pa1"
+chip: "../../configs/chips/onboarding/stm32f4.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.pa1_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 3.3
