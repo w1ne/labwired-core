@@ -12,6 +12,7 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | UARTE0 EasyDMA console (PSEL/BADRATE/TXD.PTR/MAXCNT) | smoke-tested | `ARDUINO NANO 33 BLE SMOKE` + heartbeat |
 | Active-low RGB LED mapping (P0.24/P0.16/P0.06) | smoke-tested | `rgb=red out=00012040`, `rgb=green out=01002040`, `rgb=blue out=01012000` (GPIO0 OUT readback) |
 | Built-in D13 LED (P0.13, active high) | smoke-tested | bit 13 set in every `out=` readback |
+| SAADC AIN2/AIN3 from generic analog netlists (P0.04/P0.05) | sim-validated | `cargo test -p labwired-core --test analog cosim_nrf52840_family_analog`: solved NTC/diode nodes match closed forms; EasyDMA buffer matches the 600 mV reference at gain 1/6 |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical UART streams (`diff` clean) |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
 | LSM9DS1 IMU | **not modelled** | the TWI0 controller is modelled; no sensor model is declared |
@@ -49,6 +50,11 @@ cargo build -p firmware-arduino-nano-33-ble-smoke --release --target thumbv7em-n
 #   simulator exit 0 · Instructions executed: 200000 · Unsupported: 0
 
 cargo test -p labwired-core --test gates firmware_survival::test_arduino_nano_33_ble_smoke_survival
+
+cargo test -p labwired-core --test analog cosim_nrf52840_family_analog
+#   NTC and diode nodes match the closed forms; SAADC AIN2/AIN3 codes match
+#   the 600 mV internal reference at gain 1/6 for this board and two other
+#   nRF52840 profiles.
 ```
 
 ## Notes
