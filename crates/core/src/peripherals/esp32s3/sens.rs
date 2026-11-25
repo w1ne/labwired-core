@@ -72,7 +72,12 @@
 //! too: mid-scale 0x1000 when nothing is injected, and `millivolts * 8191 /
 //! 3300` for an injected channel.
 
+use crate::peripheral::SharedAdcChannelBank;
 use crate::{Peripheral, SimResult};
+use std::sync::Arc;
+
+const ESP32S3_ADC1_BANK_KEY: &str = "esp32s3_adc1";
+const ESP32S2_ADC1_BANK_KEY: &str = "esp32s2_adc1";
 
 const SAR_READER1_CTRL: u64 = 0x000;
 const SAR_READER1_STATUS: u64 = 0x004;
@@ -229,12 +234,12 @@ pub struct Esp32s3Sens {
     /// Register file for the architected map (word-indexed; holes stay 0 and
     /// are never read back — `spec()` gates both directions).
     regs: [u32; NWORDS],
-    /// Per-ADC1-channel injected 12-bit counts (CH0..9 = GPIO1..10). `0xFFFF` =
-    /// "no injection" → fall back to `MEAS_DATA_FIXED`. A potentiometer/analog
-    /// source writes its wiper here so `analogRead()` returns a controllable,
-    /// position-driven value instead of the fixed mid-scale placeholder. This is
-    /// the SENS path esp-hal's ESP32-S3 ADC oneshot actually reads.
-    channel_inputs: [u16; 10],
+    /// Shared physical ADC1 analog input pad bank (CH0..9 = GPIO1..10), in
+    /// millivolts. Unset slots fall back to `self.fixed` (mid-scale). Shared
+    /// with `Esp32s3SarAdc` by `SystemBus::wire_esp32s3_adc_pads` so stimuli
+    /// routed to `sar_adc_s3` are immediately observed by `analogRead()` /
+    /// IDF `adc_oneshot` on `sens_s3` (and vice versa).
+    adc1_pads: Arc<SharedAdcChannelBank>,
     /// Register map: [`spec`] (S3) or [`spec_s2`] (S2).
     spec: RegSpec,
     /// Full-scale code (S3 12-bit 4095, S2 13-bit 8191) and the mid-scale
@@ -280,10 +285,24 @@ impl Esp32s3Sens {
         }
         Self {
             regs,
-            channel_inputs: [0xFFFF; 10],
+            adc1_pads: Arc::new(SharedAdcChannelBank::new(10)),
             spec,
             full_scale,
             fixed,
+        }
+    }
+
+    /// Handle to the shared physical ADC1 pad voltage bank.
+    pub fn adc1_pads(&self) -> Arc<SharedAdcChannelBank> {
+        Arc::clone(&self.adc1_pads)
+    }
+
+    /// Replace the ADC1 pad bank with a shared bank, preserving any channel
+    /// already seeded on this peripheral.
+    pub fn set_adc1_pads(&mut self, pads: Arc<SharedAdcChannelBank>) {
+        if !Arc::ptr_eq(&self.adc1_pads, &pads) {
+            pads.merge_unset_from(&self.adc1_pads);
+            self.adc1_pads = pads;
         }
     }
 
@@ -291,22 +310,25 @@ impl Esp32s3Sens {
     /// next SENS oneshot that selects this channel returns the equivalent count
     /// (3.3 V Vref; 12-bit on the S3, 13-bit on the S2) instead of the fixed
     /// mid-scale placeholder.
-    /// Read back the injected 12-bit count for a channel (`0xFFFF` = nothing
+    /// Read back the injected count for a channel (`0xFFFF` = nothing
     /// injected). The read-back counterpart of [`Self::set_channel_input`], so
     /// a stimulus test can assert what the next conversion will return without
     /// running one.
     pub fn channel_input_count(&self, channel: u8) -> u16 {
-        self.channel_inputs
-            .get(channel as usize)
-            .copied()
-            .unwrap_or(0xFFFF)
+        match self.adc1_pads.get_mv(channel) {
+            Some(millivolts) => {
+                ((millivolts as u32 * self.full_scale) / 3300).min(self.full_scale) as u16
+            }
+            None => 0xFFFF,
+        }
     }
 
     pub fn set_channel_input(&mut self, channel: u8, millivolts: u16) {
-        if (channel as usize) < self.channel_inputs.len() {
-            let count = ((millivolts as u32 * self.full_scale) / 3300).min(self.full_scale) as u16;
-            self.channel_inputs[channel as usize] = count;
-        }
+        self.adc1_pads.set_mv(channel, millivolts);
+    }
+
+    pub fn clear_channel_input(&mut self, channel: u8) {
+        self.adc1_pads.clear(channel);
     }
 
     fn reg(&self, off: u64) -> u32 {
@@ -366,25 +388,43 @@ impl Esp32s3Sens {
             return self.fixed;
         }
         let channel = en_pad.trailing_zeros() as usize;
-        match self.channel_inputs.get(channel) {
-            Some(&c) if c != 0xFFFF => (c as u32) & MEAS_DATA_MASK,
-            _ => self.fixed,
+        let count = self.channel_input_count(channel as u8);
+        if count != 0xFFFF {
+            (count as u32) & MEAS_DATA_MASK
+        } else {
+            self.fixed
         }
     }
 }
 
 impl Peripheral for Esp32s3Sens {
-    /// SAR ADC1 CH0..CH9 (GPIO1..GPIO10), the slots `channel_inputs` holds.
+    /// SAR ADC1 CH0..CH9 (GPIO1..GPIO10), the slots `adc1_pads` holds.
     fn adc_channel_count(&self) -> Option<u8> {
         Some(10)
     }
 
     fn set_adc_channel_input(&mut self, channel: u8, millivolts: u16) -> bool {
-        if (channel as usize) >= self.channel_inputs.len() {
-            return false;
+        self.adc1_pads.set_mv(channel, millivolts)
+    }
+
+    fn clear_adc_channel_input(&mut self, channel: u8) -> bool {
+        self.adc1_pads.clear(channel)
+    }
+
+    fn shared_adc_bank_key(&self) -> Option<&'static str> {
+        if self.full_scale == FULL_SCALE_12 {
+            Some(ESP32S3_ADC1_BANK_KEY)
+        } else {
+            Some(ESP32S2_ADC1_BANK_KEY)
         }
-        self.set_channel_input(channel, millivolts);
-        true
+    }
+
+    fn shared_adc_bank(&self) -> Option<Arc<SharedAdcChannelBank>> {
+        Some(Arc::clone(&self.adc1_pads))
+    }
+
+    fn bind_shared_adc_bank(&mut self, bank: Arc<SharedAdcChannelBank>) {
+        self.set_adc1_pads(bank);
     }
 
     // Inert walk: SENS register bank; no free-running state. tick() is the trait-default no-op.

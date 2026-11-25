@@ -70,6 +70,8 @@ pub mod esp32_ledc_waveform;
 pub mod esp32_pcnt_inputs;
 pub mod esp32c3_s3_ledc_waveform;
 #[cfg(test)]
+pub mod esp32s3_adc_efuse_gc9a01;
+#[cfg(test)]
 pub mod esp32s3_i2c_waveform;
 pub mod esp_spi_uart_waveform;
 #[cfg(test)]
