@@ -4944,9 +4944,9 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.</p>
 <ul>
 <li>Profiles in <code>configs/systems/</code>: <strong>440</strong></li>
-<li>Covered end to end: <strong>40</strong></li>
-<li>Not covered: <strong>400</strong></li>
-<li>Not covered but with an <code>analog_pins:</code> map: <strong>47</strong> (these are the
+<li>Covered end to end: <strong>90</strong></li>
+<li>Not covered: <strong>350</strong></li>
+<li>Not covered but with an <code>analog_pins:</code> map: <strong>0</strong> (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   <code>analog_pins:</code> map, an ADC model, or a digital endpoint first)</li>
 </ul>
@@ -4954,252 +4954,7 @@ not the board.</p>
 descriptor. Every such entry in this tree names an ADC peripheral, so the
 count is what the generic decks can reach without new routing.</p>
 <h2 id="next-queue-not-covered-analog_pins-map-already-present">Next queue: not covered, <code>analog_pins:</code> map already present</h2>
-<table>
-<thead>
-<tr>
-<th>Profile</th>
-<th>Chip</th>
-<th style="text-align: right;">Analog pad map</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>adxl345-sensor-lab</code></td>
-<td><code>stm32f103</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>labwired-demo-board</code></td>
-<td><code>stm32f103</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f103</code></td>
-<td><code>stm32f103</code></td>
-<td style="text-align: right;">2</td>
-</tr>
-<tr>
-<td><code>stm32f4</code></td>
-<td><code>stm32f4</code></td>
-<td style="text-align: right;">1</td>
-</tr>
-<tr>
-<td><code>stm32f412</code></td>
-<td><code>stm32f412</code></td>
-<td style="text-align: right;">2</td>
-</tr>
-<tr>
-<td><code>stm32f429</code></td>
-<td><code>stm32f429</code></td>
-<td style="text-align: right;">2</td>
-</tr>
-<tr>
-<td><code>stm32f4_discovery-kit</code></td>
-<td><code>stm32f4_discovery-kit</code></td>
-<td style="text-align: right;">2</td>
-</tr>
-<tr>
-<td><code>stm32f4_discovery</code></td>
-<td><code>stm32f4_discovery</code></td>
-<td style="text-align: right;">2</td>
-</tr>
-<tr>
-<td><code>stm32f746</code></td>
-<td><code>stm32f746</code></td>
-<td style="text-align: right;">2</td>
-</tr>
-<tr>
-<td><code>stm32h7</code></td>
-<td><code>stm32h7</code></td>
-<td style="text-align: right;">1</td>
-</tr>
-<tr>
-<td><code>stm32h743</code></td>
-<td><code>stm32h743</code></td>
-<td style="text-align: right;">1</td>
-</tr>
-<tr>
-<td><code>stm32h747-disco</code></td>
-<td><code>stm32h747-disco</code></td>
-<td style="text-align: right;">1</td>
-</tr>
-<tr>
-<td><code>stm32h747</code></td>
-<td><code>stm32h747</code></td>
-<td style="text-align: right;">1</td>
-</tr>
-<tr>
-<td><code>stm32h753</code></td>
-<td><code>stm32h753</code></td>
-<td style="text-align: right;">1</td>
-</tr>
-<tr>
-<td><code>stm32f103c4-smoke</code></td>
-<td><code>stm32f103c4</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f103c6-smoke</code></td>
-<td><code>stm32f103c6</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f103r4-smoke</code></td>
-<td><code>stm32f103r4</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f103r4h-smoke</code></td>
-<td><code>stm32f103r4h</code></td>
-<td style="text-align: right;">15</td>
-</tr>
-<tr>
-<td><code>stm32f103r6-smoke</code></td>
-<td><code>stm32f103r6</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f103r6h-smoke</code></td>
-<td><code>stm32f103r6h</code></td>
-<td style="text-align: right;">15</td>
-</tr>
-<tr>
-<td><code>stm32f103r8-smoke</code></td>
-<td><code>stm32f103r8</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f103t4-smoke</code></td>
-<td><code>stm32f103t4</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f103t6-smoke</code></td>
-<td><code>stm32f103t6</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f401cb-smoke</code></td>
-<td><code>stm32f401cb</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f401cc-smoke</code></td>
-<td><code>stm32f401cc</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f401cd-smoke</code></td>
-<td><code>stm32f401cd</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f401ce-smoke</code></td>
-<td><code>stm32f401ce</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f401rb-smoke</code></td>
-<td><code>stm32f401rb</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f401rc-smoke</code></td>
-<td><code>stm32f401rc</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f401rd-smoke</code></td>
-<td><code>stm32f401rd</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f401re-smoke</code></td>
-<td><code>stm32f401re</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f401vb-smoke</code></td>
-<td><code>stm32f401vb</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f401vc-smoke</code></td>
-<td><code>stm32f401vc</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f401vd-smoke</code></td>
-<td><code>stm32f401vd</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f401ve-smoke</code></td>
-<td><code>stm32f401ve</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f407ie-smoke</code></td>
-<td><code>stm32f407ie</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f407ig-smoke</code></td>
-<td><code>stm32f407ig</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f407ve-smoke</code></td>
-<td><code>stm32f407ve</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f407vg-smoke</code></td>
-<td><code>stm32f407vg</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f407ze-smoke</code></td>
-<td><code>stm32f407ze</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f407zg-smoke</code></td>
-<td><code>stm32f407zg</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f103-bare</code></td>
-<td><code>stm32f103</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f103-blue-pill-bme280</code></td>
-<td><code>stm32f103</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f103-blue-pill</code></td>
-<td><code>stm32f103</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f401cdu6-blackpill</code></td>
-<td><code>stm32f401cdu6</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f401cdu6</code></td>
-<td><code>stm32f401cdu6</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f411ceu6-blackpill</code></td>
-<td><code>stm32f411ceu6</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-</tbody>
-</table>
+<p>None.</p>
 <h2 id="not-covered">Not covered</h2>
 <table>
 <thead>
@@ -5214,11 +4969,6 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>adafruit-feather-esp32-v2-bme280</code></td>
 <td><code>esp32</code></td>
 <td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>adxl345-sensor-lab</code></td>
-<td><code>stm32f103</code></td>
-<td style="text-align: right;">10</td>
 </tr>
 <tr>
 <td><code>apollo4p-evb</code></td>
@@ -5539,11 +5289,6 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>kv260-r5</code></td>
 <td><code>xck26-rpu</code></td>
 <td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>labwired-demo-board</code></td>
-<td><code>stm32f103</code></td>
-<td style="text-align: right;">10</td>
 </tr>
 <tr>
 <td><code>litex-vexriscv</code></td>
@@ -6316,11 +6061,6 @@ count is what the generic decks can reach without new routing.</p>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
-<td><code>nucleo_f767zi</code></td>
-<td><code>nucleo_f767zi</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
 <td><code>nucleo_h753zi</code></td>
 <td><code>nucleo_h753zi</code></td>
 <td style="text-align: right;">0</td>
@@ -6746,79 +6486,9 @@ count is what the generic decks can reach without new routing.</p>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
-<td><code>stm32f103</code></td>
-<td><code>stm32f103</code></td>
-<td style="text-align: right;">2</td>
-</tr>
-<tr>
-<td><code>stm32f4</code></td>
-<td><code>stm32f4</code></td>
-<td style="text-align: right;">1</td>
-</tr>
-<tr>
 <td><code>stm32f401cdu6-blackpill</code></td>
 <td><code>stm32f401cdu6-blackpill</code></td>
 <td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>stm32f412</code></td>
-<td><code>stm32f412</code></td>
-<td style="text-align: right;">2</td>
-</tr>
-<tr>
-<td><code>stm32f429</code></td>
-<td><code>stm32f429</code></td>
-<td style="text-align: right;">2</td>
-</tr>
-<tr>
-<td><code>stm32f4_discovery-kit</code></td>
-<td><code>stm32f4_discovery-kit</code></td>
-<td style="text-align: right;">2</td>
-</tr>
-<tr>
-<td><code>stm32f4_discovery</code></td>
-<td><code>stm32f4_discovery</code></td>
-<td style="text-align: right;">2</td>
-</tr>
-<tr>
-<td><code>stm32f746</code></td>
-<td><code>stm32f746</code></td>
-<td style="text-align: right;">2</td>
-</tr>
-<tr>
-<td><code>stm32f777</code></td>
-<td><code>stm32f777</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>stm32f7_discovery-bb</code></td>
-<td><code>stm32f7_discovery-bb</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>stm32h7</code></td>
-<td><code>stm32h7</code></td>
-<td style="text-align: right;">1</td>
-</tr>
-<tr>
-<td><code>stm32h743</code></td>
-<td><code>stm32h743</code></td>
-<td style="text-align: right;">1</td>
-</tr>
-<tr>
-<td><code>stm32h747-disco</code></td>
-<td><code>stm32h747-disco</code></td>
-<td style="text-align: right;">1</td>
-</tr>
-<tr>
-<td><code>stm32h747</code></td>
-<td><code>stm32h747</code></td>
-<td style="text-align: right;">1</td>
-</tr>
-<tr>
-<td><code>stm32h753</code></td>
-<td><code>stm32h753</code></td>
-<td style="text-align: right;">1</td>
 </tr>
 <tr>
 <td><code>stm32l071</code></td>
@@ -7016,179 +6686,14 @@ count is what the generic decks can reach without new routing.</p>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
-<td><code>stm32f103c4-smoke</code></td>
-<td><code>stm32f103c4</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f103c6-smoke</code></td>
-<td><code>stm32f103c6</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f103r4-smoke</code></td>
-<td><code>stm32f103r4</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f103r4h-smoke</code></td>
-<td><code>stm32f103r4h</code></td>
-<td style="text-align: right;">15</td>
-</tr>
-<tr>
-<td><code>stm32f103r6-smoke</code></td>
-<td><code>stm32f103r6</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f103r6h-smoke</code></td>
-<td><code>stm32f103r6h</code></td>
-<td style="text-align: right;">15</td>
-</tr>
-<tr>
-<td><code>stm32f103r8-smoke</code></td>
-<td><code>stm32f103r8</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f103t4-smoke</code></td>
-<td><code>stm32f103t4</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f103t6-smoke</code></td>
-<td><code>stm32f103t6</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f401cb-smoke</code></td>
-<td><code>stm32f401cb</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f401cc-smoke</code></td>
-<td><code>stm32f401cc</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f401cd-smoke</code></td>
-<td><code>stm32f401cd</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f401ce-smoke</code></td>
-<td><code>stm32f401ce</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f401rb-smoke</code></td>
-<td><code>stm32f401rb</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f401rc-smoke</code></td>
-<td><code>stm32f401rc</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f401rd-smoke</code></td>
-<td><code>stm32f401rd</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f401re-smoke</code></td>
-<td><code>stm32f401re</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f401vb-smoke</code></td>
-<td><code>stm32f401vb</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f401vc-smoke</code></td>
-<td><code>stm32f401vc</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f401vd-smoke</code></td>
-<td><code>stm32f401vd</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f401ve-smoke</code></td>
-<td><code>stm32f401ve</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f407ie-smoke</code></td>
-<td><code>stm32f407ie</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f407ig-smoke</code></td>
-<td><code>stm32f407ig</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f407ve-smoke</code></td>
-<td><code>stm32f407ve</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f407vg-smoke</code></td>
-<td><code>stm32f407vg</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f407ze-smoke</code></td>
-<td><code>stm32f407ze</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td><code>stm32f407zg-smoke</code></td>
-<td><code>stm32f407zg</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
 <td><code>stm32f072b-disco</code></td>
 <td><code>stm32f072</code></td>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
-<td><code>stm32f103-bare</code></td>
-<td><code>stm32f103</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f103-blue-pill-bme280</code></td>
-<td><code>stm32f103</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f103-blue-pill</code></td>
-<td><code>stm32f103</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
 <td><code>stm32f103-integrated-test</code></td>
 <td><code>-</code></td>
 <td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>stm32f401cdu6-blackpill</code></td>
-<td><code>stm32f401cdu6</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f401cdu6</code></td>
-<td><code>stm32f401cdu6</code></td>
-<td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>stm32f411ceu6-blackpill</code></td>
-<td><code>stm32f411ceu6</code></td>
-<td style="text-align: right;">10</td>
 </tr>
 <tr>
 <td><code>stm32f7-discovery</code></td>
@@ -7241,6 +6746,11 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>adafruit-feather-rp2350</code></td>
 <td><code>rp2350-feather</code></td>
 <td><code>crates/core/tests/analog/cosim_rp2040_family_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>adxl345-sensor-lab</code></td>
+<td><code>stm32f103</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>arduino-leonardo</code></td>
@@ -7308,6 +6818,11 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>crates/core/tests/analog/cosim_stm32f4_family_analog.rs</code></td>
 </tr>
 <tr>
+<td><code>labwired-demo-board</code></td>
+<td><code>stm32f103</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
 <td><code>microbit-v2</code></td>
 <td><code>nrf52833</code></td>
 <td><code>crates/core/tests/analog/cosim_microbit_v2_analog.rs</code></td>
@@ -7351,6 +6866,81 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>nucleo-f767zi</code></td>
 <td><code>stm32f767</code></td>
 <td><code>crates/core/tests/analog/cosim_nucleo_f767zi_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>nucleo_f767zi</code></td>
+<td><code>nucleo_f767zi</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f103</code></td>
+<td><code>stm32f103</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f4</code></td>
+<td><code>stm32f4</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f412</code></td>
+<td><code>stm32f412</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f429</code></td>
+<td><code>stm32f429</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f4_discovery-kit</code></td>
+<td><code>stm32f4_discovery-kit</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f4_discovery</code></td>
+<td><code>stm32f4_discovery</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f746</code></td>
+<td><code>stm32f746</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f777</code></td>
+<td><code>stm32f777</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f7_discovery-bb</code></td>
+<td><code>stm32f7_discovery-bb</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32h7</code></td>
+<td><code>stm32h7</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32h7_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32h743</code></td>
+<td><code>stm32h743</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32h7_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32h747-disco</code></td>
+<td><code>stm32h747-disco</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32h7_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32h747</code></td>
+<td><code>stm32h747</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32h7_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32h753</code></td>
+<td><code>stm32h753</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32h7_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>pico-bme280</code></td>
@@ -7408,9 +6998,174 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>crates/core/tests/analog/cosim_nrf52840_family_analog.rs</code></td>
 </tr>
 <tr>
+<td><code>stm32f103c4-smoke</code></td>
+<td><code>stm32f103c4</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f103c6-smoke</code></td>
+<td><code>stm32f103c6</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f103r4-smoke</code></td>
+<td><code>stm32f103r4</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f103r4h-smoke</code></td>
+<td><code>stm32f103r4h</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f103r6-smoke</code></td>
+<td><code>stm32f103r6</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f103r6h-smoke</code></td>
+<td><code>stm32f103r6h</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f103r8-smoke</code></td>
+<td><code>stm32f103r8</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f103t4-smoke</code></td>
+<td><code>stm32f103t4</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f103t6-smoke</code></td>
+<td><code>stm32f103t6</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f401cb-smoke</code></td>
+<td><code>stm32f401cb</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f401cc-smoke</code></td>
+<td><code>stm32f401cc</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f401cd-smoke</code></td>
+<td><code>stm32f401cd</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f401ce-smoke</code></td>
+<td><code>stm32f401ce</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f401rb-smoke</code></td>
+<td><code>stm32f401rb</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f401rc-smoke</code></td>
+<td><code>stm32f401rc</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f401rd-smoke</code></td>
+<td><code>stm32f401rd</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f401re-smoke</code></td>
+<td><code>stm32f401re</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f401vb-smoke</code></td>
+<td><code>stm32f401vb</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f401vc-smoke</code></td>
+<td><code>stm32f401vc</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f401vd-smoke</code></td>
+<td><code>stm32f401vd</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f401ve-smoke</code></td>
+<td><code>stm32f401ve</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f407ie-smoke</code></td>
+<td><code>stm32f407ie</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f407ig-smoke</code></td>
+<td><code>stm32f407ig</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f407ve-smoke</code></td>
+<td><code>stm32f407ve</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f407vg-smoke</code></td>
+<td><code>stm32f407vg</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f407ze-smoke</code></td>
+<td><code>stm32f407ze</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f407zg-smoke</code></td>
+<td><code>stm32f407zg</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f103-bare</code></td>
+<td><code>stm32f103</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f103-blue-pill-bme280</code></td>
+<td><code>stm32f103</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f103-blue-pill</code></td>
+<td><code>stm32f103</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
 <td><code>stm32f4-discovery</code></td>
 <td><code>stm32f407vg</code></td>
 <td><code>crates/core/tests/analog/cosim_stm32f4_family_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f401cdu6-blackpill</code></td>
+<td><code>stm32f401cdu6</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f401cdu6</code></td>
+<td><code>stm32f401cdu6</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f411ceu6-blackpill</code></td>
+<td><code>stm32f411ceu6</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>wch-ch32v003evt-bme280</code></td>
