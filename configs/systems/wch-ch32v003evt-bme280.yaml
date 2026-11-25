@@ -1,0 +1,30 @@
+# WCH CH32V003EVT evaluation board with a BME280 breakout on I2C1.
+#
+# The board's LED row is brought to P4 (LED1 on P4-1), rather than being
+# hard-wired to an MCU pin. This profile includes a jumper from P4-1 to PC0.
+# USB-C provides power only. USART1 TX is exposed at PD5; debug_uart below is
+# only the simulator's console capture route, not an on-board USB-UART bridge.
+#
+# The BME280 sits on the CH32V003 default (non-remapped) I2C1 pads:
+# SDA = PC1, SCL = PC2, and the SDO=VDDIO address 0x76. Those are the pads the
+# stock openwch `Wire` library selects from `PIN_WIRE_SDA` / `PIN_WIRE_SCL`.
+name: "wch-ch32v003evt-bme280"
+chip: "../chips/ch32v003f4p6.yaml"
+cpu_hz: 24_000_000
+debug_uart: "usart1"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c1"
+    route:
+      sda: "PC1"
+      scl: "PC2"
+    config:
+      i2c_address: 0x76
+board_io:
+  - id: "led1_pc0"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 0
+    signal: "output"
+    active_high: false
