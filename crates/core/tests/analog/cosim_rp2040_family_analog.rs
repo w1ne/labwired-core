@@ -308,19 +308,20 @@ fn every_pico_profile_converts_the_generic_ntc_and_diode_decks() {
                 assert!(
                     (ntc_v - expected_ntc_v).abs() < 1e-9,
                     "{system} at {temperature_c} C: the Beta divider on GP26 should be \
-                 {expected_ntc_v} V, got {ntc_v} V"
+                     {expected_ntc_v} V, got {ntc_v} V"
                 );
                 let diode_v = signal_voltage(&session, "board.analog.gp27_volts");
                 assert!(
                     (diode_v - expected_diode_v).abs() < 2e-5,
-                    "{system}: the Shockley load line on GP27 should be {expected_diode_v} V, \
-                 got {diode_v} V"
+                    "{system}: the Shockley load line on GP27 should be \
+                     {expected_diode_v} V, got {diode_v} V"
                 );
                 let divider_v = signal_voltage(&session, "board.analog.gp28_volts");
                 assert!(
-                (divider_v - expected_divider_v).abs() < 1e-9,
-                "{system}: the GP28 divider should be {expected_divider_v} V, got {divider_v} V"
-            );
+                    (divider_v - expected_divider_v).abs() < 1e-9,
+                    "{system}: the GP28 divider should be {expected_divider_v} V, \
+                     got {divider_v} V"
+                );
 
                 // The three pads carry three different levels, so a swapped channel
                 // assignment cannot pass: 25 C NTC is exactly half scale, the
