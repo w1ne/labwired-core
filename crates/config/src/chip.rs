@@ -355,12 +355,35 @@ impl From<PeripheralConfigWire> for PeripheralConfig {
 /// output register lives on, and the bit within that port's data register. This
 /// is silicon truth (from the SVD / board pinmux) — the pin *label* no longer
 /// implies a port, so a board whose silkscreen labels a `gpioc` pin "PB0" resolves
-/// correctly. Extra YAML fields (e.g. `functions:`, consumed by the app codegen)
-/// are ignored here.
+/// correctly.
+///
+/// `functions:` is the same table's alternate-function list, transcribed from
+/// the datasheet pinout. The app codegen and the analog engine read it; GPIO
+/// resolution ignores it. It is optional and unknown keys are ignored so a
+/// table written for a future consumer still loads.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PinLoc {
     pub gpio: String,
     pub bit: u8,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub functions: Vec<PinFunction>,
+}
+
+/// One alternate function a pad can take in the chip's `pins:` table.
+///
+/// Only the keys the engine consumes are typed. `type: adc` carries the ADC
+/// peripheral id and the input channel; every other type (`uart`, `spi`,
+/// `timer`, `i2c`, `gpio`, `can`) names a peripheral and a `role` such as
+/// `tx` or `sck`. Unlisted keys are ignored.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct PinFunction {
+    pub r#type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peripheral: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
 }
 
 /// The analog input function of one pad: the ADC peripheral (by descriptor
@@ -826,6 +849,10 @@ pub struct ChipDescriptor {
     pub pins: std::collections::BTreeMap<String, PinLoc>,
     /// Pad label → the ADC input that samples it, transcribed from the
     /// datasheet pinout (e.g. `PA0: { peripheral: adc1, channel: 0 }`).
+    ///
+    /// A part that already transcribes its pin table can instead record the
+    /// same fact as an `adc` function on the pad ([`PinLoc::functions`]);
+    /// [`ChipDescriptor::analog_pin_table`] is the union the router uses.
     ///
     /// Kept apart from [`Self::pins`] on purpose. `pins:` is the AUTHORITATIVE
     /// GPIO map: once a chip declares it, every pad not listed stops resolving
@@ -1327,6 +1354,82 @@ pub(crate) fn expand_chip_includes(
 }
 
 impl ChipDescriptor {
+    /// Every pad this part can hand to an ADC, with the peripheral and channel
+    /// that sample it.
+    ///
+    /// Two descriptor tables can carry the answer, and both are datasheet
+    /// truth transcribed from the same pinout:
+    ///
+    /// * `analog_pins:` — the dedicated table, valid on a chip that declares no
+    ///   authoritative `pins:` map, and the only place to name an analog pad
+    ///   whose GPIO port is not transcribed.
+    /// * `pins: { <pad>: { functions: [{ type: adc, peripheral, channel }] } }`
+    ///   — the pin table's own alternate-function list, already present on
+    ///   parts that transcribe their full pinout.
+    ///
+    /// The union is what the analog router uses, so a part that publishes an
+    /// ADC function in its pin table needs no duplicate `analog_pins:` block.
+    /// `analog_pins:` wins when both name a pad, and [`Self::analog_pin_conflicts`]
+    /// reports the disagreement rather than letting one table silently win.
+    pub fn analog_pin_table(&self) -> std::collections::BTreeMap<String, AdcPinFn> {
+        let mut table = std::collections::BTreeMap::new();
+        for (pad, loc) in &self.pins {
+            for function in &loc.functions {
+                if function.r#type != "adc" {
+                    continue;
+                }
+                let (Some(peripheral), Some(channel)) = (&function.peripheral, function.channel)
+                else {
+                    continue;
+                };
+                table.insert(
+                    pad.clone(),
+                    AdcPinFn {
+                        peripheral: peripheral.clone(),
+                        channel,
+                    },
+                );
+            }
+        }
+        for (pad, pin) in &self.analog_pins {
+            table.insert(pad.clone(), pin.clone());
+        }
+        table
+    }
+
+    /// Pads that `analog_pins:` and the `pins:` alternate-function list assign
+    /// to different ADC inputs, as `(pad, analog_pins, pin_functions)`.
+    ///
+    /// A descriptor that answers "which channel samples this pad?" twice with
+    /// two different numbers is a transcription bug, not a preference. Keeping
+    /// the check here lets a test fail on the file instead of a board silently
+    /// converting the wrong node.
+    pub fn analog_pin_conflicts(&self) -> Vec<(String, AdcPinFn, AdcPinFn)> {
+        let mut conflicts = Vec::new();
+        for (pad, explicit) in &self.analog_pins {
+            let Some(loc) = self.pins.get(pad) else {
+                continue;
+            };
+            for function in &loc.functions {
+                if function.r#type != "adc" {
+                    continue;
+                }
+                let (Some(peripheral), Some(channel)) = (&function.peripheral, function.channel)
+                else {
+                    continue;
+                };
+                let derived = AdcPinFn {
+                    peripheral: peripheral.clone(),
+                    channel,
+                };
+                if &derived != explicit {
+                    conflicts.push((pad.clone(), explicit.clone(), derived));
+                }
+            }
+        }
+        conflicts
+    }
+
     /// Is this an ESP32-S2 (Xtensa LX7) part?
     ///
     /// The S2 is a single-core LX7 with a different memory/peripheral map from
