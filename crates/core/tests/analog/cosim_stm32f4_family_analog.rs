@@ -2,19 +2,21 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! One generic deck pair drives four unrelated STM32F4 board profiles into
+//! One generic deck pair drives five unrelated STM32F4 board profiles into
 //! ADC1. The Beta NTC divider and the Shockley diode load line name only
-//! `board.analog.<pad>_volts`; each profile's descriptor maps PA0 and PA1 to
-//! `adc1` channels 0 and 1, and the shared STM32F4 ADC model performs the
+//! `board.analog.<pad>_volts`; each profile's descriptor maps the two chosen
+//! pads to `adc1` channels, and the shared STM32F4 ADC model performs the
 //! conversion.
 //!
 //! The profiles differ in chip package, flash size, extra peripherals and
 //! board I/O, but share the F4 ADC register interface (RM0368/RM0393/RM0383/
 //! RM0090: ADC1 at 0x40012000, `RCC_APB2ENR` at 0x40023844, ADC1EN bit 8,
-//! SWSTART bit 30). A single table selects the profile, deck and descriptor;
-//! the same solve, routing and conversion assertions run for every entry.
-//! This proves the mechanism is not board-specific: a new F4 profile needs a
-//! descriptor map and an example deck, not new engine code.
+//! SWSTART bit 30). A single table selects the profile, deck, descriptor and
+//! the two pads, so the same solve, routing and conversion assertions run for
+//! every entry. The STM32F4-Discovery entry uses PA1 and PA6 because PA0 is
+//! its USER button and PA2/PA3 are the USART2 console pads. This proves the
+//! mechanism is not board-specific and not pad-specific: a new F4 profile
+//! needs a descriptor map and an example deck, not new engine code.
 
 use crate::common;
 use common::root;
@@ -43,6 +45,12 @@ struct Board {
     system: &'static str,
     deck: &'static str,
     chip: &'static str,
+    /// The pad the NTC divider publishes and the ADC1 channel it must select.
+    ntc: (&'static str, u8),
+    /// The pad the diode load line publishes and its ADC1 channel.
+    diode: (&'static str, u8),
+    /// An ADC1 channel no netlist drives, for the neighbour check.
+    idle_channel: u8,
 }
 
 const BOARDS: &[Board] = &[
@@ -51,24 +59,47 @@ const BOARDS: &[Board] = &[
         system: "configs/systems/nucleo-f407.yaml",
         deck: "examples/nucleo-f407/analog-ntc-diode-system.yaml",
         chip: "STM32F407",
+        ntc: ("PA0", 0),
+        diode: ("PA1", 1),
+        idle_channel: 2,
     },
     Board {
         profile: "nucleo-f411re",
         system: "configs/systems/nucleo-f411re.yaml",
         deck: "examples/nucleo-f411re/analog-ntc-diode-system.yaml",
         chip: "STM32F411",
+        ntc: ("PA0", 0),
+        diode: ("PA1", 1),
+        idle_channel: 2,
     },
     Board {
         profile: "nucleo-f446re",
         system: "configs/systems/nucleo-f446re.yaml",
         deck: "examples/nucleo-f446re/analog-ntc-diode-system.yaml",
         chip: "STM32F446",
+        ntc: ("PA0", 0),
+        diode: ("PA1", 1),
+        idle_channel: 2,
     },
     Board {
         profile: "feather-f405",
         system: "configs/systems/feather-f405.yaml",
         deck: "examples/feather-f405/analog-ntc-diode-system.yaml",
         chip: "STM32F405",
+        ntc: ("PA0", 0),
+        diode: ("PA1", 1),
+        idle_channel: 2,
+    },
+    Board {
+        profile: "stm32f4-discovery",
+        system: "configs/systems/stm32f4-discovery.yaml",
+        deck: "examples/stm32f4-discovery/analog-ntc-diode-system.yaml",
+        chip: "STM32F407",
+        // PA0 is the USER button and PA2/PA3 are the USART2 console pads on
+        // this board, so the deck uses non-adjacent channels 1 and 6.
+        ntc: ("PA1", 1),
+        diode: ("PA6", 6),
+        idle_channel: 7,
     },
 ];
 
@@ -172,18 +203,21 @@ fn run_board(board: &Board) {
     let chip_path = system_path.parent().unwrap().join(&profile.chip);
     let chip = ChipDescriptor::from_file(&chip_path)
         .unwrap_or_else(|e| panic!("load {} descriptor: {e}", board.chip));
-    assert_eq!(chip.analog_pins["PA0"].channel, 0, "{}", board.profile);
-    assert_eq!(chip.analog_pins["PA1"].channel, 1, "{}", board.profile);
-    assert_eq!(
-        chip.analog_pins["PA0"].peripheral, "adc1",
-        "{}",
-        board.profile
-    );
-    assert_eq!(
-        chip.analog_pins["PA1"].peripheral, "adc1",
-        "{}",
-        board.profile
-    );
+    for (pad, channel) in [board.ntc, board.diode] {
+        assert_eq!(
+            chip.analog_pins[pad].channel, channel,
+            "{}: {pad} must reach ADC1 channel {channel}",
+            board.profile
+        );
+        assert_eq!(
+            chip.analog_pins[pad].peripheral, "adc1",
+            "{}: {pad} must name ADC1",
+            board.profile
+        );
+    }
+
+    let ntc_signal = format!("board.analog.{}_volts", board.ntc.0.to_ascii_lowercase());
+    let diode_signal = format!("board.analog.{}_volts", board.diode.0.to_ascii_lowercase());
 
     let bus = SystemBus::from_config(&chip, &profile)
         .unwrap_or_else(|e| panic!("build {} bus: {e}", board.profile));
@@ -194,8 +228,12 @@ fn run_board(board: &Board) {
     assert_eq!(
         session.binding_errors(),
         &[] as &[RoutingError],
-        "{} generic decks must resolve through PA0/PA1 to ADC1 channels 0/1",
-        board.profile
+        "{} generic decks must resolve through {}/{} to ADC1 channels {}/{}",
+        board.profile,
+        board.ntc.0,
+        board.diode.0,
+        board.ntc.1,
+        board.diode.1
     );
     let expected_diode_v = diode_load_line_voltage();
     let mut cycles = 0;
@@ -220,41 +258,44 @@ fn run_board(board: &Board) {
             board.profile
         );
 
-        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let ntc_v = signal_voltage(&session, &ntc_signal);
         let expected_ntc_v = 3.3 * 10_000.0 / (ntc_resistance_ohms(temperature_c) + 10_000.0);
         assert!(
             (ntc_v - expected_ntc_v).abs() < 1e-9,
             "{} at {temperature_c} C: Beta divider should be {expected_ntc_v} V, got {ntc_v} V",
             board.profile
         );
-        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        let diode_v = signal_voltage(&session, &diode_signal);
         assert!(
             (diode_v - expected_diode_v).abs() < 2e-5,
             "{}: Shockley load line should be {expected_diode_v} V, got {diode_v} V",
             board.profile
         );
 
-        let ntc_count = stm32f4_adc_convert(&mut machine, 0);
+        let ntc_count = stm32f4_adc_convert(&mut machine, board.ntc.1);
         assert_eq!(
             ntc_count,
             expected_adc_count(ntc_v),
-            "{}: ADC1 channel 0 must report the solved NTC voltage",
-            board.profile
+            "{}: ADC1 channel {} must report the solved NTC voltage",
+            board.profile,
+            board.ntc.1
         );
-        let diode_count = stm32f4_adc_convert(&mut machine, 1);
+        let diode_count = stm32f4_adc_convert(&mut machine, board.diode.1);
         assert_eq!(
             diode_count,
             expected_adc_count(diode_v),
-            "{}: ADC1 channel 1 must report the solved diode voltage",
-            board.profile
+            "{}: ADC1 channel {} must report the solved diode voltage",
+            board.profile,
+            board.diode.1
         );
         // An unrouted channel reports the code after the previous DR value, so
         // this assertion also proves the neighbour did not take a routed input.
         assert_eq!(
-            stm32f4_adc_convert(&mut machine, 2),
+            stm32f4_adc_convert(&mut machine, board.idle_channel),
             (diode_count + 1) & 0xfff,
-            "{}: the undriven neighbouring channel uses its fallback",
-            board.profile
+            "{}: the undriven channel {} uses its fallback",
+            board.profile,
+            board.idle_channel
         );
         samples.push((temperature_c, ntc_v, ntc_count));
     }
@@ -277,7 +318,7 @@ fn run_board(board: &Board) {
 }
 
 #[test]
-fn stm32f4_family_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
+fn stm32f4_family_ntc_and_diode_netlists_reach_adc1_end_to_end() {
     for board in BOARDS {
         run_board(board);
     }
