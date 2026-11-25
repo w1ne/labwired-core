@@ -1211,9 +1211,9 @@ fn run_pulse_fixture(chip: &ChipDescriptor, pad: u8) -> String {
     }
 
     // pulseIn() needs a pulse of its own. The sketch prints PULSEIN_WAIT and
-    // calls pulseIn() immediately after the line; the settle below makes sure
-    // the call is already polling before the edge arrives, so a pulse that
-    // "was not there yet" cannot explain the result.
+    // calls pulseIn() immediately after the line. Measured, the call returns
+    // on its own timeout after 28 us, before this settle ends and before the
+    // edge is driven, so a missed edge cannot explain the result.
     let mut guard = 0u32;
     while guard < 2_000_000 && !text(&sink).contains("PULSEIN_WAIT") {
         if machine.step().is_err() {
@@ -1316,9 +1316,10 @@ fn ch32v003_pulse_width_needs_the_pad_the_sketch_polls() {
 ///
 /// The model and the core disagree on the counter direction. This test does
 /// not settle which is right against silicon. It records that the model
-/// follows WCH's own noneos-sdk `Delay_Us` (`Debug/ch32v00x/debug.c` writes
-/// `CNT = 0` and waits for `SR.CNTIF` at `CMP`, which needs an up-counter),
-/// and that the model's direction explains the stock core's output.
+/// follows WCH's own noneos-sdk `Delay_Us` (per this project's reading of
+/// `Debug/ch32v00x/debug.c`, which writes `CNT = 0` and waits for
+/// `SR.CNTIF` at `CMP`, a sequence that needs an up-counter), and that the
+/// model's direction explains the stock core's output.
 ///
 /// This test asserts the current, defective behaviour. If the vendor core is
 /// fixed (or a patched core is added), invert it: `micros()` must increase

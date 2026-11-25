@@ -11,8 +11,10 @@ What the sketch exercises:
 - an external pulse on **PD3**, which the sketch only ever reads
   (`pinMode(PD3, INPUT)`; the harness drives the pad). No output edge comes
   from the firmware, so every measured width is the harness's.
-- `SysTick->CNT` on the QingKe V2 STK, which counts up from 0 to `CMP` and
-  reloads (`CMP = 48 000 - 1`, `CTLR = 0x0F` from the core's `hw_config.c`).
+- `SysTick->CNT` on the QingKe V2 STK, which this project models as an
+  up-counter that runs 0..`CMP` and reloads (`CMP = 48 000 - 1`,
+  `CTLR = 0x0F` from the core's `hw_config.c`). The direction is a model and
+  code-reading claim, not a silicon measurement.
   `stk_micros()` reads tick -> counter -> tick and retries if the millisecond
   rolled over, so a sample cannot mix two milliseconds. Printed values are
   `WIDTH <us>` for a 100 us and a 250 us pulse.
