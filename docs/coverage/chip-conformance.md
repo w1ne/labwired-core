@@ -86,7 +86,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32f401ve | **L0** | ✓ | 24 | — | — | — |
 | stm32f405 | **L1** | ✓ | 22 | — | — | firmware_survival::test_stm32f405_tier1_survival |
 | stm32f767 | **L1** | ✓ | 38 | — | — | firmware_survival::test_stm32f767_tier1_survival |
-| rp2350 | **L1** | ✓ | 28 | — | — | firmware_survival::test_rp2350_demo_survival |
+| rp2350 | **L1** | ✓ | 29 | — | — | firmware_survival::test_rp2350_demo_survival |
 | stm32f407 | **L1** | ✓ | 34 | — | — | firmware_survival::test_nucleo_f407_smoke_survival |
 | stm32f407ie | **L0** | ✓ | 34 | — | — | — |
 | stm32f407ig | **L0** | ✓ | 34 | — | — | — |
@@ -158,7 +158,7 @@ This page covers the public models. For every chip we model — public and priva
 | esp32s2 | **L0** | ✓ | 2 | — | — | — |
 | esp32s2-arduino | **L1** | ✓ | 32 | — | — | esp32s2_arduino_boot::stock_arduino_l0_prints_over_uart0 |
 | rp2040-feather | **L0** | ✓ | 27 | — | — | — |
-| rp2350-feather | **L0** | ✓ | 28 | — | — | — |
+| rp2350-feather | **L0** | ✓ | 29 | — | — | — |
 | stm32h723zg | **L0** | ✓ | 43 | — | — | — |
 | stm32h753zi | **L0** | ✓ | 43 | — | — | — |
 | esp32c6fh4 | **L0** | ✓ | 69 | — | — | — |
