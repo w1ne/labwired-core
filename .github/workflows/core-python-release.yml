@@ -123,7 +123,7 @@ jobs:
           name: wheel-${{ matrix.name }}
           path: dist/*.whl
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
 
   linux-arm64-smoke:
     name: Smoke Linux ARM64 wheel
@@ -239,7 +239,7 @@ jobs:
           name: sdist
           path: dist/*.tar.gz
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
 
   publish:
     name: publish to PyPI

@@ -41,6 +41,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          retention-days: 14
+          retention-days: 3
           name: core-unsupported-audit
           path: out/unsupported-audit/

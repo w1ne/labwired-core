@@ -43,4 +43,5 @@ include = [
     {path = "examples/luckfox-pico-mini-a-linux/basket/trusted-newc.json", format = "sdist"},
     {path = "examples/luckfox-pico-mini-a-linux/basket-native-runtime/system.json", format = "sdist"},
     {path = "examples/luckfox-pico-mini-a-linux/basket-native-runtime/receipt.json", format = "sdist"},
+    {path = "tools/cosim/labwired_ngspice.py", format = "sdist"},
 ]

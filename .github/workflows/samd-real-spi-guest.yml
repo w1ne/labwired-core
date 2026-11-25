@@ -70,7 +70,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          retention-days: 7
+          retention-days: 3
           name: actual-codal-spi-guest-results
           path: |
             spi-guest-default.log

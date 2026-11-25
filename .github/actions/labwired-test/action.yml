@@ -127,6 +127,7 @@ runs:
       with:
         name: labwired-${{ github.job }}-${{ github.run_id }}-${{ github.action }}-${{ runner.arch }}
         path: ${{ inputs.output-dir }}
+        retention-days: 3
         if-no-files-found: error
 
     - name: Propagate LabWired exit code
