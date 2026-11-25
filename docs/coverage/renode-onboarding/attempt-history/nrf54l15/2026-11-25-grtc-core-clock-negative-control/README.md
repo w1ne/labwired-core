@@ -61,13 +61,15 @@ ticks per millisecond, got 500
 core clock 64000000 Hz must keep the SYSCOUNTER at 1 MHz
 ```
 
-The same log records the scheduler-mode unit test under the no-op: ten cycles
-elapse at 1 MHz, the clock doubles to 2 MHz, and the counter reads 20 instead of
-15. The test deliberately does not read the counter before the clock change, so
-a read cannot sync the lazy clock and hide a missing re-anchor. Without the
-sync inside `attach_cpu_hz` the value is 10 (all 20 cycles converted at the new
-rate); with the no-op it is 20 (no clock change at all). Only the fixed model
-reads 15.
+The same log records the scheduler-mode unit test twice. Ten cycles elapse at
+1 MHz, the clock doubles to 2 MHz, and the test expects 15. The test
+deliberately does not read the counter before the clock change, so a read
+cannot sync the lazy clock and hide a missing re-anchor.
+
+- `attach_cpu_hz` a no-op: reads 20 (no clock change at all).
+- Sync block removed, clock still stored: reads 10 (all 20 cycles converted at
+  the new rate).
+- Fixed model: reads 15 (10 ticks at the old rate, then 5 at the new one).
 
 A mid-run clock change does not move a compare event that is already in the
 scheduler queue. The bus only attaches the descriptor clock at assembly, before

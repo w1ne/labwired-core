@@ -75,3 +75,29 @@ failures:
     peripherals::nrf54l::grtc::tests::scheduler_mode::mid_run_clock_change_does_not_replay_elapsed_cycles
 
 test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 6781 filtered out; finished in 0.00s
+=== scheduler mid-run test, sync removed from attach_cpu_hz ===
+running 8 tests
+test peripherals::nrf54l::grtc::tests::scheduler_mode::arming_write_schedules_the_exact_compare_deadline ... ok
+test peripherals::nrf54l::grtc::tests::scheduler_mode::clock_attach_flips_to_scheduler_and_walk_tick_is_inert ... ok
+test peripherals::nrf54l::grtc::tests::scheduler_mode::lazy_syscounter_read_tracks_published_clock_exactly ... ok
+test peripherals::nrf54l::grtc::tests::scheduler_mode::mid_run_clock_change_does_not_replay_elapsed_cycles ... FAILED
+test peripherals::nrf54l::grtc::tests::scheduler_mode::on_event_pends_the_group_irq_and_reschedules ... ok
+test peripherals::nrf54l::grtc::tests::scheduler_mode::cc0_interval_reload_reschedules_the_next_period ... ok
+test peripherals::nrf54l::grtc::tests::scheduler_mode::stale_event_chain_dies_on_token_mismatch ... ok
+test peripherals::nrf54l::grtc::tests::scheduler_mode::masked_compare_still_latches_but_schedules_no_irq ... ok
+
+failures:
+
+---- peripherals::nrf54l::grtc::tests::scheduler_mode::mid_run_clock_change_does_not_replay_elapsed_cycles stdout ----
+
+thread 'peripherals::nrf54l::grtc::tests::scheduler_mode::mid_run_clock_change_does_not_replay_elapsed_cycles' (3689496) panicked at crates/core/src/peripherals/nrf54l/grtc_tests.rs:574:9:
+assertion `left == right` failed
+  left: 10
+ right: 15
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    peripherals::nrf54l::grtc::tests::scheduler_mode::mid_run_clock_change_does_not_replay_elapsed_cycles
+
+test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 6781 filtered out; finished in 0.00s

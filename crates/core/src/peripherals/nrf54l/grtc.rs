@@ -209,11 +209,12 @@ pub const CYCLES_PER_SYSCOUNTER_TICK: u32 = CPU_HZ_DEFAULT / SYSCOUNTER_HZ;
 /// the per-peripheral residency ceiling. Capping the wake to this horizon and
 /// re-evaluating in `on_event` (which fires the compare only once the counter
 /// actually reaches it) bounds every event's deadline, so stale wakes drain
-/// within one horizon. Chosen larger than a typical kernel-tick period (~1.3 M
-/// cycles = 10 ms at 128 MHz, longer at a slower core clock, which the SYSCOUNTER
-/// ratio now follows) so normal ticks schedule at their exact deadline and idle
-/// fast-forward skips the whole tick window in one hop; only the rare
-/// unreachable idle compare is chunked.
+/// within one horizon. A 10 ms kernel tick is ~1.3 M cycles at 128 MHz and
+/// fewer at a slower core clock, so it stays inside the horizon; only a core
+/// above roughly 210 MHz would push a 10 ms tick past it. Normal ticks
+/// therefore schedule at their exact deadline and idle fast-forward skips the
+/// whole tick window in one hop; only the rare unreachable idle compare is
+/// chunked.
 const MAX_SCHEDULE_HORIZON: u64 = 1 << 21;
 
 /// NVIC position of GRTC_0 on the nRF54L15 application core (MDK IRQn table:
