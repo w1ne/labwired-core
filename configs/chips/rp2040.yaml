@@ -78,6 +78,17 @@ pins:
   GP27: { gpio: sio, bit: 27 }
   GP28: { gpio: sio, bit: 28 }
   GP29: { gpio: sio, bit: 29 }
+# Analog inputs (datasheet §4.9.2 and §1.4.3): the SAR converter has five
+# AINSEL inputs, panel-labelled ADC0..ADC3 on GPIO26..GP29 and ADC4 on the
+# on-die temperature sensor. `pico-sdk`'s `adc_gpio_init()` accepts exactly
+# GPIO26..29 for the same reason. Only the four external pads are listed: the
+# temperature sensor is selected by `CS.TS_EN`, not by a GPIO pad, so it must
+# not be reachable through `board.analog.*`.
+analog_pins:
+  GP26: { peripheral: "adc", channel: 0 }
+  GP27: { peripheral: "adc", channel: 1 }
+  GP28: { peripheral: "adc", channel: 2 }
+  GP29: { peripheral: "adc", channel: 3 }
 
 peripherals:
   # SYSINFO (datasheet §2.21). Read-only identity block; the only load-bearing

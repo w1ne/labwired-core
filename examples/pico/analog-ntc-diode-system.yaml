@@ -1,0 +1,63 @@
+# Generic Beta NTC and Shockley diode netlists, plus a plain divider, drive
+# three RASPBERRY PI PICO ADC inputs through the RP2040 descriptor's
+# GP26/GP27/GP28 channel routes.
+#
+# No netlist names the board, the ADC, or a channel: each one only solves its
+# own circuit and publishes a probe voltage to `board.analog.<pad>_volts`. The
+# descriptor's `analog_pins:` maps GP26 -> adc/channel 0, GP27 -> channel 1 and
+# GP28 -> channel 2, so the same decks that run on the STM32, WCH, nRF52,
+# micro:bit, AVR and RA boards run here unchanged at the Pico's 3.3 V
+# ADC_VREF.
+#
+# GP29 (ADC3) is deliberately left unrouted: the test converts it to prove an
+# undriven channel keeps the model's 0 V default instead of reading a
+# neighbouring pad.
+name: "pico-analog"
+chip: "../../configs/chips/rp2040.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.gp26_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 3.3
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.gp27_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF
+        .model DREF D(IS=2.52n N=1.752 RS=0.568)
+      probes:
+        v_diode: "v(sense)"
+      vdd: 3.3
+  - id: "gp28_divider"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_gp28: "board.analog.gp28_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rtop vcc sense 10k
+        Rbottom sense 0 4.7k
+      probes:
+        v_gp28: "v(sense)"
+      vdd: 3.3
