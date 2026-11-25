@@ -1,5 +1,6 @@
 {
   "name": "labwired",
+  "description": "Official LabWired Claude Code plugin and Agent Skills: build, simulate, debug, verify, and export real hardware (MCU firmware, circuits, KiCad PCBs, BOMs, and 3D enclosures) via MCP.",
   "owner": {
     "name": "LabWired",
     "url": "https://labwired.com"
@@ -8,17 +9,24 @@
     {
       "name": "labwired",
       "source": "./plugins/labwired",
-      "description": "Design electronic circuits, simulate and verify embedded firmware, and lay out supported PCBs with LabWired.",
+      "description": "Design electronic circuits, simulate and verify embedded firmware, run CI hardware regressions, export KiCad + BOM + STEP, audit ERC/DRC safety, and lay out supported PCBs with LabWired.",
       "category": "development",
       "keywords": [
+        "labwired",
+        "mcp",
         "electronics",
         "circuit",
         "firmware",
+        "simulation",
         "pcb",
         "embedded",
         "arduino",
         "esp32",
-        "kicad"
+        "stm32",
+        "kicad",
+        "ci",
+        "erc",
+        "drc"
       ]
     }
   ]

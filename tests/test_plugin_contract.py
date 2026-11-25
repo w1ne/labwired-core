@@ -24,8 +24,27 @@ class PluginContractTests(unittest.TestCase):
         self.assertEqual(self.manifest['name'], entries[0]['name'])
 
     def test_release_is_versioned(self):
-        self.assertEqual(self.manifest['version'], '0.1.1')
+        self.assertEqual(self.manifest['version'], '0.2.0')
         self.assertEqual(self.manifest['license'], 'MIT')
+
+    def test_plugin_icon_and_bundled_skills_exist(self):
+        self.assertTrue((PLUGIN / '.claude-plugin' / 'icon.png').is_file())
+        expected_skills = [
+            'electronics-lab',
+            'build-and-verify-hardware',
+            'debug-firmware-in-sim',
+            'verify-ci-regression',
+            'export-kicad-and-bom',
+            'audit-erc-drc-and-safety',
+        ]
+        for skill_name in expected_skills:
+            skill_path = PLUGIN / 'skills' / skill_name / 'SKILL.md'
+            self.assertTrue(skill_path.is_file(), f'missing {skill_path}')
+            text = skill_path.read_text()
+            self.assertIn(f'name: {skill_name}', text)
+            self.assertIn('description:', text)
+            self.assertNotIn('w1ne/labwired-skills', text)
+        self.assertNotIn('w1ne/labwired-skills', self.readme)
 
     def test_directory_urls_are_first_party(self):
         expected = {

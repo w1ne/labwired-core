@@ -28,6 +28,29 @@ claude plugin update labwired@labwired
 
 Start a fresh session or reload plugins before testing the new instructions.
 
+## Universal Agent Skills CLI (Claude Code, Codex, Cursor, Copilot, Gemini CLI)
+
+Install any or all of the bundled Agent Skills directly from `w1ne/labwired-core`:
+
+```sh
+npx skills add w1ne/labwired-core
+```
+
+For 1-click MCP setup across all coding agents (Claude Code, Codex, Cursor, ChatGPT, VS Code Copilot, Gemini CLI), open [https://app.labwired.com/tools/mcp](https://app.labwired.com/tools/mcp).
+
+## Bundled Agent Skills
+
+| Skill | Purpose |
+| --- | --- |
+| [`electronics-lab`](skills/electronics-lab/SKILL.md) | Default hosted hardware workflow: design circuits, simulate firmware, and lay out PCBs via `labwired_hardware`. |
+| [`build-and-verify-hardware`](skills/build-and-verify-hardware/SKILL.md) | Prompt to validated schematic, compiled firmware, deterministic proof, live BOM pricing, KiCad PCB, and 3D enclosure. |
+| [`debug-firmware-in-sim`](skills/debug-firmware-in-sim/SKILL.md) | Reproduce and fix embedded firmware bugs using UART logs, GPIO edges, bus traces, stimuli, and interactive debugging. |
+| [`verify-ci-regression`](skills/verify-ci-regression/SKILL.md) | Author deterministic pass/fail hardware verification oracles and wire them into GitHub Actions CI. |
+| [`export-kicad-and-bom`](skills/export-kicad-and-bom/SKILL.md) | Generate DRC-clean KiCad schematics & autorouted PCBs, Gerber/drill/CPL fab packs, priced BOMs, and STEP enclosures. |
+| [`audit-erc-drc-and-safety`](skills/audit-erc-drc-and-safety/SKILL.md) | Pre-fabrication ERC, KiCad DRC, signal integrity, power/thermal/pin-limit, and fault-injection safety audit. |
+
+Live verification proof media is stored in [`proof/`](proof/README.md).
+
 ## Grok Build and chat connectors
 
 To connect only the MCP server in Grok Build:
