@@ -5,3 +5,4 @@ configs/
 
 # Compile-time source assets staged for sdist only.
 examples/luckfox-pico-mini-a-linux/
+tools/cosim/
