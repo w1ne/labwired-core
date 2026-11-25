@@ -159,7 +159,7 @@ _No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test r
 
 ### `ch32v003f4p6`
 
-_No tier-1 fixture or hosted model-verification gate. The WCH-CH32V003EVT board profile maps its P4 LED1 through a configured jumper to PC0; committed RV32E/ILP32E bare-metal C firmware executes from flash and the PR-gated board smoke requires two GPIO edges. A second RV32EC (compressed) fixture clocks USART1 and prints a line through polled TX on PD5; the board smoke asserts the exact string. A negative control asserts silence when the USART1 clock gate is not set. A third, stock WCH noneos-sdk ELF (PlatformIO ch32v, -march=rv32ecxw, unmodified) runs the vendor startup and SystemInit to 48 MHz, polls the STK SysTick through four Delay_Ms(10) calls and prints exact printf lines on USART1; a negative control without the STK block stops after the boot line. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
+_No tier-1 fixture or hosted model-verification gate. The WCH-CH32V003EVT board profile maps its P4 LED1 through a configured jumper to PC0; committed RV32E/ILP32E bare-metal C firmware executes from flash and the PR-gated board smoke requires two GPIO edges. A second RV32EC (compressed) fixture clocks USART1 and prints a line through polled TX on PD5; the board smoke asserts the exact string. A negative control asserts silence when the USART1 clock gate is not set. A stock WCH noneos-sdk ELF (PlatformIO ch32v, -march=rv32ecxw, unmodified) runs the vendor startup and SystemInit to 48 MHz, polls the STK SysTick through four Delay_Ms(10) calls and prints exact printf lines on USART1; a negative control without the STK block stops after the boot line. The PFIC routes the STK, USART1 RX and ADC1 EOC lines: each has a handler-entry fixture and a control with the `irq:` line removed. A stock openwch Arduino `analogRead` fixture returns 10-bit codes, and an `analogWrite` fixture drives TIM2_CH1 (PD4, 50 %) and TIM1_CH1 (PD2, 25 %) at the core defaults, measured from pad logic edges (48 000-cycle period); a negative control moves the TIM2 clock gate and requires PD4 flat while TIM1 keeps its PWM. This local simulator evidence does not cover WCH-Link, I2C, SPI, complementary timer outputs, timer interrupts, or USB, and is not hosted model_verified or hardware confirmation._
 
 ### `ch32v005f6p6`
 
@@ -175,7 +175,7 @@ _No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test r
 
 ### `ch32v003f4u6`
 
-_QFN20 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string, and runs the F4P6 blink fixture and requires GPIOC PC0 edges. A DS0 bonding test asserts the descriptor matches F4P6 except for package, pin count and bonded pins. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
+_QFN20 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1, blink and openwch `analogWrite` fixtures unchanged and asserts the exact PD5 TX string, GPIOC PC0 edges, and the TIM2_CH1 PWM on PD4. A DS0 bonding test asserts the descriptor matches F4P6 except for package, pin count and bonded pins. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, complementary timer outputs, or USB, and is not hosted model_verified or hardware confirmation._
 
 ### `ch32v006k8u6`
 
@@ -183,11 +183,11 @@ _No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test r
 
 ### `ch32v003a4m6`
 
-_SOP16 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string, and runs the F4P6 blink fixture and requires GPIOC PC0 edges. A DS0 bonding test asserts the descriptor matches F4P6 except for package, pin count and bonded pins. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
+_SOP16 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1, blink and openwch `analogWrite` fixtures unchanged and asserts the exact PD5 TX string, GPIOC PC0 edges, and the TIM2_CH1 PWM on PD4. A DS0 bonding test asserts the descriptor matches F4P6 except for package, pin count and bonded pins. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, complementary timer outputs, or USB, and is not hosted model_verified or hardware confirmation._
 
 ### `ch32v003j4m6`
 
-_SOP8 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string. SOP8 has no PC0 pad, so a separate committed fixture blinks PC4 (package pin 7); the test requires PC4 edges and a negative control requires zero PC0 edges. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
+_SOP8 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 and openwch `analogWrite` fixtures unchanged and asserts the exact PD5 TX string and the TIM2_CH1 PWM on PD4. SOP8 has no PC0 pad, so a separate committed fixture blinks PC4 (package pin 7); the test requires PC4 edges and a negative control requires zero PC0 edges. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, complementary timer outputs, or USB, and is not hosted model_verified or hardware confirmation._
 
 ### `nrf5340`
 

@@ -220,10 +220,10 @@ pub struct Timer {
     /// the flag on the timer's own line.
     #[serde(skip)]
     break_irq: Option<u32>,
-    /// The V2 alternate-function table the bus routes this timer's channel
-    /// OUTPUTS through, when it is not the F4 one (chip yaml `config: {
-    /// pad_map: stm32g0 | stm32g4 | stm32l0 | stm32l4 | stm32wb | stm32wba |
-    /// stm32u5 | stm32h5 | stm32h7 }`). Reported as
+    /// The alternate-function (or fixed-map) table the bus routes this
+    /// timer's channel OUTPUTS through, when it is not the F4 one (chip yaml
+    /// `config: { pad_map: stm32g0 | stm32g4 | stm32l0 | stm32l4 | stm32wb |
+    /// stm32wba | stm32u5 | stm32h5 | stm32h7 | wch_v00x }`). Reported as
     /// [`crate::Peripheral::timer_output_family`].
     #[serde(skip)]
     pad_map: Option<&'static str>,
@@ -480,8 +480,9 @@ impl Timer {
         self
     }
 
-    /// Name the V2 pad table the bus routes this timer's outputs through
-    /// (`stm32g0` / `stm32g4`). Builder form, like [`Self::ccer_np`].
+    /// Name the pad table the bus routes this timer's outputs through
+    /// (`stm32g0` / `stm32g4` / … / `wch_v00x`). Builder form, like
+    /// [`Self::ccer_np`].
     pub fn pad_map(mut self, map: Option<&'static str>) -> Self {
         self.pad_map = map;
         self
