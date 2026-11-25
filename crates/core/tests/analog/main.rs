@@ -40,6 +40,7 @@ mod analog_variable_resistance;
 mod analog_voltage_switch;
 mod circuit_bldc;
 mod cosim_at32f421_analog;
+mod cosim_ch32v003_analog;
 mod cosim_esp32_analog_diode;
 mod cosim_microbit_v2_analog;
 mod cosim_nucleo_f103rb_analog;
