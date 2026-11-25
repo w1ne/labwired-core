@@ -4944,9 +4944,9 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.</p>
 <ul>
 <li>Profiles in <code>configs/systems/</code>: <strong>440</strong></li>
-<li>Covered end to end: <strong>36</strong></li>
-<li>Not covered: <strong>404</strong></li>
-<li>Not covered but with an <code>analog_pins:</code> map: <strong>51</strong> (these are the
+<li>Covered end to end: <strong>40</strong></li>
+<li>Not covered: <strong>400</strong></li>
+<li>Not covered but with an <code>analog_pins:</code> map: <strong>47</strong> (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   <code>analog_pins:</code> map, an ADC model, or a digital endpoint first)</li>
 </ul>
@@ -4969,19 +4969,9 @@ count is what the generic decks can reach without new routing.</p>
 <td style="text-align: right;">10</td>
 </tr>
 <tr>
-<td><code>arduino-nano-33-ble-bme280</code></td>
-<td><code>nrf52840</code></td>
-<td style="text-align: right;">8</td>
-</tr>
-<tr>
 <td><code>labwired-demo-board</code></td>
 <td><code>stm32f103</code></td>
 <td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>nucleo-f103rb-epaper</code></td>
-<td><code>stm32f103rb</code></td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td><code>stm32f103</code></td>
@@ -5194,11 +5184,6 @@ count is what the generic decks can reach without new routing.</p>
 <td style="text-align: right;">10</td>
 </tr>
 <tr>
-<td><code>stm32f4-discovery</code></td>
-<td><code>stm32f407vg</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
 <td><code>stm32f401cdu6-blackpill</code></td>
 <td><code>stm32f401cdu6</code></td>
 <td style="text-align: right;">10</td>
@@ -5212,11 +5197,6 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>stm32f411ceu6-blackpill</code></td>
 <td><code>stm32f411ceu6</code></td>
 <td style="text-align: right;">10</td>
-</tr>
-<tr>
-<td><code>wch-ch32v003evt-bme280</code></td>
-<td><code>ch32v003f4p6</code></td>
-<td style="text-align: right;">8</td>
 </tr>
 </tbody>
 </table>
@@ -5244,11 +5224,6 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>apollo4p-evb</code></td>
 <td><code>amap42kp</code></td>
 <td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>arduino-nano-33-ble-bme280</code></td>
-<td><code>nrf52840</code></td>
-<td style="text-align: right;">8</td>
 </tr>
 <tr>
 <td><code>arduino-nano-esp32-bme280</code></td>
@@ -5659,11 +5634,6 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>nucleo-f103rb-bme280</code></td>
 <td><code>stm32f103rb-nucleo-bme280-smoke</code></td>
 <td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>nucleo-f103rb-epaper</code></td>
-<td><code>stm32f103rb</code></td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td><code>nucleo-g071rb</code></td>
@@ -7206,11 +7176,6 @@ count is what the generic decks can reach without new routing.</p>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
-<td><code>stm32f4-discovery</code></td>
-<td><code>stm32f407vg</code></td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
 <td><code>stm32f401cdu6-blackpill</code></td>
 <td><code>stm32f401cdu6</code></td>
 <td style="text-align: right;">10</td>
@@ -7244,11 +7209,6 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>vegaboard-ri5cy</code></td>
 <td><code>vegaboard-ri5cy</code></td>
 <td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>wch-ch32v003evt-bme280</code></td>
-<td><code>ch32v003f4p6</code></td>
-<td style="text-align: right;">8</td>
 </tr>
 </tbody>
 </table>
@@ -7291,6 +7251,11 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>arduino-mega-2560</code></td>
 <td><code>atmega2560</code></td>
 <td><code>crates/core/tests/cosim/cosim_pin_routing.rs</code></td>
+</tr>
+<tr>
+<td><code>arduino-nano-33-ble-bme280</code></td>
+<td><code>nrf52840</code></td>
+<td><code>crates/core/tests/analog/cosim_nrf52840_family_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>arduino-nano-33-ble</code></td>
@@ -7351,6 +7316,11 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>nrf52840-dk</code></td>
 <td><code>nrf52840</code></td>
 <td><code>crates/core/tests/analog/cosim_nrf52840_family_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>nucleo-f103rb-epaper</code></td>
+<td><code>stm32f103rb</code></td>
+<td><code>crates/core/tests/analog/cosim_nucleo_f103rb_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>nucleo-f103rb</code></td>
@@ -7436,6 +7406,16 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>seeed-xiao-nrf52840-sense</code></td>
 <td><code>nrf52840</code></td>
 <td><code>crates/core/tests/analog/cosim_nrf52840_family_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>stm32f4-discovery</code></td>
+<td><code>stm32f407vg</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32f4_family_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>wch-ch32v003evt-bme280</code></td>
+<td><code>ch32v003f4p6</code></td>
+<td><code>crates/core/tests/analog/cosim_ch32v003_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>wch-ch32v003evt</code></td>
