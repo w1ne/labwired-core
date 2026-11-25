@@ -576,7 +576,7 @@ impl WasmSimulator {
                     Self::new_from_config_xtensa_esp32s3(&chip, &manifest, firmware, blob_map)
                 }
             }
-            MachineFamily::Xtensa => Self::new_from_config_xtensa_esp32(&manifest, firmware),
+            MachineFamily::Xtensa => Self::new_from_config_xtensa_esp32(&chip, &manifest, firmware),
             // Classic Arduino Nano / ATmega328P — same shape as `build_avr_node`.
             MachineFamily::Avr => Self::new_from_config_avr(&chip, &manifest, firmware),
             MachineFamily::Pic24 => Self::new_from_config_pic24(&chip, &manifest, firmware),
@@ -1267,6 +1267,7 @@ impl WasmSimulator {
     /// (SSD1680 e-paper etc) is handled by the core helper since this code
     /// path doesn't go through `SystemBus::from_config`.
     fn new_from_config_xtensa_esp32(
+        chip: &ChipDescriptor,
         manifest: &SystemManifest,
         firmware: &[u8],
     ) -> Result<WasmSimulator, JsValue> {
@@ -1276,6 +1277,9 @@ impl WasmSimulator {
         labwired_core::peripherals::esp_xtensa_common::rom_thunks::reset_esp32_session_state();
 
         let mut bus = SystemBus::new();
+        // Match from_config before registering peripherals or external motors:
+        // the manifest operating clock overrides the chip's declared clock.
+        bus.cpu_hz = manifest.cpu_hz.unwrap_or(chip.cpu_hz);
         let cpu = configure_xtensa_esp32(&mut bus);
 
         // A classic ESP32 has NO USB peripheral: its devkit's CP210x sits on

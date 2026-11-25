@@ -330,6 +330,70 @@ peripherals: []
         );
     }
 
+    #[test]
+    fn esp32_real_constructors_seed_declared_clock_before_external_devices() {
+        use labwired_core::system::builder::{
+            build_esp32_system_from_manifest, build_machine, BootMode, BuildOptions, BuildRequest,
+            FirmwareSource,
+        };
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let chip_yaml = include_str!("../../../configs/chips/esp32.yaml");
+        let chip: ChipDescriptor = serde_yaml::from_str(chip_yaml).unwrap();
+        let firmware =
+            include_bytes!("../../core/tests/fixtures/esp32-classic-console/console.elf");
+        // Exercise the actual programmatic constructors, not from_config's
+        // already-correct bus. A declared operating clock has the same
+        // precedence as on every descriptor-built bus.
+        for operating_clock in [None, Some(120_000_000)] {
+            let mut system = manifest();
+            system.chip = root
+                .join("configs/chips/esp32.yaml")
+                .to_string_lossy()
+                .into_owned();
+            system.cpu_hz = operating_clock;
+            let clock_hz = operating_clock.unwrap_or(chip.cpu_hz);
+            let labwired_config::MotorModelConfig::Dc(motor) = &mut system.motor_models[0] else {
+                unreachable!()
+            };
+            motor.simulation_clock_hz = clock_hz;
+            let inputs = std::rc::Rc::new(lab_tools::CtorInputs {
+                system_yaml: serde_yaml::to_string(&system).unwrap(),
+                chip_yaml: chip_yaml.to_owned(),
+                firmware: firmware.to_vec(),
+                blobs: Default::default(),
+            });
+            let mut sim = WasmSimulator::new_from_config_parts(inputs)
+                .unwrap_or_else(|_| panic!("real ESP32 constructor rejected declared clock"));
+            assert_eq!(sim.machine.as_ref().unwrap().bus.cpu_hz, clock_hz);
+            assert!(sim.machine.as_ref().unwrap().cpu_secondary.is_some());
+            let zero = sim.external_mechanical_interval_s().unwrap();
+            assert_eq!(zero.clock_hz, clock_hz);
+            assert_eq!(zero.at_cycle, 0);
+            assert_eq!(zero.shafts[0].torque_average_nm, None);
+            sim.apply_external_mechanical_frame_s(&frame(0)).unwrap();
+            let stepped = sim.step_external_mechanical_to_s(3, 100).unwrap();
+            assert_eq!(stepped.at_cycle, 3);
+            assert_eq!(stepped.elapsed_s, 3.0 / clock_hz as f64);
+
+            let (bus, _, _) = build_esp32_system_from_manifest(&system, &root.join("system.yaml"))
+                .expect("native manifest constructor must attach the same external plant");
+            assert_eq!(bus.cpu_hz, clock_hz);
+            let blobs = Default::default();
+            let mut built = build_machine(BuildRequest {
+                chip: &chip,
+                system: &system,
+                firmware: FirmwareSource::Elf(firmware),
+                boot: BootMode::FastBoot,
+                blobs: &blobs,
+                options: BuildOptions::default(),
+            })
+            .expect("native session constructor must attach the same external plant");
+            assert_eq!(built.machine.cycles(), 0);
+            assert!(built.machine.advance(AdvanceRequest::single()).is_err());
+            assert_eq!(built.machine.cycles(), 0);
+        }
+    }
+
     #[derive(Debug)]
     struct ChargedPeripheral;
     impl Peripheral for ChargedPeripheral {

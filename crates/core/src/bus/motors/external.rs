@@ -291,7 +291,6 @@ mod tests {
     use super::*;
     use crate::bus::Bus;
     use crate::peripherals::components::declarative_i2c::GenericI2cDevice;
-    use crate::peripherals::i2c::I2c;
     use crate::sim_input::SimInput;
     use labwired_config::{ChipDescriptor, SystemManifest};
     use std::f64::consts::TAU;
@@ -404,25 +403,21 @@ motor_models:
         }
     }
 
-    fn imu_value(bus: &mut SystemBus, channel: &str) -> f64 {
-        for entry in &mut bus.peripherals {
-            if let Some(i2c) = entry
-                .dev
-                .as_any_mut()
-                .and_then(|any| any.downcast_mut::<I2c>())
-            {
-                for device in i2c.attached_devices() {
-                    let mut device = device.borrow_mut();
-                    if let Some(imu) = device
-                        .as_any_mut()
-                        .and_then(|any| any.downcast_mut::<GenericI2cDevice>())
-                    {
-                        return imu.input_value(channel).unwrap();
-                    }
-                }
+    fn imu_value(bus: &SystemBus, channel: &str) -> f64 {
+        let mut value = None;
+        bus.for_each_attached_device(&mut |owner, device| {
+            if owner == Some("i2c1") && device.address == Some(0x68) {
+                // Read the real descriptor's input artifact through the same
+                // inspection seam available to every transport/controller.
+                value = device.evidence.and_then(|evidence| {
+                    evidence
+                        .artifacts("imu", &crate::inspect::InspectOpts::default())
+                        .into_iter()
+                        .find_map(|artifact| artifact.meta["inputs"][channel].as_f64())
+                });
             }
-        }
-        panic!("IMU fixture was not attached")
+        });
+        value.expect("IMU fixture must expose its live input value")
     }
 
     fn plant_states(
@@ -463,8 +458,8 @@ motor_models:
         next.inputs[1].value = 0.35;
         next.inputs[3].value = -12.0;
         bus.apply_external_mechanical_frame(&next).unwrap();
-        assert_eq!(imu_value(&mut bus, "ay"), 0.35);
-        assert_eq!(imu_value(&mut bus, "gx"), -12.0);
+        assert_eq!(imu_value(&bus, "ay"), 0.35);
+        assert_eq!(imu_value(&bus, "gx"), -12.0);
         assert_eq!(bus.read_u32(0x4800_0010).unwrap() & 0b1100, 0b1100);
         let reset = bus.get_external_mechanical_interval().unwrap();
         assert_eq!(reset.from_cycle, 1000);
@@ -486,7 +481,7 @@ motor_models:
         bus.set_current_cycle(200); // leave an intentionally unflushed interval
         let before = plant_states(&bus);
         let anchor = bus.motor_cycle_anchor;
-        let ay = imu_value(&mut bus, "ay");
+        let ay = imu_value(&bus, "ay");
         let mut cases = Vec::new();
         let mut bad = frame(199);
         bad.inputs[1].value = 0.7;
@@ -532,7 +527,7 @@ motor_models:
             assert_eq!(plant_states(&bus), before);
             assert_eq!(bus.motor_cycle_anchor, anchor);
             assert_eq!(bus.external_mechanical_frontier, Some(0));
-            assert_eq!(imu_value(&mut bus, "ay"), ay);
+            assert_eq!(imu_value(&bus, "ay"), ay);
         }
         bus.apply_external_mechanical_frame(&frame(200)).unwrap();
         let before = plant_states(&bus);
@@ -548,14 +543,14 @@ motor_models:
             assert!(bus.set_input(component, "ay", 0.9).is_err());
         }
         // Temperature is unowned and would be a valid write by itself.
-        let old_temp = imu_value(&mut bus, "temp");
+        let old_temp = imu_value(&bus, "temp");
         assert!(bus
             .set_inputs(&[(Some("imu"), "temp", 30.0), (Some("imu"), "ay", 0.9),])
             .is_err());
-        assert_eq!(imu_value(&mut bus, "temp"), old_temp);
-        assert_eq!(imu_value(&mut bus, "ay"), 0.0);
+        assert_eq!(imu_value(&bus, "temp"), old_temp);
+        assert_eq!(imu_value(&bus, "ay"), 0.0);
         bus.set_input(Some("imu"), "temp", 30.0).unwrap();
-        assert_eq!(imu_value(&mut bus, "temp"), 30.0);
+        assert_eq!(imu_value(&bus, "temp"), 30.0);
         assert!(bus.set_motor_stalled("left", true).is_err());
     }
 
@@ -598,7 +593,7 @@ behavior:
         invalid.inputs.last_mut().unwrap().value = 0.0;
         assert!(bus.apply_external_mechanical_frame(&invalid).is_err());
         assert_eq!(plant_states(&bus), before);
-        assert_eq!(imu_value(&mut bus, "ay"), 0.0);
+        assert_eq!(imu_value(&bus, "ay"), 0.0);
         assert_eq!(bus.motor_cycle_anchor, 0);
     }
     #[test]

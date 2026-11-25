@@ -135,6 +135,7 @@ pub fn build_esp32_system_from_manifest_with_plugins(
         labwired_config::ChipDescriptor::resolve_with(&manifest.chip, chip_dir, plugin_chips)?;
 
     let mut bus = SystemBus::new();
+    bus.cpu_hz = manifest.cpu_hz.unwrap_or(chip.cpu_hz);
     let pro_cpu = crate::system::xtensa::configure_xtensa_esp32(&mut bus);
     // The peripheral bank is programmatic, but voltage routes still need the
     // resolved descriptor's electrical data, just as SystemBus::from_config does.

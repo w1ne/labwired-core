@@ -189,6 +189,7 @@ fn build_esp32(
     crate::peripherals::esp_xtensa_common::rom_thunks::reset_esp32_session_state();
 
     let mut bus = SystemBus::new();
+    bus.cpu_hz = manifest.cpu_hz.unwrap_or(req.chip.cpu_hz);
     let cpu = crate::system::xtensa::configure_xtensa_esp32(&mut bus);
     bus.attach_chip_io_levels(req.chip);
     bus.attach_plugin_peripherals(req.chip, manifest, plugins)?;
