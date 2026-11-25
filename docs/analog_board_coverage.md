@@ -14,9 +14,9 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **440**
-- Covered end to end: **75**
-- Not covered: **365**
-- Not covered but with an `analog_pins:` map: **13** (these are the
+- Covered end to end: **80**
+- Not covered: **360**
+- Not covered but with an `analog_pins:` map: **8** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` map, an ADC model, or a digital endpoint first)
 
@@ -35,11 +35,6 @@ count is what the generic decks can reach without new routing.
 | `stm32f4_discovery-kit` | `stm32f4_discovery-kit` | 2 |
 | `stm32f4_discovery` | `stm32f4_discovery` | 2 |
 | `stm32f746` | `stm32f746` | 2 |
-| `stm32h7` | `stm32h7` | 1 |
-| `stm32h743` | `stm32h743` | 1 |
-| `stm32h747-disco` | `stm32h747-disco` | 1 |
-| `stm32h747` | `stm32h747` | 1 |
-| `stm32h753` | `stm32h753` | 1 |
 | `stm32f401cdu6-blackpill` | `stm32f401cdu6` | 10 |
 
 ## Not covered
@@ -360,11 +355,6 @@ count is what the generic decks can reach without new routing.
 | `stm32f746` | `stm32f746` | 2 |
 | `stm32f777` | `stm32f777` | 0 |
 | `stm32f7_discovery-bb` | `stm32f7_discovery-bb` | 0 |
-| `stm32h7` | `stm32h7` | 1 |
-| `stm32h743` | `stm32h743` | 1 |
-| `stm32h747-disco` | `stm32h747-disco` | 1 |
-| `stm32h747` | `stm32h747` | 1 |
-| `stm32h753` | `stm32h753` | 1 |
 | `stm32l071` | `stm32l071` | 0 |
 | `stm32l072` | `stm32l072` | 0 |
 | `stm32l151` | `stm32l151` | 0 |
@@ -445,6 +435,11 @@ count is what the generic decks can reach without new routing.
 | `nucleo-f446re` | `stm32f446re` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `nucleo-f767zi` | `stm32f767` | `crates/core/tests/analog/cosim_nucleo_f767zi_analog.rs` |
 | `stm32f401cdu6-blackpill` | `stm32f401cdu6-blackpill` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32h7` | `stm32h7` | `crates/core/tests/analog/cosim_stm32h7_analog.rs` |
+| `stm32h743` | `stm32h743` | `crates/core/tests/analog/cosim_stm32h7_analog.rs` |
+| `stm32h747-disco` | `stm32h747-disco` | `crates/core/tests/analog/cosim_stm32h7_analog.rs` |
+| `stm32h747` | `stm32h747` | `crates/core/tests/analog/cosim_stm32h7_analog.rs` |
+| `stm32h753` | `stm32h753` | `crates/core/tests/analog/cosim_stm32h7_analog.rs` |
 | `pico-bme280` | `rp2040` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
 | `pico-selftest` | `rp2040` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
 | `pico-w-bme280` | `rp2040` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
