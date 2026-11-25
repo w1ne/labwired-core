@@ -68,9 +68,11 @@ cargo run --locked -q -p labwired-cli -- test \
   --output-dir out/boards/wch-ch32v003evt/uart-smoke --no-uart-stdout
 ```
 
-The committed evidence covers GPIOC/PC0 and polled USART1 TX only. The model
-does not include WCH-Link/SDI debug, PFIC interrupts, ADC, I2C, SPI, timers, or
-USB data. The board has no USB data function. These are local simulator smokes,
+The committed evidence covers GPIOC/PC0, polled USART1 TX, and the ADC1 analog
+decks. The model does not include WCH-Link/SDI debug, PFIC interrupts, I2C,
+SPI, timers, or USB data. ADC1 is exercised end to end against the generic
+`analog-ntc-diode-system.yaml` decks; see
+[`crates/core/tests/analog/cosim_ch32v003_analog.rs`](../../crates/core/tests/analog/cosim_ch32v003_analog.rs). The board has no USB data function. These are local simulator smokes,
 not hosted `model_verified` results or physical hardware confirmation.
 
 See [`vendor-status.md`](vendor-status.md) for current lifecycle and stock

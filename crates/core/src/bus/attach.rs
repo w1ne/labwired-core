@@ -501,10 +501,34 @@ const STM32H7_TIMER_PADS: &[TimerAfPad] = &[
     ("tim8", 'c', 9, 3, 3, "TIM8_CH4"),
 ];
 
+/// CH32V003 (WCH V00x) timer channel pads, selected by the timer's
+/// `pad_map: wch_v00x`. Fixed map, no AF nibble: the WCH GPIO port has one
+/// CFGLR word and the F1-style decode already answers "this pad is handed to
+/// a peripheral". Pads are the default (non-remapped) map in the openwch
+/// Arduino core's `variants/CH32V00x/CH32V003F4/PeripheralPins.c`, which is
+/// generated from WCH's pin data and agrees with CH32V003DS0 V1.8 Table 2-1:
+/// TIM1 CH1..4 = PD2/PA1/PC3/PC4, TIM2 CH1..4 = PD4/PD3/PC0/PD7.
+/// The complementary TIM1 outputs (PD0/PA2/PD1) are separate silicon pins
+/// with their own enable bits; this table routes only the main channels, so
+/// a complementary pad stays a plain GPIO in the model. AFIO remaps are not
+/// decoded, the same gap the F1 table carries.
+const WCH_V00X_TIMER_PADS: &[(&str, char, u8, u8, &str)] = &[
+    ("tim1", 'd', 2, 0, "TIM1_CH1"),
+    ("tim1", 'a', 1, 1, "TIM1_CH2"),
+    ("tim1", 'c', 3, 2, "TIM1_CH3"),
+    ("tim1", 'c', 4, 3, "TIM1_CH4"),
+    ("tim2", 'd', 4, 0, "TIM2_CH1"),
+    ("tim2", 'd', 3, 1, "TIM2_CH2"),
+    ("tim2", 'c', 0, 2, "TIM2_CH3"),
+    ("tim2", 'd', 7, 3, "TIM2_CH4"),
+];
+
 /// Every V2 timer AF table with the `pad_map` that selects it (`None`: the
 /// F4 table, for a timer declaring `input_capture: stm32f4` and no map).
 /// One list for the capture (input) and output passes, so a timer's inputs
-/// and outputs always come from the same table.
+/// and outputs always come from the same table. Fixed-map tables that carry
+/// no AF selector (`wch_v00x`) are separate, because a V2 port would refuse
+/// a row without an AF nibble.
 const V2_TIMER_PAD_TABLES: &[(&[TimerAfPad], Option<&str>)] = &[
     (STM32F4_TIMER_PADS, None),
     (AT32F421_TIMER_PADS, Some("at32f421")),
@@ -3224,6 +3248,8 @@ impl SystemBus {
     ///   PA6/PA7/PB0/PB1, TIM4 CH1-4 = PB6-PB9. The pad feeds the timer while
     ///   it is a digital input (RM0008 §9.1.11 Table 20: "input floating" for
     ///   TIMx_CHx input capture).
+    /// * **F1-style WCH V00x ports** that name `pad_map: wch_v00x`: the
+    ///   CH32V003 fixed default map ([`WCH_V00X_TIMER_PADS`]), no AF nibble.
     /// * **F4 AF map**, only for a timer whose chip yaml declares
     ///   `input_capture: stm32f4` (STM32F401 DS9716 / F411 DS10314 / F405-7
     ///   DS8626 "Alternate function mapping": AF1 = TIM1/TIM2, AF2 =
@@ -3274,7 +3300,12 @@ impl SystemBus {
             for &(tim, p, pin, ch, func) in F1 {
                 if p == port {
                     if let Some((t_idx, TimerInputStage::F1)) = timer(self, tim) {
-                        routes.push((t_idx, pin, None, ch, func));
+                        // A fixed-map timer that named a `pad_map` (WCH V00x)
+                        // takes its rows from that table instead; the built-in
+                        // F1 table belongs to the STM32 F1 pads.
+                        if self.peripherals[t_idx].dev.timer_output_family().is_none() {
+                            routes.push((t_idx, pin, None, ch, func));
+                        }
                     }
                 }
             }
@@ -3299,6 +3330,25 @@ impl SystemBus {
                 {
                     wired = true;
                 }
+            }
+        }
+        // CH32V003 fixed-map capture pads (`pad_map: wch_v00x`): the same
+        // rows as the outputs, with no AF selector for the F1-style port.
+        for &(tim, port, pin, ch, func) in WCH_V00X_TIMER_PADS {
+            let Some((t_idx, TimerInputStage::F1)) = timer(self, tim) else {
+                continue;
+            };
+            if self.peripherals[t_idx].dev.timer_output_family() != Some("wch_v00x") {
+                continue;
+            }
+            let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}")) else {
+                continue;
+            };
+            if self.peripherals[gpio_idx]
+                .dev
+                .bind_timer_capture_pad(pin, None, t_idx, ch, func)
+            {
+                wired = true;
             }
         }
         // `|=`: an ESP32 PCNT wired by `wire_esp32_pcnt_inputs` uses the same
@@ -3327,6 +3377,9 @@ impl SystemBus {
     ///   capture pass), or the one its `pad_map:` names (`stm32g0`,
     ///   `stm32g4`, `stm32l0`, `stm32l4`, `stm32wb`, `stm32wba`, `stm32u5`,
     ///   `stm32h5`). A V2 timer with neither is routed nowhere, fail-closed.
+    /// * **F1-style ports that name `pad_map: wch_v00x`**: the CH32V003 fixed
+    ///   default map ([`WCH_V00X_TIMER_PADS`]), with no AF nibble because the
+    ///   WCH port has one config word.
     ///
     /// Every route is CONDITIONAL
     /// ([`crate::Peripheral::bind_timer_output_pad`]): a channel whose output
@@ -3382,6 +3435,17 @@ impl SystemBus {
                 if owns {
                     self.bind_stm32_timer_output_row(t_idx, port, pin, Some(af), ch, func);
                 }
+            }
+        }
+        // CH32V003 fixed-map outputs (`pad_map: wch_v00x`).
+        for &(tim, port, pin, ch, func) in WCH_V00X_TIMER_PADS {
+            let Some(t_idx) = timer(self, tim) else {
+                continue;
+            };
+            if self.peripherals[t_idx].dev.timer_output_family() == Some("wch_v00x")
+                && self.peripherals[t_idx].dev.timer_input_stage() == Some(TimerInputStage::F1)
+            {
+                self.bind_stm32_timer_output_row(t_idx, port, pin, None, ch, func);
             }
         }
     }

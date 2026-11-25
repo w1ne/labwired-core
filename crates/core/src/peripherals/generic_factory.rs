@@ -110,6 +110,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "rp2040_xip_ssi",
     "rp2040_usb",
     "rp2350_bootram",
+    "cortex_m_coredebug",
     // ESP32-C2 DevKitM profile types. GPIO and UART behavior are shared with
     // the register-compatible C3 models, with C2 clock/source values supplied
     // by its family adapter.
@@ -1411,10 +1412,11 @@ pub fn try_build(
                         ))
                     }
                 };
-                // `pad_map: stm32g0 | stm32g4 | stm32l0 | ...` — the V2
-                // alternate-function table the bus routes this timer's
+                // `pad_map: stm32g0 | stm32g4 | stm32l0 | ... | wch_v00x` —
+                // the alternate-function table the bus routes this timer's
                 // channel outputs through (the F4 one rides on
-                // `input_capture: stm32f4`).
+                // `input_capture: stm32f4`). `wch_v00x` is the CH32V003 fixed
+                // map, so it carries no AF nibble.
                 let pad_map = match p_cfg.config.get("pad_map").and_then(|v| v.as_str()) {
                     None => None,
                     Some("at32f421") => Some("at32f421"),
@@ -1428,9 +1430,10 @@ pub fn try_build(
                     Some("stm32u5") => Some("stm32u5"),
                     Some("stm32h5") => Some("stm32h5"),
                     Some("stm32h7") => Some("stm32h7"),
+                    Some("wch_v00x") => Some("wch_v00x"),
                     Some(other) => {
                         return Err(anyhow::anyhow!(
-                            "timer '{}': unknown pad_map '{other}' (supported: at32f421, stm32g0, stm32c0, stm32g4, stm32l0, stm32l4, stm32wb, stm32wba, stm32u5, stm32h5, stm32h7)",
+                            "timer '{}': unknown pad_map '{other}' (supported: at32f421, stm32g0, stm32c0, stm32g4, stm32l0, stm32l4, stm32wb, stm32wba, stm32u5, stm32h5, stm32h7, wch_v00x)",
                             p_cfg.id
                         ))
                     }
@@ -1900,6 +1903,9 @@ pub fn try_build(
         "rp2040_watchdog" => Box::new(crate::peripherals::rp2040::watchdog::Rp2040Watchdog::new()),
         "rp2040_xip_ssi" => Box::new(crate::peripherals::rp2040::xip_ssi::Rp2040XipSsi::new()),
         "rp2350_bootram" => Box::new(crate::peripherals::rp2350_bootram::Rp2350BootRam::new()),
+        "cortex_m_coredebug" => Box::new(crate::peripherals::scs_debug::ScsDebug::without_probe(
+            crate::peripherals::scs_debug::DebugHaltState::new(),
+        )),
         "rp2040_usb" => Box::new(
             crate::peripherals::rp2040::usb::Rp2040Usb::new().with_irq(p_cfg.irq.unwrap_or(5)),
         ),

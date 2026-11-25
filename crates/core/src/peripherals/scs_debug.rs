@@ -214,6 +214,7 @@ impl DebugHaltState {
 pub struct ScsDebug {
     pub state: Arc<DebugHaltState>,
     demcr_only: bool,
+    probe: bool,
 }
 
 impl ScsDebug {
@@ -221,6 +222,7 @@ impl ScsDebug {
         Self {
             state,
             demcr_only: false,
+            probe: true,
         }
     }
 
@@ -231,6 +233,16 @@ impl ScsDebug {
         Self {
             state,
             demcr_only: true,
+            probe: false,
+        }
+    }
+
+    /// Full CoreDebug window with no debugger: software cannot enable halting debug.
+    pub fn without_probe(state: Arc<DebugHaltState>) -> Self {
+        Self {
+            state,
+            demcr_only: false,
+            probe: false,
         }
     }
 
@@ -281,7 +293,7 @@ impl crate::Peripheral for ScsDebug {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match self.register_offset(offset & !3) {
-            DHCSR => self.state.write_dhcsr(value),
+            DHCSR if self.probe => self.state.write_dhcsr(value),
             DEMCR => self.state.write_demcr(value),
             _ => {}
         }

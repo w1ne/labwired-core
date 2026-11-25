@@ -82,7 +82,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          retention-days: 14
+          retention-days: 3
           name: nightly-validation-artifacts
           path: |
             out/unsupported-audit/
@@ -429,7 +429,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          retention-days: 14
+          retention-days: 3
           name: esp32c3-ble-pong-soak-log
           path: ${{ runner.temp }}/pong-soak.log
           if-no-files-found: warn

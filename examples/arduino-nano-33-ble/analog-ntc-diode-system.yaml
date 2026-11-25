@@ -1,0 +1,48 @@
+# Generic Beta NTC and Shockley diode netlists drive two nRF52840 analog
+# inputs through the chip descriptor's P0.04/P0.05 SAADC routes.
+#
+# Neither netlist names the board, the CPU, the SAADC, or a channel: each one
+# solves its own circuit and publishes a probe voltage to
+# `board.analog.<pad>_volts`. The nRF52840 descriptor's `analog_pins:` maps
+# P0.04 -> saadc/AIN2 and P0.05 -> saadc/AIN3, so the same two decks that run
+# on the STM32, WCH and micro:bit v2 profiles run here unchanged.
+#
+# On the Arduino Nano 33 BLE these pads are A0 and A1. The same deck also
+# loads against the nRF52840-DK and the Seeed XIAO nRF52840 Sense, whose
+# descriptors share the chip map.
+name: "arduino-nano-33-ble-analog"
+chip: "../../configs/chips/nrf52840.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.p0.04_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 3.3
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.p0.05_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF
+        .model DREF D(IS=2.52n N=1.752 RS=0.568)
+      probes:
+        v_diode: "v(sense)"
+      vdd: 3.3

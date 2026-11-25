@@ -218,7 +218,7 @@ jobs:
         with:
           name: rv1103-linux-acceptance-${{ github.run_id }}
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
           path: |
             ${{ runner.temp }}/rv1103-linux/artifact-manifest.json
             ${{ runner.temp }}/rv1103-linux-boot.json
@@ -320,7 +320,7 @@ jobs:
         with:
           name: rv1103-linux-basket-${{ github.run_id }}
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
           path: |
             ${{ runner.temp }}/basket-evidence/
             ${{ runner.temp }}/basket-prepared/

@@ -23,6 +23,21 @@ flash:
 ram:
   base: 0x20000000
   size: "256KB"
+# Physical AIN input indices, distinct from SAADC CH[n] converter slots.
+# Nordic nRF52840 Product Specification v1.11 (4413_417), "GPIO — Analog
+# inputs": AIN0..AIN7 are P0.02, P0.03, P0.04, P0.05, P0.28, P0.29, P0.30,
+# P0.31. The nRF52833 map in configs/chips/nrf52833.yaml carries the same
+# eight pads, so one generic `board.analog.<pad>_volts` deck reaches either
+# part through this descriptor alone.
+analog_pins:
+  P0.02: { peripheral: "saadc", channel: 0 }
+  P0.03: { peripheral: "saadc", channel: 1 }
+  P0.04: { peripheral: "saadc", channel: 2 }
+  P0.05: { peripheral: "saadc", channel: 3 }
+  P0.28: { peripheral: "saadc", channel: 4 }
+  P0.29: { peripheral: "saadc", channel: 5 }
+  P0.30: { peripheral: "saadc", channel: 6 }
+  P0.31: { peripheral: "saadc", channel: 7 }
 # Nordic nRF5 SDK / ArduinoCore-nRF5 errata probes read a reserved silicon
 # fingerprint window at 0xF0000FE0 (nrf52_errata_16 etc.). On real die this
 # returns a package/rev code; unmapped, the sim records unmapped_mmio and the
