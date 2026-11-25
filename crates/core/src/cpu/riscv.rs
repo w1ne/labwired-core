@@ -1404,29 +1404,14 @@ impl RiscV {
 }
 
 #[inline]
-fn bus_has_pending_schedule(bus: &dyn Bus) -> bool {
+fn pending_schedule_deadline(_bus: &dyn Bus) -> Option<u64> {
     #[cfg(feature = "event-scheduler")]
     {
-        bus.has_pending_schedule()
+        if _bus.has_pending_schedule() {
+            return _bus.earliest_pending_deadline();
+        }
     }
-    #[cfg(not(feature = "event-scheduler"))]
-    {
-        let _ = bus;
-        false
-    }
-}
-
-#[inline]
-fn bus_earliest_pending_deadline(bus: &dyn Bus) -> Option<u64> {
-    #[cfg(feature = "event-scheduler")]
-    {
-        bus.earliest_pending_deadline()
-    }
-    #[cfg(not(feature = "event-scheduler"))]
-    {
-        let _ = bus;
-        None
-    }
+    None
 }
 
 impl RiscV {
@@ -1478,13 +1463,8 @@ impl RiscV {
         }
 
         // Fast guard against cycle-accurate buses and active debug watches.
-        if let Some(sb) = bus
-            .as_any()
-            .and_then(|a| a.downcast_ref::<crate::bus::SystemBus>())
-        {
-            if sb.requires_cycle_accurate() || !sb.debug_watches.is_empty() {
-                return Ok(0);
-            }
+        if !bus.block_cache_eligible() {
+            return Ok(0);
         }
 
         let mut total_retired: u32 = 0;
@@ -1494,9 +1474,9 @@ impl RiscV {
             if remaining == 0 {
                 break;
             }
-            if exact_clock && bus_has_pending_schedule(bus) {
-                let now = batch_start.wrapping_add(u64::from(already_retired + total_retired));
-                if let Some(dl) = bus_earliest_pending_deadline(bus) {
+            if exact_clock {
+                if let Some(dl) = pending_schedule_deadline(bus) {
+                    let now = batch_start.wrapping_add(u64::from(already_retired + total_retired));
                     if dl <= now {
                         break;
                     }
@@ -1507,32 +1487,11 @@ impl RiscV {
             let meta = if let Some(m) = self.block_cache.lookup(pc) {
                 // Re-verify synthetic base-zero flash entry word so debugger
                 // host-patching tests see patched words immediately.
-                if (m.flags & FLAG_VERIFY_ENTRY) != 0 {
-                    let cur_word = bus
-                        .as_any()
-                        .and_then(|a| a.downcast_ref::<crate::bus::SystemBus>())
-                        .and_then(|sb| {
-                            let off = (pc as u64).checked_sub(sb.flash.base_addr)? as usize;
-                            if off + 4 <= sb.flash.data.len() {
-                                Some(u32::from_le_bytes([
-                                    sb.flash.data[off],
-                                    sb.flash.data[off + 1],
-                                    sb.flash.data[off + 2],
-                                    sb.flash.data[off + 3],
-                                ]))
-                            } else if off + 2 <= sb.flash.data.len() {
-                                Some(u32::from(u16::from_le_bytes([
-                                    sb.flash.data[off],
-                                    sb.flash.data[off + 1],
-                                ])))
-                            } else {
-                                None
-                            }
-                        });
-                    if cur_word != Some(m.entry_word) {
-                        self.block_cache.invalidate();
-                        break;
-                    }
+                if (m.flags & FLAG_VERIFY_ENTRY) != 0
+                    && bus.read_flash_entry_word(pc as u64) != Some(m.entry_word)
+                {
+                    self.block_cache.invalidate();
+                    break;
                 }
                 m
             } else {
@@ -1543,51 +1502,9 @@ impl RiscV {
                     break;
                 }
                 self.refill_fetch_window(bus, pc);
-                let Some((code_bytes, writable_code, verify_entry)) = ({
-                    let sb = bus
-                        .as_any()
-                        .and_then(|a| a.downcast_ref::<crate::bus::SystemBus>());
-                    sb.and_then(|sb| {
-                        let max_bytes = MAX_BLOCK_LEN * 4;
-                        let pc64 = pc as u64;
-                        // Determine which code memory owns `pc` (matching
-                        // `refill_fetch_window`'s exact regions; plain RAM is
-                        // deliberately excluded so host-patched RAM tests stay
-                        // exact).
-                        if let Some(idx) = sb.find_peripheral_index(pc64) {
-                            let p = &sb.peripherals[idx];
-                            if p.dev
-                                .as_any()
-                                .and_then(|a| {
-                                    a.downcast_ref::<crate::peripherals::esp32s3::flash_xip::FlashXipPeripheral>()
-                                })
-                                .is_some()
-                            {
-                                let slice = sb.read_code_slice(pc64, max_bytes);
-                                return Some((slice, false, false));
-                            }
-                            return None;
-                        }
-                        if let Some(off) = pc64.checked_sub(sb.flash.base_addr) {
-                            let off = off as usize;
-                            if off + 2 <= sb.flash.data.len() {
-                                let len = (sb.flash.data.len() - off).min(max_bytes);
-                                let verify = sb.flash.base_addr == 0;
-                                return Some((sb.flash.data[off..off + len].to_vec(), false, verify));
-                            }
-                        }
-                        for mem in &sb.extra_mem {
-                            if let Some(off) = pc64.checked_sub(mem.base_addr) {
-                                let off = off as usize;
-                                if off + 2 <= mem.data.len() {
-                                    let len = (mem.data.len() - off).min(max_bytes);
-                                    return Some((mem.data[off..off + len].to_vec(), true, false));
-                                }
-                            }
-                        }
-                        None
-                    })
-                }) else {
+                let Some((code_bytes, writable_code, verify_entry)) =
+                    bus.read_block_cache_code(pc as u64, MAX_BLOCK_LEN * 4)
+                else {
                     break;
                 };
 
@@ -1624,9 +1541,9 @@ impl RiscV {
             if self.block_would_cross_irq(bus, block_len) {
                 break;
             }
-            if exact_clock && bus_has_pending_schedule(bus) {
-                let now = batch_start.wrapping_add(u64::from(already_retired + total_retired));
-                if let Some(dl) = bus_earliest_pending_deadline(bus) {
+            if exact_clock {
+                if let Some(dl) = pending_schedule_deadline(bus) {
+                    let now = batch_start.wrapping_add(u64::from(already_retired + total_retired));
                     if dl < now.saturating_add(u64::from(block_len)) {
                         break;
                     }
@@ -1926,7 +1843,7 @@ impl RiscV {
                             }
                             self.invalidate_fetch_if_store_overlaps(addr, 1);
                             self.reservation = None;
-                            if exact_clock && bus_has_pending_schedule(bus) {
+                            if exact_clock && pending_schedule_deadline(bus).is_some() {
                                 self.pc = next_pc;
                                 streak_retired += idx as u32 + 1;
                                 broke_early = true;
@@ -1944,7 +1861,7 @@ impl RiscV {
                             }
                             self.invalidate_fetch_if_store_overlaps(addr, 2);
                             self.reservation = None;
-                            if exact_clock && bus_has_pending_schedule(bus) {
+                            if exact_clock && pending_schedule_deadline(bus).is_some() {
                                 self.pc = next_pc;
                                 streak_retired += idx as u32 + 1;
                                 broke_early = true;
@@ -1962,7 +1879,7 @@ impl RiscV {
                             }
                             self.invalidate_fetch_if_store_overlaps(addr, 4);
                             self.reservation = None;
-                            if exact_clock && bus_has_pending_schedule(bus) {
+                            if exact_clock && pending_schedule_deadline(bus).is_some() {
                                 self.pc = next_pc;
                                 streak_retired += idx as u32 + 1;
                                 broke_early = true;
@@ -1980,7 +1897,7 @@ impl RiscV {
                             }
                             self.invalidate_fetch_if_store_overlaps(addr, 4);
                             self.reservation = None;
-                            if exact_clock && bus_has_pending_schedule(bus) {
+                            if exact_clock && pending_schedule_deadline(bus).is_some() {
                                 self.pc = next_pc;
                                 streak_retired += idx as u32 + 1;
                                 broke_early = true;
@@ -1998,7 +1915,7 @@ impl RiscV {
                             }
                             self.invalidate_fetch_if_store_overlaps(addr, 4);
                             self.reservation = None;
-                            if exact_clock && bus_has_pending_schedule(bus) {
+                            if exact_clock && pending_schedule_deadline(bus).is_some() {
                                 self.pc = next_pc;
                                 streak_retired += idx as u32 + 1;
                                 broke_early = true;
@@ -2083,7 +2000,7 @@ impl RiscV {
                     && next_pc == meta.tag_pc
                     && (max_count - total_retired - streak_retired) >= block_len
                     && !self.block_would_cross_irq(bus, streak_retired + block_len)
-                    && !(exact_clock && bus_has_pending_schedule(bus))
+                    && !(exact_clock && pending_schedule_deadline(bus).is_some())
                 {
                     continue;
                 }
@@ -2200,8 +2117,8 @@ impl RiscV {
 
         let flush_jit_ram = |engine: &mut crate::cpu::jit_framework::riscv::RiscvJitEngine,
                              bus: &mut dyn Bus| {
-            if let Some(sb) = bus.as_any_mut().and_then(|a| a.downcast_mut::<SystemBus>()) {
-                engine.flush_ram(&mut sb.ram.data);
+            if let Some(ram) = bus.ram_data_mut() {
+                engine.flush_ram(ram);
             }
         };
 
@@ -2286,9 +2203,8 @@ impl RiscV {
                 return Ok(retired);
             }
             // Mirror the interpreter's Gap #1 deadline clamp (see `step_batch`).
-            #[cfg(feature = "event-scheduler")]
-            if config.peripheral_tick_interval > 1 && bus.has_pending_schedule() {
-                if let Some(dl) = bus.earliest_pending_deadline() {
+            if config.peripheral_tick_interval > 1 {
+                if let Some(dl) = pending_schedule_deadline(bus) {
                     let max_ret = dl.saturating_sub(batch_start);
                     if (retired as u64) >= max_ret {
                         flush_jit_ram(engine, bus);
@@ -3166,10 +3082,7 @@ impl Cpu for RiscV {
                     i += retired;
                     if exact_clock {
                         bus.publish_cycle(batch_start + u64::from(i - 1));
-                    }
-                    #[cfg(feature = "event-scheduler")]
-                    if exact_clock && bus.has_pending_schedule() {
-                        if let Some(dl) = bus.earliest_pending_deadline() {
+                        if let Some(dl) = pending_schedule_deadline(bus) {
                             let max_ret = dl.saturating_sub(batch_start);
                             if (i as u64) >= max_ret {
                                 return Ok(i);
@@ -3201,9 +3114,8 @@ impl Cpu for RiscV {
             if tap.as_ref().is_some_and(|t| t.batch_stop_hit()) {
                 return Ok(i);
             }
-            #[cfg(feature = "event-scheduler")]
-            if exact_clock && bus.has_pending_schedule() {
-                if let Some(dl) = bus.earliest_pending_deadline() {
+            if exact_clock {
+                if let Some(dl) = pending_schedule_deadline(bus) {
                     // After `i` instructions, total_cycles will be batch_start+i.
                     // Do not advance total_cycles past `dl` before drain enqueues.
                     let max_ret = dl.saturating_sub(batch_start);

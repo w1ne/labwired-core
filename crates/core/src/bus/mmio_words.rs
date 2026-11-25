@@ -79,4 +79,60 @@ impl SystemBus {
         }
         None
     }
+
+    /// Side-effect-free entry-word peek in linear flash for verifying cached
+    /// blocks backed by synthetic base-zero flash.
+    pub(crate) fn read_flash_entry_word_impl(&self, pc: u64) -> Option<u32> {
+        let off = pc.checked_sub(self.flash.base_addr)? as usize;
+        if off + 4 <= self.flash.data.len() {
+            Some(u32::from_le_bytes([
+                self.flash.data[off],
+                self.flash.data[off + 1],
+                self.flash.data[off + 2],
+                self.flash.data[off + 3],
+            ]))
+        } else if off + 2 <= self.flash.data.len() {
+            Some(u32::from(u16::from_le_bytes([
+                self.flash.data[off],
+                self.flash.data[off + 1],
+            ])))
+        } else {
+            None
+        }
+    }
+
+    /// Side-effect-free code-window slice for the decoded basic-block cache:
+    /// returns `(bytes, writable_code, verify_entry)` matching `refill_fetch_window`'s
+    /// code regions (flash, extra IRAM/ROM memories, and Flash-XIP windows; plain RAM
+    /// is deliberately excluded so host-patched RAM tests stay exact).
+    pub(crate) fn read_block_cache_code_impl(
+        &self,
+        pc: u64,
+        max_bytes: usize,
+    ) -> Option<(Vec<u8>, bool, bool)> {
+        if self.find_peripheral_index(pc).is_some() {
+            // Reuses `read_code_slice` which permits only FlashXipPeripheral
+            // and never touches side-effectful MMIO peripherals.
+            let slice = self.read_code_slice(pc, max_bytes);
+            return (!slice.is_empty()).then_some((slice, false, false));
+        }
+        if let Some(off) = pc.checked_sub(self.flash.base_addr) {
+            let off = off as usize;
+            if off + 2 <= self.flash.data.len() {
+                let len = (self.flash.data.len() - off).min(max_bytes);
+                let verify = self.flash.base_addr == 0;
+                return Some((self.flash.data[off..off + len].to_vec(), false, verify));
+            }
+        }
+        for mem in &self.extra_mem {
+            if let Some(off) = pc.checked_sub(mem.base_addr) {
+                let off = off as usize;
+                if off + 2 <= mem.data.len() {
+                    let len = (mem.data.len() - off).min(max_bytes);
+                    return Some((mem.data[off..off + len].to_vec(), true, false));
+                }
+            }
+        }
+        None
+    }
 }
