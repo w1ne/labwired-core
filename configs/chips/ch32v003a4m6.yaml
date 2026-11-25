@@ -206,6 +206,18 @@ peripherals:
     config:
       irq_error: 31
 
+  # SPI1: the same die block as the F4P6 descriptor (SPI1_BASE 0x40013000,
+  # RCC_SPI1EN = APB2PCENR bit 12, SPI1_IRQn = 33). This package bonds PC6
+  # and PC7 but has no PC5 pad, so it cannot form a clocked 3-wire bus; the
+  # `pins` map therefore claims no SPI function. Register coverage and the
+  # AFIO remap/NSS caveats are documented in `ch32v003f4p6.yaml`.
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 33
+    clock: { reg: "apb2pcenr", bit: 12 }
+
   # QingKe V2 system timer STK (core_riscv.h): SysTick_Type at 0xE000F000 is
   # CTLR, SR, CNT, reserved, CMP. The vendor noneos-sdk `Delay_Us`/`Delay_Ms`
   # poll SR.CNTIF. The STK is a core block (no RCC gate). With CTLR.STIE set a
