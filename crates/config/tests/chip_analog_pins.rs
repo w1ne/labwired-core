@@ -68,7 +68,7 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
             Some(p)
                 if !matches!(
                     p.r#type.as_str(),
-                    "adc" | "nrf52840_saadc" | "avr_adc" | "ra_adc12" | "rp2040_adc"
+                    "adc" | "nrf52840_saadc" | "avr_adc" | "ra_adc12" | "rp2040_adc" | "samd21_adc"
                 ) =>
             {
                 problems.push(format!(
@@ -96,6 +96,10 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
             .peripherals
             .iter()
             .any(|p| &p.id == peripheral && p.r#type == "rp2040_adc");
+        let samd21 = desc
+            .peripherals
+            .iter()
+            .any(|p| &p.id == peripheral && p.r#type == "samd21_adc");
         if ra {
             // `ra_adc12` has one data register per channel, ADDR0-ADDR28, so a
             // channel number above 28 addresses nothing (see the `CHANNELS`
@@ -207,6 +211,42 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
                     "{chip}: {pad} is not a GP<n> pad label (the RP2040/RP2350A pinout form)"
                 )),
             }
+        } else if samd21 {
+            // SAMD21 pads are `PA<n>` / `PB<n>` and the two PORT groups are
+            // declared as `gpio_a` / `gpio_b` (one LabWired port is one PORT
+            // GROUP, not one package bank). The AINn input number is checked
+            // against the CMSIS table by the core's end-to-end test; here the
+            // label, the owning port and the 20-input window are structural.
+            if u64::from(*channel) >= 20 {
+                problems.push(format!(
+                    "{chip}: {pad} is outside {peripheral}'s 20 AIN inputs"
+                ));
+            }
+            match samd21_pad_port_and_bit(pad) {
+                Some((port, bit)) => match desc
+                    .peripherals
+                    .iter()
+                    .find(|p| p.id == port && p.r#type == "gpio")
+                {
+                    Some(p) => {
+                        let count = p
+                            .config
+                            .get("num_pins")
+                            .and_then(serde_yaml::Value::as_u64)
+                            .unwrap_or(32);
+                        if u64::from(bit) >= count {
+                            problems
+                                .push(format!("{chip}: {pad} is outside {port}'s {count} pins"));
+                        }
+                    }
+                    None => problems.push(format!(
+                        "{chip}: {pad} is on {port}, not a declared SAMD21 GPIO"
+                    )),
+                },
+                None => problems.push(format!(
+                    "{chip}: {pad} is not a P<A|B><bit> SAMD21 pad label"
+                )),
+            }
         } else {
             match pad_port_and_bit(pad, nordic) {
                 Some((port, bit)) => {
@@ -304,6 +344,26 @@ fn pad_port_and_bit(pad: &str, nordic: bool) -> Option<(String, u8)> {
             digits.parse().ok()?,
         ))
     }
+}
+
+/// SAMD21 pad labels: `PA<n>` / `PB<n>`, where A/B is the PORT group and
+/// `<n>` the bit inside it. The descriptor declares exactly those two groups
+/// as `gpio_a` / `gpio_b`.
+fn samd21_pad_port_and_bit(pad: &str) -> Option<(String, u8)> {
+    let upper = pad.to_ascii_uppercase();
+    let rest = upper.strip_prefix('P')?;
+    let port = rest.chars().next()?;
+    if !matches!(port, 'A' | 'B') {
+        return None;
+    }
+    let digits = &rest[1..];
+    if digits.is_empty() || !digits.bytes().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    Some((
+        format!("gpio_{}", port.to_ascii_lowercase()),
+        digits.parse().ok()?,
+    ))
 }
 
 /// RP2040/RP2350A pad labels: `GP<n>` (`GP26` is the Pico pinout form the
