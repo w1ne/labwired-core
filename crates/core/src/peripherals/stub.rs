@@ -24,6 +24,10 @@ impl StubPeripheral {
 }
 
 impl crate::Peripheral for StubPeripheral {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         // Simple byte mapping
         let reg_offset = offset & !3;

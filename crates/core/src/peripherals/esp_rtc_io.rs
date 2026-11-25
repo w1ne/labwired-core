@@ -897,6 +897,10 @@ struct Snapshot {
 }
 
 impl Peripheral for EspRtcIo {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     /// Changes only at MMIO write time and on GPIO input reports.
     fn needs_legacy_walk(&self) -> bool {
         false

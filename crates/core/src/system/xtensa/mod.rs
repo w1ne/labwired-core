@@ -90,6 +90,10 @@ impl std::fmt::Debug for RamPeripheral {
 }
 
 impl crate::Peripheral for RamPeripheral {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     // RAM/ROM windows only store and serve bytes. They have no elapsed-time
     // state, IRQs, DMA, or scheduled events, so the legacy per-step walk is
     // provably unnecessary for every firmware state.

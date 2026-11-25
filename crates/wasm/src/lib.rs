@@ -24,6 +24,7 @@ mod inspect;
 mod install;
 mod jit_browser;
 mod lab_tools;
+mod mechanical;
 mod ngspice;
 #[cfg(test)]
 mod pic24_wasm_tests;
@@ -1868,6 +1869,8 @@ impl WasmSimulator {
     /// [`Self::step_batch`] without a journal entry, for callers that already
     /// recorded their own step.
     fn step_batch_unrecorded(&mut self, max_cycles: u32) -> Result<u32, JsValue> {
+        self.ensure_uncoupled_stepping()
+            .map_err(AdvanceFailure::into_js)?;
         if self.jit_browser_enabled && self.arch == MachineFamily::CortexM && self.cosim.is_none() {
             let before = self.machine().total_cycles;
             return match self.step_batch_cortex_m_jit(max_cycles) {
@@ -2261,6 +2264,8 @@ impl WasmSimulator {
     /// and permanently disabled idle FF for the classic-aids playground path.
     #[wasm_bindgen]
     pub fn step_with_esp32_aids(&mut self, cycles: u32) -> Result<(), JsValue> {
+        self.ensure_uncoupled_stepping()
+            .map_err(AdvanceFailure::into_js)?;
         self.ensure_cosim_healthy()
             .map_err(AdvanceFailure::into_js)?;
         self.record(lab_tools::Op::StepEsp32Aids(cycles));
@@ -2286,66 +2291,68 @@ impl WasmSimulator {
         }
     }
 
+    fn service_esp32_singlecore_ipi(&mut self, refresh_handshake: bool) {
+        let machine = self.machine.as_mut().unwrap();
+        let bridge = self.esp32_ipi.as_mut().unwrap();
+        if let Ok(v) = machine.bus.read_u32(0x3FF0_0164) {
+            let bit = (v & 0x1F) as u8;
+            if v != 0 && bit < 32 {
+                bridge.from_cpu_bit0 = Some(bit);
+            }
+        }
+        if let Ok(v) = machine.bus.read_u32(0x3FF0_0168) {
+            let bit = (v & 0x1F) as u8;
+            if v != 0 && bit < 32 {
+                bridge.from_cpu_bit1 = Some(bit);
+            }
+        }
+        if let Ok(v0) = machine.bus.read_u32(0x3FF0_00DC) {
+            if v0 != 0 && v0 != bridge.last_from_cpu0_val {
+                if let Some(bit) = bridge.from_cpu_bit0 {
+                    machine.cpu.raise_interrupt_bits(1u32 << bit);
+                }
+                let _ = machine.bus.write_u32(0x3FF0_00DC, 0);
+            }
+            bridge.last_from_cpu0_val = 0;
+        }
+        if let Ok(v1) = machine.bus.read_u32(0x3FF0_00E0) {
+            if v1 != 0 && v1 != bridge.last_from_cpu1_val {
+                if let Some(bit) = bridge.from_cpu_bit1 {
+                    machine.cpu.raise_interrupt_bits(1u32 << bit);
+                }
+                let _ = machine.bus.write_u32(0x3FF0_00E0, 0);
+            }
+            bridge.last_from_cpu1_val = 0;
+        }
+        // Dual-core handshake keep-alive. Re-asserts the handshake
+        // bytes every 10k cycles so .bss zero-init can't wipe them
+        // before the spin-wait check in call_start_cpu0. Uses the
+        // per-firmware addresses resolved by autodiscover when
+        // available; falls back to the hardcoded reference-firmware
+        // addresses for the legacy install_esp32_arduino_quirks
+        // path.
+        if refresh_handshake {
+            if !bridge.handshake_bytes.is_empty() {
+                for &addr in &bridge.handshake_bytes {
+                    let _ = machine.bus.write_u8(addr as u64, 0x01);
+                }
+            } else {
+                let _ = machine.bus.write_u8(0x3FFC_6F04, 0x01);
+                let _ = machine.bus.write_u8(0x3FFC_6F01, 0x01);
+                let _ = machine.bus.write_u8(0x3FFC_6F02, 0x01);
+                let _ = machine.bus.write_u8(0x3FFC_6FFD, 0x01);
+                let _ = machine.bus.write_u8(0x3FFC_6FFE, 0x01);
+                let _ = machine.bus.write_u8(0x3FFC_7190, 0x01);
+            }
+        }
+    }
+
     fn step_with_esp32_aids_singlecore_ipi(&mut self, cycles: u32) -> Result<(), JsValue> {
         if self.esp32_ipi.is_none() {
             return self.step_batch_unrecorded(cycles).map(|_| ());
         }
         for i in 0..cycles {
-            {
-                let machine = self.machine.as_mut().unwrap();
-                let bridge = self.esp32_ipi.as_mut().unwrap();
-                if let Ok(v) = machine.bus.read_u32(0x3FF0_0164) {
-                    let bit = (v & 0x1F) as u8;
-                    if v != 0 && bit < 32 {
-                        bridge.from_cpu_bit0 = Some(bit);
-                    }
-                }
-                if let Ok(v) = machine.bus.read_u32(0x3FF0_0168) {
-                    let bit = (v & 0x1F) as u8;
-                    if v != 0 && bit < 32 {
-                        bridge.from_cpu_bit1 = Some(bit);
-                    }
-                }
-                if let Ok(v0) = machine.bus.read_u32(0x3FF0_00DC) {
-                    if v0 != 0 && v0 != bridge.last_from_cpu0_val {
-                        if let Some(bit) = bridge.from_cpu_bit0 {
-                            machine.cpu.raise_interrupt_bits(1u32 << bit);
-                        }
-                        let _ = machine.bus.write_u32(0x3FF0_00DC, 0);
-                    }
-                    bridge.last_from_cpu0_val = 0;
-                }
-                if let Ok(v1) = machine.bus.read_u32(0x3FF0_00E0) {
-                    if v1 != 0 && v1 != bridge.last_from_cpu1_val {
-                        if let Some(bit) = bridge.from_cpu_bit1 {
-                            machine.cpu.raise_interrupt_bits(1u32 << bit);
-                        }
-                        let _ = machine.bus.write_u32(0x3FF0_00E0, 0);
-                    }
-                    bridge.last_from_cpu1_val = 0;
-                }
-                // Dual-core handshake keep-alive. Re-asserts the handshake
-                // bytes every 10k cycles so .bss zero-init can't wipe them
-                // before the spin-wait check in call_start_cpu0. Uses the
-                // per-firmware addresses resolved by autodiscover when
-                // available; falls back to the hardcoded reference-firmware
-                // addresses for the legacy install_esp32_arduino_quirks
-                // path.
-                if i % 10_000 == 0 {
-                    if !bridge.handshake_bytes.is_empty() {
-                        for &addr in &bridge.handshake_bytes {
-                            let _ = machine.bus.write_u8(addr as u64, 0x01);
-                        }
-                    } else {
-                        let _ = machine.bus.write_u8(0x3FFC_6F04, 0x01);
-                        let _ = machine.bus.write_u8(0x3FFC_6F01, 0x01);
-                        let _ = machine.bus.write_u8(0x3FFC_6F02, 0x01);
-                        let _ = machine.bus.write_u8(0x3FFC_6FFD, 0x01);
-                        let _ = machine.bus.write_u8(0x3FFC_6FFE, 0x01);
-                        let _ = machine.bus.write_u8(0x3FFC_7190, 0x01);
-                    }
-                }
-            }
+            self.service_esp32_singlecore_ipi(i % 10_000 == 0);
 
             // #124 Phase 4: browser-side JIT fast-path. Runs BEFORE
             // `machine.step()` so a successful JIT call advances PC

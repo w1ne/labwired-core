@@ -877,6 +877,10 @@ impl crate::peripherals::esp_gpspi_net::GpSpiHost for NetView<'_> {
 }
 
 impl Peripheral for Esp32Spi {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     fn line_names(&self) -> &'static [&'static str] {
         crate::peripherals::esp_gpspi_wire::SPI_NET_LINES
     }

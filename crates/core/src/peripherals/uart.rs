@@ -3129,6 +3129,10 @@ impl UartStreamHost for Uart {
 }
 
 impl crate::Peripheral for Uart {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     fn inject_uart_rx(&mut self, bytes: &[u8]) -> Option<Result<usize, String>> {
         Some(self.inject_rx_bytes(bytes))
     }

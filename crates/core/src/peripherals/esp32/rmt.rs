@@ -415,6 +415,10 @@ impl Esp32Rmt {
 }
 
 impl Peripheral for Esp32Rmt {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;
