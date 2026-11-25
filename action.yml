@@ -263,15 +263,42 @@ runs:
             ;;
         esac
 
-        tag="${VERSION}"
-        if [[ "${tag}" == "latest" ]]; then
-          tag="$(curl -fsSL -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/w1ne/labwired-core/releases/latest" \
-            | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])')"
+        resolved="$(python3 - "${VERSION}" "${target}" <<'PY'
+        import json, os, sys, urllib.request
+        want, target = sys.argv[1], sys.argv[2]
+        suffix = f"-{target}.tar.gz"
+        headers = {"Accept": "application/vnd.github+json", "User-Agent": "w1ne-labwired-core-action/v1"}
+        tok = os.environ.get("GH_TOKEN", "").strip()
+        if tok:
+            headers["Authorization"] = f"Bearer {tok}"
+        if want != "latest":
+            url = f"https://api.github.com/repos/w1ne/labwired-core/releases/tags/{want}"
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                rels = [json.loads(resp.read().decode("utf-8"))]
+        else:
+            url = "https://api.github.com/repos/w1ne/labwired-core/releases?per_page=30"
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                rels = json.loads(resp.read().decode("utf-8"))
+        for rel in rels:
+            if rel.get("draft"):
+                continue
+            for asset in rel.get("assets") or []:
+                name = str(asset.get("name") or "")
+                if name.startswith("labwired-") and name.endswith(suffix):
+                    print(f"{rel.get('tag_name', '')}\t{asset.get('browser_download_url', '')}")
+                    sys.exit(0)
+        sys.exit(1)
+        PY
+        )"
+        tag="${resolved%%$'\t'*}"
+        url="${resolved#*$'\t'}"
+        if [[ -z "${url}" ]]; then
+          echo "::error::No labwired release asset found for ${VERSION} (${target})"
+          exit 1
         fi
-
-        url="https://github.com/w1ne/labwired-core/releases/download/${tag}/labwired-${tag}-${target}.tar.gz"
-        echo "Downloading ${url}"
+        echo "Downloading ${url} (${tag})"
         curl -fsSL "${url}" -o "${install_dir}/labwired.tar.gz"
         tar -xzf "${install_dir}/labwired.tar.gz" -C "${install_dir}"
         bin_path="$(find "${install_dir}" -type f -name labwired | head -n 1)"
@@ -281,7 +308,10 @@ runs:
         fi
         chmod +x "${bin_path}"
         "${bin_path}" --version
-        echo "bin=${bin_path}" >> "${GITHUB_OUTPUT}"
+        {
+          echo "bin=${bin_path}"
+          echo "cli_version=${tag}"
+        } >> "${GITHUB_OUTPUT}"
 
     - name: Run firmware simulation & assertions
       id: sim
@@ -357,10 +387,11 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
         OUTDIR: ${{ inputs.out_dir }}
         VERDICT: ${{ steps.verdict.outputs.verdict }}
-        SUMMARY_LINE: ${{ steps.verdict.outputs.summary_line }}
+        ASSERTIONS_PASSED: ${{ steps.verdict.outputs.assertions_passed }}
+        ASSERTIONS_TOTAL: ${{ steps.verdict.outputs.assertions_total }}
+        CLI_VERSION: ${{ steps.install_cli.outputs.cli_version }}
+        REPO_PRIVATE: ${{ github.event.repository.private }}
         API_URL: ${{ inputs.api_url }}
-        ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
-        ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
       run: |
         set -euo pipefail
         python3 "${ACTION_PATH}/action/upload.py"
