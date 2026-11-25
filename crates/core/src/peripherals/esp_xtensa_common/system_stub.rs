@@ -62,6 +62,10 @@ impl Default for SystemStub {
 }
 
 impl Peripheral for SystemStub {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     // This is a register file only: all state changes happen synchronously on
     // MMIO writes, with no elapsed-time state, IRQs, DMA, or events.
     fn needs_legacy_walk(&self) -> bool {
@@ -146,6 +150,10 @@ pub struct FlashSpiMemStub {
 }
 
 impl Peripheral for FlashSpiMemStub {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     /// A word map plus one constant (`CMD` always reads 0). Command completion
     /// is reported at read time, not advanced on a clock. No
     /// `tick`/`tick_elapsed` override, so the walk gets the trait default
@@ -253,6 +261,10 @@ impl RtcCntlStub {
 }
 
 impl Peripheral for RtcCntlStub {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     // Inert walk: RTC_CNTL register bank; TIME_UPDATE handshake settles on write.
     // tick() is the trait-default no-op.
     fn needs_legacy_walk(&self) -> bool {
@@ -395,6 +407,10 @@ impl TimgStub {
 }
 
 impl Peripheral for TimgStub {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     /// A word map whose only state machine — the RTC calibration in
     /// [`Self::maybe_complete_calibration`] — runs from `write`, not from a
     /// clock: exactly the "lazily-evaluated model that advances on MMIO
@@ -531,6 +547,10 @@ impl EfuseStub {
 }
 
 impl Peripheral for EfuseStub {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     // eFuse reads are immutable canned values; the stub has no time-driven
     // behavior to service from the legacy walk.
     fn needs_legacy_walk(&self) -> bool {

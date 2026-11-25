@@ -217,6 +217,10 @@ impl std::fmt::Debug for RomThunkBank {
 }
 
 impl Peripheral for RomThunkBank {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     /// A read-only byte bank. Thunk dispatch happens in the CPU's `BREAK 1,14`
     /// exec arm on an instruction fetch, never on a clock, and `write` is
     /// dropped. No `tick`/`tick_elapsed` override, so the walk gets the trait

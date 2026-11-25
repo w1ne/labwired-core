@@ -16,7 +16,7 @@ pub use bldc::{
 };
 pub use brushed::{
     BrushedDcMotor, BrushedMotorParams, BrushedMotorSnapshot, HBridgeCommand, HBridgeState,
-    MotorFaults,
+    MotorFaults, ShaftOwner,
 };
 pub use encoder::{EncoderPins, QuadratureEncoder};
 pub use shaft::{ModelError, Shaft, ShaftParams, ShaftSnapshot};

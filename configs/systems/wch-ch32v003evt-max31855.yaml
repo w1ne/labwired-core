@@ -1,0 +1,35 @@
+# WCH CH32V003EVT evaluation board with an Adafruit MAX31855 K-type
+# thermocouple breakout on SPI1.
+#
+# The board's LED row is brought to P4 (LED1 on P4-1), rather than being
+# hard-wired to an MCU pin. This profile includes a jumper from P4-1 to PC0.
+# USB-C provides power only. USART1 TX is exposed at PD5; debug_uart below is
+# only the simulator's console capture route, not an on-board USB-UART bridge.
+#
+# The breakout carries its own 3.3 V regulator and level shifter. It sits on
+# the CH32V003 default (non-remapped) SPI1 pads from the official
+# arduino_core_ch32 `CH32V003F4` variant: SCK = PC5, MOSI (the MAX31855's DIN,
+# unused for a read) = PC6, MISO (DO) = PC7. Chip select is the GPIO PC4,
+# driven by the sketch; the MAX31855 takes no command byte and clocks out its
+# 32-bit frame while CS is low.
+#
+# The converter model reports its input defaults: 25.00 degC at the hot
+# junction and 22.00 degC at the cold junction, fault-free. It does not model
+# the conversion time, the pad voltage or the thermocouple's analog front end.
+name: "wch-ch32v003evt-max31855"
+chip: "../chips/ch32v003f4p6.yaml"
+cpu_hz: 24_000_000
+debug_uart: "usart1"
+external_devices:
+  - id: "tc1"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PC4"
+board_io:
+  - id: "led1_pc0"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 0
+    signal: "output"
+    active_high: false

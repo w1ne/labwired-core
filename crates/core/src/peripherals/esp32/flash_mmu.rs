@@ -135,6 +135,10 @@ impl Esp32FlashMmuRegs {
 }
 
 impl Peripheral for Esp32FlashMmuRegs {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     fn needs_legacy_walk(&self) -> bool {
         false
     }
@@ -286,6 +290,10 @@ impl ClassicFlashWindow {
 }
 
 impl Peripheral for ClassicFlashWindow {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     fn needs_legacy_walk(&self) -> bool {
         false
     }

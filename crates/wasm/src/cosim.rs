@@ -139,6 +139,13 @@ impl WasmSimulator {
         }
     }
     pub(crate) fn runtime_snapshot_refusal(&self) -> Option<&'static str> {
+        if self
+            .machine
+            .as_ref()
+            .is_some_and(|m| m.bus.has_external_mechanical_shafts())
+        {
+            return Some("external mechanical state requires complete frame-journal replay");
+        }
         self.cosim
             .as_ref()
             .and_then(|session| session.runtime_snapshot_refusal())
@@ -237,6 +244,29 @@ impl WasmSimulator {
     /// fails at apply time is reported once and the run continues, as in
     /// `labwired test`; a model that fails ends the call with an error.
     pub(crate) fn advance_machine(
+        &mut self,
+        request: AdvanceRequest,
+    ) -> Result<AdvanceReport, AdvanceFailure> {
+        self.ensure_uncoupled_stepping()?;
+        self.advance_machine_at_mechanical_frontier(request)
+    }
+
+    pub(crate) fn ensure_uncoupled_stepping(&self) -> Result<(), AdvanceFailure> {
+        if self
+            .machine
+            .as_ref()
+            .is_some_and(|m| m.bus.has_external_mechanical_shafts())
+        {
+            return Err(AdvanceFailure::Cosim(
+                "external mechanical shafts require step_external_mechanical_to and atomic feedback".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// The external mechanical entry point preflights strict timing before
+    /// using this shared executor; ordinary calls pass through the guard above.
+    pub(crate) fn advance_machine_at_mechanical_frontier(
         &mut self,
         request: AdvanceRequest,
     ) -> Result<AdvanceReport, AdvanceFailure> {
