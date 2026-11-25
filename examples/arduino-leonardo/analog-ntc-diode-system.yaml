@@ -1,11 +1,13 @@
 # Generic Beta NTC and Shockley diode netlists drive two ARDUINO LEONARDO
-# analog inputs through the ATmega32U4 descriptor's PF7/PF6 channel routes.
+# analog inputs through the ATmega32U4 descriptor's PF7/PF6 channel routes,
+# plus a plain divider on PD7 to prove the high (MUX5) channel half.
 #
-# Neither netlist names the board, the ADC, or a channel: each one only solves
-# its own circuit and publishes a probe voltage to `board.analog.<pad>_volts`.
-# The descriptor's `analog_pins:` maps PF7 -> adc/channel 7 (Arduino A0) and
-# PF6 -> adc/channel 6 (A1), so the same two decks that run on the STM32, WCH,
-# nRF52 and ATmega328P boards run here unchanged at the Leonardo's 5 V AVcc.
+# No netlist names the board, the ADC, or a channel: each one only solves its
+# own circuit and publishes a probe voltage to `board.analog.<pad>_volts`.
+# The descriptor's `analog_pins:` maps PF7 -> adc/channel 7 (Arduino A0),
+# PF6 -> adc/channel 6 (A1) and PD7 -> adc/channel 10 (A7), so the same decks
+# that run on the STM32, WCH, nRF52 and ATmega328P boards run here unchanged at
+# the Leonardo's 5 V AVcc.
 name: "arduino-leonardo-analog"
 chip: "../../configs/chips/atmega32u4.yaml"
 external_devices: []
@@ -41,4 +43,20 @@ cosim_models:
         .model DREF D(IS=2.52n N=1.752 RS=0.568)
       probes:
         v_diode: "v(sense)"
+      vdd: 5
+  # PD7 is ADC10 and A7; it sits above ADC7, so this divider proves the
+  # ADCSRB.MUX5 half of the descriptor map through a conversion. It is also
+  # one of the pads the first draft of the map mislabelled.
+  - id: "pd7_divider"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_pd7: "board.analog.pd7_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 5
+        Rtop vcc sense 10k
+        Rbottom sense 0 4.7k
+      probes:
+        v_pd7: "v(sense)"
       vdd: 5

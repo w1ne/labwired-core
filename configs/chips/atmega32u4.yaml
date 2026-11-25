@@ -130,14 +130,17 @@ pins:
   PF6: { gpio: "portf", bit: 6 }
   PF7: { gpio: "portf", bit: 7 }
 
-# Regular ADC inputs by pad, Microchip DS7766 "Pinout": ADC0..ADC7 are
-# PF0..PF7 and ADC8..ADC11 are PD4..PD7. The 44-pin TQFP/QFN package does not
-# bond PF2/PF3 (ADC2/ADC3), so they are absent here, the same rule the
-# STM32F103 LQFP48 applies to PC0..PC5. Arduino A0..A5 are PF7, PF6, PF5,
-# PF4, PF1, PF0 on the Leonardo, so the deck names the chip pad, not the
-# header pin.
+# Regular ADC inputs by pad, Microchip DS7766. Table 24-4 "Input Channel and
+# Gain Selections" assigns the single-ended inputs, and Tables 10-3, 10-8 and
+# 10-13 give the pins: ADC0..ADC7 are PF0..PF7, ADC8..ADC13 are PD4, PD6, PD7
+# and PB4..PB6. PD5 is XCK1/CTS and has no ADC input, so it is absent. The
+# 44-pin TQFP/QFN package does not bond PF2/PF3 (ADC2/ADC3), so they are absent
+# too, the same rule the STM32F103 LQFP48 applies to PC0..PC5.
+# Arduino A0..A5 are PF7, PF6, PF5, PF4, PF1, PF0 on the Leonardo and A6..A11
+# are D4, D6, D8, D9, D10, D12 = PD4, PD7, PB4, PB5, PB6, PD6, so the deck
+# names the chip pad, not the header pin.
 # Consumed by co-simulation `board.analog.<pad>_volts`; pads not listed are
-# refused.
+# refused. Channels 8..13 need ADCSRB.MUX5 (bit 5); see `cpu/avr.rs`.
 analog_pins:
   PF0: { peripheral: "adc", channel: 0 }
   PF1: { peripheral: "adc", channel: 1 }
@@ -146,6 +149,8 @@ analog_pins:
   PF6: { peripheral: "adc", channel: 6 }
   PF7: { peripheral: "adc", channel: 7 }
   PD4: { peripheral: "adc", channel: 8 }
-  PD5: { peripheral: "adc", channel: 9 }
-  PD6: { peripheral: "adc", channel: 10 }
-  PD7: { peripheral: "adc", channel: 11 }
+  PD6: { peripheral: "adc", channel: 9 }
+  PD7: { peripheral: "adc", channel: 10 }
+  PB4: { peripheral: "adc", channel: 11 }
+  PB5: { peripheral: "adc", channel: 12 }
+  PB6: { peripheral: "adc", channel: 13 }
