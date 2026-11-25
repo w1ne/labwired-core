@@ -1865,6 +1865,45 @@ impl SystemBus {
         }
     }
 
+    /// Bind peer MMIO controllers that share physical analog input pads (e.g.
+    /// ESP32-S3 RTC `sens_s3` at `0x6000_8800` and digital `sar_adc_s3` at
+    /// `0x6004_0000` both sampling GPIO1..GPIO10) to a single
+    /// [`crate::peripheral::SharedAdcChannelBank`].
+    ///
+    /// Board configs route GPIO1..10 analog stimuli to `sar_adc_s3`; binding
+    /// peers via the generic [`Peripheral::shared_adc_bank_key`] capability
+    /// eliminates the split-brain where `analogRead()` stayed pinned at
+    /// mid-scale (2048) while stimuli were seeded on `sar_adc_s3`, with zero
+    /// concrete peripheral downcasts. No-op on chips without shared banks.
+    pub(crate) fn wire_shared_adc_banks(&mut self) {
+        let mut banks: Vec<(
+            &'static str,
+            std::sync::Arc<crate::peripheral::SharedAdcChannelBank>,
+        )> = Vec::new();
+        for entry in &self.peripherals {
+            let Some(key) = entry.dev.shared_adc_bank_key() else {
+                continue;
+            };
+            if banks.iter().any(|(k, _)| *k == key) {
+                continue;
+            }
+            if let Some(bank) = entry.dev.shared_adc_bank() {
+                banks.push((key, bank));
+            }
+        }
+        if banks.is_empty() {
+            return;
+        }
+        for entry in &mut self.peripherals {
+            let Some(key) = entry.dev.shared_adc_bank_key() else {
+                continue;
+            };
+            if let Some((_, bank)) = banks.iter().find(|(k, _)| *k == key) {
+                entry.dev.bind_shared_adc_bank(std::sync::Arc::clone(bank));
+            }
+        }
+    }
+
     /// Wire C3 IO_MUX per-pad controls into C3 GPIO after both models have
     /// been constructed. The IO_MUX owns the shared register bank; GPIO reads
     /// `FUN_WPU` from it to model Arduino `INPUT_PULLUP`. No-op on any bus

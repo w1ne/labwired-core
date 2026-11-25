@@ -1570,6 +1570,7 @@ impl SystemBus {
         // wires it there too; this keeps the declarative path honest if the
         // peripheral is ever declared.)
         bus.wire_esp32s3_pad_controls();
+        bus.wire_shared_adc_banks();
         // ESP32-C3/C5: share the I²C0 bit engine's live SDA/SCL line levels
         // with the GPIO model so matrix-routed pads carry the real waveform.
         // No-op for every other chip.
