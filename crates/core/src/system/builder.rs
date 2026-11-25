@@ -532,7 +532,6 @@ mod esp32_clock_tests {
     };
     use crate::bus::Bus;
     use crate::cosim::CosimSession;
-    use crate::peripheral::Peripheral;
     use labwired_config::{ChipDescriptor, SystemManifest};
     use std::path::Path;
 
@@ -582,18 +581,18 @@ cosim_models:
             bus.write_u32(0x3ff5_9008, 128 << 4).unwrap();
             bus.write_u32(0x3ff5_900c, 1 << 31).unwrap();
             let index = bus.find_peripheral_index_by_name("ledc").expect("LEDC");
-            let ledc = bus.peripherals[index]
-                .dev
-                .as_any_mut()
-                .expect("LEDC supports downcasting")
-                .downcast_mut::<crate::peripherals::esp32::ledc::Ledc>()
-                .expect("classic ESP32 LEDC");
-            let lines = ledc.pad_lines_arc();
+            let ledc = &mut bus.peripherals[index].dev;
             let period_cycles = 256 * expected_hz / 80_000_000;
             ledc.sync_to(period_cycles + 1);
-            assert!(lines.level(0), "LEDC pulse rises at selected clock");
+            assert!(
+                ledc.wire_lines().expect("LEDC pad wire").level(0),
+                "LEDC pulse rises at selected clock"
+            );
             ledc.sync_to(period_cycles + period_cycles / 2 + 1);
-            assert!(!lines.level(0), "LEDC pulse falls at selected clock");
+            assert!(
+                !ledc.wire_lines().expect("LEDC pad wire").level(0),
+                "LEDC pulse falls at selected clock"
+            );
         }
     }
 
