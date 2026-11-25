@@ -30,7 +30,7 @@ The declared range is a decision from the catalog table, not the part's operatin
 
 The analog engine steps every 100 µs with 10 backward-Euler substeps. The firmware ([firmware.rs](firmware.rs)) samples 10 ms into each 100 ms period, which is at least 15 time constants of C7 against R6 ‖ U4 in the declared range. It takes whole millivolts (truncation), as `analogReadMilliVolts()` returns them, and computes `T = 1 / (1/298.15 + ln(R/10 kΩ) / 3380) - 273.15` with its own `ln`. `loop` returns (10,000 + T in tenths) × 10 + LED. The thresholds are on at 40.0 °C and off below 38.0 °C. Because the firmware uses the same beta equation as the model, a pass does not test the beta equation against the real part.
 
-The same network and part values have an ngspice deck in [`examples/cosim-ngspice-ntc`](../../../../examples/cosim-ngspice-ntc/README.md). `cosim_ngspice::a_thermistor_deck_matches_the_in_core_curve_within_its_range` compares that deck's `B` source with this `thermistors` entry at 10, 25 and 60 °C, so the bounded curve can move to the reference solver without a change in the observable.
+The same network and part values have an ngspice deck in [`examples/cosim-ngspice-ntc`](../../../../examples/cosim-ngspice-ntc/README.md). `cosim_ngspice::a_thermistor_deck_matches_the_in_core_curve_within_its_range` compares that deck's `B` source with this `thermistors` entry at 10, 25 and 60 °C. This fixture now carries its own reference-solver variant, [`system-ngspice.yaml`](system-ngspice.yaml) with [`ntc.cir`](ntc.cir), and three `ngspice-*.yaml` scripts; see [Reference solver](#reference-solver-ngspice) for the measured parity and the one transient difference.
 
 ## Expected values, calculated before the first run
 
@@ -62,6 +62,54 @@ Negative controls (`/tmp` copies, not committed):
 - Without the manifest-check fix the manifest stops with `unsupported config key 'thermistors'`; without the unit fix it stops with `requires unit degC; signal 'environment.temperature' declares Some("°C")`.
 
 Browser run: Chromium 156.0.8078.79 runs all three scripts at `1a59956f12` with the same result text, logic, oscilloscope, analog series and console records as the CLI. See [browser-flex-scripts.json](../browser-flex-scripts.json).
+
+## Reference solver (ngspice)
+
+`system-ngspice.yaml` is the same project with the R6/U4/C7 network solved by
+ngspice: `ntc.cir` writes U4 as the behavioural current source
+`Bntc = V(sns_an1) / (10k · exp(3380 · (1/(273.15 + V(temp)) − 1/298.15)))`, and
+the model declares the same 10..60 °C `input_ranges` domain. Ports, firmware,
+the IO48 behavior model, the console and the model sequence are unchanged. The
+three `ngspice-*.yaml` scripts repeat the in-core sequences with the same
+assertions; they are not named `test-*.yaml` because the generic fixture matrix
+and the browser receipt have no solver host. The native host needs python3 and
+libngspice (`apt install libngspice0`).
+
+Measured on 2026-11-25 with ngspice-42 through `labwired test --script`:
+
+| Observation | In-core | ngspice |
+| --- | --- | --- |
+| Scripts passing with the same assertions | 3 of 3 | 3 of 3 |
+| `loop` results, alarm script | 102600, 104201, 103801, 103600 | identical |
+| Console text, range script | `mV=2131 / 769 / 1649 / 1398` | identical |
+| Scope samples, alarm / range / negative | 4001 / 4001 / 3001 | identical |
+| Settled scope deviation | — | ≤ 2·10⁻⁷ V (f32) |
+| Fastest transient sample at 100.3 ms (analytic 1.346593 V) | 1.357021 V | 1.346538 V |
+
+- The 1.05·10⁻² V gap in the fastest transient is the in-core engine's
+  first-order backward-Euler lag; ngspice stays within 0.1 mV of the analytic
+  curve. Both cross the alarm level 1.38969 V at the 100.4 ms sample, and every
+  sample the firmware reads (10 ms into each period) is identical, including
+  the 1649 mV truncation case.- 61 °C stops both engines with `status: error`, `stop_reason: model_error`:
+  `analog input `temperature`: thermistor temperature must be within 10..60 C`
+  in-core and `ngspice model 'source-sns-an1' input 'temperature' is 61,
+  outside the declared 10..60 °C range` from the shared latch.
+- The run report pins the deck: `source.path: "./ntc.cir"`, `bytes` and
+  `sha256`, next to `manifest_sha256` of `system-ngspice.yaml`.
+
+Reproduce:
+
+```bash
+labwired test --script crates/wasm/tests/fixtures/flex-heypcb-esp32-ntc/ngspice-overtemp-alarm.yaml --output-dir /tmp/ntc-alarm
+LABWIRED_REQUIRE_NGSPICE=1 cargo test -p labwired-cli --test cosim_pin_routing labwired_test_runs_the_heypcb_ntc_deck_on_ngspice
+```
+
+The regression test runs all three scripts on both engines and requires equal
+`entry_result`, console and instrument counts, the netlist pin, and both range
+stops. The browser keeps the in-core manifest: the committed browser receipt
+has no ngspice host, and a page must supply the ngspice WASM callback before
+this deck can run there. This is not a chip-parity claim and does not prove the
+part's tolerance or a physical board.
 
 ## Onboarding effort
 
