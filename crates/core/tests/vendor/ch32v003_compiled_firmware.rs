@@ -1458,3 +1458,136 @@ fn ch32v003_package_variants_read_the_bme280_over_i2c1() {
         assert_no_fault(mcause);
     }
 }
+
+const SPI_FIXTURE: &str = "ch32v003f4p6-arduino-openwch-spi.elf";
+
+/// Runs the stock openwch `SPI` fixture against `manifest`.
+fn run_spi_fixture(
+    chip: &ChipDescriptor,
+    manifest: &SystemManifest,
+    max_steps: u64,
+) -> (String, u64, u32) {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut bus =
+        SystemBus::from_config(chip, manifest).expect("CH32V003 peripherals plus the SPI slave");
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+    let image = labwired_loader::load_elf(&root.join("tests/fixtures").join(SPI_FIXTURE))
+        .expect("openwch Arduino SPI ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load CH32V003 ELF");
+    let mut steps = 0;
+    while steps < max_steps {
+        if machine.step().is_err() {
+            break;
+        }
+        steps += 1;
+        if steps % 10_000 == 0 {
+            let out = sink.lock().unwrap();
+            if String::from_utf8_lossy(&out).contains("CH32V003_SPI_DONE") && out.ends_with(b"\n") {
+                break;
+            }
+        }
+    }
+    let out = String::from_utf8_lossy(&sink.lock().unwrap()).into_owned();
+    (out, steps, machine.cpu.mcause)
+}
+
+/// The shipped CH32V003EVT + MAX31855 profile.
+fn max31855_manifest() -> SystemManifest {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let path = root.join("configs/systems/wch-ch32v003evt-max31855.yaml");
+    let text = std::fs::read_to_string(&path).expect("read the shipped CH32V003 SPI profile");
+    serde_yaml::from_str(&text).expect("parse the shipped CH32V003 SPI profile")
+}
+
+#[test]
+fn ch32v003_openwch_spi_reads_a_max31855_frame_over_spi1() {
+    // Stock openwch arduino_core_ch32 `SPI` on the default SCK=PC5 / MOSI=PC6
+    // / MISO=PC7 pads. `SPI.begin()` enables RCC_SPI1EN (APB2PCENR bit 12),
+    // programs CTLR1 for master mode, and `SPI.transfer()` polls
+    // STATR.TXE/RXNE/BSY exactly as `spi_com.c` does. The MAX31855 answers a
+    // read-only 32-bit frame with no command byte: 25.00 degC hot junction
+    // (100 quarter-degrees) and 22.00 degC cold junction (352 sixteenths),
+    // fault-free, i.e. 0x01901600.
+    let chip = load_chip("ch32v003f4p6");
+    let (out, steps, mcause) = run_spi_fixture(&chip, &max31855_manifest(), 4_000_000);
+    assert_eq!(
+        out,
+        "CH32V003_SPI_BOOT\r\nraw=0x1901600\r\ntc_milli=25000\r\ncj_milli=22000\r\n\
+         CH32V003_SPI_PASS\r\nCH32V003_SPI_DONE\r\n",
+        "USART1 TX stream after {steps} steps"
+    );
+    assert_no_fault(mcause);
+}
+
+#[test]
+fn ch32v003_spi_transfer_without_a_slave_reports_no_frame() {
+    // Negative control: the same firmware and pads, no device on the bus. The
+    // master still completes its four frames (the model answers 0x00), so the
+    // sketch must see an all-zero frame and refuse to call it a reading.
+    let chip = load_chip("ch32v003f4p6");
+    let empty: SystemManifest =
+        serde_yaml::from_str("name: \"ch32v003-spi\"\nchip: \"../chips/ch32v003f4p6.yaml\"\n")
+            .expect("system manifest without a device");
+    let (out, _, mcause) = run_spi_fixture(&chip, &empty, 2_000_000);
+    assert!(out.starts_with("CH32V003_SPI_BOOT\r\n"), "{out:?}");
+    assert!(out.contains("raw=0x0\r\n"), "no-slave frame: {out:?}");
+    assert!(out.contains("CH32V003_SPI_FAIL"), "{out:?}");
+    assert_no_fault(mcause);
+}
+
+#[test]
+fn ch32v003_spi1_is_on_every_package_but_the_pads_only_where_bonded() {
+    // One die, four packages: the SPI1 block is present in every descriptor
+    // (the package-consistency test requires it). SPI1 needs SCK, MOSI and
+    // MISO: the F4P6 (TSSOP20) and F4U6 (QFN20) bond PC5/PC6/PC7, the A4M6
+    // (SOP16) drops PC5, and the J4M6 (SOP8) drops all three, so only the two
+    // 20-pin packages may claim SPI pin functions.
+    for (name, pins) in [
+        (
+            "ch32v003f4p6",
+            vec![("PC5", "sck"), ("PC6", "mosi"), ("PC7", "miso")],
+        ),
+        (
+            "ch32v003f4u6",
+            vec![("PC5", "sck"), ("PC6", "mosi"), ("PC7", "miso")],
+        ),
+        ("ch32v003a4m6", vec![]),
+        ("ch32v003j4m6", vec![]),
+    ] {
+        let chip = load_chip(name);
+        let bus = SystemBus::from_config(&chip, &SystemManifest::default())
+            .unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert!(
+            bus.find_peripheral_index_by_name("spi1").is_some(),
+            "{name} keeps the die's SPI1 block"
+        );
+
+        let yaml = chip_yaml(name);
+        let mut claimed = Vec::new();
+        for (pad, spec) in yaml["pins"].as_mapping().expect("pins map") {
+            let pad = pad.as_str().expect("pad name");
+            let Some(functions) = spec.get("functions") else {
+                continue;
+            };
+            for function in functions.as_sequence().expect("functions list") {
+                if function["type"].as_str() == Some("spi") {
+                    assert_eq!(function["peripheral"].as_str(), Some("spi1"));
+                    claimed.push((
+                        pad,
+                        function["role"].as_str().expect("SPI role").to_string(),
+                    ));
+                }
+            }
+        }
+        claimed.sort();
+        let mut expected: Vec<(&str, String)> = pins
+            .into_iter()
+            .map(|(pad, role)| (pad, role.to_string()))
+            .collect();
+        expected.sort();
+        assert_eq!(claimed, expected, "{name} SPI pad claims");
+    }
+}
