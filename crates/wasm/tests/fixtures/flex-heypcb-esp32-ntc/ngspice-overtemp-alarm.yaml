@@ -7,10 +7,10 @@
 # `loop` returns (10,000 + T in tenths of °C) x 10 + LED.
 #
 # The firmware results, console text and every asserted scope value are the
-# same as the in-core run. The engines differ during fast transients: over the
-# 100.2-101.3 ms samples after the 42 °C step ngspice is up to 1.0e-2 V above
-# the in-core backward-Euler curve, which lags the analytic one; both cross
-# 1.38969 V at the 100.4 ms sample, and settled values agree within 1e-4 V.
+# same as the in-core run. The engines differ during fast transients: after the
+# 42 °C step ngspice is up to 2.2e-3 V above the in-core backward-Euler curve,
+# which lags the analytic one; both cross 1.38969 V at the 100.4 ms sample, and
+# settled values agree within 1e-4 V.
 schema_version: "1.0"
 inputs:
   flex: system-ngspice.yaml

@@ -146,9 +146,10 @@ source-pinned HeyPCB ESP32-S3 NTC fixture carries `system-ngspice.yaml` and
 repeat the in-core sequences through `labwired test --script`. Measured on
 2026-11-25: every firmware `loop` result, the console text, the asserted scope
 values and the instrument counts are identical on both engines; settled scope
-samples agree within 2·10⁻⁷ V (f32), and the fastest transient sample differs
-by 1.05·10⁻² V because the in-core backward-Euler curve lags the analytic one,
-which ngspice follows within 0.1 mV. The scripts are not named `test-*.yaml`
+samples agree within 2·10⁻⁷ V (f32), and the range script's fastest transient
+sample differs by 1.05·10⁻² V because the in-core backward-Euler curve lags the
+analytic one, which ngspice follows within 0.1 mV. The scripts are not named
+`test-*.yaml`
 because the generic fixture matrix and the browser receipt run without a solver
 host; `labwired_test_runs_the_heypcb_ntc_deck_on_ngspice` runs them on both
 engines and also requires the `source.sha256` netlist pin and the 61 °C stop on

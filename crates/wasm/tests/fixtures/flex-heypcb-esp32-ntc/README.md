@@ -84,14 +84,15 @@ Measured on 2026-11-25 with ngspice-42 through `labwired test --script`:
 | Console text, range script | `mV=2131 / 769 / 1649 / 1398` | identical |
 | Scope samples, alarm / range / negative | 4001 / 4001 / 3001 | identical |
 | Settled scope deviation | — | ≤ 2·10⁻⁷ V (f32) |
-| Fastest transient sample at 100.3 ms (analytic 1.346593 V) | 1.357021 V | 1.346538 V |
+| Fastest transient sample, range script (60 °C step at 100.3 ms; analytic 1.346593 V) | 1.357021 V | 1.346538 V |
 
-- The 1.05·10⁻² V gap in the fastest transient is the in-core engine's
-  first-order backward-Euler lag; ngspice stays within 0.1 mV of the analytic
-  curve. Both cross the alarm level 1.38969 V at the 100.4 ms sample, and every
-  sample the firmware reads (10 ms into each period) is identical, including
-  the 1649 mV truncation case.- 61 °C stops both engines with `status: error`, `stop_reason: model_error`:
-  `analog input `temperature`: thermistor temperature must be within 10..60 C`
+- The 1.05·10⁻² V gap in the range script's fastest transient is the in-core
+  engine's first-order backward-Euler lag; ngspice stays within 0.1 mV of the
+  analytic curve. Both cross the alarm level 1.38969 V at the 100.4 ms sample,
+  and every sample the firmware reads (10 ms into each period) is identical,
+  including the 1649 mV truncation case.
+- 61 °C stops both engines with `status: error`, `stop_reason: model_error`:
+  ``analog input `temperature`: thermistor temperature must be within 10..60 C``
   in-core and `ngspice model 'source-sns-an1' input 'temperature' is 61,
   outside the declared 10..60 °C range` from the shared latch.
 - The run report pins the deck: `source.path: "./ntc.cir"`, `bytes` and
