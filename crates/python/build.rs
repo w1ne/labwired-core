@@ -48,11 +48,16 @@ fn main() {
     if sdist_examples.exists() {
         fs::remove_dir_all(&sdist_examples).unwrap();
     }
+    let sdist_tools = root.join("tools/cosim");
+    if sdist_tools.exists() {
+        fs::remove_dir_all(&sdist_tools).unwrap();
+    }
     for relative in [
         "examples/luckfox-pico-mini-a-linux/basket/trusted-prepared.json",
         "examples/luckfox-pico-mini-a-linux/basket/trusted-newc.json",
         "examples/luckfox-pico-mini-a-linux/basket-native-runtime/system.json",
         "examples/luckfox-pico-mini-a-linux/basket-native-runtime/receipt.json",
+        "tools/cosim/labwired_ngspice.py",
     ] {
         let source = root.join("../..").join(relative);
         println!("cargo:rerun-if-changed={}", source.display());

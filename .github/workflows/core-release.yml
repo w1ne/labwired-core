@@ -182,7 +182,7 @@ jobs:
         with:
           name: labwired-${{ matrix.platform }}
           path: ${{ env.ARCHIVE }}
-          retention-days: 14
+          retention-days: 1
 
   # Run the artifact somewhere old before anyone can download it. The symbol
   # assert above checks runtime symbols; this boots firmware and speaks DAP.
@@ -304,6 +304,8 @@ jobs:
 
       - name: Build and publish CI runner image
         uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: "false"
         with:
           context: .
           file: ./Dockerfile.ci
