@@ -65,7 +65,12 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
             None => problems.push(format!(
                 "{chip}: {pad} names ADC '{peripheral}', not declared"
             )),
-            Some(p) if !matches!(p.r#type.as_str(), "adc" | "nrf52840_saadc" | "avr_adc") => {
+            Some(p)
+                if !matches!(
+                    p.r#type.as_str(),
+                    "adc" | "nrf52840_saadc" | "avr_adc" | "ra_adc12"
+                ) =>
+            {
                 problems.push(format!(
                     "{chip}: {pad} names '{peripheral}', which is type '{}', not adc",
                     p.r#type
@@ -83,7 +88,50 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
             .peripherals
             .iter()
             .any(|p| &p.id == peripheral && p.r#type == "avr_adc");
-        if avr {
+        let ra = desc
+            .peripherals
+            .iter()
+            .any(|p| &p.id == peripheral && p.r#type == "ra_adc12");
+        if ra {
+            // `ra_adc12` has one data register per channel, ADDR0-ADDR28, so a
+            // channel number above 28 addresses nothing (see the `CHANNELS`
+            // constant in crates/core/src/peripherals/ra_adc12.rs).
+            if u64::from(*channel) >= 29 {
+                problems.push(format!(
+                    "{chip}: {pad} is outside {peripheral}'s 29 channels"
+                ));
+            }
+            // Renesas RA names its ports `port<n>` and its pads `P<port><bit>`
+            // with both numbers fixed-width (`P014` is port 0 bit 14, `P101`
+            // is port 1 bit 0). A wrong split would route a solved node into a
+            // completely different pad, so the label must be exactly one port
+            // digit plus two bit digits and the port must be declared.
+            match ra_pad_port_and_bit(pad) {
+                Some((port, bit)) => match desc
+                    .peripherals
+                    .iter()
+                    .find(|p| p.id == port && p.r#type == "gpio")
+                {
+                    Some(p) => {
+                        let count = p
+                            .config
+                            .get("num_pins")
+                            .and_then(serde_yaml::Value::as_u64)
+                            .unwrap_or(16);
+                        if u64::from(bit) >= count {
+                            problems
+                                .push(format!("{chip}: {pad} is outside {port}'s {count} pins"));
+                        }
+                    }
+                    None => problems.push(format!(
+                        "{chip}: {pad} is on {port}, not a declared RA GPIO"
+                    )),
+                },
+                None => problems.push(format!(
+                    "{chip}: {pad} is not a P<port><bit:02> RA pad label"
+                )),
+            }
+        } else if avr {
             // AVR names its GPIO blocks `port<letter>` and its converter
             // `avr_adc`; a few inputs are dedicated die pads with no GPIO, so
             // their pad label is the channel name (`ADC6`).
@@ -229,6 +277,84 @@ fn pad_port_and_bit(pad: &str, nordic: bool) -> Option<(String, u8)> {
             digits.parse().ok()?,
         ))
     }
+}
+
+/// RA pad labels: `P<port><bit:02>`, e.g. `P014` -> port0 bit 14 and `P101` ->
+/// port1 bit 0. Both numbers are fixed width in FSP's `R7FA4M1AB.h` pad macro
+/// names (`BSP_IO_PORT_00_PIN_14`), so exactly one port digit and two bit
+/// digits are accepted. `PA5`-style STM32 labels must never pass here.
+fn ra_pad_port_and_bit(pad: &str) -> Option<(String, u8)> {
+    let rest = pad.to_ascii_uppercase();
+    let rest = rest.strip_prefix('P')?;
+    if rest.len() != 3 || !rest.bytes().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let port = rest[..1].parse::<u8>().ok()?;
+    let bit = rest[1..].parse::<u8>().ok()?;
+    Some((format!("port{port}"), bit))
+}
+
+/// ArduinoCore-renesas 1.6.0 `variants/MINIMA`: A0-A5 are P014, P000, P001,
+/// P002, P101, P100, and `pinmux.inc` gives their `PIN_ANALOG` channels as
+/// 9, 0, 1, 2, 21, 22. A4/A5 land in ADANSA1, so this map exercises both
+/// halves of the group-A selector.
+#[test]
+fn ra4m1_analog_pins_match_the_arduino_uno_r4_pinout() {
+    let desc = load("ra4m1");
+    let expected = [
+        ("P014", 9u8),
+        ("P000", 0),
+        ("P001", 1),
+        ("P002", 2),
+        ("P101", 21),
+        ("P100", 22),
+    ];
+    assert_eq!(desc.analog_pins.len(), expected.len());
+    for (pad, channel) in expected {
+        let mapping = &desc.analog_pins[pad];
+        assert_eq!(mapping.peripheral, "adc0", "{pad} must name the UNO R4 ADC");
+        assert_eq!(mapping.channel, channel, "{pad}");
+    }
+    assert!(analog_pin_problems("ra4m1", &desc).is_empty());
+}
+
+#[test]
+fn ra_validation_rejects_bad_models_ports_channels_and_pads() {
+    let original = load("ra4m1");
+    for bad_pad in ["P14", "P0140", "PA14", "P0.14", "p014x"] {
+        let mut desc = original.clone();
+        let mapping = desc.analog_pins.remove("P014").unwrap();
+        desc.analog_pins.insert(bad_pad.to_string(), mapping);
+        assert!(
+            !analog_pin_problems("bad", &desc).is_empty(),
+            "accepted {bad_pad}"
+        );
+    }
+    // Inside the label grammar, outside the port's 16 pins.
+    let mut desc = original.clone();
+    let mapping = desc.analog_pins.remove("P014").unwrap();
+    desc.analog_pins.insert("P190".to_string(), mapping);
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+    // A channel with no ADDRn behind it: ra_adc12 stops at 28.
+    let mut desc = original.clone();
+    desc.analog_pins.get_mut("P014").unwrap().channel = 29;
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+    // Two pads on one input.
+    let mut desc = original.clone();
+    desc.analog_pins.get_mut("P000").unwrap().channel = 9;
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+    // A pad whose port is not declared.
+    let mut desc = original.clone();
+    desc.peripherals.retain(|p| p.id != "port0");
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+    // The peripheral is not a converter.
+    let mut desc = original;
+    desc.peripherals
+        .iter_mut()
+        .find(|p| p.id == "adc0")
+        .unwrap()
+        .r#type = "uart".into();
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
 }
 
 #[test]
