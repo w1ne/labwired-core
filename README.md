@@ -119,6 +119,29 @@ GPIO is checked at the pin, not in the banner, by
 The verdict goes to stderr. The exit code is the gate: `0` passes, anything else fails.
 UART output and `--json` stay on stdout, so pipes keep working.
 
+## GitHub Action (`uses: w1ne/labwired-core@v1`)
+
+Run LabWired hardware & firmware verification on every pull request in public repositories at zero cost — no API keys or secrets required:
+
+```yaml
+name: LabWired Verify
+on: [pull_request, push]
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: w1ne/labwired-core@v1
+```
+
+Auto-detects unmodified Wokwi `diagram.json` projects, KiCad `.kicad_pcb`/`.kicad_sch` boards, and LabWired test scripts (`tests/labwired.yml`), runs ERC + PCB DRC + deterministic firmware assertions, and posts a PR check summary (`ERC 0/0 · DRC 0/0 · X/X firmware assertions passed`) with a shareable replay link and `Verified by LabWired` badge. See [`action/README.md`](action/README.md) and the drop-in samples in [`examples/ci-wokwi-dropin`](examples/ci-wokwi-dropin) and [`examples/ci-kicad-dropin`](examples/ci-kicad-dropin).
+
 ## Installation
 
 The install script covers Linux, macOS, and Windows via WSL2.
