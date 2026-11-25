@@ -210,8 +210,9 @@ pub const CYCLES_PER_SYSCOUNTER_TICK: u32 = CPU_HZ_DEFAULT / SYSCOUNTER_HZ;
 /// re-evaluating in `on_event` (which fires the compare only once the counter
 /// actually reaches it) bounds every event's deadline, so stale wakes drain
 /// within one horizon. Chosen larger than a typical kernel-tick period (~1.3 M
-/// cycles = 10 ms at 128 MHz) so normal ticks schedule at their exact deadline
-/// and idle fast-forward skips the whole tick window in one hop; only the rare
+/// cycles = 10 ms at 128 MHz, longer at a slower core clock, which the SYSCOUNTER
+/// ratio now follows) so normal ticks schedule at their exact deadline and idle
+/// fast-forward skips the whole tick window in one hop; only the rare
 /// unreachable idle compare is chunked.
 const MAX_SCHEDULE_HORIZON: u64 = 1 << 21;
 
@@ -527,10 +528,13 @@ impl Nrf54lGrtc {
         if increments == 0 {
             return (0, 0);
         }
+        // Mask in u128 before narrowing: truncating a count above u64::MAX to
+        // u64 first would not be congruent mod 2^52. Real clock rates never
+        // reach that, but the mask costs nothing and is right in every case.
         let new = self
             .counter
             .get()
-            .wrapping_add(increments.min(u128::from(u64::MAX)) as u64)
+            .wrapping_add((increments & u128::from(COUNTER_MASK)) as u64)
             & COUNTER_MASK;
         self.counter.set(new);
 
@@ -1037,13 +1041,16 @@ impl Peripheral for Nrf54lGrtc {
     }
 
     /// Adopt the chip descriptor's core clock. The bus calls this at the same
-    /// choke point as [`Peripheral::attach_cycle_clock`], before any
-    /// instruction executes, but a caller may also change the clock mid-run.
-    /// Sync to the published cycle first so cycles that already elapsed keep
-    /// the rate they were counted at, then drop the sub-tick phase: it belongs
-    /// to the previous ratio. A repeat of the current clock leaves the phase
-    /// intact, so attaching the shipped 128 MHz descriptor stays byte-identical
-    /// to a hand-built bus.
+    /// choke point as [`Peripheral::attach_cycle_clock`], before the first
+    /// instruction, so the shipped path never changes the clock mid-run. The
+    /// counter still stays coherent if a caller does: sync to the published
+    /// cycle first so cycles that already elapsed keep the rate they were
+    /// counted at, then drop the sub-tick phase, which belongs to the previous
+    /// ratio. A repeat of the current clock leaves the phase intact, so
+    /// attaching the shipped 128 MHz descriptor stays byte-identical to a
+    /// hand-built bus. Note that an already-queued compare event keeps the
+    /// deadline it was scheduled with; a dynamic clock model would have to
+    /// reschedule it, and the descriptor is still one static `cpu_hz`.
     fn attach_cpu_hz(&mut self, hz: u64) {
         if hz == 0 || hz == self.cpu_hz {
             return;

@@ -47,7 +47,7 @@ Result: 2/2 pass in default and `event-scheduler` modes. Unit tests
 `peripherals::nrf54l::grtc::tests::core_clock` add the fractional 2.5 MHz
 ratio, the zero-clock default, the no-op default attach and the armed-compare
 deadline at 16 MHz: 5/5 pass. `peripherals::nrf54l::grtc::tests::scheduler_mode`
-adds the mid-run clock change: 4/4 pass with `event-scheduler`.
+adds the mid-run clock change: 8/8 pass with `event-scheduler`.
 
 ## Negative control
 
@@ -60,6 +60,19 @@ nrf54l15 GRTC at 0x500e2000 with cpu_hz=64000000: expected 1000 SYSCOUNTER
 ticks per millisecond, got 500
 core clock 64000000 Hz must keep the SYSCOUNTER at 1 MHz
 ```
+
+The same log records the scheduler-mode unit test under the no-op: ten cycles
+elapse at 1 MHz, the clock doubles to 2 MHz, and the counter reads 20 instead of
+15. The test deliberately does not read the counter before the clock change, so
+a read cannot sync the lazy clock and hide a missing re-anchor. Without the
+sync inside `attach_cpu_hz` the value is 10 (all 20 cycles converted at the new
+rate); with the no-op it is 20 (no clock change at all). Only the fixed model
+reads 15.
+
+A mid-run clock change does not move a compare event that is already in the
+scheduler queue. The bus only attaches the descriptor clock at assembly, before
+the first instruction, so this remains a documented limitation of the static
+`cpu_hz` model rather than a path a shipped board takes.
 
 ## Sources
 

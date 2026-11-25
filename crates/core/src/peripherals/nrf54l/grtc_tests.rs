@@ -558,13 +558,17 @@ mod scheduler_mode {
     fn mid_run_clock_change_does_not_replay_elapsed_cycles() {
         let (mut g, clock) = armed_scheduler(); // 1 MHz: 1 cycle = 1 tick
         g.write_u32(OFF_MODE, MODE_SYSCOUNTEREN).unwrap();
+        // Deliberately do NOT read the counter here: a read would sync the
+        // lazy clock to cycle 10 and hide whether `attach_cpu_hz` re-anchors.
         clock.publish(10);
-        assert_eq!(g.read_u32(SYSCOUNTERL).unwrap(), 10);
 
-        // Double the core clock after time has advanced. Re-anchoring at the
-        // published cycle means only the next 10 cycles are converted at
-        // 2 MHz (5 ticks); without the anchor reset the first 10 cycles would
-        // be replayed at the new rate and the counter would read 20.
+        // Double the core clock after ten cycles have already elapsed.
+        // `attach_cpu_hz` must first advance to the published cycle at the old
+        // rate (10 ticks), then convert only the next 10 cycles at 2 MHz
+        // (5 ticks) → 15. Without the sync, all 20 cycles are converted at the
+        // new rate → 10. (Without any clock change at all the counter would
+        // read 20.) This is what makes the test fail if the re-anchor is
+        // removed.
         g.attach_cpu_hz(2_000_000);
         clock.publish(20);
         assert_eq!(g.read_u32(SYSCOUNTERL).unwrap(), 15);
