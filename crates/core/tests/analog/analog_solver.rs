@@ -84,6 +84,122 @@ mod analog {
         }
     }
 
+    /// Worst relative error of a sine-driven RC against its closed form.
+    ///
+    /// `Vsin in 0 SIN(0 1 1k)` into 1 kΩ / 100 nF (tau = 100 us, omega·tau =
+    /// 0.628): `v(t) = A·|H|·[sin(omega·t + phi) − exp(−t/tau)·sin(phi)]`, with
+    /// `|H| = 1/sqrt(1 + (omega·tau)^2)` and `phi = −atan(omega·tau)`. The
+    /// exponential is the transient left by starting from a zero operating
+    /// point; 4 ms is 40 tau, so the compared trace is the steady state plus a
+    /// start-up detail, and every sample is compared.
+    fn sine_driven_rc_worst_error(substeps_per_sample: u32) -> f64 {
+        let tau = 1e3 * 100e-9;
+        let omega = 2.0 * std::f64::consts::PI * 1e3;
+        let gain = 1.0 / (1.0 + (omega * tau).powi(2)).sqrt();
+        let phi = -(omega * tau).atan();
+
+        let circuit =
+            parse_netlist("* rc sine\nVsin in 0 SIN(0 1 1k)\nR1 in out 1k\nC1 out 0 100n\n")
+                .expect("rc netlist parses");
+        let mut solver = Solver::new(circuit, Integration::Trapezoidal).expect("solver builds");
+        let node = solver.circuit().node("out").expect("node out");
+
+        let sample = 10e-6;
+        let h = sample / f64::from(substeps_per_sample);
+        let mut worst: f64 = 0.0;
+        for _ in 0..400 {
+            for _ in 0..substeps_per_sample {
+                solver.advance(h).expect("transient step should solve");
+            }
+            let t = solver.time();
+            let expected = gain * ((omega * t + phi).sin() - (-t / tau).exp() * phi.sin());
+            let actual = solver.node_voltage(node);
+            worst = worst.max((actual - expected).abs() / gain);
+        }
+        worst
+    }
+
+    #[test]
+    fn a_sine_driven_rc_converges_at_second_order() {
+        // A waveform source that changes value on every step is still a smooth
+        // input: restarting trapezoidal there would silently run the whole
+        // circuit at backward Euler, whose error only halves when the step
+        // halves. Measured on this fixture before the corner rule existed:
+        // 0.14 % of the drive amplitude at 1 us steps. Now it is 9.3e-5 %.
+        let coarse = sine_driven_rc_worst_error(10);
+        let fine = sine_driven_rc_worst_error(20);
+        assert!(
+            coarse < 5e-4,
+            "10 substeps of 10 us: worst error {:.3e} of the drive amplitude",
+            coarse
+        );
+        assert!(
+            fine < 5e-4,
+            "20 substeps of 10 us: worst error {:.3e} of the drive amplitude",
+            fine
+        );
+        assert!(
+            coarse / fine > 3.0,
+            "halving the step must cut the error by more than half — second order, \
+             not the first order a waveform mistaken for a discontinuity would give \
+             (worst {:.3e} vs {:.3e})",
+            coarse,
+            fine
+        );
+    }
+
+    #[test]
+    fn a_pulse_edge_restarts_like_a_routed_input() {
+        // The same 3.3 V step into 10 kΩ / 100 nF, delivered two ways: as a
+        // PULSE whose edge falls on the boundary after the fifth 10 us step,
+        // and through `set_voltage_source` as a routed input is. The corner
+        // rule must restart integration for the PULSE edge exactly as the
+        // setter does, so the two trajectories have to agree sample for
+        // sample. The edge is deliberately not in step 0: every solver starts
+        // with `restart`, so an edge inside the first step would pass even if
+        // the corner rule never fired.
+        let pulse = parse_netlist(
+            "* rc pulse\nVgpio in 0 PULSE(0 3.3 60u 0 0 1 2)\nR1 in out 10k\nC1 out 0 100n\n",
+        )
+        .expect("pulse netlist parses");
+        let mut pulsed = Solver::new(pulse, Integration::Trapezoidal).expect("solver builds");
+        let pulsed_node = pulsed.circuit().node("out").expect("node out");
+
+        let driven = parse_netlist("* rc driven\nVgpio in 0 dc 0\nR1 in out 10k\nC1 out 0 100n\n")
+            .expect("driven netlist parses");
+        let mut stepped = Solver::new(driven, Integration::Trapezoidal).expect("solver builds");
+        let source = stepped.voltage_source_index("Vgpio").expect("Vgpio exists");
+        let stepped_node = stepped.circuit().node("out").expect("node out");
+
+        // Five steps at 0 V. The pulse edge is at 60 us, so the step that
+        // arrives there is step six.
+        for step in 0..5 {
+            pulsed.advance(10e-6).expect("pulse step solves");
+            stepped.advance(10e-6).expect("driven step solves");
+            let a = pulsed.node_voltage(pulsed_node);
+            let b = stepped.node_voltage(stepped_node);
+            assert_eq!(
+                a.to_bits(),
+                b.to_bits(),
+                "settling step {step}: {a} V vs {b} V"
+            );
+        }
+        stepped.set_voltage_source(source, 3.3);
+
+        for step in 5..100 {
+            pulsed.advance(10e-6).expect("pulse step solves");
+            stepped.advance(10e-6).expect("driven step solves");
+            let a = pulsed.node_voltage(pulsed_node);
+            let b = stepped.node_voltage(stepped_node);
+            assert_eq!(
+                a.to_bits(),
+                b.to_bits(),
+                "step {step}: a PULSE edge gave {a} V, the same edge through \
+                 set_voltage_source gave {b} V"
+            );
+        }
+    }
+
     #[test]
     fn rl_current_matches_closed_form() {
         // 10 V across 100 Ω in series with 10 mH: tau = L/R = 100 us,
