@@ -189,14 +189,15 @@ const CLKCFG_RESET_VALUE: u32 = 0x0001_0001;
 /// `#define NRF_GRTC_SYSCOUNTER_MAIN_FREQUENCY_HZ 1000000UL`.
 pub const SYSCOUNTER_HZ: u32 = 1_000_000;
 
-/// nRF54L15 application-core clock, per the chip profile (128 MHz).
+/// Clock assumed when no chip descriptor supplies one. The nRF54L15
+/// application core runs at 128 MHz, so a hand-built bus without
+/// [`Peripheral::attach_cpu_hz`] still keeps time.
 pub const CPU_HZ_DEFAULT: u32 = 128_000_000;
 
-/// CPU cycles per SYSCOUNTER increment: 128_000_000 / 1_000_000 = 128 exactly,
-/// so no fractional accumulator is needed to hit 1 MHz without drift.
-///
-/// Unit tests that call `tick()` directly use [`Nrf54lGrtc::new_fast`], which
-/// sets this to 1 so small tick counts advance the counter.
+/// CPU cycles per SYSCOUNTER increment at [`CPU_HZ_DEFAULT`]: exactly 128.
+/// Kept as the documented default ratio and for tests; the model itself
+/// derives the ratio from the attached core clock, so a 64 MHz or 16 MHz
+/// core is exact rather than a fixed 128-cycle tick.
 pub const CYCLES_PER_SYSCOUNTER_TICK: u32 = CPU_HZ_DEFAULT / SYSCOUNTER_HZ;
 
 /// Maximum CPU-cycle horizon a single scheduled compare wake may reach. A
@@ -238,11 +239,16 @@ pub struct Nrf54lGrtc {
     /// Set by TASKS_START, cleared by TASKS_STOP.
     task_started: bool,
 
-    /// CPU-cycle accumulator feeding the 1 MHz SYSCOUNTER tick. `Cell` for the
-    /// same lazy `&self` advance as `counter`.
-    cycle_accum: Cell<u32>,
-    /// CPU cycles per SYSCOUNTER increment; 1 in `new_fast()`.
-    cycles_per_tick: u32,
+    /// CPU-cycle accumulator feeding the 1 MHz SYSCOUNTER tick, in
+    /// `cycles * SYSCOUNTER_HZ` units and always below `cpu_hz`. `Cell` for
+    /// the same lazy `&self` advance as `counter`.
+    cycle_accum: Cell<u64>,
+    /// CPU clock the SYSCOUNTER is derived from. [`Peripheral::attach_cpu_hz`]
+    /// fills it from the chip descriptor's `cpu_hz`, which is the single
+    /// source of the core clock; [`CPU_HZ_DEFAULT`] covers hand-built buses.
+    /// A rational ratio instead of a fixed 128 cycles keeps 1 MHz exact on any
+    /// core clock, including a 16 MHz or 64 MHz boot state.
+    cpu_hz: u64,
 
     /// High word latched by the most recent SYSCOUNTERL read, and whether a
     /// SYSCOUNTERL read has happened at all. Behind `Cell` because the
@@ -339,7 +345,7 @@ impl Default for Nrf54lGrtc {
             counter: Cell::new(0),
             task_started: false,
             cycle_accum: Cell::new(0),
-            cycles_per_tick: CYCLES_PER_SYSCOUNTER_TICK,
+            cpu_hz: u64::from(CPU_HZ_DEFAULT),
             high_latch: Cell::new(0),
             high_latched: Cell::new(false),
             prev_read_high: Cell::new(0),
@@ -398,12 +404,13 @@ impl Nrf54lGrtc {
     }
 
     /// Construct a "fast" GRTC whose SYSCOUNTER advances once per `tick()`
-    /// instead of once per 128 CPU cycles. Intended for unit tests that call
-    /// `tick()` directly and want small tick counts to move the counter.
+    /// instead of once per [`CYCLES_PER_SYSCOUNTER_TICK`] CPU cycles. Intended
+    /// for unit tests that call `tick()` directly and want small tick counts
+    /// to move the counter. Equivalent to attaching a 1 MHz core clock.
     #[cfg(test)]
     pub fn new_fast() -> Self {
         Self {
-            cycles_per_tick: 1,
+            cpu_hz: u64::from(SYSCOUNTER_HZ),
             ..Self::default()
         }
     }
@@ -512,14 +519,19 @@ impl Nrf54lGrtc {
         if !self.running() {
             return (0, 0);
         }
-        let total = self.cycle_accum.get() as u64 + cycles;
-        let cpt = self.cycles_per_tick as u64;
-        let increments = total / cpt;
-        self.cycle_accum.set((total % cpt) as u32);
+        let total =
+            u128::from(self.cycle_accum.get()) + u128::from(cycles) * u128::from(SYSCOUNTER_HZ);
+        let cpu_hz = u128::from(self.cpu_hz.max(1));
+        let increments = total / cpu_hz;
+        self.cycle_accum.set((total % cpu_hz) as u64);
         if increments == 0 {
             return (0, 0);
         }
-        let new = self.counter.get().wrapping_add(increments) & COUNTER_MASK;
+        let new = self
+            .counter
+            .get()
+            .wrapping_add(increments.min(u128::from(u64::MAX)) as u64)
+            & COUNTER_MASK;
         self.counter.set(new);
 
         // Each INTEN group drives an independent GRTC line (GRTC_g =
@@ -605,8 +617,8 @@ impl Nrf54lGrtc {
             return None;
         }
         let cur = self.counter.get();
-        let cpt = self.cycles_per_tick as u64;
-        let accum = self.cycle_accum.get() as u64;
+        let cpu_hz = u128::from(self.cpu_hz.max(1));
+        let accum = u128::from(self.cycle_accum.get());
         let mut best: Option<u64> = None;
         for i in 0..self.num_cc {
             if self.cc_en[i].get() & CCEN_ACTIVE == 0 || self.events_compare[i].get() != 0 {
@@ -618,9 +630,15 @@ impl Nrf54lGrtc {
             // `cc - cur` increments reach it.
             let increments = if cc > cur { cc - cur } else { 1 };
             // Cycles to the `increments`-th SYSCOUNTER tick from the current
-            // fractional phase: `increments * cpt - accum` (always >= 1 since
-            // accum < cpt).
-            let cycles = increments.saturating_mul(cpt).saturating_sub(accum);
+            // fractional phase: the smallest `cycles` with
+            // `(accum + cycles * SYSCOUNTER_HZ) / cpu_hz >= increments`, i.e.
+            // `ceil((increments * cpu_hz - accum) / SYSCOUNTER_HZ)`. Always
+            // >= 1 because `accum < cpu_hz`. u128 keeps a 52-bit deadline from
+            // overflowing before the division.
+            let cycles = (u128::from(increments) * cpu_hz)
+                .saturating_sub(accum)
+                .div_ceil(u128::from(SYSCOUNTER_HZ))
+                .min(u128::from(u64::MAX)) as u64;
             best = Some(best.map_or(cycles, |b| b.min(cycles)));
         }
         best
@@ -1016,6 +1034,27 @@ impl Peripheral for Nrf54lGrtc {
         // retroactively replayed into the counter.
         self.anchor.set(clock.now());
         self.clock = Some(clock);
+    }
+
+    /// Adopt the chip descriptor's core clock. The bus calls this at the same
+    /// choke point as [`Peripheral::attach_cycle_clock`], before any
+    /// instruction executes, but a caller may also change the clock mid-run.
+    /// Sync to the published cycle first so cycles that already elapsed keep
+    /// the rate they were counted at, then drop the sub-tick phase: it belongs
+    /// to the previous ratio. A repeat of the current clock leaves the phase
+    /// intact, so attaching the shipped 128 MHz descriptor stays byte-identical
+    /// to a hand-built bus.
+    fn attach_cpu_hz(&mut self, hz: u64) {
+        if hz == 0 || hz == self.cpu_hz {
+            return;
+        }
+        if let Some(clock) = &self.clock {
+            if self.scheduler_mode() {
+                self.advance_to(clock.now());
+            }
+        }
+        self.cpu_hz = hz;
+        self.cycle_accum.set(0);
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {

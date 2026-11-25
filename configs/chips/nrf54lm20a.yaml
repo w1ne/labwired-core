@@ -49,12 +49,13 @@ arch: "arm"
 core: "cortex-m33"
 
 # Simulated core clock, Hz -- see ChipDescriptor::cpu_hz. Self-timed devices
-# scale their datasheet microseconds by it; a slower board overrides it.
-# Matches peripherals/nrf54l/grtc.rs CPU_HZ_DEFAULT, and the devicetree: the
-# cpuapp node's `clocks = <&hfpll>` and `hfpll` is `clock-frequency =
-# <DT_FREQ_M(128)>` (nrf54lm20_a_b.dtsi). SPIM00's PRESCALER divides this same
-# 128 MHz, which is why its divisor and its cycles-per-SCK-bit are the same
-# number in the model.
+# scale their datasheet microseconds by it; the GRTC derives its 1 MHz
+# SYSCOUNTER tick from this value (the model's 128 MHz constant is only a
+# fallback for hand-built buses); a slower board overrides it. It matches the
+# devicetree: the cpuapp node's `clocks = <&hfpll>` and `hfpll` is
+# `clock-frequency = <DT_FREQ_M(128)>` (nrf54lm20_a_b.dtsi). SPIM00's PRESCALER
+# divides this same 128 MHz, which is why its divisor and its cycles-per-SCK-bit
+# are the same number in the model.
 cpu_hz: 128_000_000
 
 # RRAM, not flash. 2036 KB — an odd size, and it is correct: see
