@@ -1,0 +1,71 @@
+# Source-grounded sensor network of HeyPCB's ESP32-S3 LDR board: U4 (GL5528)
+# from 3V3 to SNS_AN1, R6 and C7 from SNS_AN1 to GND, solved by ngspice on the
+# native host. Portable firmware runs in WasmFlexRuntime; the ESP32 CPU and its
+# ADC peripheral are not emulated.
+#
+# This is the reference-solver variant of system.yaml. Ports, models, scripts
+# and firmware are the same; only the circuit engine differs. `model:` resolves
+# from this manifest's directory in `labwired test --script`. The native host
+# needs python3 and libngspice (`apt install libngspice0`).
+schema_version: 1
+name: heypcb-esp32-s3-ldr-sensor-network-ngspice
+assumptions:
+  - Firmware is a newly authored portable WebAssembly behavior program, not firmware from the pinned board source.
+  - "U4 follows the GL5528 row of Senba's GL55 series manual: R = R10 * (lux / 10)^-0.6. The manual defines the 0.6 slope between 10 lx and 100 lx; this model extends the same line down to 1 lx, the lower edge of the manual's illuminance-resistance figure. ngspice evaluates the curve as the behavioural current source `Bldr` of ldr.cir."
+  - "R10 is 15 kΩ, the midpoint of the manual's 10-20 kΩ light-resistance range at 10 lx. The manual gives no typical value."
+  - "3V3 is an ideal 3.3 V source. R6 (10 kΩ) and C7 (100 nF) use their nominal BOM values."
+  - GPIO1 is an ideal voltage probe on SNS_AN1 with no input current, sampling capacitance, or ADC conversion.
+  - ngspice integrates the R6/U4/C7 network between the 50 µs boundaries with its own adaptive step control, not the in-core engine's 10 backward-Euler substeps.
+  - Firmware instructions take no virtual time. The firmware samples once, 4 ms after the illuminance is written.
+  - The IO48 user LED is represented by digital logic state only.
+unsupported_checks:
+  - Original ESP32-S3 firmware execution and target instruction or ADC peripheral fidelity; the pinned source contains no board firmware.
+  - Full-board power, USB, boot/reset, RF, MCU integration, and assembled hardware behavior.
+  - "Illuminance below 1 lx or above 100 lx, including darkness. The run stops with an explicit range error; the manual's 1 MΩ dark resistance is a minimum 10 s after a 10 lx light is removed, not a curve point."
+  - "GL5528 response time (20 ms rise, 30 ms decay in the manual), light history, spectral response, and temperature dependence. The modeled transient is C7 charging through R6 and the static U4 resistance only."
+  - "Part-to-part spread inside the 10-20 kΩ range and R6, C7, and 3V3 tolerances. The native regression runs the 10 kΩ and 20 kΩ corners on the in-core manifest."
+  - "The generic importer does not produce this network: the schematic import drops U4 and the PCB import maps it as a fixed resistor. The netlist is written from the pinned source nets."
+  - "Snapshot and restore of solver state; an ngspice run starts from t = 0 each time."
+ports:
+  - { name: lux, signal: environment.lux, access: write, kind: number, unit: lx, initial: 10 }
+  - { name: sensor_v, signal: source.U3.GPIO1, access: read, kind: number, unit: V }
+  - { name: user_led_drive, signal: source.U3.GPIO48, access: write, kind: bool, initial: 0 }
+  - { name: user_led_state, signal: source.D1.logic_state, access: read, kind: bool }
+cosim_models:
+  # Source net SNS_AN1: U4 pad 2, R6 pad 1, C7 pad 1, U3 pad 39 (IO1).
+  - id: source-sns-an1
+    adapter: ngspice
+    model: ./ldr.cir
+    step_ns: 50000
+    inputs: { lux: environment.lux }
+    outputs: { voltage: source.U3.GPIO1 }
+    config:
+      # Integrate the completed interval before latching this boundary's lux.
+      input_sampling: previous_boundary
+      input_sources:
+        lux: { element: Vlux, scale: 1, offset: 0 }
+      output_nodes:
+        voltage: { node: sns_an1, scale: 1, offset: 0 }
+      trace_volts: [voltage]
+      # `ldr.cir` states its curve for 1-100 lx, the range the README quotes.
+      # Outside it the run stops here on either host.
+      input_ranges:
+        lux: { min: 1, max: 100, unit: lx }
+  - id: source-d1-user-led
+    adapter: behavior
+    step_ns: 1000
+    inputs: { drive: source.U3.GPIO48 }
+    outputs: { led: source.D1.logic_state }
+    config:
+      behavior:
+        primitive: gpio_device
+        states: [off, on]
+        outputs: [led]
+        pin_defaults: { led: false }
+        rules:
+          - on: { input: drive }
+            when: 'input(drive) != 0'
+            do: [{ goto: on }, { pin: led, level: 1 }]
+          - on: { input: drive }
+            when: 'input(drive) == 0'
+            do: [{ goto: off }, { pin: led, level: 0 }]

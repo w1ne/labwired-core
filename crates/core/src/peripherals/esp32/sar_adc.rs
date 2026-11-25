@@ -410,6 +410,10 @@ impl Esp32SarAdc {
 }
 
 impl Peripheral for Esp32SarAdc {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     /// CH0..CH9. SAR1 has CH0..CH7 and SAR2 CH0..CH9, and this model keeps one
     /// input table for both units, so the wider unit's range is what a
     /// conversion can read.

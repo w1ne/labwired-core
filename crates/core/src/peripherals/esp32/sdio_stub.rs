@@ -32,6 +32,10 @@ impl HostSlc {
 }
 
 impl Peripheral for HostSlc {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     // Inert walk: register-backed SDIO stub (FSM-done forced on read); tick() is an explicit no-op.
     fn needs_legacy_walk(&self) -> bool {
         false

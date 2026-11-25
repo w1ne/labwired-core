@@ -387,6 +387,28 @@ impl SimInput for DeclarativeAnalogDevice {
         &self.inputs
     }
 
+    fn validate_atomic_inputs(
+        &self,
+        sets: &[(&str, f64)],
+    ) -> Result<(), crate::sim_input::SimInputError> {
+        let exact = self.derived.iter().any(CompiledDerived::is_exact);
+        let mut prospective = self.input_values.clone();
+        for &(key, value) in sets {
+            self.require_channel(key, value)?;
+            prospective.insert(key.to_owned(), value);
+            if exact {
+                // Match each individual set_input's prospective prefix, not
+                // just the final batch. Evaluation must not consume noise or
+                // leak computed slots into the next prefix.
+                let mut checked = prospective.clone();
+                eval_derived(&self.derived, &mut checked).map_err(|error| {
+                    crate::sim_input::SimInputError::Evaluation(format!("input '{key}': {error:#}"))
+                })?;
+            }
+        }
+        Ok(())
+    }
+
     fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
         self.require_channel(key, value)?;
         if self.derived.iter().any(CompiledDerived::is_exact) {

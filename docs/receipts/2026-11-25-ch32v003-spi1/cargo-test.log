@@ -1,0 +1,58 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/h735-telematics-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-hw-onboarding/Cargo.toml
+    Finished `test` profile [optimized] target(s) in 0.22s
+     Running tests/vendor/main.rs (/data/cargo-pool/labwired-core/lanes/hw-onboarding/debug/deps/vendor-ccd7d39933925c73)
+
+running 36 tests
+test ch32v003_compiled_firmware::ch32v003_adc1_is_the_ten_channel_wch_layout ... ok
+test ch32v003_compiled_firmware::ch32v003_adc_eoc_interrupt_enters_the_handler ... ok
+test ch32v003_compiled_firmware::ch32v003_adc_eoc_interrupt_never_enters_without_the_irq_line ... ok
+test ch32v003_compiled_firmware::ch32v003_analog_read_overflows_10_bits_with_the_stm32f1_adc ... ok
+test ch32v003_compiled_firmware::ch32v003_analog_write_needs_the_tim2_apb1_clock ... ok
+test ch32v003_compiled_firmware::ch32v003_arduino_delay_never_returns_without_the_stk_irq_line ... ok
+test ch32v003_compiled_firmware::ch32v003_attach_interrupt_misses_pd3_with_the_stm32f1_afio_mux ... ok
+test ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0 ... ok
+test ch32v003_compiled_firmware::ch32v003_compiled_rv32ec_firmware_prints_on_usart1 ... ok
+test ch32v003_compiled_firmware::ch32v003_i2c_read_nacks_a_device_at_the_wrong_address ... ok
+test ch32v003_compiled_firmware::ch32v003_noneos_sdk_delay_stalls_without_the_stk_block ... ok
+test ch32v003_compiled_firmware::ch32v003_official_openwch_arduino_sketch_runs_unmodified ... ok
+test ch32v003_compiled_firmware::ch32v003_openwch_analog_read_returns_10_bit_codes ... ok
+test ch32v003_compiled_firmware::ch32v003_openwch_analog_write_pwms_tim2_ch1_and_tim1_ch1 ... ok
+test ch32v003_compiled_firmware::ch32v003_openwch_attach_interrupt_and_serial_read_run_unmodified ... ok
+test ch32v003_compiled_firmware::ch32v003_openwch_spi_reads_a_max31855_frame_over_spi1 ... ok
+test ch32v003_compiled_firmware::ch32v003_openwch_tone_toggles_pd4_from_the_tim2_update_isr ... ok
+test ch32v003_compiled_firmware::ch32v003_openwch_wire_reads_a_bme280_chip_id_over_i2c1 ... ok
+test ch32v003_compiled_firmware::ch32v003_package_variants_match_ds0_bonding_on_the_f4p6_die ... ok
+test ch32v003_compiled_firmware::ch32v003_package_variants_print_on_usart1_pd5 ... ok
+test ch32v003_compiled_firmware::ch32v003_package_variants_pwm_tim2_ch1_on_the_bonded_pd4 ... ok
+test ch32v003_compiled_firmware::ch32v003_package_variants_read_the_bme280_over_i2c1 ... ok
+test ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin ... ok
+test ch32v003_compiled_firmware::ch32v003_pad_pulse_width_reads_microseconds_from_the_stk_counter ... ok
+test ch32v003_compiled_firmware::ch32v003_pulse_width_needs_the_pad_the_sketch_polls ... ok
+test ch32v003_compiled_firmware::ch32v003_shipped_micros_runs_backwards_and_pulse_in_cannot_measure ... ok
+test ch32v003_compiled_firmware::ch32v003_spi1_is_on_every_package_but_the_pads_only_where_bonded ... ok
+test ch32v003_compiled_firmware::ch32v003_spi_transfer_without_a_slave_reports_no_frame ... ok
+test ch32v003_compiled_firmware::ch32v003_stock_noneos_sdk_firmware_boots_delays_and_prints ... ok
+test ch32v003_compiled_firmware::ch32v003_stock_sdk_systick_interrupt_runs_through_the_pfic ... ok
+test ch32v003_compiled_firmware::ch32v003_stock_sdk_usart1_rx_interrupt_runs_through_the_pfic ... ok
+test ch32v003_compiled_firmware::ch32v003_systick_interrupt_never_enters_without_the_stk_irq_line ... ok
+test ch32v003_compiled_firmware::ch32v003_tone_needs_the_tim2_irq_line ... ok
+test ch32v003_compiled_firmware::ch32v003_usart1_rx_interrupt_never_enters_without_the_irq_line ... ok
+test ch32v003_compiled_firmware::ch32v003_usart1_stays_silent_without_its_apb2_clock ... ok
+test ch32v003_compiled_firmware::ch32v003j4m6_blink_fixture_leaves_unbonded_pc0_alone ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 173 filtered out; finished in 18.29s
+
