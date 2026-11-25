@@ -1,0 +1,43 @@
+# CPU-free Flex contract: a source-grounded NTC divider solved by ngspice.
+# The bench writes `ambient_c`; the model latches it at its next 100 us
+# boundary and the firmware reads `sensor_v`.
+#
+# Flex resolves `model:` from the process working directory (the runtime builds
+# its models without a base directory); `FlexRuntime::from_yaml_with_base` and
+# `labwired test --script` resolve it from the manifest's directory. Requires
+# python3 and libngspice (apt install libngspice0).
+schema_version: 1
+name: flex-ngspice-ntc
+assumptions:
+  - "U4 is the NCP18XH103F03RB row of Murata catalog R44E: R25 = 10 kOhm and B25/50 = 3380 K. From 10 to 60 °C the beta equation is within 1.7 % (0.40 °C) of the catalog's center-value table."
+  - 3V3 is an ideal 3.3 V source. R6 (10 kOhm), U4 at 25 °C (10 kOhm) and C7 (100 nF) use their nominal values.
+  - "`sensor_v` is an ideal voltage probe on SNS_AN1 with no input current, sampling capacitance or ADC conversion."
+  - The thermistor follows a temperature step at once; ngspice integrates the R6/U4/C7 network every 100 us.
+unsupported_checks:
+  - Original target firmware execution, target instruction or ADC peripheral fidelity.
+  - Temperatures outside 10..60 °C. The run stops with an explicit range error; the beta equation leaves the catalog table by 3.0 °C at -40 °C and by 4.2 °C at 125 °C.
+  - NCP18XH103F03RB resistance (+/-1 %) and B-constant (+/-1 %) tolerance, R6, C7 and 3V3 tolerance, self-heating and the thermal time constant of the 0603 part.
+  - Full-board power, USB, boot/reset, RF, MCU integration and assembled hardware behavior.
+ports:
+  - { name: ambient_c, signal: bench.temperature_c, access: write, kind: number, unit: "°C", initial: 25 }
+  - { name: sensor_v, signal: ntc.out_volts, access: read, kind: number, unit: V }
+cosim_models:
+  - id: ntc
+    adapter: ngspice
+    model: ./ntc.cir
+    step_ns: 100000
+    inputs: { temperature: bench.temperature_c }
+    outputs: { voltage: ntc.out_volts }
+    config:
+      # Integrate the completed interval before latching this boundary's
+      # temperature, as the in-core `thermistors` entry does.
+      input_sampling: previous_boundary
+      input_sources:
+        temperature: { element: Vtemp, scale: 1, offset: 0 }
+      output_nodes:
+        voltage: { node: sns_an1, scale: 1, offset: 0 }
+      trace_volts: [voltage]
+      # `ntc.cir` states its curve for 10-60 °C, the range the README quotes.
+      # Outside it the run stops here.
+      input_ranges:
+        temperature: { min: 10, max: 60, unit: "°C" }

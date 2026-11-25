@@ -30,6 +30,8 @@ The declared range is a decision from the catalog table, not the part's operatin
 
 The analog engine steps every 100 µs with 10 backward-Euler substeps. The firmware ([firmware.rs](firmware.rs)) samples 10 ms into each 100 ms period, which is at least 15 time constants of C7 against R6 ‖ U4 in the declared range. It takes whole millivolts (truncation), as `analogReadMilliVolts()` returns them, and computes `T = 1 / (1/298.15 + ln(R/10 kΩ) / 3380) - 273.15` with its own `ln`. `loop` returns (10,000 + T in tenths) × 10 + LED. The thresholds are on at 40.0 °C and off below 38.0 °C. Because the firmware uses the same beta equation as the model, a pass does not test the beta equation against the real part.
 
+The same network and part values have an ngspice deck in [`examples/cosim-ngspice-ntc`](../../../../examples/cosim-ngspice-ntc/README.md). `cosim_ngspice::a_thermistor_deck_matches_the_in_core_curve_within_its_range` compares that deck's `B` source with this `thermistors` entry at 10, 25 and 60 °C, so the bounded curve can move to the reference solver without a change in the observable.
+
 ## Expected values, calculated before the first run
 
 A test-bench `set` at a period start latches at the next 100 µs boundary. An LED write reaches `user_led_state` 1,000 ns later.
