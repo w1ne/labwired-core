@@ -1,0 +1,50 @@
+# Generic Beta NTC and Shockley diode netlists drive two ATmega1281 analog
+# inputs through the chip descriptor's Port F `adc` pin functions.
+#
+# Neither netlist names the board, the CPU, the ADC, or a channel: each one
+# solves its own circuit and publishes a probe voltage to
+# `board.analog.<pad>_volts`. The ATmega1281 descriptor maps PF0 -> adc/ADC0
+# and PF1 -> adc/ADC1 (DS40002211A Table 2-1), so the same two decks that run
+# on the ATmega328P, STM32, WCH, nRF52 and micro:bit profiles run here
+# unchanged.
+#
+# The supply is the part's 5 V VCC rail, which is also the AVcc reference the
+# AVR converter converts against, so a full-scale input reads 1023. The AVR
+# interpreter owns ADMUX/ADCSRA/ADCL/ADCH; this file only writes the levels
+# the converter samples.
+name: "atmega1281-analog"
+chip: "../../configs/chips/atmega1281.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.pf0_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 5.0
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 5.0
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.pf1_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 5.0
+        Rlim supply sense 1k
+        D1 sense 0 DREF
+        .model DREF D(IS=2.52n N=1.752 RS=0.568)
+      probes:
+        v_diode: "v(sense)"
+      vdd: 5.0
