@@ -1,0 +1,32 @@
+LW_TWDT_ARM
+LW_TWDT_FED_OK
+E (801) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+E (801) task_wdt:  - loopTask (CPU 1)
+E (801) task_wdt: Tasks currently running:
+E (801) task_wdt: CPU 0: IDLE0
+E (801) task_wdt: CPU 1: loopTask
+E (801) task_wdt: Print CPU 1 backtrace
+E (901) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+E (901) task_wdt:  - loopTask (CPU 1)
+E (901) task_wdt: Tasks currently running:
+E (901) task_wdt: CPU 0: IDLE0
+E (901) task_wdt: CPU 1: IDLE1
+E (901) task_wdt: Print CPU 1 backtrace
+E (1001) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+E (1001) task_wdt:  - loopTask (CPU 1)
+E (1001) task_wdt: Tasks currently running:
+E (1001) task_wdt: CPU 0: IDLE0
+E (1001) task_wdt: CPU 1: IDLE1
+E (1001) task_wdt: Print CPU 1 backtrace
+E (1101) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+E (1101) task_wdt:  - loopTask (CPU 1)
+E (1101) task_wdt: Tasks currently running:
+E (1101) task_wdt: CPU 0: IDLE0
+E (1101) task_wdt: CPU 1: IDLE1
+E (1101) task_wdt: Print CPU 1 backtrace
+E (1201) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+E (1201) task_wdt:  - loopTask (CPU 1)
+E (1201) task_wdt: Tasks currently running:
+E (1201) task_wdt: CPU 0: IDLE0
+E (1201) task_wdt: CPU 1: IDLE1
+E (1201) task_wdt: Print CPU 1 backtrace

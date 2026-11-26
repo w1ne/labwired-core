@@ -1,0 +1,10 @@
+MON i=0 spin=101
+MON i=1 spin=589571
+MON i=2 spin=1188358
+MON i=3 spin=1787146
+MON i=4 spin=2385933
+SEND_YIELD
+MON i=5 spin=2984608
+MON i=6 spin=3583395
+MON i=7 spin=4182183
+MON i=8 spin=478097

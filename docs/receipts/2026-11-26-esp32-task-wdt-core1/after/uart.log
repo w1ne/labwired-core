@@ -1,0 +1,13 @@
+LW_TWDT_ARM
+LW_TWDT_FED_OK
+E (801) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+E (801) task_wdt:  - loopTask (CPU 1)
+E (801) task_wdt: Tasks currently running:
+E (801) task_wdt: CPU 0: IDLE0
+E (801) task_wdt: CPU 1: loopTask
+E (801) task_wdt: Print CPU 1 backtrace
+
+
+Backtrace: 0x4008217E:0x3FFBFB7C |<-CORRUPTED
+
+LW_TWDT_FIRED
