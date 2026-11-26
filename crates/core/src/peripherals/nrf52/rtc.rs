@@ -216,10 +216,8 @@ impl Nrf52Rtc {
         let period = (cpu_hz / g) as u32;
         // The walk fires at most one LFCLK edge per CPU cycle, so a core
         // slower than LFCLK cannot be represented exactly. Saturate to 1:1
-        // rather than let the phase run past the period (which would make
-        // `advance_lfclk` subtract only one period per cycle and drift).
-        // Every supported nRF core is >= 16 MHz, so this only guards a
-        // hand-built bus.
+        // rather than let `inc` exceed `period`. Every supported nRF core is
+        // >= 16 MHz, so this only guards a hand-built bus.
         self.lfclk_inc = inc;
         self.lfclk_period = period.max(inc);
         // A mid-run re-attach must not leave the leftover phase at or above
@@ -232,27 +230,6 @@ impl Nrf52Rtc {
     }
 
     crate::cycle_clock::scheduler_mode!();
-
-    /// Advance the LFCLK accumulator by one CPU-cycle increment. Returns true
-    /// if a LFCLK base-clock edge fired (i.e. the prescaler/counter should
-    /// advance this cycle).
-    #[inline]
-    fn advance_lfclk(&self) -> bool {
-        // Widened to u64: `period + inc` can exceed u32::MAX for an accepted
-        // but absurd clock (odd cpu_hz near u32::MAX gives inc 32_768 and
-        // period cpu_hz), and `wrapping_add` would silently skip the edge.
-        let accum = u64::from(self.lfclk_accum.get()) + u64::from(self.lfclk_inc);
-        let period = u64::from(self.lfclk_period);
-        if accum >= period {
-            // `inc <= period` is an invariant of `set_lfclk_ratio`, so the
-            // residue is < period and fits in u32.
-            self.lfclk_accum.set((accum - period) as u32);
-            true
-        } else {
-            self.lfclk_accum.set(accum as u32);
-            false
-        }
-    }
 
     /// A queued wake arrives in `[now, deadline]`.
     fn wake_arrives_by(&self, now: u64, deadline: u64) -> bool {
@@ -277,57 +254,83 @@ impl Nrf52Rtc {
         if !self.running || cycles == 0 {
             return (false, 0);
         }
+        // The ratio is maintained with 0 < inc <= period and phase < period.
+        // Keep the zero-period guard defensive for hand-built/internal states.
+        if self.lfclk_period == 0 {
+            return (false, 0);
+        }
+
+        let lfclk_period = u128::from(self.lfclk_period);
+        let total_lfclk =
+            u128::from(self.lfclk_accum.get()) + u128::from(cycles) * u128::from(self.lfclk_inc);
+        let lfclk_edges = total_lfclk / lfclk_period;
+        self.lfclk_accum.set((total_lfclk % lfclk_period) as u32);
+        if lfclk_edges == 0 {
+            return (false, 0);
+        }
+
+        let divider = u128::from(self.prescaler & PRESCALER_MASK) + 1;
+        let total_psc = u128::from(self.prescaler_accum.get()) + lfclk_edges;
+        let counter_steps = total_psc / divider;
+        self.prescaler_accum.set((total_psc % divider) as u32);
+        if counter_steps == 0 {
+            return (false, 0);
+        }
+
+        let old_counter = self.counter.get() & COUNTER_MASK;
+        let old_plus_steps = u128::from(old_counter) + counter_steps;
+        let new_counter = (old_plus_steps & u128::from(COUNTER_MASK)) as u32;
+        self.counter.set(new_counter);
+
         let mut irq = false;
         let mut fired_mask = 0u32;
-        for _ in 0..cycles {
-            if !self.advance_lfclk() {
-                continue;
+        // TICK is evaluated on every counter step; this aggregate advance
+        // crossed at least one such step.
+        if self.evten & EN_TICK != 0 {
+            fired_mask |= EN_TICK;
+        }
+        if self.inten & EN_TICK != 0 {
+            irq = true;
+        }
+        if (self.evten | self.inten) & EN_TICK != 0 {
+            self.events_tick.set(1);
+        }
+
+        // Any crossing of the 24-bit boundary fires OVRFLW. Repeated wraps
+        // still produce one latched event and one fired-mask bit.
+        if old_plus_steps >= (u128::from(COUNTER_MASK) + 1) {
+            if self.evten & EN_OVRFLW != 0 {
+                fired_mask |= EN_OVRFLW;
             }
-            let divider = (self.prescaler & PRESCALER_MASK) + 1;
-            let psc = self.prescaler_accum.get().wrapping_add(1);
-            if psc < divider {
-                self.prescaler_accum.set(psc);
-                continue;
-            }
-            self.prescaler_accum.set(0);
-            let prev = self.counter.get();
-            let next = (prev.wrapping_add(1)) & COUNTER_MASK;
-            self.counter.set(next);
-            // An event enabled in INTEN or in EVTEN latches its EVENTS_*
-            // register; EVTEN alone decides whether it reaches PPI.
-            if self.evten & EN_TICK != 0 {
-                fired_mask |= EN_TICK;
-            }
-            if self.inten & EN_TICK != 0 {
+            if self.inten & EN_OVRFLW != 0 {
                 irq = true;
             }
-            if (self.evten | self.inten) & EN_TICK != 0 {
-                self.events_tick.set(1);
+            if (self.evten | self.inten) & EN_OVRFLW != 0 {
+                self.events_ovrflw.set(1);
             }
-            if prev == COUNTER_MASK && next == 0 {
-                if self.evten & EN_OVRFLW != 0 {
-                    fired_mask |= EN_OVRFLW;
-                }
-                if self.inten & EN_OVRFLW != 0 {
-                    irq = true;
-                }
-                if (self.evten | self.inten) & EN_OVRFLW != 0 {
-                    self.events_ovrflw.set(1);
-                }
+        }
+
+        // The loop's `next == target` check means a target equal to the
+        // starting counter is hit after one complete 24-bit revolution.
+        for i in 0..self.num_cc {
+            let target = self.cc[i] & COUNTER_MASK;
+            let distance = if target > old_counter {
+                u128::from(target - old_counter)
+            } else {
+                (u128::from(COUNTER_MASK) + 1) - u128::from(old_counter) + u128::from(target)
+            };
+            if counter_steps < distance {
+                continue;
             }
-            for i in 0..self.num_cc {
-                if next == (self.cc[i] & COUNTER_MASK) {
-                    let bit = 1u32 << (EN_COMPARE_SHIFT + i as u32);
-                    if self.evten & bit != 0 {
-                        fired_mask |= bit;
-                    }
-                    if self.inten & bit != 0 {
-                        irq = true;
-                    }
-                    if (self.evten | self.inten) & bit != 0 {
-                        self.events_compare[i].set(1);
-                    }
-                }
+            let bit = 1u32 << (EN_COMPARE_SHIFT + i as u32);
+            if self.evten & bit != 0 {
+                fired_mask |= bit;
+            }
+            if self.inten & bit != 0 {
+                irq = true;
+            }
+            if (self.evten | self.inten) & bit != 0 {
+                self.events_compare[i].set(1);
             }
         }
         (irq, fired_mask)
@@ -427,7 +430,11 @@ impl Nrf52Rtc {
             let steps = (COUNTER_MASK - cur) as u64 + 1;
             best_steps = Some(best_steps.map_or(steps, |b| b.min(steps)));
         }
-        let steps = best_steps.unwrap_or(1);
+        // A running RTC keeps counting without generating a scheduled event
+        // when every TICK/OVRFLW/COMPARE source is disabled. Returning a
+        // one-counter-tick wake here turns the free-running LFCLK into a
+        // permanent scheduler source and prevents the CPU from parking.
+        let steps = best_steps?;
         Some(
             cpu_to_lfclk + (steps.saturating_sub(1)) * (lfclk_period.div_ceil(lfclk_inc) * divider),
         )
@@ -699,6 +706,49 @@ impl Peripheral for Nrf52Rtc {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct AdvanceCase {
+        lfclk_inc: u32,
+        lfclk_period: u32,
+        lfclk_accum: u32,
+        prescaler: u32,
+        prescaler_accum: u32,
+        counter: u32,
+        cycles: u64,
+        inten: u32,
+        evten: u32,
+        cc: [u32; 4],
+        expected: (bool, u32),
+        expected_counter: u32,
+        expected_tick: u32,
+        expected_ovrflw: u32,
+        expected_compare: [u32; 4],
+    }
+
+    fn rtc_for_advance_case(case: &AdvanceCase) -> Nrf52Rtc {
+        let mut rtc = Nrf52Rtc::new_with_cc(4);
+        rtc.lfclk_inc = case.lfclk_inc;
+        rtc.lfclk_period = case.lfclk_period;
+        rtc.lfclk_accum.set(case.lfclk_accum);
+        rtc.prescaler = case.prescaler;
+        rtc.prescaler_accum.set(case.prescaler_accum);
+        rtc.counter.set(case.counter);
+        rtc.inten = case.inten;
+        rtc.evten = case.evten;
+        rtc.cc = case.cc;
+        rtc.running = true;
+        rtc
+    }
+
+    fn rtc_advance_state(rtc: &Nrf52Rtc) -> (u32, u32, u32, u32, [u32; 4]) {
+        (
+            rtc.counter.get(),
+            rtc.lfclk_accum.get(),
+            rtc.prescaler_accum.get(),
+            rtc.events_tick.get(),
+            std::array::from_fn(|i| rtc.events_compare[i].get()),
+        )
+    }
 
     #[test]
     fn prescaler_masks_to_12_bits() {
@@ -1017,6 +1067,116 @@ mod tests {
         assert!(r.lfclk_accum.get() < r.lfclk_period);
     }
 
+    #[test]
+    fn bulk_advance_matches_repeated_single_cycle_advances() {
+        let compare0 = 1 << EN_COMPARE_SHIFT;
+        let compare1 = 1 << (EN_COMPARE_SHIFT + 1);
+        let compare2 = 1 << (EN_COMPARE_SHIFT + 2);
+        let compare3 = 1 << (EN_COMPARE_SHIFT + 3);
+        let cases = [
+            AdvanceCase {
+                // Three LFCLK edges produce three COUNTER steps. COMPARE0 is
+                // exactly at the endpoint, COMPARE1 is crossed, COMPARE2 is
+                // missed, and COMPARE3 equal to the starting counter needs a
+                // full 24-bit revolution. TICK is INTEN-only.
+                lfclk_inc: 4,
+                lfclk_period: 7,
+                lfclk_accum: 6,
+                prescaler: 0,
+                prescaler_accum: 0,
+                counter: 100,
+                cycles: 4,
+                inten: EN_TICK | compare0,
+                evten: compare1,
+                cc: [103, 102, 104, 100],
+                expected: (true, compare1),
+                expected_counter: 103,
+                expected_tick: 1,
+                expected_ovrflw: 0,
+                expected_compare: [1, 1, 0, 0],
+            },
+            AdvanceCase {
+                // Fractional LFCLK phase plus PRESCALER=2 leaves a one-edge
+                // remainder; compare0 lands exactly on the fifth step.
+                lfclk_inc: 3,
+                lfclk_period: 8,
+                lfclk_accum: 7,
+                prescaler: 2,
+                prescaler_accum: 1,
+                counter: 12,
+                cycles: 39,
+                inten: compare0,
+                evten: compare2,
+                cc: [17, 18, 13, 12],
+                expected: (true, compare2),
+                expected_counter: 17,
+                expected_tick: 0,
+                expected_ovrflw: 0,
+                expected_compare: [1, 0, 1, 0],
+            },
+            AdvanceCase {
+                // Three steps start near wrap, crossing OVRFLW and hitting
+                // COMPARE0/1/3, with COMPARE2 outside the closed step range.
+                lfclk_inc: 5,
+                lfclk_period: 13,
+                lfclk_accum: 9,
+                prescaler: 0,
+                prescaler_accum: 0,
+                counter: COUNTER_MASK - 2,
+                cycles: 8,
+                inten: compare1,
+                evten: EN_OVRFLW | compare0 | compare3,
+                cc: [COUNTER_MASK - 1, 0, 3, COUNTER_MASK],
+                expected: (true, EN_OVRFLW | compare0 | compare3),
+                expected_counter: 0,
+                expected_tick: 0,
+                expected_ovrflw: 1,
+                expected_compare: [1, 1, 0, 1],
+            },
+        ];
+
+        for case in &cases {
+            let repeated = rtc_for_advance_case(case);
+            let bulk = rtc_for_advance_case(case);
+            let mut repeated_irq = false;
+            let mut repeated_fired = 0;
+            for _ in 0..case.cycles {
+                let (irq, fired) = repeated.advance_and_eval(1);
+                repeated_irq |= irq;
+                repeated_fired |= fired;
+            }
+            let repeated_result = (repeated_irq, repeated_fired);
+
+            assert_eq!(repeated_result, case.expected);
+            assert_eq!(bulk.advance_and_eval(case.cycles), case.expected);
+            assert_eq!(rtc_advance_state(&bulk), rtc_advance_state(&repeated));
+            assert_eq!(bulk.events_ovrflw.get(), case.expected_ovrflw);
+            assert_eq!(
+                std::array::from_fn::<_, 4, _>(|i| bulk.events_compare[i].get()),
+                case.expected_compare
+            );
+            assert_eq!(bulk.counter.get(), case.expected_counter);
+            assert_eq!(bulk.events_tick.get(), case.expected_tick);
+        }
+    }
+
+    #[test]
+    fn nrf5340_rtc_bulk_advance_handles_a_256_second_idle_jump() {
+        let mut rtc = Nrf52Rtc::new_with_cc(4);
+        rtc.attach_cpu_hz(128_000_000);
+        rtc.write_u32(OFF_PRESCALER, 0).unwrap();
+        rtc.write_u32(OFF_CC0, 0x0080_0000).unwrap();
+        rtc.write_u32(OFF_INTENSET, 1 << EN_COMPARE_SHIFT).unwrap();
+        rtc.write_u32(OFF_EVTENSET, 1 << EN_COMPARE_SHIFT).unwrap();
+        rtc.write_u32(OFF_TASKS_START, 1).unwrap();
+
+        let result = rtc.advance_and_eval(32_768_000_000);
+
+        assert_eq!(rtc.read_u32(OFF_COUNTER).unwrap(), 0x0080_0000);
+        assert_eq!(rtc.read_u32(OFF_EVENTS_COMPARE0).unwrap(), 1);
+        assert_eq!(result, (true, 1 << EN_COMPARE_SHIFT));
+    }
+
     #[cfg(feature = "event-scheduler")]
     mod scheduler_mode {
         use super::*;
@@ -1069,6 +1229,37 @@ mod tests {
         fn without_clock_stays_on_legacy_tick_path() {
             let r = Nrf52Rtc::new();
             assert!(!r.uses_scheduler(), "no cycle clock attached → legacy walk");
+        }
+
+        #[test]
+        fn running_rtc_without_enabled_events_does_not_schedule_wakes() {
+            let clock = CycleClock::default();
+            let mut r = Nrf52Rtc::new_fast();
+            r.attach_cycle_clock(clock.clone());
+            r.write_u32(OFF_PRESCALER, 0).unwrap();
+            r.write_u32(OFF_TASKS_START, 1).unwrap();
+
+            assert!(r.cycles_until_next_event().is_none());
+            assert!(r.take_scheduled_events().is_empty());
+
+            // The free-running counter still advances lazily when observed.
+            clock.publish(10);
+            assert_eq!(r.read_u32(OFF_COUNTER).unwrap(), 10);
+            assert!(r.take_scheduled_events().is_empty());
+        }
+
+        #[test]
+        fn enabled_compare_keeps_its_scheduled_wake() {
+            let clock = CycleClock::default();
+            let mut r = Nrf52Rtc::new_fast();
+            r.attach_cycle_clock(clock);
+            r.write_u32(OFF_PRESCALER, 0).unwrap();
+            r.write_u32(OFF_CC0, 4).unwrap();
+            r.write_u32(OFF_INTENSET, 1 << EN_COMPARE_SHIFT).unwrap();
+            r.write_u32(OFF_TASKS_START, 1).unwrap();
+
+            assert_eq!(r.cycles_until_next_event(), Some(4));
+            assert_eq!(r.take_scheduled_events(), vec![(3, 1)]);
         }
     }
 }
