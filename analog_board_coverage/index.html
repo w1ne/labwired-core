@@ -4955,8 +4955,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.</p>
 <ul>
 <li>Profiles in <code>configs/systems/</code>: <strong>441</strong></li>
-<li>Covered end to end: <strong>101</strong></li>
-<li>Not covered: <strong>340</strong></li>
+<li>Covered end to end: <strong>108</strong></li>
+<li>Not covered: <strong>333</strong></li>
 <li>Not covered but with an ADC pad map: <strong>0</strong> (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   <code>analog_pins:</code> block or <code>adc</code> pin functions, an ADC model, or a digital
@@ -4979,11 +4979,6 @@ the generic decks can reach without new routing.</p>
 </tr>
 </thead>
 <tbody>
-<tr>
-<td><code>adafruit-feather-esp32-v2-bme280</code></td>
-<td><code>esp32</code></td>
-<td style="text-align: right;">0</td>
-</tr>
 <tr>
 <td><code>apollo4p-evb</code></td>
 <td><code>amap42kp</code></td>
@@ -5055,16 +5050,6 @@ the generic decks can reach without new routing.</p>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
-<td><code>ek-ra6m5</code></td>
-<td><code>r7fa6m5bh</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>ek-ra8m1</code></td>
-<td><code>r7fa8m1ah</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
 <td><code>ek-rx261</code></td>
 <td><code>r5f52618bgfp</code></td>
 <td style="text-align: right;">0</td>
@@ -5080,28 +5065,8 @@ the generic decks can reach without new routing.</p>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
-<td><code>esp32-devkitm-1-bme280</code></td>
-<td><code>esp32</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>esp32-devkitm-1</code></td>
-<td><code>esp32</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
 <td><code>esp32-s3-devkitc-1-n16r8-adc</code></td>
 <td><code>esp32s3-devkitc-1-n16r8-adc</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>esp32-wroom-32</code></td>
-<td><code>esp32</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>esp32-wroom-epaper</code></td>
-<td><code>esp32</code></td>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
@@ -6692,6 +6657,11 @@ the generic decks can reach without new routing.</p>
 </thead>
 <tbody>
 <tr>
+<td><code>adafruit-feather-esp32-v2-bme280</code></td>
+<td><code>esp32</code></td>
+<td><code>crates/core/tests/analog/cosim_esp32_classic_boards_analog.rs</code></td>
+</tr>
+<tr>
 <td><code>adafruit-feather-esp32-v2</code></td>
 <td><code>esp32</code></td>
 <td><code>crates/core/tests/analog/cosim_esp32_analog_diode.rs</code></td>
@@ -6800,6 +6770,36 @@ the generic decks can reach without new routing.</p>
 <td><code>controllino-mini</code></td>
 <td><code>atmega328p</code></td>
 <td><code>crates/core/tests/analog/cosim_avr_atmega328p_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>ek-ra6m5</code></td>
+<td><code>r7fa6m5bh</code></td>
+<td><code>crates/core/tests/analog/cosim_ek_ra_adc_pad_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>ek-ra8m1</code></td>
+<td><code>r7fa8m1ah</code></td>
+<td><code>crates/core/tests/analog/cosim_ek_ra_adc_pad_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>esp32-devkitm-1-bme280</code></td>
+<td><code>esp32</code></td>
+<td><code>crates/core/tests/analog/cosim_esp32_classic_boards_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>esp32-devkitm-1</code></td>
+<td><code>esp32</code></td>
+<td><code>crates/core/tests/analog/cosim_esp32_classic_boards_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>esp32-wroom-32</code></td>
+<td><code>esp32</code></td>
+<td><code>crates/core/tests/analog/cosim_esp32_classic_boards_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>esp32-wroom-epaper</code></td>
+<td><code>esp32</code></td>
+<td><code>crates/core/tests/analog/cosim_esp32_classic_boards_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>feather-f405</code></td>
