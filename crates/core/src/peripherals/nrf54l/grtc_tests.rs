@@ -798,6 +798,10 @@ mod core_clock {
         for _ in 0..97 {
             plain.tick_elapsed(1_234_567);
             attached.tick_elapsed(1_234_567);
+            // Re-attaching the same clock mid-run must leave the sub-tick
+            // phase intact. This runs after a tick leaves a remainder, so an
+            // unconditional `cycle_accum.set(0)` would drift the two apart.
+            attached.attach_cpu_hz(u64::from(CPU_HZ_DEFAULT));
         }
         assert_eq!(
             attached.read_u32(SYSCOUNTERL).unwrap(),
@@ -813,10 +817,25 @@ mod core_clock {
         g.write_u32(OFF_TASKS_START, 1).unwrap();
         g.write_u32(cc_reg(0, 0x0), 1).unwrap();
         g.write_u32(cc_reg(0, 0xC), CCEN_ACTIVE).unwrap();
+        assert_eq!(
+            g.cycles_until_next_compare(),
+            Some(16),
+            "armed CC[0]=1 at 16 MHz is 16 CPU cycles away"
+        );
 
         g.tick_elapsed(15);
         assert_eq!(g.read_u32(OFF_EVENTS_COMPARE0).unwrap(), 0);
+        assert_eq!(
+            g.cycles_until_next_compare(),
+            Some(1),
+            "one SYSCOUNTER increment (16 CPU cycles - 15 elapsed) remains"
+        );
         g.tick_elapsed(1);
         assert_eq!(g.read_u32(OFF_EVENTS_COMPARE0).unwrap(), 1);
+        assert_eq!(
+            g.cycles_until_next_compare(),
+            None,
+            "a fired compare is no longer a pending deadline"
+        );
     }
 }
