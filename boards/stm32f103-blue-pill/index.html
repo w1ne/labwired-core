@@ -4881,19 +4881,35 @@
 <h1 id="stm32f103c8t6-blue-pill">STM32F103C8T6 Blue Pill</h1>
 <p><strong>Demand position:</strong> STM32F103 ranks #3 at 17% of reported MCU use. The Blue
 Pill is a board-level profile over the existing STM32F103C8 model.</p>
-<p>The profile includes its reference active-low user LED on PC13 and the USART1
-header path on PA9/PA10. The local smoke prints <code>BLUEPILL_F103C8_OK</code> and checks
-PC13 output edges. It does not claim USB device behavior, a USB bootloader, an
-onboard debugger, or physical board validation. Blue Pill clones can differ.</p>
+<p>The profile includes its reference active-low user LED on PC13, the USART1
+header path on PA9/PA10, and hardware PWM on TIM3_CH1 (PA6) and TIM2_CH2 (PA1).
+The GPIO smoke prints <code>BLUEPILL_F103C8_OK</code> and checks PC13 output edges; the
+PWM smoke runs an unmodified STM32duino sketch and measures 1000.0 Hz at
+25.10 % on PA6 and 75.29 % on PA1, with an L298N motor plant reaching
+325.90 rpm. It does not claim USB device behavior, a USB bootloader, an
+onboard debugger, TIM1 complementary outputs, or physical board validation.
+Blue Pill clones can differ.</p>
 <ul>
 <li><a href="../../examples/stm32f103-blue-pill/README.md">Pin map, Arduino example, and smoke command</a></li>
 <li><a href="../../examples/stm32f103-blue-pill/vendor-status.md">Live ST lifecycle and retailer availability receipt</a></li>
 <li><a href="../../examples/stm32f103-blue-pill/evidence/">Committed local simulator evidence</a></li>
+<li><a href="../../crates/core/tests/stm32/stm32f103_arduino_pwm.rs">PWM waveform test and its negative controls</a></li>
+<li><a href="../../receipts/2026-11-25-stm32f103-bluepill-pwm/">PWM receipt: what was measured, what is still stubbed</a></li>
 </ul>
 <p>The STM32F103 chip descriptor also declares unexercised peripherals. Its USB
 device and BKP windows are stubs, and WWDG is inert; this board profile does
-not claim those paths. The exercised GPIOC and USART1 models are separate from
-those gaps.</p>
+not claim those paths. The exercised GPIOC, USART1, TIM3 and TIM2 models are
+separate from those gaps. The TIM1 complementary outputs behind <code>PA7</code> are not
+modelled, and the AFIO remaps are not decoded: only the default fixed timer
+map is wired.</p>
+<p>Two clock profiles exist for this board for one honest reason: <code>cpu_hz</code> is
+static per run. <code>configs/systems/stm32f103-blue-pill.yaml</code> is the 8 MHz HSI
+reset clock the bare-metal GPIO smoke boots at;
+<code>examples/stm32f103-blue-pill/pwm-system.yaml</code> is the 72 MHz PLL clock stock
+STM32duino selects. The Tier-1 grid's <code>pwm</code> cell for this chip still renders
+"not modelled" because the cell follows peripheral-id class markers and this
+descriptor names its timers <code>tim1..tim4</code>; that is a reporting gap, recorded in
+the PWM receipt, not a capability claim.</p>
 
 
 
