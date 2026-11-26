@@ -2032,7 +2032,11 @@ jobs:
     # and the last two were cancelled at 30 min in their final steps.
     # 45 -> 60 on 2026-11-13: this job now also runs the cargo-backed half of
     # the generated-artifact drift gate (moved here from pr-gate).
-    timeout-minutes: 60
+    # 60 -> 90 on 2026-11-26: main run 45762905295 passed steps 1-17 (including
+    # generated-artifact regen, unit tests, and 21m release-gated tests) and
+    # hit the 60m wall-clock limit mid-way through step 18/20 (scheduler IRQ
+    # delivery), cancelling an otherwise passing main run.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
