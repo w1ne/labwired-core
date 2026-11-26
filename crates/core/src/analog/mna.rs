@@ -2677,7 +2677,9 @@ impl Solver {
             let op = device::jfet_op_with_b(
                 vgs,
                 vds,
-                sign * jfet.model.vto,
+                // SPICE writes a JFET's VTO in the channel's own frame: a
+                // depletion device has VTO < 0 for both NJF and PJF.
+                jfet.model.vto,
                 jfet.model.beta,
                 jfet.model.lambda,
                 jfet.model.b,

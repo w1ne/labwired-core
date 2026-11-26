@@ -766,7 +766,9 @@ C1 out 0 100n $ dollar comment
         assert_eq!(circuit.jfets[0].model.polarity, Polarity::N);
         assert_eq!(circuit.jfets[0].model.vto, -2.0);
         assert_eq!(circuit.jfets[1].model.polarity, Polarity::P);
-        assert_eq!(circuit.jfets[1].model.vto, 2.0);
+        // A JFET's VTO is in the channel's own frame, as in ngspice: a
+        // depletion PJF is negative too.
+        assert_eq!(circuit.jfets[1].model.vto, -2.0);
         assert!(circuit.is_nonlinear());
     }
 

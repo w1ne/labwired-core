@@ -1188,8 +1188,9 @@ pub fn jfet_op(vgs: f64, vds: f64, vto: f64, beta: f64, lambda: f64) -> JfetOp {
 /// ```
 ///
 /// Gate-junction current and the channel's GMIN path are stamped separately by
-/// the MNA solver. `vto` is negative for an N-channel JFET; the caller mirrors
-/// voltages and currents for a P-channel device. `pb` is the gate-junction
+/// the MNA solver. `vto` is negative for a depletion JFET of either polarity,
+/// as SPICE writes it; the caller mirrors voltages and currents for a
+/// P-channel device but not `vto`. `pb` is the gate-junction
 /// potential used by the Parker–Skellern fit.
 pub fn jfet_op_with_b(
     vgs: f64,

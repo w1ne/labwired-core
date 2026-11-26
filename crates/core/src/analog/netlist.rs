@@ -1363,7 +1363,9 @@ pub struct MosModel {
 pub struct JfetModel {
     /// N-channel or P-channel.
     pub polarity: Polarity,
-    /// Pinch-off voltage `VTO`, volts (negative for NJF, positive for PJF).
+    /// Pinch-off voltage `VTO`, volts, in the channel's own frame as SPICE
+    /// writes it: negative for a depletion device of **either** polarity, so a
+    /// vendor `PJF` card means the same thing here and in ngspice.
     pub vto: f64,
     /// Transconductance parameter `BETA`, A/V².
     pub beta: f64,
@@ -1393,7 +1395,7 @@ impl JfetModel {
     fn defaults(polarity: Polarity) -> Self {
         Self {
             polarity,
-            vto: if polarity == Polarity::N { -2.0 } else { 2.0 },
+            vto: -2.0,
             beta: 1e-4,
             lambda: 0.0,
             b: 1.0,

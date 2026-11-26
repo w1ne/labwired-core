@@ -4503,7 +4503,7 @@ mod analog {
                      LAMBDA={lambda} IS={is})\n",
                     sign * vgs,
                     sign * vds,
-                    sign * vto
+                    vto
                 );
                 let solver = build(&netlist);
                 let vgst = vgs - vto;
@@ -4568,7 +4568,7 @@ mod analog {
                     "Vg g 0 dc {}\nVd d 0 dc {}\nVs s 0 dc 0\nJ1 d g s JMOD\n.model JMOD {kind}(VTO={} BETA={beta} LAMBDA={lambda} IS={is} B={b} PB={pb})\n",
                     sign * vgs,
                     sign * vds,
-                    sign * vto
+                    vto
                 );
                 let measured = sign * source_current(&build(&netlist), "Vd");
                 let gate_drain_voltage = vgs - vds;
@@ -4592,7 +4592,7 @@ mod analog {
                  J1 d g s JMOD\n.model JMOD {kind}(VTO={} BETA=200u IS=1e-12)\n",
                 sign * drain,
                 sign * source,
-                -2.0 * sign
+                -2.0
             )
         };
         for (kind, sign) in [("NJF", 1.0), ("PJF", -1.0)] {
@@ -5210,7 +5210,7 @@ mod analog {
     #[test]
     fn jfet_terminal_resistances_drop_voltage_at_the_intrinsic_nodes() {
         let resistance = 100.0;
-        for (kind, sign, vto) in [("NJF", 1.0, -2.0), ("PJF", -1.0, 2.0)] {
+        for (kind, sign, vto) in [("NJF", 1.0, -2.0), ("PJF", -1.0, -2.0)] {
             for (parameter, terminal, signed_drop) in [
                 ("RD", "drain", "external - intrinsic"),
                 ("RS", "source", "intrinsic - external"),
@@ -5263,7 +5263,7 @@ mod analog {
         let (cgs, cgd, pb, fc) = (200e-12, 100e-12, 0.75, 0.5);
 
         for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
-            for (kind, sign, vto) in [("NJF", 1.0, -2.0), ("PJF", -1.0, 2.0)] {
+            for (kind, sign, vto) in [("NJF", 1.0, -2.0), ("PJF", -1.0, -2.0)] {
                 let gate_initial = -sign * 3.0;
                 let gate_step = -sign * 1.5;
                 let modelled = format!(
@@ -5430,7 +5430,7 @@ mod analog {
                     "V1 in 0 dc 0\nR1 in g {resistance}\nVd d 0 dc 0\nVs s 0 dc 0\n\
                      J1 d g s JMOD\n.model JMOD {kind}(VTO={} BETA=100u IS=1e-30 \
                      CGS={cgs} CGD={cgd} PB={pb} FC={fc})\n",
-                    if kind == "NJF" { -2.0 } else { 2.0 }
+                    -2.0
                 );
                 let circuit = parse_netlist(&netlist).expect("JFET capacitance model parses");
                 let model = circuit.jfets[0].model;
