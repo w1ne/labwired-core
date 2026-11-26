@@ -56,6 +56,7 @@ mod cosim_rp2040_family_analog;
 mod cosim_samd21_family_analog;
 mod cosim_stm32f1f4_catalog_analog;
 mod cosim_stm32f4_family_analog;
+mod cosim_stm32g0b1_analog;
 mod cosim_stm32h7_analog;
 mod cosim_stm32l4u5_pin_functions_analog;
 mod declarative_noise;
