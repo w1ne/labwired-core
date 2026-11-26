@@ -114,8 +114,11 @@ input, the STK SysTick interrupt, EXTI line 3, ADC1 (10-bit), TIM1/TIM2 PWM and
 the I2C1 master read above. What is still not modelled: WCH-Link/SDI debug, the
 SPI1 controller, USB data, the AFIO I2C1 partial/full remaps (PD0/PD1 and
 PC6/PC5), and the TIM1 complementary outputs (PD0/PA2/PD1). ADC1 is exercised
-end to end against the generic `analog-ntc-diode-system.yaml` decks; see
-[`crates/core/tests/analog/cosim_ch32v003_analog.rs`](../../crates/core/tests/analog/cosim_ch32v003_analog.rs).
+end to end against the generic `analog-ntc-diode-system.yaml` decks, and the
+same pair runs on ngspice through `analog-ntc-diode-ngspice.yaml`; see
+[`crates/core/tests/analog/cosim_ch32v003_analog.rs`](../../crates/core/tests/analog/cosim_ch32v003_analog.rs)
+and
+[`crates/cli/tests/analog_vs_ngspice_differential.rs`](../../crates/cli/tests/analog_vs_ngspice_differential.rs).
 The board has no USB data function. These are local simulator smokes, not
 hosted `model_verified` results or physical hardware confirmation.
 

@@ -176,8 +176,15 @@ because the in-core engine solves at 300.00 K; ngspice's 27 °C default alone
 moves the forward voltage by 0.3 mV, 1,500 times the agreement measured here.
 `ngspice_solves_the_generic_ntc_and_diode_decks_the_in_core_engine_solves`
 checks both routes and requires the NTC output to move with temperature, so
-agreement on a flat wrong value cannot pass. This covers one deck shape and its
-manifest routing, not every board that shares it.
+agreement on a flat wrong value cannot pass. The same pair, with the same
+netlists and only the published pads moved, runs on
+`examples/wch-ch32v003evt/analog-ntc-diode-ngspice.yaml` through the WCH
+CH32V003 10-bit ADC map. Measured on 2026-11-26 at −20, 25 and 85 °C: the NTC
+route agrees to 4.4·10⁻¹⁶ V and the diode route to 2.1·10⁻⁷ V;
+`ngspice_solves_the_wch_ch32v003_generic_decks_the_in_core_engine_solves`
+checks it. This covers one deck shape and its manifest routing on two register
+families — the STM32F401 12-bit map and the CH32V003 10-bit map — not every
+board that shares it.
 
 ### Pinning the circuit a Flex run solved
 
