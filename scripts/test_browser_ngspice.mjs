@@ -239,7 +239,8 @@ async function runCases() {
   const RC_DRIVE_FROM_NS = 25_000;
   const rcVolts = (timeNs) => 3.3 * (1 - Math.exp(-Math.max(timeNs - RC_DRIVE_FROM_NS, 0) / RC_TAU_NS));
   const RC_TOLERANCE_V = 1e-5;
-  const testRun = (name, script, manifest, firmware, callback, channelName = 'rc.v_out') => {
+  const testRun = (name, script, manifest, firmware, callback,
+    channelName = 'rc.v_out', captureDetails = false) => {
     const run = wasm.WasmFlexTestRun.run_with_ngspice_callback(
       name, script, manifest, new Uint8Array(firmware), callback);
     try {
@@ -253,7 +254,16 @@ async function runCases() {
           check(index >= 0 && batch.channels[index].unit === 'V',
             `scope channel ${channelName}: ${JSON.stringify(batch.channels)}`);
           samples = batch.samples.map((s) => ({ time_ns: Number(s.time_ns), v: s.values[index] }));
-          return { result, samples, batch, digital: runtime.digital_trace_snapshot(0), report: runtime.run_report() };
+          if (captureDetails) {
+            return {
+              result,
+              samples,
+              batch,
+              digital: runtime.digital_trace_snapshot(0),
+              report: runtime.run_report(),
+            };
+          }
+          return { result, samples };
         } finally { runtime.free(); }
       }
       return { result, samples };
@@ -393,7 +403,7 @@ async function runCases() {
     const exchange = await host.createBrowserNgspiceExchange(models, factory);
     try {
       const captured = testRun(name, script, heypcbYaml, heypcbFirmware, exchange.exchange,
-        'source-sns-an1.voltage');
+        'source-sns-an1.voltage', true);
       const { result, samples, batch, digital, report } = captured;
       check(result.status === 'pass' && result.stop_reason === 'completed',
         `${name}: ${result.status}/${result.stop_reason}: ${result.message}`);
@@ -415,19 +425,27 @@ async function runCases() {
         && report.execution_scope.detailed_target_execution_selected === false
         && report.execution_scope.chip_parity === 'not_established'
         && report.scope_notes_complete && report.manifest_sha256 === inputDigests.manifest
-        && report.assumptions.length > 0
-        && report.unsupported_checks.length > 0,
+        && report.assumptions.some((note) => note.includes('GL5528 row'))
+        && report.unsupported_checks.some((note) => note.includes('Original ESP32-S3 firmware execution'))
+        && report.unsupported_checks.some((note) => note.includes('Full-board')),
       `${name}: run report lost model scope: ${JSON.stringify(report.execution_scope)}`);
+      check(['lux', 'sensor_v', 'user_led_drive', 'user_led_state']
+        .every((portName) => report.ports.some((port) => port.name === portName)),
+      `${name}: run report lost named ports: ${JSON.stringify(report.ports)}`);
       const model = report.models.find((entry) => entry.id === 'source-sns-an1');
       check(model?.adapter === 'ngspice' && model.source?.kind === 'spice_netlist'
         && model.source.origin === 'file' && model.source.path === './ldr.cir'
-        && model.source.sha256 === inputDigests.netlist,
+        && model.source.bytes === new TextEncoder().encode(heypcbNetlist).length
+        && model.source.sha256 === inputDigests.netlist
+        && model.inputs.some((input) => input.name === 'lux' && input.signal === 'environment.lux')
+        && model.outputs.some((output) => output.name === 'voltage' && output.signal === 'source.U3.GPIO1'),
       `${name}: run report did not pin the source deck: ${JSON.stringify(model)}`);
       return {
         source: sourceIdentity,
         firmware: 'portable_behavior_wasm',
         input_sha256: inputDigests,
         execution_scope: report.execution_scope,
+        ports: report.ports,
         model: { adapter: model.adapter, id: model.id, source: model.source },
         result: { status: result.status, entry_result: result.entry_result, time_ns: result.time_ns },
         oscilloscope: {
