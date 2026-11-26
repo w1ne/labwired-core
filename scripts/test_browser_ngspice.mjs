@@ -3,7 +3,8 @@
 // Run `adapter: ngspice` in a real browser: the web build of labwired-wasm,
 // a real ngspice WASM build and the host's JavaScript exchange callback. Both
 // browser constructors are exercised with the committed LDR example, and the
-// browser `labwired test` runner with the portable mixed-signal firmware:
+// browser `labwired test` runner with portable mixed-signal firmware and the
+// source-pinned HeyPCB LDR project:
 //   machine:    WasmSimulator.new_from_config_with_ngspice_callback (F401 blinky)
 //   flex:       WasmFlexRuntime.new_from_yaml_with_ngspice_callback
 //   flex test:  WasmFlexTestRun.run_with_ngspice_callback
@@ -48,6 +49,7 @@ const routes = {
   '/ngspice/': wasmDir,
   '/example/': resolve(root, 'examples/cosim-ngspice-ldr'),
   '/mixed/': resolve(root, 'crates/wasm/tests/fixtures/flex-mixed-signal'),
+  '/heypcb-ldr/': resolve(root, 'crates/wasm/tests/fixtures/flex-heypcb-ldr-network'),
 };
 const files = {
   '/host.mjs': hostModule,
@@ -237,9 +239,10 @@ async function runCases() {
   const RC_DRIVE_FROM_NS = 25_000;
   const rcVolts = (timeNs) => 3.3 * (1 - Math.exp(-Math.max(timeNs - RC_DRIVE_FROM_NS, 0) / RC_TAU_NS));
   const RC_TOLERANCE_V = 1e-5;
-  const testRun = (name, script, callback) => {
+  const testRun = (name, script, manifest, firmware, callback,
+    channelName = 'rc.v_out', captureDetails = false) => {
     const run = wasm.WasmFlexTestRun.run_with_ngspice_callback(
-      name, script, rcYaml, new Uint8Array(rcFirmware), callback);
+      name, script, manifest, new Uint8Array(firmware), callback);
     try {
       const result = JSON.parse(run.result_json());
       let samples = null;
@@ -247,9 +250,20 @@ async function runCases() {
         const runtime = run.take_runtime();
         try {
           const batch = runtime.analog_trace_snapshot(0);
-          check(batch.channels.length === 1 && batch.channels[0].name === 'rc.v_out'
-            && batch.channels[0].unit === 'V', `scope channels ${JSON.stringify(batch.channels)}`);
-          samples = batch.samples.map((s) => ({ time_ns: Number(s.time_ns), v: s.values[0] }));
+          const index = batch.channels.findIndex((channel) => channel.name === channelName);
+          check(index >= 0 && batch.channels[index].unit === 'V',
+            `scope channel ${channelName}: ${JSON.stringify(batch.channels)}`);
+          samples = batch.samples.map((s) => ({ time_ns: Number(s.time_ns), v: s.values[index] }));
+          if (captureDetails) {
+            return {
+              result,
+              samples,
+              batch,
+              digital: runtime.digital_trace_snapshot(0),
+              report: runtime.run_report(),
+            };
+          }
+          return { result, samples };
         } finally { runtime.free(); }
       }
       return { result, samples };
@@ -261,7 +275,8 @@ async function runCases() {
   await run('flex test: firmware enables the ngspice RC', async () => {
     const exchange = await host.createBrowserNgspiceExchange(rcModels(), factory);
     try {
-      const { result, samples } = testRun('ngspice-enable.yaml', enableScript, exchange.exchange);
+      const { result, samples } = testRun(
+        'ngspice-enable.yaml', enableScript, rcYaml, rcFirmware, exchange.exchange);
       check(result.status === 'pass' && result.stop_reason === 'completed',
         `${result.status}/${result.stop_reason}: ${result.message} ${JSON.stringify(failedAssertions(result))}`);
       let worst = 0;
@@ -277,7 +292,8 @@ async function runCases() {
   await run('flex test: wrong firmware command leaves the ngspice RC low', async () => {
     const exchange = await host.createBrowserNgspiceExchange(rcModels(), factory);
     try {
-      const { result, samples } = testRun('ngspice-disabled.yaml', disabledScript, exchange.exchange);
+      const { result, samples } = testRun(
+        'ngspice-disabled.yaml', disabledScript, rcYaml, rcFirmware, exchange.exchange);
       check(result.status === 'pass' && result.stop_reason === 'completed',
         `${result.status}/${result.stop_reason}: ${result.message} ${JSON.stringify(failedAssertions(result))}`);
       check(result.entry_result === 0, `entry_result ${result.entry_result}`);
@@ -301,7 +317,8 @@ async function runCases() {
         // Exchange 1 is the (0, 0) priming step; fail at the 40th boundary.
         return calls < 40 ? exchange.exchange(request) : answer(request);
       };
-      const { result } = testRun('ngspice-enable.yaml', enableScript, callback);
+      const { result } = testRun(
+        'ngspice-enable.yaml', enableScript, rcYaml, rcFirmware, callback);
       check(result.status === 'error' && result.stop_reason === 'model_error',
         `${result.status}/${result.stop_reason}: ${result.message}`);
       check(result.time_ns === FAULT_TIME_NS, `stopped at ${result.time_ns} ns, expected ${FAULT_TIME_NS} ns`);
@@ -335,5 +352,125 @@ async function runCases() {
       return { stop_reason: result.stop_reason, message: result.message };
     } finally { run.free(); }
   });
+
+  // The exact source-pinned HeyPCB project and portable behavior firmware,
+  // exercising the ngspice adapter through the same browser Flex test API.
+  const [heypcbYaml, heypcbNetlist, heypcbFirmware, brightScript, dimScript,
+    sourceMapText, firmwareSource, browserReceiptText] = await Promise.all([
+    fetch('/heypcb-ldr/system-ngspice.yaml').then((r) => r.text()),
+    fetch('/heypcb-ldr/ldr.cir').then((r) => r.text()),
+    fetch('/heypcb-ldr/firmware.wasm').then((r) => r.arrayBuffer()),
+    fetch('/heypcb-ldr/ngspice-bright.yaml').then((r) => r.text()),
+    fetch('/heypcb-ldr/ngspice-dim.yaml').then((r) => r.text()),
+    fetch('/heypcb-ldr/source-map.json').then((r) => r.text()),
+    fetch('/heypcb-ldr/firmware.rs').then((r) => r.text()),
+    fetch('/heypcb-ldr/browser.json').then((r) => r.text()),
+  ]);
+  const sourceMap = JSON.parse(sourceMapText);
+  const browserReceipt = JSON.parse(browserReceiptText);
+  const source = sourceMap.source;
+  const sourceIdentity = {
+    repository: source.repository,
+    revision: source.revision,
+    asset: source.asset,
+    board_revision: source.board_revision,
+    license_spdx: source.license_spdx,
+    files: source.files,
+  };
+  const sha256 = async (data) => [...new Uint8Array(await crypto.subtle.digest(
+    'SHA-256', typeof data === 'string' ? new TextEncoder().encode(data) : data))]
+    .map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  const inputDigests = {
+    manifest: await sha256(heypcbYaml),
+    netlist: await sha256(heypcbNetlist),
+    firmware: await sha256(heypcbFirmware),
+    firmware_source: await sha256(firmwareSource),
+    source_map: await sha256(sourceMapText),
+  };
+  check(sourceIdentity.repository === 'HeyPCB/esp32-sensors-1'
+    && sourceIdentity.revision === '57a2122a19ac1aa9c092e43fb5b123c461508752'
+    && sourceIdentity.asset === 'boards/ldr/kicad/esp32_ldr'
+    && sourceIdentity.board_revision === 'A'
+    && sourceIdentity.license_spdx === 'CERN-OHL-S-2.0',
+  `unexpected source pin: ${JSON.stringify(sourceIdentity)}`);
+  check(inputDigests.firmware === browserReceipt.firmware_sha256
+    && inputDigests.firmware_source === browserReceipt.firmware_source_sha256
+    && inputDigests.source_map === browserReceipt.source_map_sha256,
+  `portable firmware or source-map bytes changed: ${JSON.stringify(inputDigests)}`);
+
+  const runHeypcbLdr = async (name, script, expectedEntry, expectedEdges, sampleAtNs, sampleRange) => {
+    const models = host.prepareBrowserFlexNgspiceModels(heypcbYaml, { './ldr.cir': heypcbNetlist });
+    const exchange = await host.createBrowserNgspiceExchange(models, factory);
+    try {
+      const captured = testRun(name, script, heypcbYaml, heypcbFirmware, exchange.exchange,
+        'source-sns-an1.voltage', true);
+      const { result, samples, batch, digital, report } = captured;
+      check(result.status === 'pass' && result.stop_reason === 'completed',
+        `${name}: ${result.status}/${result.stop_reason}: ${result.message}`);
+      check(result.entry_result === expectedEntry,
+        `${name}: firmware returned ${result.entry_result}, expected ${expectedEntry}`);
+      check(batch.time_unit === 'ns' && batch.dropped === 0 && samples.length === 81
+        && batch.channels[0].port_names.includes('sensor_v'),
+      `${name}: incomplete named oscilloscope trace: ${JSON.stringify(batch)}`);
+      const sample = samples.find((entry) => entry.time_ns === sampleAtNs)?.v;
+      check(sample !== undefined && sample >= sampleRange[0] && sample <= sampleRange[1],
+        `${name}: SNS_AN1 at ${sampleAtNs} ns is ${sample} V`);
+      check(digital.time_unit === 'ns' && digital.dropped === 0
+        && digital.edges.length === expectedEdges
+        && digital.channels.some((channel) => channel.port_names.includes('user_led_drive'))
+        && digital.channels.some((channel) => channel.port_names.includes('user_led_state')),
+      `${name}: incomplete named logic-analyzer trace: ${JSON.stringify(digital)}`);
+      check(report.execution_path === 'flex_portable_wasm' && report.target_cpu_emulated === false
+        && report.execution_scope.original_target_firmware_executed === false
+        && report.execution_scope.detailed_target_execution_selected === false
+        && report.execution_scope.chip_parity === 'not_established'
+        && report.scope_notes_complete && report.manifest_sha256 === inputDigests.manifest
+        && report.assumptions.some((note) => note.includes('GL5528 row'))
+        && report.unsupported_checks.some((note) => note.includes('Original ESP32-S3 firmware execution'))
+        && report.unsupported_checks.some((note) => note.includes('Full-board')),
+      `${name}: run report lost model scope: ${JSON.stringify(report.execution_scope)}`);
+      check(['lux', 'sensor_v', 'user_led_drive', 'user_led_state']
+        .every((portName) => report.ports.some((port) => port.name === portName)),
+      `${name}: run report lost named ports: ${JSON.stringify(report.ports)}`);
+      const model = report.models.find((entry) => entry.id === 'source-sns-an1');
+      check(model?.adapter === 'ngspice' && model.source?.kind === 'spice_netlist'
+        && model.source.origin === 'file' && model.source.path === './ldr.cir'
+        && model.source.bytes === new TextEncoder().encode(heypcbNetlist).length
+        && model.source.sha256 === inputDigests.netlist
+        && model.inputs.some((input) => input.name === 'lux' && input.signal === 'environment.lux')
+        && model.outputs.some((output) => output.name === 'voltage' && output.signal === 'source.U3.GPIO1'),
+      `${name}: run report did not pin the source deck: ${JSON.stringify(model)}`);
+      return {
+        source: sourceIdentity,
+        firmware: 'portable_behavior_wasm',
+        input_sha256: inputDigests,
+        execution_scope: report.execution_scope,
+        ports: report.ports,
+        model: { adapter: model.adapter, id: model.id, source: model.source },
+        result: { status: result.status, entry_result: result.entry_result, time_ns: result.time_ns },
+        oscilloscope: {
+          time_unit: batch.time_unit,
+          channels: batch.channels,
+          dropped: batch.dropped,
+          sample_count: samples.length,
+          sample_at_ns: sampleAtNs,
+          sample_v: sample,
+        },
+        logic_analyzer: {
+          time_unit: digital.time_unit,
+          channels: digital.channels,
+          dropped: digital.dropped,
+          edge_count: digital.edges.length,
+          edge_times_ns: digital.edges.map((edge) => Number(edge.time_ns)),
+        },
+        scope_notes: { assumptions: report.assumptions, unsupported_checks: report.unsupported_checks },
+      };
+    } finally { exchange.dispose(); }
+  };
+
+  await run('HeyPCB ESP32-S3 LDR: source-pinned ngspice bright behavior', async () =>
+    runHeypcbLdr('ngspice-bright.yaml', brightScript, 2974, 4, 350_000, [2.036, 2.038]));
+  await run('HeyPCB ESP32-S3 LDR: ngspice dim negative control', async () =>
+    runHeypcbLdr('ngspice-dim.yaml', dimScript, 597, 0, 350_000, [1.069, 1.071]));
   return { cases };
 }
