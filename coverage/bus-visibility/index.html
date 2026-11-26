@@ -4946,15 +4946,19 @@
 <li><strong>ch32v003a4m6</strong></li>
 <li>UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware</li>
 <li>I2C: F4P6-die package variant: the I2C bring-up machines in this gate are Cortex-M only; master traffic is proven by ch32v003_compiled_firmware</li>
+<li>SPI: F4P6-die package variant: this gate is Cortex-M only and SOP16 has no bonded 3-wire SPI pads; proven by ch32v003_compiled_firmware::ch32v003_spi1_is_on_every_package_but_the_pads_only_where_bonded</li>
 <li><strong>ch32v003f4p6</strong></li>
 <li>UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32v003_compiled_firmware</li>
 <li>I2C: the I2C bring-up machines in this gate are Cortex-M only; the CH32V003 is RISC-V. Master traffic is proven by ch32v003_compiled_firmware</li>
+<li>SPI: the SPI bring-up machines in this gate are Cortex-M only; the CH32V003 is RISC-V. Master traffic is proven by ch32v003_compiled_firmware::ch32v003_openwch_spi_reads_a_max31855_frame_over_spi1</li>
 <li><strong>ch32v003f4u6</strong></li>
 <li>UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware</li>
 <li>I2C: F4P6-die package variant: the I2C bring-up machines in this gate are Cortex-M only; master traffic is proven by ch32v003_compiled_firmware</li>
+<li>SPI: F4P6-die package variant: the SPI bring-up machines in this gate are Cortex-M only; the CH32V003 is RISC-V. Master traffic is proven by ch32v003_compiled_firmware::ch32v003_openwch_spi_reads_a_max31855_frame_over_spi1</li>
 <li><strong>ch32v003j4m6</strong></li>
 <li>UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware</li>
 <li>I2C: F4P6-die package variant: the I2C bring-up machines in this gate are Cortex-M only; master traffic is proven by ch32v003_compiled_firmware</li>
+<li>SPI: F4P6-die package variant: this gate is Cortex-M only and SOP8 has no bonded 3-wire SPI pads; proven by ch32v003_compiled_firmware::ch32v003_spi1_is_on_every_package_but_the_pads_only_where_bonded</li>
 <li><strong>ch32v005f6p6</strong></li>
 <li>UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32_compiled_firmware</li>
 <li><strong>ch32v006k8u6</strong></li>
