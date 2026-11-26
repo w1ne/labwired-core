@@ -555,6 +555,26 @@ mod scheduler_mode {
     }
 
     #[test]
+    fn mid_run_clock_change_does_not_replay_elapsed_cycles() {
+        let (mut g, clock) = armed_scheduler(); // 1 MHz: 1 cycle = 1 tick
+        g.write_u32(OFF_MODE, MODE_SYSCOUNTEREN).unwrap();
+        // Deliberately do NOT read the counter here: a read would sync the
+        // lazy clock to cycle 10 and hide whether `attach_cpu_hz` re-anchors.
+        clock.publish(10);
+
+        // Double the core clock after ten cycles have already elapsed.
+        // `attach_cpu_hz` must first advance to the published cycle at the old
+        // rate (10 ticks), then convert only the next 10 cycles at 2 MHz
+        // (5 ticks) → 15. Without the sync, all 20 cycles are converted at the
+        // new rate → 10. (Without any clock change at all the counter would
+        // read 20.) This is what makes the test fail if the re-anchor is
+        // removed.
+        g.attach_cpu_hz(2_000_000);
+        clock.publish(20);
+        assert_eq!(g.read_u32(SYSCOUNTERL).unwrap(), 15);
+    }
+
+    #[test]
     fn clock_attach_flips_to_scheduler_and_walk_tick_is_inert() {
         let (mut g, _clock) = armed_scheduler();
         assert!(g.uses_scheduler(), "clock attached → walk-independent");
@@ -709,5 +729,94 @@ mod scheduler_mode {
             Some(19),
             "next period at cycle 40"
         );
+    }
+}
+
+mod core_clock {
+    use super::*;
+
+    /// Attach `hz`, start the counter, and return the SYSCOUNTER value after
+    /// exactly one second of CPU cycles.
+    fn count_after_one_second(hz: u64) -> u32 {
+        let mut g = Nrf54lGrtc::new();
+        g.attach_cpu_hz(hz);
+        g.write_u32(OFF_TASKS_START, 1).unwrap();
+        g.tick_elapsed(hz);
+        g.read_u32(SYSCOUNTERL).unwrap()
+    }
+
+    #[test]
+    fn attach_cpu_hz_derives_exact_one_megahertz_from_each_core_clock() {
+        // The shipped 128 MHz application core, the 64 MHz pre-PLL boot
+        // state, and two other ratios (32 MHz, and the 16 MHz PCLK16M
+        // peripheral-clock scale, used here only as a synthetic core clock).
+        for hz in [128_000_000u64, 64_000_000, 32_000_000, 16_000_000] {
+            assert_eq!(
+                count_after_one_second(hz),
+                SYSCOUNTER_HZ,
+                "core clock {hz} Hz must keep the SYSCOUNTER at 1 MHz"
+            );
+        }
+    }
+
+    #[test]
+    fn attach_cpu_hz_accumulates_a_fractional_ratio_without_drift() {
+        // 2.5 MHz is not a whole multiple of 1 MHz: two ticks every five
+        // cycles. The remainder must carry, not round.
+        let mut g = Nrf54lGrtc::new();
+        g.attach_cpu_hz(2_500_000);
+        g.write_u32(OFF_TASKS_START, 1).unwrap();
+        g.tick_elapsed(5);
+        assert_eq!(g.read_u32(SYSCOUNTERL).unwrap(), 2);
+        g.tick_elapsed(5);
+        assert_eq!(g.read_u32(SYSCOUNTERL).unwrap(), 4);
+        g.tick_elapsed(25_000_000);
+        assert_eq!(g.read_u32(SYSCOUNTERL).unwrap(), 10_000_004);
+    }
+
+    #[test]
+    fn attach_cpu_hz_zero_keeps_the_default_ratio() {
+        let mut g = Nrf54lGrtc::new();
+        g.attach_cpu_hz(0);
+        g.write_u32(OFF_TASKS_START, 1).unwrap();
+        g.tick_elapsed(u64::from(CYCLES_PER_SYSCOUNTER_TICK));
+        assert_eq!(g.read_u32(SYSCOUNTERL).unwrap(), 1);
+    }
+
+    #[test]
+    fn attach_cpu_hz_at_the_default_is_a_no_op() {
+        let mut plain = Nrf54lGrtc::new();
+        let mut attached = Nrf54lGrtc::new();
+        attached.attach_cpu_hz(u64::from(CPU_HZ_DEFAULT));
+        for g in [&mut plain, &mut attached] {
+            g.write_u32(OFF_TASKS_START, 1).unwrap();
+        }
+
+        // A run length that is not a whole number of SYSCOUNTER ticks. The
+        // 128 MHz ratio is exact by construction (128e6 = 128 * 1e6), so this
+        // pins that attaching the default clock changes nothing.
+        for _ in 0..97 {
+            plain.tick_elapsed(1_234_567);
+            attached.tick_elapsed(1_234_567);
+        }
+        assert_eq!(
+            attached.read_u32(SYSCOUNTERL).unwrap(),
+            plain.read_u32(SYSCOUNTERL).unwrap()
+        );
+    }
+
+    #[test]
+    fn attach_cpu_hz_scales_the_armed_compare_deadline() {
+        // CC[0] = 1 under a 16 MHz core is reached after exactly 16 cycles.
+        let mut g = Nrf54lGrtc::new();
+        g.attach_cpu_hz(16_000_000);
+        g.write_u32(OFF_TASKS_START, 1).unwrap();
+        g.write_u32(cc_reg(0, 0x0), 1).unwrap();
+        g.write_u32(cc_reg(0, 0xC), CCEN_ACTIVE).unwrap();
+
+        g.tick_elapsed(15);
+        assert_eq!(g.read_u32(OFF_EVENTS_COMPARE0).unwrap(), 0);
+        g.tick_elapsed(1);
+        assert_eq!(g.read_u32(OFF_EVENTS_COMPARE0).unwrap(), 1);
     }
 }

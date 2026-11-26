@@ -1,0 +1,103 @@
+=== gate (default features) ===
+test nrf_grtc_clock::nrf54l_grtc_follows_the_descriptor_core_clock ... FAILED
+test nrf_grtc_clock::every_nrf54l_grtc_counts_one_megahertz_at_the_descriptor_clock ... ok
+thread 'nrf_grtc_clock::nrf54l_grtc_follows_the_descriptor_core_clock' (3231375) panicked at crates/core/tests/nrf/nrf_grtc_clock.rs:147:13:
+assertion `left == right` failed: nrf54l15 GRTC at 0x500e2000 with cpu_hz=64000000: expected 1000 SYSCOUNTER ticks per millisecond, got 500
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 76 filtered out; finished in 0.26s
+=== gate (event-scheduler) ===
+test nrf_grtc_clock::nrf54l_grtc_follows_the_descriptor_core_clock ... FAILED
+test nrf_grtc_clock::every_nrf54l_grtc_counts_one_megahertz_at_the_descriptor_clock ... ok
+thread 'nrf_grtc_clock::nrf54l_grtc_follows_the_descriptor_core_clock' (3234736) panicked at crates/core/tests/nrf/nrf_grtc_clock.rs:147:13:
+assertion `left == right` failed: nrf54l15 GRTC at 0x500e2000 with cpu_hz=64000000: expected 1000 SYSCOUNTER ticks per millisecond, got 500
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 76 filtered out; finished in 0.13s
+=== unit tests (default features) ===
+running 5 tests
+test peripherals::nrf54l::grtc::tests::core_clock::attach_cpu_hz_at_the_default_is_a_no_op ... ok
+test peripherals::nrf54l::grtc::tests::core_clock::attach_cpu_hz_accumulates_a_fractional_ratio_without_drift ... FAILED
+test peripherals::nrf54l::grtc::tests::core_clock::attach_cpu_hz_derives_exact_one_megahertz_from_each_core_clock ... FAILED
+test peripherals::nrf54l::grtc::tests::core_clock::attach_cpu_hz_zero_keeps_the_default_ratio ... ok
+test peripherals::nrf54l::grtc::tests::core_clock::attach_cpu_hz_scales_the_armed_compare_deadline ... FAILED
+
+failures:
+
+---- peripherals::nrf54l::grtc::tests::core_clock::attach_cpu_hz_accumulates_a_fractional_ratio_without_drift stdout ----
+
+thread 'peripherals::nrf54l::grtc::tests::core_clock::attach_cpu_hz_accumulates_a_fractional_ratio_without_drift' (3439199) panicked at crates/core/src/peripherals/nrf54l/grtc_tests.rs:766:9:
+assertion `left == right` failed
+  left: 0
+ right: 2
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- peripherals::nrf54l::grtc::tests::core_clock::attach_cpu_hz_derives_exact_one_megahertz_from_each_core_clock stdout ----
+
+thread 'peripherals::nrf54l::grtc::tests::core_clock::attach_cpu_hz_derives_exact_one_megahertz_from_each_core_clock' (3439201) panicked at crates/core/src/peripherals/nrf54l/grtc_tests.rs:750:13:
+assertion `left == right` failed: core clock 64000000 Hz must keep the SYSCOUNTER at 1 MHz
+  left: 500000
+ right: 1000000
+
+---- peripherals::nrf54l::grtc::tests::core_clock::attach_cpu_hz_scales_the_armed_compare_deadline stdout ----
+
+thread 'peripherals::nrf54l::grtc::tests::core_clock::attach_cpu_hz_scales_the_armed_compare_deadline' (3439202) panicked at crates/core/src/peripherals/nrf54l/grtc_tests.rs:816:9:
+assertion `left == right` failed
+  left: 0
+ right: 1
+
+
+failures:
+    peripherals::nrf54l::grtc::tests::core_clock::attach_cpu_hz_accumulates_a_fractional_ratio_without_drift
+    peripherals::nrf54l::grtc::tests::core_clock::attach_cpu_hz_derives_exact_one_megahertz_from_each_core_clock
+    peripherals::nrf54l::grtc::tests::core_clock::attach_cpu_hz_scales_the_armed_compare_deadline
+
+test result: FAILED. 2 passed; 3 failed; 0 ignored; 0 measured; 6592 filtered out; finished in 0.00s
+=== scheduler unit tests (event-scheduler) ===
+running 8 tests
+test peripherals::nrf54l::grtc::tests::scheduler_mode::lazy_syscounter_read_tracks_published_clock_exactly ... ok
+test peripherals::nrf54l::grtc::tests::scheduler_mode::mid_run_clock_change_does_not_replay_elapsed_cycles ... FAILED
+test peripherals::nrf54l::grtc::tests::scheduler_mode::clock_attach_flips_to_scheduler_and_walk_tick_is_inert ... ok
+test peripherals::nrf54l::grtc::tests::scheduler_mode::arming_write_schedules_the_exact_compare_deadline ... ok
+test peripherals::nrf54l::grtc::tests::scheduler_mode::stale_event_chain_dies_on_token_mismatch ... ok
+test peripherals::nrf54l::grtc::tests::scheduler_mode::masked_compare_still_latches_but_schedules_no_irq ... ok
+test peripherals::nrf54l::grtc::tests::scheduler_mode::cc0_interval_reload_reschedules_the_next_period ... ok
+test peripherals::nrf54l::grtc::tests::scheduler_mode::on_event_pends_the_group_irq_and_reschedules ... ok
+
+failures:
+
+---- peripherals::nrf54l::grtc::tests::scheduler_mode::mid_run_clock_change_does_not_replay_elapsed_cycles stdout ----
+
+thread 'peripherals::nrf54l::grtc::tests::scheduler_mode::mid_run_clock_change_does_not_replay_elapsed_cycles' (3600311) panicked at crates/core/src/peripherals/nrf54l/grtc_tests.rs:574:9:
+assertion `left == right` failed
+  left: 20
+ right: 15
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    peripherals::nrf54l::grtc::tests::scheduler_mode::mid_run_clock_change_does_not_replay_elapsed_cycles
+
+test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 6781 filtered out; finished in 0.00s
+=== scheduler mid-run test, sync removed from attach_cpu_hz ===
+running 8 tests
+test peripherals::nrf54l::grtc::tests::scheduler_mode::arming_write_schedules_the_exact_compare_deadline ... ok
+test peripherals::nrf54l::grtc::tests::scheduler_mode::clock_attach_flips_to_scheduler_and_walk_tick_is_inert ... ok
+test peripherals::nrf54l::grtc::tests::scheduler_mode::lazy_syscounter_read_tracks_published_clock_exactly ... ok
+test peripherals::nrf54l::grtc::tests::scheduler_mode::mid_run_clock_change_does_not_replay_elapsed_cycles ... FAILED
+test peripherals::nrf54l::grtc::tests::scheduler_mode::on_event_pends_the_group_irq_and_reschedules ... ok
+test peripherals::nrf54l::grtc::tests::scheduler_mode::cc0_interval_reload_reschedules_the_next_period ... ok
+test peripherals::nrf54l::grtc::tests::scheduler_mode::stale_event_chain_dies_on_token_mismatch ... ok
+test peripherals::nrf54l::grtc::tests::scheduler_mode::masked_compare_still_latches_but_schedules_no_irq ... ok
+
+failures:
+
+---- peripherals::nrf54l::grtc::tests::scheduler_mode::mid_run_clock_change_does_not_replay_elapsed_cycles stdout ----
+
+thread 'peripherals::nrf54l::grtc::tests::scheduler_mode::mid_run_clock_change_does_not_replay_elapsed_cycles' (3689496) panicked at crates/core/src/peripherals/nrf54l/grtc_tests.rs:574:9:
+assertion `left == right` failed
+  left: 10
+ right: 15
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    peripherals::nrf54l::grtc::tests::scheduler_mode::mid_run_clock_change_does_not_replay_elapsed_cycles
+
+test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 6781 filtered out; finished in 0.00s
