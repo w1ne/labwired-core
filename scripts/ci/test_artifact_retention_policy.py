@@ -66,6 +66,31 @@ def test_workflows_contain_upload_steps():
     assert UPLOAD_STEPS, "no actions/upload-artifact steps found; parser broken?"
 
 
+def test_deploy_docs_prunes_superseded_github_pages_artifacts():
+    workflow = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "deploy-docs.yml").read_text()
+    )
+    assert (workflow.get("permissions") or {}).get("actions") == "write"
+
+    steps = workflow["jobs"]["deploy"]["steps"]
+    prune_index, prune_step = next(
+        (index, step)
+        for index, step in enumerate(steps)
+        if step.get("name") == "Prune superseded github-pages artifacts"
+    )
+    deploy_index = next(
+        index for index, step in enumerate(steps) if step.get("name") == "Build and Deploy"
+    )
+    assert prune_index < deploy_index
+    assert prune_step.get("continue-on-error") is True
+    assert str(prune_step.get("uses", "")).startswith("actions/github-script@")
+
+    script = (prune_step.get("with") or {}).get("script", "")
+    assert "listArtifactsForRepo" in script
+    assert "deleteArtifact" in script
+    assert "name: 'github-pages'" in script
+
+
 @pytest.mark.parametrize("step,max_days", UPLOAD_STEPS)
 def test_upload_artifact_sets_bounded_retention(step, max_days):
     days = (step.get("with") or {}).get("retention-days")
