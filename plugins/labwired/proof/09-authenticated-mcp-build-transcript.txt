@@ -1,0 +1,676 @@
+# LabWired Authenticated Hosted MCP — Live End-to-End Hardware Build & Verify
+# Timestamp (UTC): 2026-11-26T01:49:16Z
+# Endpoint: https://api.labwired.com/mcp
+# Auth: OAuth 2.1 PKCE (S256) Bearer token, scope=labwired:mcp, client='LabWired MCP Live Proof'
+
+==> 1. MCP initialize (HTTP 200, 0.95s)
+{
+  "protocolVersion": "2025-06-18",
+  "serverInfo": {
+    "name": "@labwired/hosted-mcp",
+    "version": "5ef17cff4ef6bac6bad953e7f6f45dda57303c0e"
+  }
+}
+
+==> 2. MCP tools/list (HTTP 200, 0.64s)
+Authenticated tool count: 68
+Sample tools: labwired_hardware, labwired_search, labwired_cad_tools, labwired_cad_call, labwired_list, labwired_project_list, labwired_project_get, labwired_project_create, labwired_project_update, labwired_project_edit_firmware, labwired_project_watch, labwired_project_verify, ...
+
+==> 3. tools/call labwired_list(kind='board', filter='esp32-c3') (HTTP 200, 0.71s)
+{
+  "boards": [
+    {
+      "id": "esp32c3-supermini",
+      "name": "ESP32-C3 Super Mini",
+      "board": "esp32c3",
+      "description": "Compact RISC-V ESP32-C3 Super Mini board with USB-C. Built-in user LED on GPIO8 (active-low).",
+      "mcu_component_type": "esp32-c3-supermini",
+      "canonical_id": "esp32-c3-supermini",
+      "runnable": true,
+      "compilable": true,
+      "support": "compile_and_run"
+    }
+  ],
+  "boards_note": "Omitted fields repeat another: target = board, mcu_component_type = id. An unfiltered listing has no description; pass filter, or labwired_describe a board."
+}
+
+==> 4. tools/call labwired_validate (ERC + pin checks + firmware-to-wiring) (HTTP 200, 0.74s)
+{
+  "ok": true,
+  "error_count": 0,
+  "warning_count": 0,
+  "diagnostics": []
+}
+
+==> 5. tools/call labwired_verify (ESP32-C3 LED blink + UART heartbeat, polls=0) (HTTP 200, 8.48s)
+{
+  "ok": true,
+  "status": "model_verified",
+  "proven": true,
+  "gaps": [
+    {
+      "code": "approximation",
+      "scope": "model",
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3.3 V rail, so power-on and brown-out reset are not simulated",
+      "address": "0x0",
+      "pc": "0x0"
+    }
+  ],
+  "unmodeled_faults": [
+    {
+      "access": "unpowered_rail_assumed",
+      "pc": "0x0",
+      "count": 1,
+      "note": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3.3 V rail, so power-on and brown-out reset are not simulated",
+      "address": "0x0"
+    }
+  ],
+  "verification": "serial contains \"BOOT:ESP32C3_READY\"; serial contains \"HEARTBEAT tick=\"; GPIO4 transitioned 4 time(s) (>= 4). Model-verified deterministically.",
+  "run_status": "pass",
+  "stop_reason": "assertions_passed",
+  "device_ms": 78.846,
+  "oracle_results": [
+    {
+      "kind": "serial",
+      "passed": true,
+      "detail": "serial contains \"BOOT:ESP32C3_READY\""
+    },
+    {
+      "kind": "serial",
+      "passed": true,
+      "detail": "serial contains \"HEARTBEAT tick=\""
+    },
+    {
+      "kind": "gpio_edges",
+      "passed": true,
+      "detail": "GPIO4 transitioned 4 time(s) (>= 4)"
+    }
+  ],
+  "diagnosis": {
+    "summary": "Ran and satisfied the UART acceptance assertions."
+  },
+  "serial": "ESP-ROM:esp32c3-api1-20210207\r\nBuild:Feb  7 2021\r\nrst:0x1 (POWERON),boot:0x8 (SPI_FAST_FLASH_BOOT)\r\nSPIWP:0xee\r\nmode:DIO, clock div:1\r\nload:0x3fcd5820,len:0x110c\r\nload:0x403cbf10,len:0xb54\r\nload:0x403ce710,len:0x2f9c\r\nentry 0x403cbf10\r\nBOOT:ESP32C3_READY\r\nHEARTBEAT tick=1\r\n",
+  "peripherals": [
+    {
+      "name": "uart0",
+      "kind": "native",
+      "base": 1610612736,
+      "registers_omitted": 33
+    },
+    {
+      "name": "gpio",
+      "kind": "native",
+      "base": 1610629120,
+      "registers_omitted": 199
+    },
+    {
+      "name": "timg0",
+      "kind": "native",
+      "base": 1610739712,
+      "registers_omitted": 26
+    },
+    {
+      "name": "interrupt_core0",
+      "kind": "declarative",
+      "base": 1611407360,
+      "registers_omitted": 103
+    },
+    {
+      "name": "uart1",
+      "kind": "native",
+      "base": 1610678272,
+      "registers_omitted": 33
+    },
+    {
+      "name": "timg1",
+      "kind": "native",
+      "base": 1610743808,
+      "registers_omitted": 26
+    },
+    {
+      "name": "system",
+      "kind": "declarative",
+      "base": 1611399168,
+      "registers_omitted": 40
+    },
+    {
+      "name": "rtc_cntl",
+      "kind": "declarative",
+      "base": 1610645504,
+      "registers_omitted": 75
+    },
+    {
+      "name": "apb_ctrl",
+      "kind": "declarative",
+      "base": 1610768384,
+      "registers_omitted": 40
+    },
+    {
+      "name": "systimer",
+      "kind": "native",
+      "base": 1610756096,
+      "registers_omitted": 30
+    },
+    {
+      "name": "io_mux",
+      "kind": "declarative",
+      "base": 1610649600,
+      "registers_omitted": 24
+    },
+    {
+      "name": "i2c0",
+      "kind": "native",
+      "base": 1610690560,
+      "registers_omitted": 36
+    },
+    {
+      "name": "spi2",
+      "kind": "native",
+      "base": 1610760192,
+      "registers_omitted": 37
+    },
+    {
+      "name": "ledc",
+      "kind": "native",
+      "base": 1610715136,
+      "registers_omitted": 44
+    },
+    {
+      "name": "rmt",
+      "kind": "native",
+      "base": 1610702848,
+      "registers_omitted": 30,
+      "artifacts": [
+        {
+          "kind": "rmt_tx",
+          "id": "tx_start",
+          "meta": {
+            "count": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "spi1",
+      "kind": "declarative",
+      "base": 1610620928,
+      "registers_omitted": 42
+    },
+    {
+      "name": "spi0",
+      "kind": "declarative",
+      "base": 1610625024,
+      "registers_omitted": 18
+    },
+    {
+      "name": "gpio_sd",
+      "kind": "declarative",
+      "base": 1610632960,
+      "registers_omitted": 7
+    },
+    {
+      "name": "efuse",
+      "kind": "declarative",
+      "base": 1610647552,
+      "registers_omitted": 115
+    },
+    {
+      "name": "uhci1",
+      "kind": "declarative",
+      "base": 1610661888,
+      "registers_omitted": 33
+    },
+    {
+      "name": "uhci0",
+      "kind": "declarative",
+      "base": 1610694656,
+      "registers_omitted": 33
+    },
+    {
+      "name": "bb",
+      "kind": "declarative",
+      "base": 1610731520,
+      "registers_omitted": 1
+    },
+    {
+      "name": "twai0",
+      "kind": "native",
+      "base": 1610788864,
+      "registers_omitted": 27
+    },
+    {
+      "name": "i2s0",
+      "kind": "declarative",
+      "base": 1610797056,
+      "registers_omitted": 23
+    },
+    {
+      "name": "bt",
+      "kind": "native",
+      "base": 1610813440,
+      "registers_omitted": 0
+    },
+    {
+      "name": "aes",
+      "kind": "declarative",
+      "base": 1610850304,
+      "registers_omitted": 47
+    },
+    {
+      "name": "sha",
+      "kind": "declarative",
+      "base": 1610854400,
+      "registers_omitted": 36
+    },
+    {
+      "name": "rsa",
+      "kind": "declarative",
+      "base": 1610858496,
+      "registers_omitted": 397
+    },
+    {
+      "name": "ds",
+      "kind": "declarative",
+      "base": 1610862592,
+      "registers_omitted": 659
+    },
+    {
+      "name": "hmac",
+      "kind": "declarative",
+      "base": 1610866688,
+      "registers_omitted": 40
+    },
+    {
+      "name": "dma",
+      "kind": "native",
+      "base": 1610870784,
+      "registers_omitted": 93
+    },
+    {
+      "name": "apb_saradc",
+      "kind": "native",
+      "base": 1610874880,
+      "registers_omitted": 26
+    },
+    {
+      "name": "usb_device",
+      "kind": "declarative",
+      "base": 1610887168,
+      "registers_omitted": 20
+    },
+    {
+      "name": "sensitive",
+      "kind": "declarative",
+      "base": 1611403264,
+      "registers_omitted": 94
+    },
+    {
+      "name": "extmem",
+      "kind": "declarative",
+      "base": 1611415552,
+      "registers_omitted": 66
+    },
+    {
+      "name": "xts_aes",
+      "kind": "declarative",
+      "base": 1611448320,
+      "registers_omitted": 12
+    },
+    {
+      "name": "assist_debug",
+      "kind": "declarative",
+      "base": 1611456512,
+      "registers_omitted": 40
+    },
+    {
+      "name": "radio_fe",
+      "kind": "declarative",
+      "base": 1610637312,
+      "registers_omitted": 17
+    },
+    {
+      "name": "radio_nrx",
+      "kind": "declarative",
+      "base": 1610730496,
+      "registers_omitted": 65
+    },
+    {
+      "name": "wifi_mac",
+      "kind": "declarative",
+      "base": 1610821632,
+      "registers_omitted": 193
+    },
+    {
+      "name": "spimem1_flash",
+      "kind": "native",
+      "base": 1610620928,
+      "registers_omitted": 0
+    },
+    {
+      "name": "spimem0_flash",
+      "kind": "native",
+      "base": 1610625024,
+      "registers_omitted": 0
+    },
+    {
+      "name": "mmu_table",
+      "kind": "native",
+      "base": 1611419648,
+      "registers_omitted": 0
+    },
+    {
+      "name": "extmem_cache",
+      "kind": "native",
+      "base": 1611415552,
+      "registers_omitted": 0
+    },
+    {
+      "name": "rtc_i2c_ana",
+      "kind": "native",
+      "base": 1610670080,
+      "registers_omitted": 0
+    },
+    {
+      "name": "usb_serial_jtag",
+      "kind": "native",
+      "base": 1610887168,
+      "registers_omitted": 0
+    },
+    {
+      "name": "wifi_fe",
+      "kind": "native",
+      "base": 1610682368,
+      "registers_omitted": 0
+    },
+    {
+      "name": "wifi_bb",
+      "kind": "native",
+      "base": 1610727424,
+      "registers_omitted": 0
+    },
+    {
+      "name": "radio_fe_pll_lock",
+      "kind": "native",
+      "base": 1610637684,
+      "registers_omitted": 0
+    },
+    {
+      "name": "wifi_mac",
+      "kind": "native",
+      "base": 1610821632,
+      "registers_omitted": 0
+    },
+    {
+      "name": "wdev_rnd",
+      "kind": "native",
+      "base": 1610768560,
+      "registers_omitted": 0
+    },
+    {
+      "name": "sha",
+      "kind": "native",
+      "base": 1610854400,
+      "registers_omitted": 0
+    },
+    {
+      "name": "flash_irom_xip",
+      "kind": "native",
+      "base": 1107296256,
+      "registers_omitted": 0
+    },
+    {
+      "name": "flash_drom_xip",
+      "kind": "native",
+      "base": 1006632960,
+      "registers_omitted": 0
+    },
+    {
+      "name": "rtc_cntl_timer",
+      "kind": "native",
+      "base": 1610645504,
+      "registers_omitted": 0
+    }
+  ],
+  "output_truncated": {
+    "reason": "The full payload was 414895 characters, over the 90000-character limit most clients accept for one tool result.",
+    "omitted": [
+      "peripherals[].registers and artifact bytes"
+    ],
+    "detail": "Re-run with output:\"peripherals\" and `peripheral` set to one name from the list for that block with its registers."
+  }
+}
+
+==> 6. tools/call labwired_price (qty=10 BOM) (HTTP 200, 1.75s)
+{
+  "quantity": 10,
+  "pricedLines": 2,
+  "totalLines": 3,
+  "total": null,
+  "runCost": null,
+  "lines": [
+    {
+      "part": "ESP32-C3",
+      "count": 1,
+      "mpn": "ESP32-C3",
+      "manufacturer": "Espressif Systems",
+      "termSource": "query",
+      "matched": "exact",
+      "unit": 1.5793,
+      "extended": 1.5793,
+      "priceStatus": "verified_live",
+      "sourcingLinks": [
+        {
+          "seller": "lcsc",
+          "displayName": "LCSC",
+          "mpn": "ESP32-C3",
+          "sku": "C2838500",
+          "clickUrl": "https://www.lcsc.com/product-detail/microcontrollers-mcu-mpu-soc_espressif-systems-esp32-c3_C2838500.html",
+          "priceStatus": "verified_live",
+          "match": "exact"
+        },
+        {
+          "seller": "digikey",
+          "displayName": "DigiKey",
+          "mpn": "ESP32-C3",
+          "clickUrl": "https://www.digikey.com/en/products/result?keywords=ESP32-C3",
+          "priceStatus": "unverified_price",
+          "match": "mpn_lookup"
+        },
+        {
+          "seller": "mouser",
+          "displayName": "Mouser",
+          "mpn": "ESP32-C3",
+          "clickUrl": "https://www.mouser.com/c/?q=ESP32-C3",
+          "priceStatus": "unverified_price",
+          "match": "mpn_lookup"
+        },
+        {
+          "seller": "tme",
+          "displayName": "TME",
+          "mpn": "ESP32-C3",
+          "clickUrl": "https://www.tme.eu/en/katalog/?search=ESP32-C3",
+          "priceStatus": "unverified_price",
+          "match": "mpn_lookup"
+        }
+      ],
+      "offers": [
+        {
+          "source": "jlcpcb",
+          "sku": "C2838500",
+          "currency": "USD",
+          "stock": 5196,
+          "unit": 1.5793,
+          "selected": true,
+          "url": "https://www.lcsc.com/product-detail/microcontrollers-mcu-mpu-soc_espressif-systems-esp32-c3_C2838500.html",
+          "assembly": "extended",
+          "fetchedAt": "2026-11-26T01:49:30.374Z"
+        }
+      ],
+      "nearMisses": {
+        "consignment-placeholder": 5,
+        "model-mismatch": 14
+      }
+    },
+    {
+      "part": "led",
+      "count": 1,
+      "mpn": null,
+      "manufacturer": null,
+      "termSource": "query",
+      "unit": null,
+      "extended": null,
+      "unpriced": "generic-part",
+      "detail": "\"led\" is a generic part (many values, colours and packages), so it has no single price. Pass a specific manufacturer part number, e.g. the exact 0603 resistor or LED you will buy.",
+      "offers": []
+    },
+    {
+      "part": "RC0603FR-07330RL",
+      "count": 1,
+      "mpn": "RC0603FR-07330RL",
+      "manufacturer": "YAGEO",
+      "termSource": "query",
+      "matched": "exact",
+      "unit": 0.0024,
+      "extended": 0.0024,
+      "priceStatus": "verified_live",
+      "sourcingLinks": [
+        {
+          "seller": "lcsc",
+          "displayName": "LCSC",
+          "mpn": "RC0603FR-07330RL",
+          "sku": "C105881",
+          "clickUrl": "https://www.lcsc.com/product-detail/chip-resistor-surface-mount_yageo-rc0603fr-07330rl_C105881.html",
+          "priceStatus": "verified_live",
+          "match": "exact"
+        },
+        {
+          "seller": "digikey",
+          "displayName": "DigiKey",
+          "mpn": "RC0603FR-07330RL",
+          "clickUrl": "https://www.digikey.com/en/products/result?keywords=RC0603FR-07330RL",
+          "priceStatus": "unverified_price",
+          "match": "mpn_lookup"
+        },
+        {
+          "seller": "mouser",
+          "displayName": "Mouser",
+          "mpn": "RC0603FR-07330RL",
+          "clickUrl": "https://www.mouser.com/c/?q=RC0603FR-07330RL",
+          "priceStatus": "unverified_price",
+          "match": "mpn_lookup"
+        },
+        {
+          "seller": "tme",
+          "displayName": "TME",
+          "mpn": "RC0603FR-07330RL",
+          "clickUrl": "https://www.tme.eu/en/katalog/?search=RC0603FR-07330RL",
+          "priceStatus": "unverified_price",
+          "match": "mpn_lookup"
+        }
+      ],
+      "offers": [
+        {
+          "source": "jlcpcb",
+          "sku": "C105881",
+          "currency": "USD",
+          "stock": 7325566,
+          "unit": 0.0024,
+          "selected": true,
+          "url": "https://www.lcsc.com/product-detail/chip-resistor-surface-mount_yageo-rc0603fr-07330rl_C105881.html",
+          "assembly": "extended",
+          "fetchedAt": "2026-11-26T01:49:30.292Z"
+        }
+      ]
+    }
+  ],
+  "incomplete": [
+    {
+      "part": "led",
+      "reason": "generic-part",
+      "detail": "\"led\" is a generic part (many values, colours and packages), so it has no single price. Pass a specific manufacturer part number, e.g. the exact 0603 resistor or LED you will buy."
+    }
+  ],
+  "providersUnavailable": [
+    {
+      "source": "nexar",
+      "detail": "The multi-distributor aggregate source is not enabled on this server; only JLCPCB/LCSC was searched for it."
+    },
+    {
+      "source": "mouser",
+      "detail": "Mouser is not enabled on this server and was not searched."
+    },
+    {
+      "source": "digikey",
+      "detail": "DigiKey is not enabled on this server and was not searched."
+    },
+    {
+      "source": "tme",
+      "detail": "TME is not enabled on this server and was not searched."
+    }
+  ]
+}
+==> 7. GET /v1/mcp/status (signed-in Clerk session, post-build)
+{
+  "httpStatus": 200,
+  "server_url": "https://api.labwired.com/mcp",
+  "plan": "free",
+  "is_paid": true,
+  "quota": {
+    "tier": "unlimited",
+    "daily_build_limit": null,
+    "daily_builds_used": 0,
+    "daily_builds_remaining": null,
+    "unlimited_read_tools": true,
+    "resets_at": "2026-11-27T00:00:00.000Z",
+    "upgrade_url": "https://labwired.com/pricing.html"
+  },
+  "connected_apps": [
+    {
+      "client_name": "LabWired MCP Live Proof",
+      "scope": "labwired:mcp",
+      "created_at": 1795657526,
+      "grant_id_prefix": "cRCGQFuy..."
+    },
+    {
+      "client_name": "sven",
+      "scope": "labwired:mcp",
+      "created_at": 1795174853,
+      "grant_id_prefix": "kDYUsSr4..."
+    },
+    {
+      "client_name": "LabWired postmerge transport QA",
+      "scope": "labwired:mcp",
+      "created_at": 1794526682,
+      "grant_id_prefix": "PWoNkYKF..."
+    },
+    {
+      "client_name": "ChatGPT",
+      "scope": "labwired:mcp",
+      "created_at": 1794511702,
+      "grant_id_prefix": "Bi5OqNVg..."
+    },
+    {
+      "client_name": "Claude",
+      "scope": "labwired:mcp",
+      "created_at": 1791487186,
+      "grant_id_prefix": "4PsGLFZN..."
+    }
+  ]
+}
+
+==> 8. Live UI Revoke ('LabWired MCP Live Proof' on /tools/mcp)
+{
+  "ui_row_removed": true,
+  "delete_api_responses": [
+    {
+      "status": 204,
+      "url_path": "/v1/mcp/grants/<id>"
+    },
+    {
+      "status": 200,
+      "url_path": "/v1/mcp/grants/<id>"
+    }
+  ],
+  "post_revoke_mcp_http_status": 401,
+  "post_revoke_www_authenticate": "Bearer realm=\"LabWired MCP\", resource_metadata=\"https://api.labwired.com/.well-known/oauth-protected-resource/mcp\""
+}
