@@ -323,7 +323,10 @@ const ESP32_ADC1_GPIO: [u8; 8] = [36, 37, 38, 39, 32, 33, 34, 35];
 /// `GPIO34` -> 34. Espressif names pads by their GPIO number only.
 fn esp_gpio_number(pad: &str) -> Option<u8> {
     let digits = pad.strip_prefix("GPIO")?;
-    if digits.is_empty() || (digits.len() > 1 && digits.starts_with('0')) {
+    if digits.is_empty()
+        || !digits.bytes().all(|b| b.is_ascii_digit())
+        || (digits.len() > 1 && digits.starts_with('0'))
+    {
         return None;
     }
     digits.parse().ok()
@@ -813,7 +816,7 @@ fn rp2040_validation_rejects_bad_pads_channels_and_the_temperature_input() {
 fn esp32_validation_rejects_bad_pads_channels_and_types() {
     let original = load("esp32");
     assert!(analog_pin_problems("esp32", &original).is_empty());
-    for bad_pad in ["GPIO034", "IO34", "GPIO", "P34", "GPIO34x"] {
+    for bad_pad in ["GPIO034", "GPIO+34", "IO34", "GPIO", "P34", "GPIO34x"] {
         let mut desc = original.clone();
         let mapping = desc.analog_pins.remove("GPIO34").unwrap();
         desc.analog_pins.insert(bad_pad.to_string(), mapping);
