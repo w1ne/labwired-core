@@ -35,7 +35,7 @@ jobs:
           --fixture crates/core/tests/fixtures/st7735-codal-host-trace.json
       - uses: actions/upload-artifact@v4
         with:
-          retention-days: 3
+          retention-days: 2
           name: st7735-codal-host-trace
           path: ${{ runner.temp }}/st7735-codal-trace.json
           if-no-files-found: error

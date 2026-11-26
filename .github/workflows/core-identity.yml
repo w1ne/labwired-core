@@ -197,7 +197,7 @@ jobs:
         if: always()
         with:
           name: cortex-m-perf-evidence
-          retention-days: 3
+          retention-days: 2
           path: |
             perf-evidence/
             perf-build-evidence/
@@ -277,7 +277,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          retention-days: 3
+          retention-days: 2
           name: cortex-m-oracle-evidence
           path: oracle-source/oracle-evidence/
 
@@ -385,7 +385,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          retention-days: 3
+          retention-days: 2
           name: identity-${{ matrix.side }}
           path: out/
 
@@ -554,6 +554,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          retention-days: 3
+          retention-days: 2
           name: identity-report
           path: report.txt
