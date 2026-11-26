@@ -1257,7 +1257,10 @@ fn every_drivable_adc_takes_an_input_on_its_last_channel() {
     let mut sens = Esp32s3Sens::new();
     let last = sens.adc_channel_count().expect("S3 SENS is an ADC") - 1;
     sens.set_channel_input(last, 1650);
-    assert_eq!(sens.channel_input_count(last), 2047);
+    assert_eq!(
+        sens.channel_input_count(last),
+        labwired_core::peripherals::esp_xtensa_common::esp32s3_adc1_mv_to_raw(1650, 3)
+    );
 
     let mut c3 = Esp32c3ApbSarAdc::default();
     let last = c3.adc_channel_count().expect("C3 APB_SARADC is an ADC") - 1;

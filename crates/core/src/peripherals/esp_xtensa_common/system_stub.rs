@@ -519,10 +519,13 @@ impl EfuseStub {
     /// succeeds without aborting with `ESP_ERR_NOT_FOUND` /
     /// `ESP_ERR_NOT_SUPPORTED`.
     ///
-    /// Calibration voltages (`ADC1_CAL_VOL_ATTEN0..3` diffs = `[70, 100, 125,
-    /// 140]` -> decoded digi `[3635, 2765, 1965, 1040]`) align ESP-IDF's
-    /// S3 curve-fitting polynomial with our nominal 12-bit 3.3 V ADC model
-    /// (`<15 mV` error across `0..2000 mV` at ATTEN3).
+    /// Calibration voltages (`ADC1_CAL_VOL_ATTEN0..3` diffs = `[70, 100, 215,
+    /// 50]` -> decoded digi `[3635, 2765, 1965, 950]`) keep the ATTEN3
+    /// curve-fitting ceiling above the ESP32-S3 datasheet's `3100 mV` range
+    /// (`3203 mV` at raw `4095`). Pair with [`esp32s3_adc1_mv_to_raw`] in
+    /// `Esp32s3Sens` / `Esp32s3SarAdc` so `analogReadMilliVolts()` round-trips
+    /// injected voltages to within `<= 2 mV` across `0..3200 mV` with no
+    /// near-3 V roll-off.
     const BLK2_WORDS: [u32; 8] = {
         let w = [0u32; 8];
         // BLK_VERSION_MAJOR = 1 (V1 ADC calibration): bit 128, width 2
@@ -537,13 +540,85 @@ impl EfuseStub {
         // ADC1_CAL_VOL_ATTEN0..3: bits 201(8), 209(8), 217(8), 225(8)
         let w = Self::pack_field(w, 201, 8, 70);
         let w = Self::pack_field(w, 209, 8, 100);
-        let w = Self::pack_field(w, 217, 8, 125);
-        let w = Self::pack_field(w, 225, 8, 140);
+        let w = Self::pack_field(w, 217, 8, 215);
+        let w = Self::pack_field(w, 225, 8, 50);
         // ADC2_CAL_VOL_ATTEN0..2: bits 233(8), 241(7), 248(7) -> match ADC1
         let w = Self::pack_field(w, 233, 8, 40);
         let w = Self::pack_field(w, 241, 7, 10);
         Self::pack_field(w, 248, 7, 20)
     };
+}
+
+/// Decoded ESP32-S3 V1 ADC1 calibration digital values (`[ATTEN0, ATTEN1,
+/// ATTEN2, ATTEN3]`) exposed by [`EfuseStub`]. All four attenuations calibrate
+/// against `850 mV` in ESP-IDF v5.3.2 `esp_efuse_rtc_calib_get_cal_voltage`.
+pub const ESP32S3_V1_CAL_VOL: [u32; 4] = [3635, 2765, 1965, 950];
+
+/// Exact ESP-IDF v5.3.2 ESP32-S3 `ADC_ATTEN_DB_12` (ATTEN3) V1 curve-fitting
+/// polynomial (`adc_cali_raw_to_voltage`), matching [`EfuseStub`]'s `v1_3`.
+pub fn esp32s3_atten3_curve_fit_mv(raw: u16) -> u16 {
+    const COEFF_A_SCALING: u64 = 65536;
+    const COEFF_A: u64 = (COEFF_A_SCALING * 850) / ESP32S3_V1_CAL_VOL[3] as u64;
+    const TERMS: [(u64, u64, i64); 5] = [
+        (644_403_418_269_478, 1_000_000_000_000_000, -1),
+        (644_334_888_647_536, 10_000_000_000_000_000, -1),
+        (1_297_891_447_611, 10_000_000_000_000_000, 1),
+        (70_769_718, 1_000_000_000_000_000, -1),
+        (13_515, 1_000_000_000_000_000, 1),
+    ];
+
+    let v_cali_1 = (u64::from(raw.min(4095)) * COEFF_A) / COEFF_A_SCALING;
+    if v_cali_1 == 0 {
+        return 0;
+    }
+    let mut var = 1u128;
+    let mut err = 0i64;
+    for (idx, &(c, m, sign)) in TERMS.iter().enumerate() {
+        if idx > 0 {
+            var *= u128::from(v_cali_1);
+        }
+        err += ((var * u128::from(c)) / u128::from(m)) as i64 * sign;
+    }
+    (v_cali_1 as i64 - err).clamp(0, i64::from(u16::MAX)) as u16
+}
+
+/// Convert a physical pad voltage (`millivolts`) into the 12-bit ESP32-S3 SAR
+/// ADC1 raw count for attenuation `atten` (`0..=3`, where `3` is 12 dB /
+/// `ADC_ATTEN_DB_12`).
+///
+/// For `atten == 3`, inverts [`esp32s3_atten3_curve_fit_mv`] so real ESP-IDF /
+/// Arduino `analogReadMilliVolts()` recovers the injected voltage to within
+/// `<= 1 mV` across `0..3200 mV` instead of rolling off near 3 V.
+pub fn esp32s3_adc1_mv_to_raw(millivolts: u16, atten: u8) -> u16 {
+    if millivolts == 0 {
+        return 0;
+    }
+    let atten_idx = (atten & 0x3) as usize;
+    if atten_idx < 3 {
+        let cal = u64::from(ESP32S3_V1_CAL_VOL[atten_idx]);
+        return ((u64::from(millivolts) * cal + 425) / 850).min(4095) as u16;
+    }
+
+    // `esp32s3_atten3_curve_fit_mv` is strictly non-decreasing on 0..=4095
+    // (ceiling 3203 mV at raw = 4095). Binary-search for the closest raw code.
+    let mut lo: u16 = 0;
+    let mut hi: u16 = 4095;
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        if esp32s3_atten3_curve_fit_mv(mid) < millivolts {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    if lo > 0 {
+        let above = esp32s3_atten3_curve_fit_mv(lo).abs_diff(millivolts);
+        let below = esp32s3_atten3_curve_fit_mv(lo - 1).abs_diff(millivolts);
+        if below < above {
+            return lo - 1;
+        }
+    }
+    lo
 }
 
 impl Peripheral for EfuseStub {
@@ -674,7 +749,7 @@ mod tests {
         let v1_2 = adc1_d2 + v1_3 + 800;
         let v1_1 = adc1_d1 + v1_2 + 700;
         let v1_0 = adc1_d0 + v1_1 + 800;
-        assert_eq!([v1_0, v1_1, v1_2, v1_3], [3635, 2765, 1965, 1040]);
+        assert_eq!([v1_0, v1_1, v1_2, v1_3], ESP32S3_V1_CAL_VOL);
 
         let adc2_d0 = read_efuse_bits(&efuse, 0x05C, 233, 8);
         let adc2_d1 = read_efuse_bits(&efuse, 0x05C, 241, 7);
@@ -685,10 +760,12 @@ mod tests {
         let v2_2 = v1_2 - adc2_d2 + 20;
         let v2_1 = v1_1 - adc2_d1 + 10;
         let v2_0 = v1_0 - adc2_d0 + 40;
-        assert_eq!([v2_0, v2_1, v2_2, v2_3], [3635, 2765, 1965, 1040]);
+        assert_eq!([v2_0, v2_1, v2_2, v2_3], ESP32S3_V1_CAL_VOL);
 
-        // Verify ESP-IDF v5.3.2 ATTEN3 curve-fitting polynomial maps nominal
-        // 12-bit 3.3 V ADC counts back to millivolts within 20 mV across 0..2000 mV.
+        // Verify ESP-IDF v5.3.2 ATTEN3 curve-fitting polynomial round-trips
+        // `esp32s3_adc1_mv_to_raw(mv, 3)` back to millivolts within <= 2 mV
+        // across the full 0..3200 mV range (including near-3 V sensor divider
+        // points such as 2970 mV soil-moisture and 3100 mV 500 lx LDR).
         const COEFF_A_SCALING: u64 = 65536;
         let coeff_a = (COEFF_A_SCALING * 850) / u64::from(v1_3);
         let terms: [(u64, u64, i64); 5] = [
@@ -698,8 +775,10 @@ mod tests {
             (70_769_718, 1_000_000_000_000_000, -1),
             (13_515, 1_000_000_000_000_000, 1),
         ];
-        for mv in [0u32, 330, 850, 1000, 1650, 2000] {
-            let raw = (u64::from(mv) * 4095) / 3300;
+        for mv in [
+            0u16, 330, 660, 850, 1000, 1650, 2000, 2500, 2970, 3100, 3200,
+        ] {
+            let raw = u64::from(esp32s3_adc1_mv_to_raw(mv, 3));
             let v_cali_1 = (raw * coeff_a) / COEFF_A_SCALING;
             let out_mv = if v_cali_1 == 0 {
                 0i64
@@ -714,9 +793,10 @@ mod tests {
                 }
                 v_cali_1 as i64 - err
             };
+            assert_eq!(out_mv, i64::from(esp32s3_atten3_curve_fit_mv(raw as u16)));
             assert!(
-                (out_mv - i64::from(mv)).abs() <= 20,
-                "ATTEN3 curve fit at {mv} mV returned {out_mv} mV"
+                (out_mv - i64::from(mv)).abs() <= 2,
+                "ATTEN3 curve fit at {mv} mV returned {out_mv} mV (raw={raw})"
             );
         }
     }

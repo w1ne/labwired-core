@@ -282,6 +282,14 @@ pub struct GenericDisplay {
     /// set, so summary mode stays small). Cap matches generation_history.
     /// Used by Acc framebuffer prove clauses (blink / motion / geometry).
     frames_seen: VecDeque<LoggedFrame>,
+    /// True when the descriptor defines an explicit `refresh` command
+    /// (e-paper panels whose glass updates only on `action.refresh`).
+    has_refresh: bool,
+    /// True once at least one write unit / pixel has landed in the currently
+    /// open `Framing::Ram` stream. Prevents empty `RAMWR` openings from
+    /// emitting a spurious frame while allowing inspect/CS-close to flush the
+    /// final rendered frame without requiring a dummy trailing command.
+    ram_stream_wrote: bool,
     /// Data bytes written since the last `note_fb_generation` for
     /// `ram.stream: always` panels. Adafruit SSD1306 chunks a display() into
     /// many short I²C transactions; we only log a frame once a full plane
@@ -1117,6 +1125,10 @@ impl GenericDisplay {
             known: vec![false; width * height],
             rejected_colmod: 0,
         });
+        let has_refresh = spec
+            .commands
+            .iter()
+            .any(|c| c.actions.iter().any(|a| a.refresh));
         let mut dev = Self {
             by_opcode,
             width,
@@ -1158,6 +1170,8 @@ impl GenericDisplay {
             refresh_generation: 0,
             generation_history: VecDeque::new(),
             frames_seen: VecDeque::new(),
+            has_refresh,
+            ram_stream_wrote: false,
             ram_bytes_since_note: 0,
             last_logged_generation: None,
             framing: Framing::Idle,
@@ -1296,6 +1310,7 @@ impl GenericDisplay {
                     // Neither release nor an unknown wire resumes fragments
                     // clocked before the reset-state transition.
                     self.framing = Framing::Idle;
+                    self.ram_stream_wrote = false;
                     self.param_have = 0;
                     self.param_want = 0;
                     self.pending_idx = None;
@@ -1345,6 +1360,7 @@ impl GenericDisplay {
         }
         self.reset_window();
         self.framing = Framing::Idle;
+        self.ram_stream_wrote = false;
         self.param_have = 0;
         self.param_want = 0;
         self.pending_idx = None;
@@ -1633,6 +1649,7 @@ impl GenericDisplay {
                 self.unit_have = 0;
                 self.ram_remaining = (self.spec.ram.stream == DisplayRamStream::WindowCounted)
                     .then(|| self.window_units());
+                self.ram_stream_wrote = false;
                 self.framing = Framing::Ram;
             }
             if let Some(on) = action.display_on {
@@ -1687,6 +1704,7 @@ impl GenericDisplay {
     fn command_byte(&mut self, byte: u8) {
         if self.framing == Framing::Ram {
             self.note_fb_generation();
+            self.ram_stream_wrote = false;
         }
         // Parameters of a command opened on the COMMAND stream (I²C control-byte
         // framing) arrive here, ahead of any opcode decode — the controller is
@@ -1855,6 +1873,7 @@ impl GenericDisplay {
                 };
                 self.ram[index * 3..index * 3 + 3].copy_from_slice(&channels);
             }
+            self.ram_stream_wrote = true;
             self.advance();
             return;
         }
@@ -1865,6 +1884,7 @@ impl GenericDisplay {
         }
         self.unit_have = 0;
         self.commit_unit();
+        self.ram_stream_wrote = true;
         self.advance();
         // `window_counted`: the controller accepts exactly the window and then
         // the stream is shut. Running past it would wrap the counters back to
@@ -1874,6 +1894,7 @@ impl GenericDisplay {
             if *left == 0 {
                 self.ram_remaining = None;
                 self.framing = Framing::Idle;
+                self.ram_stream_wrote = false;
                 self.note_fb_generation();
             }
         }
@@ -2018,6 +2039,26 @@ impl GenericDisplay {
         Some(known)
     }
 
+    fn make_logged_frame(&self, fb: Vec<u8>, gen: u64) -> LoggedFrame {
+        let sha = {
+            use sha2::{Digest, Sha256};
+            let dig = Sha256::digest(&fb);
+            dig.iter().map(|b| format!("{b:02x}")).collect::<String>()
+        };
+        // A 128x64 1-bpp plane is 1024 bytes; 128 of those is fine. A
+        // 170x320 RGB888 plane is ~160 KiB, and 128 of those would be ~20 MiB
+        // per panel. Keep the plane only when Acc geometry can reasonably
+        // use it.
+        const FRAME_BYTES_KEEP: usize = 4096;
+        LoggedFrame {
+            generation: gen,
+            t_us: self.elapsed_us,
+            sha256: sha,
+            ink_bytes: fb.iter().filter(|&&b| b != 0).count(),
+            bytes: (fb.len() <= FRAME_BYTES_KEEP).then_some(fb),
+        }
+    }
+
     /// Record the current framebuffer hash when a RAMWR (or equivalent) stream
     /// has closed and the picture differs from the last logged one.
     fn note_fb_generation(&mut self) {
@@ -2036,23 +2077,8 @@ impl GenericDisplay {
         if self.frames_seen.len() >= CAP {
             self.frames_seen.pop_front();
         }
-        let sha = {
-            use sha2::{Digest, Sha256};
-            let dig = Sha256::digest(&fb);
-            dig.iter().map(|b| format!("{b:02x}")).collect::<String>()
-        };
-        // A 128x64 1-bpp plane is 1024 bytes; 128 of those is fine. A
-        // 170x320 RGB888 plane is ~160 KiB, and 128 of those would be ~20 MiB
-        // per panel. Keep the plane only when Acc geometry can reasonably
-        // use it.
-        const FRAME_BYTES_KEEP: usize = 4096;
-        self.frames_seen.push_back(LoggedFrame {
-            generation: gen,
-            t_us: self.elapsed_us,
-            sha256: sha,
-            ink_bytes: fb.iter().filter(|&&b| b != 0).count(),
-            bytes: (fb.len() <= FRAME_BYTES_KEEP).then_some(fb),
-        });
+        let frame = self.make_logged_frame(fb, gen);
+        self.frames_seen.push_back(frame);
     }
 
     fn build_artifacts(
@@ -2092,15 +2118,30 @@ impl GenericDisplay {
             history.push(generation);
         }
         meta.insert("generation_history".into(), serde_json::json!(history));
-        meta.insert(
-            "frames_seen".into(),
-            serde_json::Value::Array(
-                self.frames_seen
-                    .iter()
-                    .map(|frame| frame.to_meta(opts.include_bytes))
-                    .collect(),
-            ),
-        );
+        let mut frames_seen: Vec<serde_json::Value> = self
+            .frames_seen
+            .iter()
+            .map(|frame| frame.to_meta(opts.include_bytes))
+            .collect();
+        // A `ram.stream: command` panel (GC9A01, ILI9341, ST7789, ST7735, ...)
+        // leaves its final `RAMWR` stream open when firmware stops sending
+        // commands after the last pixel write. Surface that live frame in
+        // `frames_seen` just as `generation_history` already includes it,
+        // without requiring a dummy trailing command (such as NORON 0x13).
+        if self.spec.ram.stream == DisplayRamStream::Command
+            && !self.has_refresh
+            && self.framing == Framing::Ram
+            && self.ram_stream_wrote
+        {
+            let fb_gen = crate::inspect::artifact_generation(&fb);
+            if self.last_logged_generation != Some(fb_gen) {
+                frames_seen.push(
+                    self.make_logged_frame(fb.clone(), fb_gen)
+                        .to_meta(opts.include_bytes),
+                );
+            }
+        }
+        meta.insert("frames_seen".into(), serde_json::Value::Array(frames_seen));
         // Which panel this is. Two panels can hold the same picture (three
         // OLEDs at 0x3C behind a TCA9548A drawing one splash), and a consumer
         // that tells evidence apart by its contents would merge them into one.
@@ -2410,6 +2451,7 @@ impl I2cDevice for GenericDisplay {
         if self.spec.ram.stream != DisplayRamStream::Always && self.framing == Framing::Ram {
             self.note_fb_generation();
             self.framing = Framing::Idle;
+            self.ram_stream_wrote = false;
         }
         self.control = None;
     }
@@ -2462,7 +2504,11 @@ impl SpiDevice for GenericDisplay {
         if self.spec.cs_select == DisplayCsSelect::KeepsStream {
             return;
         }
+        if self.framing == Framing::Ram && self.ram_stream_wrote && !self.has_refresh {
+            self.note_fb_generation();
+        }
         self.framing = Framing::Idle;
+        self.ram_stream_wrote = false;
         self.param_want = 0;
         self.param_have = 0;
         self.unit_have = 0;

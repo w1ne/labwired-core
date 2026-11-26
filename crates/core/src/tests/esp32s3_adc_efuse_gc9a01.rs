@@ -88,25 +88,17 @@ mod esp32s3_adc_efuse_gc9a01_tests {
         assert!(bus.seed_adc_channel("sar_adc_s3", 3, 2500));
         assert!(bus.seed_adc_channel("sar_adc_s3", 4, 825));
 
-        let expected_ch3 = ((2500u32 * 4095) / 3300) as u16;
-        let expected_ch4 = ((825u32 * 4095) / 3300) as u16;
+        let expected_ch3 = crate::peripherals::esp_xtensa_common::esp32s3_adc1_mv_to_raw(2500, 3);
+        let expected_ch4 = crate::peripherals::esp_xtensa_common::esp32s3_adc1_mv_to_raw(825, 3);
         assert_eq!(sens_oneshot_adc1(&mut bus, 3), expected_ch3);
         assert_eq!(sens_oneshot_adc1(&mut bus, 4), expected_ch4);
-        assert_eq!(
-            apb_saradc_onetime_adc1(&mut bus, 3),
-            ((2500u32 * 4095 + 1650) / 3300) as u16
-        );
+        assert_eq!(apb_saradc_onetime_adc1(&mut bus, 3), expected_ch3);
 
         // Bidirectional: seeding `sens_s3` must also be observed by `sar_adc_s3`.
         assert!(bus.seed_adc_channel("sens_s3", 1, 1650));
-        assert_eq!(
-            sens_oneshot_adc1(&mut bus, 1),
-            ((1650u32 * 4095) / 3300) as u16
-        );
-        assert_eq!(
-            apb_saradc_onetime_adc1(&mut bus, 1),
-            ((1650u32 * 4095 + 1650) / 3300) as u16
-        );
+        let expected_ch1 = crate::peripherals::esp_xtensa_common::esp32s3_adc1_mv_to_raw(1650, 3);
+        assert_eq!(sens_oneshot_adc1(&mut bus, 1), expected_ch1);
+        assert_eq!(apb_saradc_onetime_adc1(&mut bus, 1), expected_ch1);
 
         // Clearing via `sar_adc_s3` reverts `sens_s3` to mid-scale 2048.
         let sar_idx = bus
@@ -122,16 +114,39 @@ mod esp32s3_adc_efuse_gc9a01_tests {
         assert!(bus.seed_adc_channel("sar_adc_s3", 2, 2900));
         assert_eq!(
             sens_oneshot_adc1(&mut bus, 2),
-            ((2900u32 * 4095) / 3300) as u16
+            crate::peripherals::esp_xtensa_common::esp32s3_adc1_mv_to_raw(2900, 3)
         );
         bus.peripherals[sar_idx].dev.restore(snap).unwrap();
         assert_eq!(
             sens_oneshot_adc1(&mut bus, 2),
-            ((1100u32 * 4095) / 3300) as u16
+            crate::peripherals::esp_xtensa_common::esp32s3_adc1_mv_to_raw(1100, 3)
         );
         // Further writes after restore must still propagate to `sens_s3`.
         assert!(bus.seed_adc_channel("sar_adc_s3", 2, 3300));
         assert_eq!(sens_oneshot_adc1(&mut bus, 2), 4095);
+    }
+
+    #[test]
+    fn esp32s3_adc1_curve_fit_no_rolloff_near_3v() {
+        let mut bus = make_esp32s3_bus();
+        // Verify near-3 V sensor divider voltages (e.g. 2970 mV soil moisture
+        // at 10% and 3100 mV LDR at 500 lx) round-trip through SENS oneshot +
+        // ESP-IDF ATTEN3 curve fitting within <= 2 mV instead of rolling off.
+        for mv in [0u16, 330, 660, 850, 1650, 2500, 2970, 3100, 3200] {
+            assert!(bus.seed_adc_channel("sar_adc_s3", 4, mv));
+            let sens_raw = sens_oneshot_adc1(&mut bus, 4);
+            let apb_raw = apb_saradc_onetime_adc1(&mut bus, 4);
+            assert_eq!(
+                sens_raw, apb_raw,
+                "SENS and APB_SARADC must agree at {mv} mV"
+            );
+            let recovered =
+                crate::peripherals::esp_xtensa_common::esp32s3_atten3_curve_fit_mv(sens_raw);
+            assert!(
+                recovered.abs_diff(mv) <= 2,
+                "ESP32-S3 ADC1 ATTEN3 roll-off at {mv} mV: raw={sens_raw} -> {recovered} mV"
+            );
+        }
     }
 
     #[test]
@@ -290,6 +305,95 @@ external_devices:
             arts_after[0].meta["painted_bytes"].as_u64().unwrap_or(0),
             6,
             "CS=HIGH must gate subsequent GDMA pixel writes"
+        );
+    }
+
+    #[test]
+    fn gc9a01_frames_seen_includes_final_frame_without_trailing_noron() {
+        let mut bus = make_esp32s3_bus();
+        let manifest: labwired_config::SystemManifest = serde_yaml::from_str(
+            r#"
+schema_version: "1.0"
+name: "esp32s3-gc9a01-frames-test"
+chip: "esp32s3.yaml"
+external_devices:
+  - id: "tft"
+    type: "gc9a01"
+    connection: "spi2_s3"
+    config:
+      dc_pin: "GPIO13"
+      cs_pin: "GPIO10"
+"#,
+        )
+        .expect("parse test manifest");
+        let res =
+            attach_external_device_universal(&mut bus, &manifest, &manifest.external_devices[0])
+                .expect("attach gc9a01");
+        assert_eq!(res, UniversalResolution::Attached);
+
+        bus.write_u32(GPIO_ENABLE_W1TS, (1 << 10) | (1 << 13))
+            .unwrap();
+        // Assert CS=LOW, DC=LOW for init commands.
+        bus.write_u32(GPIO_OUT_W1TC, (1 << 10) | (1 << 13)).unwrap();
+        spi2_pio_send(&mut bus, &[0x11]); // SLPOUT
+        spi2_pio_send(&mut bus, &[0x29]); // DISPON
+
+        // Paint 4 distinct frames using only CASET/RASET/RAMWR + pixel bytes,
+        // with NO trailing NORON (0x13) or other command after frame 4.
+        let frame_colors: [[u8; 4]; 4] = [
+            [0xF8, 0x00, 0xF8, 0x00],
+            [0x07, 0xE0, 0x07, 0xE0],
+            [0x00, 0x1F, 0x00, 0x1F],
+            [0xFF, 0xFF, 0xFF, 0xFF],
+        ];
+        for pixels in frame_colors {
+            bus.write_u32(GPIO_OUT_W1TC, 1 << 13).unwrap(); // DC=LOW
+            spi2_pio_send(&mut bus, &[0x2A]); // CASET
+            bus.write_u32(GPIO_OUT_W1TS, 1 << 13).unwrap(); // DC=HIGH
+            spi2_pio_send(&mut bus, &[0, 0, 0, 1]);
+            bus.write_u32(GPIO_OUT_W1TC, 1 << 13).unwrap(); // DC=LOW
+            spi2_pio_send(&mut bus, &[0x2B]); // RASET
+            bus.write_u32(GPIO_OUT_W1TS, 1 << 13).unwrap(); // DC=HIGH
+            spi2_pio_send(&mut bus, &[0, 0, 0, 0]);
+            bus.write_u32(GPIO_OUT_W1TC, 1 << 13).unwrap(); // DC=LOW
+            spi2_pio_send(&mut bus, &[0x2C]); // RAMWR
+            bus.write_u32(GPIO_OUT_W1TS, 1 << 13).unwrap(); // DC=HIGH
+            spi2_pio_send(&mut bus, &pixels);
+        }
+
+        let arts = bus.display_artifacts_of_format(&["rgb565_be"], &InspectOpts::default());
+        assert_eq!(arts.len(), 1);
+        let frames_before_noron = arts[0].meta["frames_seen"]
+            .as_array()
+            .expect("frames_seen array");
+        let gens_before_noron = arts[0].meta["generation_history"]
+            .as_array()
+            .expect("generation_history array");
+        assert_eq!(
+            frames_before_noron.len(),
+            4,
+            "all 4 distinct GC9A01 frames must appear in frames_seen without a trailing NORON (0x13)"
+        );
+        assert_eq!(gens_before_noron.len(), 4);
+        let distinct_shas: std::collections::HashSet<&str> = frames_before_noron
+            .iter()
+            .map(|f| f["sha256"].as_str().expect("sha256"))
+            .collect();
+        assert_eq!(distinct_shas.len(), 4);
+
+        // Sending a trailing NORON (0x13) afterwards must close cleanly without
+        // duplicating frame 4.
+        bus.write_u32(GPIO_OUT_W1TC, 1 << 13).unwrap(); // DC=LOW
+        spi2_pio_send(&mut bus, &[0x13]); // NORON
+        let arts_after_noron =
+            bus.display_artifacts_of_format(&["rgb565_be"], &InspectOpts::default());
+        let frames_after_noron = arts_after_noron[0].meta["frames_seen"]
+            .as_array()
+            .expect("frames_seen array");
+        assert_eq!(
+            frames_after_noron.len(),
+            4,
+            "trailing NORON (0x13) must not duplicate the already-surfaced 4th frame"
         );
     }
 }
