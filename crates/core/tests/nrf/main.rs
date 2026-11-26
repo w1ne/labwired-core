@@ -41,3 +41,4 @@ mod nrf_gpio_in_step_vs_run;
 mod nrf_grtc_clock;
 mod nrf_rtc_lfclk_clock;
 mod nrf_timer_base_clock;
+mod nrf_wdt_lfclk_clock;
