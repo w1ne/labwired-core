@@ -274,7 +274,24 @@ const INT_WDT_BIT: u32 = 1 << 2;
 const INT_LACT_BIT: u32 = 1 << 3;
 
 const ALARM_EVENT_TOKEN: u32 = 0x5449_4D00;
+/// Token for a one-shot DPORT LEVEL-refresh wake that rides alongside a live
+/// alarm chain instead of forking a second one. Never handed out as a chain
+/// token (see `bump_alarm_token`), so `on_event` can tell the two apart
+/// without comparing deadlines.
+const ALARM_LEVEL_TOKEN: u32 = 0x5449_4DFF;
 const ALARM_EVENT_HORIZON: u64 = 1u64 << 32;
+
+/// Slack applied when comparing a recomputed alarm deadline with the live
+/// chain's, in CPU cycles (two APB periods at 240/80 MHz = 6 cycles = 25 ns).
+///
+/// `next_alarm_delay` converts a counter remainder to whole CPU cycles and
+/// rounds up, so two evaluations of the SAME instant taken a few cycles apart
+/// can differ by a cycle or two. Treating that rounding as a reconfiguration
+/// would supersede the live chain on every MMIO write and reintroduce the
+/// residency leak this field exists to prevent. A real reprogramming is many
+/// orders of magnitude larger than one APB period; below it the model cannot
+/// resolve a difference anyway.
+const ALARM_REARM_SLACK: u64 = (LACT_CPU_MHZ / APB_MHZ) as u64 * 2;
 
 // CONFIG.EN is bit 31 on the ESP32-classic TIMG block.
 const T_CONFIG_EN_BIT: u32 = 1 << 31;
@@ -378,6 +395,18 @@ pub struct Timg {
     alarm_schedule_dirty: bool,
     /// Invalidates older queued timer events when a guest reprograms TIMG.
     alarm_event_token: u32,
+    /// Absolute CPU cycle at which the LIVE wake chain (the one carrying
+    /// `alarm_event_token`) will fire, or `None` when no chain is in flight.
+    ///
+    /// `take_scheduled_events` uses it to refuse a second chain for a
+    /// deadline that is no earlier than the live one. Without this a guest
+    /// that rewrites a config word every few milliseconds (the classic
+    /// Arduino WDT does) forks one chain per write, and every superseded
+    /// chain stays resident in the scheduler heap until its own multi-second
+    /// deadline — the `MAX_LIVE_EVENTS_PER_PERIPHERAL` overflow. Firing early
+    /// is safe: a wake re-syncs, fires what is due and recomputes. Firing
+    /// LATE is not, so a genuinely nearer deadline still supersedes.
+    alarm_wake_deadline: Option<u64>,
 }
 
 impl Timg {
@@ -406,6 +435,7 @@ impl Timg {
             alarm_source_base: None,
             alarm_schedule_dirty: false,
             alarm_event_token: ALARM_EVENT_TOKEN,
+            alarm_wake_deadline: None,
         }
     }
 
@@ -702,6 +732,17 @@ impl Timg {
     fn mark_alarm_schedule_dirty(&mut self) {
         if self.alarm_source_base.is_some() {
             self.alarm_schedule_dirty = true;
+        }
+    }
+
+    /// Move to a fresh chain token so every queued wake of the previous chain
+    /// is rejected on arrival (cancellation contract layer 3). Zero means
+    /// "unused" to the bus, and [`ALARM_LEVEL_TOKEN`] is reserved for the
+    /// level-refresh wake, so neither is ever issued as a chain token.
+    fn bump_alarm_token(&mut self) {
+        self.alarm_event_token = self.alarm_event_token.wrapping_add(1);
+        if self.alarm_event_token == 0 || self.alarm_event_token == ALARM_LEVEL_TOKEN {
+            self.alarm_event_token = ALARM_EVENT_TOKEN;
         }
     }
 
@@ -1540,10 +1581,31 @@ impl Peripheral for Timg {
             return Vec::new();
         }
         self.alarm_schedule_dirty = false;
-        self.alarm_event_token = self.alarm_event_token.wrapping_add(1);
-        if self.alarm_event_token == 0 {
-            self.alarm_event_token = ALARM_EVENT_TOKEN;
+        let Some(delay) = self.next_alarm_delay() else {
+            // A write changed an interrupt LEVEL or disabled the last armed
+            // source: the wake exists to re-derive the DPORT levels, and no
+            // chain survives it. A new token kills any queued chain at once
+            // rather than leaving it resident for its old deadline.
+            self.alarm_wake_deadline = None;
+            self.bump_alarm_token();
+            return vec![(0, self.alarm_event_token)];
+        };
+        // `sync_to` ran on the MMIO write that set the dirty flag, so
+        // `anchor_tick` is the write's cycle: the same "now" the bus adds this
+        // wake's delay to (`current_cycle + 1 + delay`).
+        let deadline = self.anchor_tick + 1 + delay;
+        if let Some(live) = self.alarm_wake_deadline {
+            if deadline + ALARM_REARM_SLACK >= live {
+                // The live chain already fires at or before this instant and
+                // re-reads the state. This wake is a LEVEL refresh only: it
+                // rides a reserved token and `on_event` does not re-arm it.
+                // See `alarm_wake_deadline` for why forking a chain here is
+                // what overflows the scheduler heap.
+                return vec![(0, ALARM_LEVEL_TOKEN)];
+            }
         }
+        self.alarm_wake_deadline = Some(deadline);
+        self.bump_alarm_token();
         vec![(0, self.alarm_event_token)]
     }
 
@@ -1553,23 +1615,45 @@ impl Peripheral for Timg {
         sched: &mut crate::sched::EventScheduler,
         _bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
-        if self.alarm_source_base.is_none() || event_token != self.alarm_event_token {
+        if self.alarm_source_base.is_none() {
             return crate::sched::EventResult::default();
         }
-        self.sync_to(sched.now());
-        self.fire_due_alarms_at_current();
         let source_base = self.alarm_source_base.unwrap();
-        crate::sched::EventResult {
-            // This is a wake for the DPORT level poll, including after INT_CLR
-            // removes the final asserted source. `matrix_irq_sources_into`
-            // supplies the current level; stale event tokens are ignored above.
-            explicit_irqs: vec![
+        let level_irqs = || {
+            vec![
                 source_base,
                 source_base + 1,
                 source_base + 2,
                 source_base + 3,
-            ],
-            reschedule_delay: self.next_alarm_delay(),
+            ]
+        };
+        if event_token == ALARM_LEVEL_TOKEN {
+            // A refresh wake: re-derive the DPORT levels from current state
+            // and leave the live chain to own the next re-arm. A write that
+            // makes an alarm due NOW computes a nearer deadline in
+            // `take_scheduled_events` and supersedes instead of reaching here.
+            self.sync_to(sched.now());
+            return crate::sched::EventResult {
+                explicit_irqs: level_irqs(),
+                ..Default::default()
+            };
+        }
+        if event_token != self.alarm_event_token {
+            return crate::sched::EventResult::default();
+        }
+        self.sync_to(sched.now());
+        self.fire_due_alarms_at_current();
+        let now = sched.now();
+        let reschedule_delay = self.next_alarm_delay();
+        // Track the chain this handler is about to re-arm, so a write that
+        // lands while it is in flight compares against the right instant.
+        self.alarm_wake_deadline = reschedule_delay.map(|delay| now + delay);
+        crate::sched::EventResult {
+            // This is a wake for the DPORT level poll, including after INT_CLR
+            // removes the final asserted source. `matrix_irq_sources_into`
+            // supplies the current level; stale event tokens are ignored above.
+            explicit_irqs: level_irqs(),
+            reschedule_delay,
             ..Default::default()
         }
     }
@@ -2663,5 +2747,54 @@ mod tests {
             .with_alarms(14)
             .with_classic_mwdt();
         assert!(t.uses_scheduler());
+    }
+
+    /// A re-arming write must not fork a second wake chain.
+    ///
+    /// Arduino-esp32 rewrites the classic WDT surface every few milliseconds.
+    /// Bumping the arming token on each of those writes left the superseded
+    /// chain resident in the scheduler heap until its own multi-second
+    /// deadline, which tripped `MAX_LIVE_EVENTS_PER_PERIPHERAL` on
+    /// `labwired-wasm`'s classic ESP32 worlds. A write whose expiry is no
+    /// earlier than the live chain's must therefore be a DPORT level refresh
+    /// only; a genuinely earlier expiry must still supersede.
+    #[test]
+    fn classic_mwdt_rearm_does_not_fork_a_wake_chain() {
+        let mut t = Timg::new(0x3FF5_F000)
+            .with_lact()
+            .with_alarms(14)
+            .with_classic_mwdt();
+        write_u32(&mut t, WDT_WPROTECT, WDT_WKEY_VALUE);
+        write_u32(&mut t, WDT_CONFIG2, 400_000);
+        write_u32(
+            &mut t,
+            WDT_CONFIG0,
+            WDT_EN_BIT | (WDT_STAGE_ACTION_INT << WDT_STG_SHIFTS[0]),
+        );
+        t.sync_to(0);
+        let armed = t.take_scheduled_events();
+        assert_eq!(armed.len(), 1);
+        let chain = armed[0].1;
+        assert_ne!(chain, ALARM_LEVEL_TOKEN);
+
+        // A feed pushes the expiry LATER than the live chain's instant, so
+        // the next dirty write only has to refresh the DPORT level.
+        t.sync_to(100_000);
+        write_u32(&mut t, WDT_FEED, 1);
+        write_u32(&mut t, INT_ENA, 0);
+        let refresh = t.take_scheduled_events();
+        assert_eq!(refresh.len(), 1, "the write still needs its level refresh");
+        assert_eq!(refresh[0].1, ALARM_LEVEL_TOKEN);
+        assert_ne!(refresh[0].1, chain);
+
+        // A genuinely earlier expiry (hold 1000 instead of 400_000) must
+        // supersede the live chain.
+        write_u32(&mut t, WDT_CONFIG2, 1_000);
+        write_u32(&mut t, WDT_FEED, 1);
+        write_u32(&mut t, INT_ENA, 0);
+        let nearer = t.take_scheduled_events();
+        assert_eq!(nearer.len(), 1);
+        assert_ne!(nearer[0].1, ALARM_LEVEL_TOKEN);
+        assert_ne!(nearer[0].1, chain);
     }
 }

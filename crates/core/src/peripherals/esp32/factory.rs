@@ -54,11 +54,19 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // ESP32-classic is the only chip in this model that HAS a LACT timer
         // (the C3 path in generic_factory.rs deliberately does not opt in —
         // it put INT_ST/INT_CLR/RTCCALICFG2 at those offsets).
+        //
+        // `esp32_timg` is shared: `configs/chips/esp32c3.yaml` names the same
+        // type for TIMG0/TIMG1 at 0x6001_F000/0x6002_0000. So the classic
+        // main-system watchdog is opted into by BASE, not by type. The C3/C6
+        // MWDT is offset-identical over 0x48..0x64 but latches in its own
+        // INT_RAW_TIMERS (0x74, bit 1) and has no classic INT_RAW bit 2, so
+        // handing it the classic layout would seed CONFIG0 with the classic
+        // reset value and put the latch in a register the C3 does not have.
         "esp32_timg" => {
-            let model = timg::Timg::new(base).with_lact().with_classic_mwdt();
+            let model = timg::Timg::new(base).with_lact();
             match base {
-                0x3FF5_F000 => Box::new(model.with_alarms(14)),
-                0x3FF6_0000 => Box::new(model.with_alarms(18)),
+                0x3FF5_F000 => Box::new(model.with_classic_mwdt().with_alarms(14)),
+                0x3FF6_0000 => Box::new(model.with_classic_mwdt().with_alarms(18)),
                 _ => Box::new(model),
             }
         }

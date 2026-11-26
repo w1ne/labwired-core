@@ -47,7 +47,9 @@ paths are covered.
    observed the difference; the fixture now pins the vendor map
    (`classic_mwdt_register_map_matches_the_vendor_header`).
 2. **The four-stage chain is real on classic ESP32** (`Timg::with_classic_mwdt`,
-   wired for TIMG0 and TIMG1 in `peripherals/esp32/factory.rs`):
+   opted into by TIMG0/TIMG1 **base** in `peripherals/esp32/factory.rs` —
+   `esp32_timg` is shared with `configs/chips/esp32c3.yaml`, whose TIMG must
+   keep its own layout):
    - WDTCONFIG0.WDT_EN 0→1 arms stage 0; a write to WDTFEED restarts at stage 0;
      expiry advances `0 → 1 → 2 → 3 → 0` loading each stage's hold.
    - Holds are WDTCONFIG2..5, in APB cycles scaled by
@@ -72,6 +74,36 @@ paths are covered.
    into `MAX_LIVE_EVENTS_PER_PERIPHERAL` (measured: the fed fixture tripped that
    ceiling before the fix).
 
+## Follow-up: two defects the first CI round found (fixed here)
+
+**1. The classic layout leaked into the ESP32-C3.** `esp32_timg` is not a
+classic-only type: `configs/chips/esp32c3.yaml` names it for TIMG0/TIMG1. Wiring
+`with_classic_mwdt()` at the type arm made the C3 seed the classic WDTCONFIG0
+reset value and latch into `INT_RAW` bit 2 instead of its own `INT_RAW_TIMERS`
+bit 1. The chip-conformance ratchet caught it as a *new* real gap at TIMG0/TIMG1
+`+0x48` (sim `0x0004c000`, silicon `0`) on a board whose score also rose, which
+is exactly the "net rise hides a regression" shape the ratchet warns about. The
+opt-in is now per base (`0x3FF5_F000` / `0x3FF6_0000`), and the esp32c3
+register window is **byte-identical to `main`** (`CONFORMANCE_REPORT=1` gap list
+diffed against `HEAD~1`), so `docs/coverage/chip-conformance.md` is unchanged.
+
+**2. Re-arming the watchdog forked a wake chain per write.** Every dirty
+`take_scheduled_events` bumped the arming token. Arduino-esp32 rewrites
+WDTCONFIG0 every few milliseconds while the stage-0 hold is seconds long, so
+each superseded chain stayed resident in the scheduler heap until its own
+deadline and `MAX_LIVE_EVENTS_PER_PERIPHERAL` (8) tripped:
+`peripheral 28 holds 9 live events` in four `labwired-wasm` classic-ESP32
+worlds. The peripheral now tracks the live chain's absolute deadline
+(`alarm_wake_deadline`). A write whose expiry is no earlier than that deadline
+still returns a wake — the DPORT levels must be re-derived — but it carries the
+reserved `ALARM_LEVEL_TOKEN`, and `on_event` handles it as a level refresh with
+no re-arm. Only a genuinely earlier expiry (more than two APB periods, 25 ns)
+supersedes. `classic_mwdt_rearm_does_not_fork_a_wake_chain` pins both halves.
+
+`build.sh` also quoted its `-Wl,...` flags: shellcheck 0.11.0 read the commas
+inside the array literal as element separators (SC2054), which failed
+`Core workflows lint`.
+
 ## Evidence
 
 Committed fixtures (`crates/core/tests/fixtures/esp32-classic-wdt/`):
@@ -86,11 +118,11 @@ Committed fixtures (`crates/core/tests/fixtures/esp32-classic-wdt/`):
 
 Tests:
 
-- `crates/core/src/peripherals/esp32/timg.rs` unit tests, 6 new:
+- `crates/core/src/peripherals/esp32/timg.rs` unit tests, 7 new:
   vendor register map and write lock, bit-2 latch + INT_ST gating + W1C clear,
   feed re-arm and disable, prescaler scaling, DPORT source base+2 for TIMG0 and
-  TIMG1, and `uses_scheduler()` unchanged (existing classic labs keep the
-  scheduler).
+  TIMG1, `uses_scheduler()` unchanged (existing classic labs keep the
+  scheduler), and the no-fork re-arm contract.
 - `crates/core/tests/esp/esp32_classic_wdt.rs` — runs both ELFs on
   `configs/systems/esp32-devkitm-1.yaml` and asserts the exact console.
 
