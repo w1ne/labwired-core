@@ -56,7 +56,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          retention-days: 3
+          retention-days: 2
           name: representative-workload-performance
           path: |
             workload-perf-report.txt

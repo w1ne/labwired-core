@@ -157,7 +157,7 @@ jobs:
         with:
           name: board-${{ matrix.id }}
           path: out/boards/${{ matrix.id }}/
-          retention-days: 3
+          retention-days: 1
           if-no-files-found: ignore
 
   # The tier1 scoreboard is generated from docs/coverage/tier1-matrix.json (the

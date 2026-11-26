@@ -989,7 +989,7 @@ jobs:
         with:
           name: onboarding-smoke-${{ matrix.id }}
           path: out/onboarding-smoke/${{ matrix.id }}/
-          retention-days: 3
+          retention-days: 1
 
   onboarding-smoke-b:
     name: onboarding-${{ matrix.id }}
@@ -1933,7 +1933,7 @@ jobs:
         with:
           name: onboarding-smoke-${{ matrix.id }}
           path: out/onboarding-smoke/${{ matrix.id }}/
-          retention-days: 3
+          retention-days: 1
 
   stm32u575-reference:
     name: stm32u575-60north-reference
@@ -2013,7 +2013,7 @@ jobs:
           name: stm32u575-60north-reference
           path: out/stm32u575-reference/
           if-no-files-found: warn
-          retention-days: 3
+          retention-days: 1
 
   onboarding-scoreboard:
     name: onboarding-scoreboard
@@ -2051,4 +2051,4 @@ jobs:
           path: |
             out/onboarding-smoke/onboarding-scoreboard.md
             out/onboarding-smoke/onboarding-scoreboard.json
-          retention-days: 3
+          retention-days: 1
