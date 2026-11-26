@@ -110,6 +110,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "rp2040_xip_ssi",
     "rp2040_usb",
     "rp2350_bootram",
+    "cortex_m_coredebug",
     // ESP32-C2 DevKitM profile types. GPIO and UART behavior are shared with
     // the register-compatible C3 models, with C2 clock/source values supplied
     // by its family adapter.
@@ -1902,6 +1903,9 @@ pub fn try_build(
         "rp2040_watchdog" => Box::new(crate::peripherals::rp2040::watchdog::Rp2040Watchdog::new()),
         "rp2040_xip_ssi" => Box::new(crate::peripherals::rp2040::xip_ssi::Rp2040XipSsi::new()),
         "rp2350_bootram" => Box::new(crate::peripherals::rp2350_bootram::Rp2350BootRam::new()),
+        "cortex_m_coredebug" => Box::new(crate::peripherals::scs_debug::ScsDebug::without_probe(
+            crate::peripherals::scs_debug::DebugHaltState::new(),
+        )),
         "rp2040_usb" => Box::new(
             crate::peripherals::rp2040::usb::Rp2040Usb::new().with_irq(p_cfg.irq.unwrap_or(5)),
         ),

@@ -1129,3 +1129,465 @@ fn ch32v003_tone_needs_the_tim2_irq_line() {
         "a TIM2 without an irq line must leave PD4 undriven, got {edges:?}"
     );
 }
+
+const PULSE_FIXTURE: &str = "ch32v003f4p6-arduino-openwch-pulse.elf";
+
+/// High widths, in HCLK cycles at 48 MHz, of the pulses the harness puts on
+/// the pad: 100 us and 250 us.
+const PULSE_WIDTHS_CYCLES: [u64; 2] = [4_800, 12_000];
+
+/// Run the pulse-width fixture and drive `pad` from the harness only. The
+/// sketch never drives an output: it waits for PD3 to rise, reads the STK
+/// counter, and waits for PD3 to fall.
+///
+/// Each pulse is placed on exact cycle boundaries. The pad is held high for
+/// `PULSE_WIDTHS_CYCLES[i]`, then released; the sketch prints one `WIDTH`
+/// line per pulse and the test compares the reported microseconds with the
+/// cycles the harness actually drove.
+fn run_pulse_fixture(chip: &ChipDescriptor, pad: u8) -> String {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut bus = SystemBus::from_config(chip, &SystemManifest::default())
+        .expect("CH32V003 peripherals and clock gates");
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+    let image = labwired_loader::load_elf(&root.join("tests/fixtures").join(PULSE_FIXTURE))
+        .expect("openwch pulse ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine
+        .load_firmware(&image)
+        .expect("load CH32V003 pulse ELF");
+    let gpiod = machine
+        .bus
+        .find_peripheral_index_by_name("gpiod")
+        .expect("GPIOD registered from descriptor");
+
+    let text = |sink: &std::sync::Mutex<Vec<u8>>| {
+        String::from_utf8_lossy(&sink.lock().unwrap()).into_owned()
+    };
+    let width_lines = |out: &str| out.lines().filter(|l| l.starts_with("WIDTH ")).count();
+
+    // Setup prints BOOT, then calls pinMode and enters the PD3 wait loop. A
+    // 0.4 ms settle after the line arrives is ample for those instructions.
+    let mut guard = 0u32;
+    while guard < 2_000_000 && !text(&sink).contains("CH32V003_PULSE_BOOT") {
+        if machine.step().is_err() {
+            break;
+        }
+        guard += 1;
+    }
+    let settle = machine.total_cycles + 20_000;
+    while machine.total_cycles < settle {
+        if machine.step().is_err() {
+            break;
+        }
+    }
+
+    for (index, width) in PULSE_WIDTHS_CYCLES.iter().enumerate() {
+        machine.bus.set_peripheral_gpio_input(gpiod, pad, true);
+        let fall = machine.total_cycles + width;
+        while machine.total_cycles < fall {
+            if machine.step().is_err() {
+                break;
+            }
+        }
+        machine.bus.set_peripheral_gpio_input(gpiod, pad, false);
+        // Let the sketch report this pulse and return to its wait loop before
+        // the next one starts; otherwise the rising edge would arrive while
+        // the previous line is still in the UART FIFO.
+        let mut guard = 0u32;
+        while guard < 2_000_000 && width_lines(&text(&sink)) <= index {
+            if machine.step().is_err() {
+                break;
+            }
+            guard += 1;
+        }
+        let settle = machine.total_cycles + 20_000;
+        while machine.total_cycles < settle {
+            if machine.step().is_err() {
+                break;
+            }
+        }
+    }
+
+    // pulseIn() needs a pulse of its own. The sketch prints PULSEIN_WAIT and
+    // calls pulseIn() immediately after the line. Measured, the call returns
+    // on its own timeout after 28 us, before this settle ends and before the
+    // edge is driven, so a missed edge cannot explain the result.
+    let mut guard = 0u32;
+    while guard < 2_000_000 && !text(&sink).contains("PULSEIN_WAIT") {
+        if machine.step().is_err() {
+            break;
+        }
+        guard += 1;
+    }
+    let settle = machine.total_cycles + 20_000;
+    while machine.total_cycles < settle {
+        if machine.step().is_err() {
+            break;
+        }
+    }
+    machine.bus.set_peripheral_gpio_input(gpiod, pad, true);
+    let fall = machine.total_cycles + PULSE_WIDTHS_CYCLES[0];
+    while machine.total_cycles < fall {
+        if machine.step().is_err() {
+            break;
+        }
+    }
+    machine.bus.set_peripheral_gpio_input(gpiod, pad, false);
+
+    let mut guard = 0u32;
+    while guard < 2_000_000 && !text(&sink).contains("CH32V003_PULSE_DONE") {
+        if machine.step().is_err() {
+            break;
+        }
+        guard += 1;
+    }
+    text(&sink)
+}
+
+fn printed_numbers(out: &str, prefix: &str) -> Vec<u32> {
+    let mut values = Vec::new();
+    for line in out.lines() {
+        if let Some(rest) = line.strip_prefix(prefix) {
+            values.extend(
+                rest.split_whitespace()
+                    .filter_map(|n| n.parse::<u32>().ok()),
+            );
+        }
+    }
+    values
+}
+
+/// The QingKe V2 STK is an up-counter that reloads from 0 at `CMP`
+/// (`SysTick->CMP = 48 000 - 1`, `CTLR = 0xF` from the core's `hw_config.c`),
+/// so elapsed microseconds are `CNT * 1000 / (CMP + 1)`. Polling the pad and
+/// reading `CNT` must recover the width the harness drove, to the polling
+/// granularity.
+#[test]
+fn ch32v003_pad_pulse_width_reads_microseconds_from_the_stk_counter() {
+    let chip = load_chip("ch32v003f4p6");
+    let out = run_pulse_fixture(&chip, 3);
+    assert!(
+        out.contains("CH32V003_PULSE_DONE"),
+        "sketch stopped before PULSE_DONE: {out:?}"
+    );
+
+    let widths = printed_numbers(&out, "WIDTH ");
+    assert_eq!(widths.len(), 2, "one WIDTH line per pulse: {out:?}");
+    let expected = [100u32, 250];
+    for (measured, want) in widths.iter().zip(expected) {
+        assert!(
+            measured.abs_diff(want) <= 2,
+            "pulse of {want} us measured as {measured} us: {widths:?}"
+        );
+    }
+    let span = widths[1] - widths[0];
+    assert!(
+        span.abs_diff(150) <= 2,
+        "100 us and 250 us pulses differ by {span} us, not 150: {widths:?}"
+    );
+}
+
+/// Negative control: drive PD2 instead of PD3. The sketch polls PD3 only, so
+/// no `WIDTH` line can appear. This shows the printed widths come from the
+/// pad the harness drives, not from the sketch's own instruction timing.
+#[test]
+fn ch32v003_pulse_width_needs_the_pad_the_sketch_polls() {
+    let chip = load_chip("ch32v003f4p6");
+    let out = run_pulse_fixture(&chip, 2);
+    // The sketch printed its banner, then blocked in `while (!pd3())` for the
+    // whole run: no width, no micros() samples, no pulseIn() call.
+    assert_eq!(
+        out, "CH32V003_PULSE_BOOT\r\n",
+        "PD2 pulses must not reach a sketch that polls PD3: {out:?}"
+    );
+}
+
+/// Characterization test for the stock core's `micros()` on this part.
+/// `getCurrentMicros()` (ch32/clock.c, the CH32V00x branch) computes
+/// `(CMP + 1 - CNT) * 1000 / (CMP + 1)`. That is the remaining time in the
+/// millisecond when `CNT` counts up, so three consecutive samples are not
+/// increasing. `pulseIn()` (cores/arduino/wiring_pulse.cpp) compares
+/// `micros()` differences against its timeout on every pass, so the call
+/// returns 0 in tens of microseconds, before the 100 us pulse the harness
+/// drives after PULSEIN_WAIT could end. The sketch times the call with the
+/// STK counter and prints both the result and the duration.
+///
+/// The model and the core disagree on the counter direction. This test does
+/// not settle which is right against silicon. It records that the model
+/// follows WCH's own noneos-sdk `Delay_Us` (per this project's reading of
+/// `Debug/ch32v00x/debug.c`, which writes `CNT = 0` and waits for
+/// `SR.CNTIF` at `CMP`, a sequence that needs an up-counter), and that the
+/// model's direction explains the stock core's output.
+///
+/// This test asserts the current, defective behaviour. If the vendor core is
+/// fixed (or a patched core is added), invert it: `micros()` must increase
+/// and `pulseIn()` must report the driven width.
+#[test]
+fn ch32v003_shipped_micros_runs_backwards_and_pulse_in_cannot_measure() {
+    let chip = load_chip("ch32v003f4p6");
+    let out = run_pulse_fixture(&chip, 3);
+    assert!(
+        out.contains("CH32V003_PULSE_DONE"),
+        "sketch stopped before PULSE_DONE: {out:?}"
+    );
+
+    let samples = printed_numbers(&out, "MICROS ");
+    assert_eq!(samples.len(), 3, "three micros() samples: {out:?}");
+    assert!(
+        samples[1] < samples[0] || samples[2] < samples[1],
+        "micros() must not increase across consecutive calls: {samples:?}"
+    );
+
+    let pulse_in = printed_numbers(&out, "PULSEIN ");
+    assert_eq!(pulse_in.len(), 2, "PULSEIN <width> <call us>: {out:?}");
+    assert_eq!(
+        pulse_in[0], 0,
+        "pulseIn() must return 0 on this core: {out:?}"
+    );
+    // The harness holds the pad high for 4 800 cycles (100 us) after the
+    // sketch prints PULSEIN_WAIT. A call that ended inside that window bailed
+    // out on its own timeout before the pulse could finish; a call that
+    // waited for the pulse would last at least the pulse width.
+    assert!(
+        pulse_in[1] < 100,
+        "pulseIn() took {} us, which is not shorter than the 100 us pulse: {out:?}",
+        pulse_in[1]
+    );
+}
+
+const I2C_FIXTURE: &str = "ch32v003f4p6-arduino-openwch-i2c.elf";
+
+/// Runs the stock openwch `Wire` fixture against a BME280 placed on `i2c1`,
+/// until it prints the complete `CH32V003_I2C_DONE` line or `max_steps` pass.
+fn run_i2c_fixture(
+    chip: &ChipDescriptor,
+    device_address: u8,
+    max_steps: u64,
+) -> (String, u64, u32) {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let yaml = format!(
+        "name: \"ch32v003-i2c\"\n\
+         chip: \"{}\"\n\
+         external_devices:\n\
+         \x20 - id: \"bme\"\n\
+         \x20   type: \"bme280\"\n\
+         \x20   connection: \"i2c1\"\n\
+         \x20   route:\n\
+         \x20     sda: \"PC1\"\n\
+         \x20     scl: \"PC2\"\n\
+         \x20   config:\n\
+         \x20     i2c_address: 0x{device_address:02x}\n",
+        root.join("configs/chips/ch32v003f4p6.yaml").display()
+    );
+    let manifest: SystemManifest = serde_yaml::from_str(&yaml).expect("system manifest");
+    let mut bus =
+        SystemBus::from_config(chip, &manifest).expect("CH32V003 peripherals plus the I2C slave");
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+    let image = labwired_loader::load_elf(&root.join("tests/fixtures").join(I2C_FIXTURE))
+        .expect("openwch Arduino Wire ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load CH32V003 ELF");
+    let mut steps = 0;
+    while steps < max_steps {
+        if machine.step().is_err() {
+            break;
+        }
+        steps += 1;
+        if steps % 10_000 == 0 {
+            let out = sink.lock().unwrap();
+            if String::from_utf8_lossy(&out).contains("CH32V003_I2C_DONE") && out.ends_with(b"\n") {
+                break;
+            }
+        }
+    }
+    let out = String::from_utf8_lossy(&sink.lock().unwrap()).into_owned();
+    (out, steps, machine.cpu.mcause)
+}
+
+#[test]
+fn ch32v003_openwch_wire_reads_a_bme280_chip_id_over_i2c1() {
+    // Stock openwch arduino_core_ch32 `Wire` on the default SDA=PC1 / SCL=PC2
+    // pads. The core enables the I2C1 clock (APB1PCENR bit 21), programs
+    // CKCFGR, and runs the EV/ER interrupt path in twi.c. A pointer write of
+    // 0xD0 followed by a one-byte read must return the BME280 chip id 0x60.
+    let chip = load_chip("ch32v003f4p6");
+    let (out, steps, mcause) = run_i2c_fixture(&chip, 0x76, 4_000_000);
+    assert_eq!(
+        out,
+        "CH32V003_I2C_BOOT\r\nerr=0\r\ncount=1\r\nid=0x60\r\n\
+         CH32V003_I2C_PASS\r\nCH32V003_I2C_DONE\r\n",
+        "USART1 TX stream after {steps} steps"
+    );
+    assert_no_fault(mcause);
+}
+
+#[test]
+fn ch32v003_i2c_read_nacks_a_device_at_the_wrong_address() {
+    // Negative control: the same firmware addresses 0x76 while the BME280 is
+    // wired at 0x77, so the address phase must NACK (err != 0) and no chip id
+    // may come back.
+    let chip = load_chip("ch32v003f4p6");
+    let (out, _, mcause) = run_i2c_fixture(&chip, 0x77, 2_000_000);
+    assert!(out.starts_with("CH32V003_I2C_BOOT\r\n"), "{out:?}");
+    assert!(
+        !out.contains("id=0x60"),
+        "wrong-address read returned the id: {out:?}"
+    );
+    assert!(out.contains("CH32V003_I2C_FAIL"), "{out:?}");
+    assert_no_fault(mcause);
+}
+
+#[test]
+fn ch32v003_package_variants_read_the_bme280_over_i2c1() {
+    // F4P6 (TSSOP20), F4U6 (QFN20), A4M6 (SOP16) and J4M6 (SOP8) all bond
+    // PC1/PC2 and declare the same I2C1 block. The stock openwch `Wire`
+    // fixture finds the BME280 at 0x76 and reads CHIP_ID 0x60 on each.
+    for name in [
+        "ch32v003f4p6",
+        "ch32v003f4u6",
+        "ch32v003a4m6",
+        "ch32v003j4m6",
+    ] {
+        let chip = load_chip(name);
+        let (out, _, mcause) = run_i2c_fixture(&chip, 0x76, 4_000_000);
+        assert!(out.contains("CH32V003_I2C_PASS"), "{name}: {out:?}");
+        assert_no_fault(mcause);
+    }
+}
+
+const SPI_FIXTURE: &str = "ch32v003f4p6-arduino-openwch-spi.elf";
+
+/// Runs the stock openwch `SPI` fixture against `manifest`.
+fn run_spi_fixture(
+    chip: &ChipDescriptor,
+    manifest: &SystemManifest,
+    max_steps: u64,
+) -> (String, u64, u32) {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut bus =
+        SystemBus::from_config(chip, manifest).expect("CH32V003 peripherals plus the SPI slave");
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+    let image = labwired_loader::load_elf(&root.join("tests/fixtures").join(SPI_FIXTURE))
+        .expect("openwch Arduino SPI ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load CH32V003 ELF");
+    let mut steps = 0;
+    while steps < max_steps {
+        if machine.step().is_err() {
+            break;
+        }
+        steps += 1;
+        if steps % 10_000 == 0 {
+            let out = sink.lock().unwrap();
+            if String::from_utf8_lossy(&out).contains("CH32V003_SPI_DONE") && out.ends_with(b"\n") {
+                break;
+            }
+        }
+    }
+    let out = String::from_utf8_lossy(&sink.lock().unwrap()).into_owned();
+    (out, steps, machine.cpu.mcause)
+}
+
+/// The shipped CH32V003EVT + MAX31855 profile.
+fn max31855_manifest() -> SystemManifest {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let path = root.join("configs/systems/wch-ch32v003evt-max31855.yaml");
+    let text = std::fs::read_to_string(&path).expect("read the shipped CH32V003 SPI profile");
+    serde_yaml::from_str(&text).expect("parse the shipped CH32V003 SPI profile")
+}
+
+#[test]
+fn ch32v003_openwch_spi_reads_a_max31855_frame_over_spi1() {
+    // Stock openwch arduino_core_ch32 `SPI` on the default SCK=PC5 / MOSI=PC6
+    // / MISO=PC7 pads. `SPI.begin()` enables RCC_SPI1EN (APB2PCENR bit 12),
+    // programs CTLR1 for master mode, and `SPI.transfer()` polls
+    // STATR.TXE/RXNE/BSY exactly as `spi_com.c` does. The MAX31855 answers a
+    // read-only 32-bit frame with no command byte: 25.00 degC hot junction
+    // (100 quarter-degrees) and 22.00 degC cold junction (352 sixteenths),
+    // fault-free, i.e. 0x01901600.
+    let chip = load_chip("ch32v003f4p6");
+    let (out, steps, mcause) = run_spi_fixture(&chip, &max31855_manifest(), 4_000_000);
+    assert_eq!(
+        out,
+        "CH32V003_SPI_BOOT\r\nraw=0x1901600\r\ntc_milli=25000\r\ncj_milli=22000\r\n\
+         CH32V003_SPI_PASS\r\nCH32V003_SPI_DONE\r\n",
+        "USART1 TX stream after {steps} steps"
+    );
+    assert_no_fault(mcause);
+}
+
+#[test]
+fn ch32v003_spi_transfer_without_a_slave_reports_no_frame() {
+    // Negative control: the same firmware and pads, no device on the bus. The
+    // master still completes its four frames (the model answers 0x00), so the
+    // sketch must see an all-zero frame and refuse to call it a reading.
+    let chip = load_chip("ch32v003f4p6");
+    let empty: SystemManifest =
+        serde_yaml::from_str("name: \"ch32v003-spi\"\nchip: \"../chips/ch32v003f4p6.yaml\"\n")
+            .expect("system manifest without a device");
+    let (out, _, mcause) = run_spi_fixture(&chip, &empty, 2_000_000);
+    assert!(out.starts_with("CH32V003_SPI_BOOT\r\n"), "{out:?}");
+    assert!(out.contains("raw=0x0\r\n"), "no-slave frame: {out:?}");
+    assert!(out.contains("CH32V003_SPI_FAIL"), "{out:?}");
+    assert_no_fault(mcause);
+}
+
+#[test]
+fn ch32v003_spi1_is_on_every_package_but_the_pads_only_where_bonded() {
+    // One die, four packages: the SPI1 block is present in every descriptor
+    // (the package-consistency test requires it). SPI1 needs SCK, MOSI and
+    // MISO: the F4P6 (TSSOP20) and F4U6 (QFN20) bond PC5/PC6/PC7, the A4M6
+    // (SOP16) drops PC5, and the J4M6 (SOP8) drops all three, so only the two
+    // 20-pin packages may claim SPI pin functions.
+    for (name, pins) in [
+        (
+            "ch32v003f4p6",
+            vec![("PC5", "sck"), ("PC6", "mosi"), ("PC7", "miso")],
+        ),
+        (
+            "ch32v003f4u6",
+            vec![("PC5", "sck"), ("PC6", "mosi"), ("PC7", "miso")],
+        ),
+        ("ch32v003a4m6", vec![]),
+        ("ch32v003j4m6", vec![]),
+    ] {
+        let chip = load_chip(name);
+        let bus = SystemBus::from_config(&chip, &SystemManifest::default())
+            .unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert!(
+            bus.find_peripheral_index_by_name("spi1").is_some(),
+            "{name} keeps the die's SPI1 block"
+        );
+
+        let yaml = chip_yaml(name);
+        let mut claimed = Vec::new();
+        for (pad, spec) in yaml["pins"].as_mapping().expect("pins map") {
+            let pad = pad.as_str().expect("pad name");
+            let Some(functions) = spec.get("functions") else {
+                continue;
+            };
+            for function in functions.as_sequence().expect("functions list") {
+                if function["type"].as_str() == Some("spi") {
+                    assert_eq!(function["peripheral"].as_str(), Some("spi1"));
+                    claimed.push((
+                        pad,
+                        function["role"].as_str().expect("SPI role").to_string(),
+                    ));
+                }
+            }
+        }
+        claimed.sort();
+        let mut expected: Vec<(&str, String)> = pins
+            .into_iter()
+            .map(|(pad, role)| (pad, role.to_string()))
+            .collect();
+        expected.sort();
+        assert_eq!(claimed, expected, "{name} SPI pad claims");
+    }
+}

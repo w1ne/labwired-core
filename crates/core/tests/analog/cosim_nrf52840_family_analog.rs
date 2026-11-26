@@ -2,19 +2,22 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! One generic deck pair drives three unrelated nRF52840 board profiles into
+//! One generic deck pair drives four unrelated nRF52840 board profiles into
 //! SAADC AIN2/AIN3. The Beta NTC divider and the Shockley diode load line name
 //! only `board.analog.<pad>_volts`; the nRF52840 descriptor's `analog_pins:`
 //! map selects P0.04 -> AIN2 and P0.05 -> AIN3, and the shared Nordic SAADC
 //! model performs the conversion.
 //!
-//! The profiles are an Arduino Nano 33 BLE, an nRF52840-DK and a Seeed XIAO
-//! nRF52840 Sense. They differ in board I/O, pull-ups and package wiring but
-//! share the nRF52840 SAADC register interface (PS v1.11 §6.21: SAADC at
-//! 0x40007000, ENABLE, RESOLUTION, CH[n].PSELP, EasyDMA RESULT buffer). The
-//! same solve, routing and conversion assertions run for every entry, so a
-//! new nRF52840 profile needs a descriptor pad map and a profile file, not new
-//! engine code.
+//! The profiles are an Arduino Nano 33 BLE, the same board with a BME280 on
+//! I2C, an nRF52840-DK and a Seeed XIAO nRF52840 Sense. They differ in board
+//! I/O, pull-ups, sensors and package wiring but share the nRF52840 SAADC
+//! register interface (PS v1.11 §6.21: SAADC at 0x40007000, ENABLE,
+//! RESOLUTION, CH[n].PSELP, EasyDMA RESULT buffer). The same solve, routing and
+//! conversion assertions run for every entry, so a new nRF52840 profile needs a
+//! descriptor pad map and a profile file, not new engine code. The BME280
+//! variant proves an attached sensor does not disturb the analog front end:
+//! the sensor owns A4/A5 (P0.31/P0.02) while the decks drive A0/A1
+//! (P0.04/P0.05).
 //!
 //! The pads are deliberately AIN2/AIN3 rather than the AIN0/AIN1 pair the
 //! micro:bit v2 test already covers: this proves the SAADC PSELP selector and
@@ -67,6 +70,10 @@ const BOARDS: &[Board] = &[
     Board {
         profile: "arduino-nano-33-ble",
         system: "configs/systems/arduino-nano-33-ble.yaml",
+    },
+    Board {
+        profile: "arduino-nano-33-ble-bme280",
+        system: "configs/systems/arduino-nano-33-ble-bme280.yaml",
     },
     Board {
         profile: "nrf52840-dk",
@@ -199,14 +206,14 @@ fn run_board(board: &Board) {
     let mut profile = SystemManifest::from_file(&system_path)
         .unwrap_or_else(|e| panic!("load {} profile: {e}", board.profile));
     assert_eq!(profile.name, board.profile);
-    assert!(
-        profile.external_devices.is_empty(),
-        "{}: the analog run adds no external device",
-        board.profile
-    );
 
     let analog = SystemManifest::from_file(root(DECK))
         .unwrap_or_else(|e| panic!("load generic decks for {}: {e}", board.profile));
+    assert!(
+        analog.external_devices.is_empty(),
+        "{}: the generic decks add no external device",
+        board.profile
+    );
     profile.cosim_models = analog.cosim_models;
 
     let chip_path = system_path.parent().unwrap().join(&profile.chip);

@@ -46,13 +46,13 @@ pins:
   PA1: { gpio: "gpioa", bit: 1 }
   PA2: { gpio: "gpioa", bit: 2 }
   PC0: { gpio: "gpioc", bit: 0 }
-  PC1: { gpio: "gpioc", bit: 1 }
-  PC2: { gpio: "gpioc", bit: 2 }
+  PC1: { gpio: "gpioc", bit: 1, functions: [{ type: i2c, peripheral: "i2c1", role: sda }] }
+  PC2: { gpio: "gpioc", bit: 2, functions: [{ type: i2c, peripheral: "i2c1", role: scl }] }
   PC3: { gpio: "gpioc", bit: 3 }
   PC4: { gpio: "gpioc", bit: 4 }
-  PC5: { gpio: "gpioc", bit: 5 }
-  PC6: { gpio: "gpioc", bit: 6 }
-  PC7: { gpio: "gpioc", bit: 7 }
+  PC5: { gpio: "gpioc", bit: 5, functions: [{ type: spi, peripheral: "spi1", role: sck }] }
+  PC6: { gpio: "gpioc", bit: 6, functions: [{ type: spi, peripheral: "spi1", role: mosi }] }
+  PC7: { gpio: "gpioc", bit: 7, functions: [{ type: spi, peripheral: "spi1", role: miso }] }
   PD0: { gpio: "gpiod", bit: 0 }
   PD1: { gpio: "gpiod", bit: 1 }
   PD2: { gpio: "gpiod", bit: 2 }
@@ -192,6 +192,35 @@ peripherals:
     clock: { reg: "apb1pcenr", bit: 0 }
     config:
       pad_map: "wch_v00x"
+
+  # I2C1 (ch32v00x.h): I2C1_BASE = APB1PERIPH_BASE + 0x5400, RCC_I2C1EN =
+  # APB1PCENR bit 21. I2C_TypeDef is the legacy F1 register file at the same
+  # offsets (CTLR1 0x00 .. CKCFGR 0x1C; STAR1 SB=0x01, ADDR=0x02, BTF=0x04,
+  # STOPF=0x10, RXNE=0x40, TXE=0x80, AF=0x400; STAR2 MSL=0x01, BUSY=0x02,
+  # TRA=0x04), so the `i2c` model's default `stm32f1` layout serves
+  # it. Default (non-remapped) pads are SDA PC1 and SCL PC2; the AFIO partial
+  # and full remaps are not modelled. I2C1_EV (30) and I2C1_ER (31) are both
+  # wired because the stock openwch `Wire` library runs the interrupt path.
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 30
+    clock: { reg: "apb1pcenr", bit: 21 }
+    config:
+      irq_error: 31
+
+  # SPI1: same die block as the F4P6 descriptor (SPI1_BASE 0x40013000,
+  # RCC_SPI1EN = APB2PCENR bit 12, SPI1_IRQn = 33). The QFN20 bonds the same
+  # 18 GPIOs, so PC5/PC6/PC7 carry SCK/MOSI/MISO exactly as on the TSSOP20.
+  # Register coverage and the AFIO remap/NSS caveats are documented in
+  # `ch32v003f4p6.yaml`.
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 33
+    clock: { reg: "apb2pcenr", bit: 12 }
 
   # QingKe V2 system timer STK (core_riscv.h): SysTick_Type at 0xE000F000 is
   # CTLR, SR, CNT, reserved, CMP. The vendor noneos-sdk `Delay_Us`/`Delay_Ms`

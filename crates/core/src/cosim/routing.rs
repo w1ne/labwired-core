@@ -231,7 +231,8 @@ pub enum SignalPath {
     /// drives.
     GpioDriven { pad: String },
     /// `board.analog.<pad>_volts` — the analog level on the ADC input the chip
-    /// descriptor's `analog_pins:` assigns to `<pad>`.
+    /// descriptor assigns to `<pad>`, from `analog_pins:` or the pad's `adc`
+    /// pin function.
     AnalogPad { pad: String },
     /// `adc.<peripheral>.<channel>_volts` — the analog level on an explicitly
     /// named ADC channel, for chips whose descriptor records no analog pads.
@@ -470,8 +471,9 @@ pub enum RoutingError {
     NotReadable {
         path: String,
     },
-    /// The chip descriptor's `analog_pins:` names no ADC input for this pad.
-    /// Use the explicit `adc.<peripheral>.<channel>_volts` form instead.
+    /// The chip descriptor's `analog_pins:` and pin `functions:` tables name
+    /// no ADC input for this pad. Use the explicit
+    /// `adc.<peripheral>.<channel>_volts` form instead.
     NoAdcChannel {
         path: String,
         pad: String,
@@ -619,7 +621,8 @@ impl std::fmt::Display for RoutingError {
             Self::NoAdcChannel { path, pad } => write!(
                 f,
                 "co-sim path '{path}': the chip descriptor names no ADC input for pad '{pad}' \
-                 (no `analog_pins:` entry); route adc.<peripheral>.<channel>_volts instead"
+                 (neither an `analog_pins:` entry nor an `adc` function in its `pins:` table); \
+                 route adc.<peripheral>.<channel>_volts instead"
             ),
             Self::AdcUnavailable { path, channel } => write!(
                 f,
@@ -775,8 +778,9 @@ enum WriteBinding {
         connection: String,
         channel: u8,
     },
-    /// A pad level by label: its `analog_pins:` ADC channel and every
-    /// comparator sampling the pad (`SystemBus::set_analog_pad_mv`).
+    /// A pad level by label: its resolved ADC channel (`analog_pins:` or the
+    /// pad's `adc` pin function) and every comparator sampling the pad
+    /// (`SystemBus::set_analog_pad_mv`).
     AnalogPad {
         pad: String,
         // Retain the validated ADC identity for physical writer ownership.

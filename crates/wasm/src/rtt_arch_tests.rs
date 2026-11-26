@@ -346,8 +346,8 @@ fn open_riscv(fw: &[u8]) -> WasmSimulator {
 }
 
 fn open_xtensa(fw: &[u8]) -> WasmSimulator {
-    let (_chip, manifest) = chip_and_manifest(XTENSA_CHIP, XTENSA_SYSTEM);
-    WasmSimulator::new_from_config_xtensa_esp32(&manifest, fw)
+    let (chip, manifest) = chip_and_manifest(XTENSA_CHIP, XTENSA_SYSTEM);
+    WasmSimulator::new_from_config_xtensa_esp32(&chip, &manifest, fw)
         .unwrap_or_else(|_| panic!("new_from_config_xtensa_esp32 failed"))
 }
 

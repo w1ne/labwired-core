@@ -1101,6 +1101,10 @@ impl Timg {
 }
 
 impl Peripheral for Timg {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     /// Side-effect-free probe, so `inspect` can show real values instead of
     /// zeros.
     ///

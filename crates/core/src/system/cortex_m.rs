@@ -179,19 +179,30 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     // DEMCR is a firmware-visible register even without a connected debugger.
     // The RP2350 M33 register definitions place it at 0xE000_EDFC with TRCENA
     // at bit24; ordinary cycleCounterInit code writes it before DWT.CYCCNTENA.
-    // Keep the same inactive state for a later SWD attachment. Only DEMCR is
-    // mapped here: DHCSR remains unmapped and C_DEBUGEN stays clear.
+    // Keep the same inactive state for a later SWD attachment. By default only
+    // DEMCR is mapped; an explicit full window also exposes read-only DHCSR.
     let debug_state = crate::peripherals::scs_debug::DebugHaltState::new();
     cpu.set_debug_halt(debug_state.clone());
-    bus.replace_or_add_peripheral_at(
-        "scs_debug",
-        0xE000_EDFC,
-        4,
-        None,
-        Box::new(crate::peripherals::scs_debug::ScsDebug::demcr_only(
-            debug_state,
-        )),
-    );
+    // Keep an explicitly declared full window (RP2350) instead of replacing it
+    // with the default four-byte window. Both share the CPU's debug state.
+    let full_window = bus
+        .peripherals
+        .iter()
+        .any(|p| p.name == "scs_debug" && p.base == 0xE000_EDF0 && p.size == 0x10);
+    let (base, size, debug) = if full_window {
+        (
+            0xE000_EDF0,
+            0x10,
+            crate::peripherals::scs_debug::ScsDebug::without_probe(debug_state),
+        )
+    } else {
+        (
+            0xE000_EDFC,
+            4,
+            crate::peripherals::scs_debug::ScsDebug::demcr_only(debug_state),
+        )
+    };
+    bus.replace_or_add_peripheral_at("scs_debug", base, size, None, Box::new(debug));
 
     // Ensure DWT exists. Size 0x1000 covers the full CoreSight DWT register space,
     // including the CYCCNT enable bit at offset 0 and CYCCNT at offset 4, as well as

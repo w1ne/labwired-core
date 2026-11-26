@@ -1782,6 +1782,22 @@ impl crate::Bus for SystemBus {
         self.config.peripheral_tick_interval.max(1)
     }
 
+    fn block_cache_eligible(&self) -> bool {
+        !self.requires_cycle_accurate() && self.debug_watches.is_empty()
+    }
+
+    fn read_flash_entry_word(&self, pc: u64) -> Option<u32> {
+        self.read_flash_entry_word_impl(pc)
+    }
+
+    fn read_block_cache_code(&self, pc: u64, max_bytes: usize) -> Option<(Vec<u8>, bool, bool)> {
+        self.read_block_cache_code_impl(pc, max_bytes)
+    }
+
+    fn ram_data_mut(&mut self) -> Option<&mut [u8]> {
+        Some(&mut self.ram.data)
+    }
+
     fn semihost_write(&mut self, bytes: &[u8]) {
         self.semihost.write(bytes);
     }

@@ -512,6 +512,10 @@ impl UartCore {
 }
 
 impl Peripheral for Esp32Uart {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     fn line_names(&self) -> &'static [&'static str] {
         UART_LINES
     }
@@ -801,6 +805,10 @@ impl Peripheral for Esp32Uart {
 }
 
 impl Peripheral for Esp32UartAhbFifo {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     fn scheduler_wake_owner(&self) -> Option<usize> {
         Some(self.owner)
     }

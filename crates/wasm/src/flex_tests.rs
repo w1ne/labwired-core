@@ -1571,6 +1571,47 @@ fn flex_heypcb_ldr_network_netlist_matches_the_pinned_source_nets() {
         serde_json::json!([10, 20])
     );
     assert_eq!(sensor["outputs"]["voltage"], "source.U3.GPIO1");
+
+    // The reference-solver variant is the same project: the same ports, the
+    // same LED model, the same 1..100 lx domain, and a deck that states the
+    // curve. Only the circuit engine differs.
+    let reference: serde_yaml::Value = serde_yaml::from_str(include_str!(
+        "../tests/fixtures/flex-heypcb-ldr-network/system-ngspice.yaml"
+    ))
+    .unwrap();
+    assert_eq!(reference["ports"], yaml["ports"]);
+    assert_eq!(reference["cosim_models"][1], yaml["cosim_models"][1]);
+    let deck = &reference["cosim_models"][0];
+    assert_eq!(deck["id"], sensor["id"]);
+    assert_eq!(deck["adapter"], "ngspice");
+    assert_eq!(deck["model"].as_str(), Some("./ldr.cir"));
+    assert_eq!(deck["step_ns"], sensor["step_ns"]);
+    assert_eq!(deck["outputs"], sensor["outputs"]);
+    assert_eq!(deck["config"]["input_sampling"], "previous_boundary");
+    assert_eq!(
+        deck["config"]["input_ranges"]["lux"]["min"].as_f64(),
+        Some(1.0)
+    );
+    assert_eq!(
+        deck["config"]["input_ranges"]["lux"]["max"].as_f64(),
+        Some(100.0)
+    );
+    let netlist = include_str!("../tests/fixtures/flex-heypcb-ldr-network/ldr.cir");
+    for element in [
+        "V3V3 3v3 0 dc 3.3",
+        "Vlux lux 0 dc 10",
+        "R6 sns_an1 0 10k",
+        "C7 sns_an1 0 100n",
+    ] {
+        assert!(
+            netlist.lines().any(|line| line.trim() == element),
+            "the deck is missing {element:?}"
+        );
+    }
+    assert!(
+        netlist.contains("15k * pow(max(V(lux), 0.01) / 10, -0.6)"),
+        "the deck states the GL5528 curve from the manual"
+    );
 }
 
 #[test]
@@ -2718,6 +2759,54 @@ fn check_heypcb_ntc(
             assert!(deviation > 0.0171, "{celsius} C could be inside the range");
         }
     }
+
+    // The reference-solver variant is the same project: the same ports, the
+    // same LED model, the same 10..60 °C domain, and a deck that states the
+    // curve. Only the circuit engine differs.
+    let reference: serde_yaml::Value = serde_yaml::from_str(include_str!(
+        "../tests/fixtures/flex-heypcb-esp32-ntc/system-ngspice.yaml"
+    ))
+    .unwrap();
+    assert_eq!(reference["ports"], yaml["ports"]);
+    assert_eq!(reference["console"], yaml["console"]);
+    assert_eq!(reference["cosim_models"][1], yaml["cosim_models"][1]);
+    let deck = &reference["cosim_models"][0];
+    assert_eq!(deck["id"], model["id"]);
+    assert_eq!(deck["adapter"], "ngspice");
+    assert_eq!(
+        deck["model"].as_str(),
+        source_map["runtime_bindings"]["reference_solver"]["netlist"].as_str()
+    );
+    assert_eq!(deck["step_ns"], model["step_ns"]);
+    assert_eq!(deck["outputs"], model["outputs"]);
+    assert_eq!(deck["config"]["input_sampling"], "previous_boundary");
+    assert_eq!(
+        deck["config"]["input_ranges"]["temperature"]["min"].as_f64(),
+        Some(10.0)
+    );
+    assert_eq!(
+        deck["config"]["input_ranges"]["temperature"]["max"].as_f64(),
+        Some(60.0)
+    );
+    assert_eq!(
+        source_map["runtime_bindings"]["reference_solver"]["manifest"].as_str(),
+        Some("system-ngspice.yaml")
+    );
+    let netlist = include_str!("../tests/fixtures/flex-heypcb-esp32-ntc/ntc.cir");
+    for element in [
+        "V3V3 3v3 0 dc 3.3",
+        "R6 3v3 sns_an1 10k",
+        "C7 sns_an1 0 100n",
+    ] {
+        assert!(
+            netlist.lines().any(|line| line.trim() == element),
+            "the deck is missing {element:?}"
+        );
+    }
+    assert!(
+        netlist.contains("3380 * (1/(273.15 + V(temp)) - 1/298.15)"),
+        "the deck states the catalog beta curve"
+    );
 }
 
 /// The MAX31855 fixture is a third board of the same pinned repository, and

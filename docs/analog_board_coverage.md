@@ -7,99 +7,41 @@ A profile is **covered** only when an integration test advances a
 `CosimSession` that loads that profile (or one of its
 `examples/<dir>/analog-*.yaml` decks) and reaches an endpoint route the
 manifest declares: `board.analog.<pad>_volts`, which the chip's
-`analog_pins:` map resolves to an ADC channel or a voltage-thresholded
-digital pad, or an explicit `adc.<peripheral>.<channel>_volts` route.
+`analog_pins:` map or the pad's `adc` pin function resolves to an ADC
+channel, or an explicit `adc.<peripheral>.<channel>_volts` route.
 Device-only unit tests, ADC register tests with no netlist, files that only
 list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
-- Profiles in `configs/systems/`: **439**
-- Covered end to end: **18**
-- Not covered: **421**
-- Not covered but with an `analog_pins:` map: **50** (these are the
+- Profiles in `configs/systems/`: **440**
+- Covered end to end: **93**
+- Not covered: **347**
+- Not covered but with an ADC pad map: **0** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
-  `analog_pins:` map, an ADC model, or a digital endpoint first)
+  `analog_pins:` block or `adc` pin functions, an ADC model, or a digital
+  endpoint first)
 
-The `Analog pad map` column counts `analog_pins:` entries in the chip
-descriptor. Every such entry in this tree names an ADC peripheral, so the
-count is what the generic decks can reach without new routing.
+The `Analog pad map` column counts the pads a chip can hand to an ADC:
+`analog_pins:` entries plus pads whose `pins:` table carries an
+`{ type: adc, peripheral, channel }` function (the union the router uses).
+Every such entry in this tree names an ADC peripheral, so the count is what
+the generic decks can reach without new routing.
 
-## Next queue: not covered, `analog_pins:` map already present
+## Next queue: not covered, ADC pads already mapped
 
-| Profile | Chip | Analog pad map |
-| --- | --- | ---: |
-| `adxl345-sensor-lab` | `stm32f103` | 10 |
-| `arduino-nano-33-ble-bme280` | `nrf52840` | 8 |
-| `labwired-demo-board` | `stm32f103` | 10 |
-| `nucleo-f103rb-epaper` | `stm32f103rb` | 16 |
-| `stm32f103` | `stm32f103` | 2 |
-| `stm32f4` | `stm32f4` | 1 |
-| `stm32f412` | `stm32f412` | 2 |
-| `stm32f429` | `stm32f429` | 2 |
-| `stm32f4_discovery-kit` | `stm32f4_discovery-kit` | 2 |
-| `stm32f4_discovery` | `stm32f4_discovery` | 2 |
-| `stm32f746` | `stm32f746` | 2 |
-| `stm32h7` | `stm32h7` | 1 |
-| `stm32h743` | `stm32h743` | 1 |
-| `stm32h747-disco` | `stm32h747-disco` | 1 |
-| `stm32h747` | `stm32h747` | 1 |
-| `stm32h753` | `stm32h753` | 1 |
-| `stm32f103c4-smoke` | `stm32f103c4` | 10 |
-| `stm32f103c6-smoke` | `stm32f103c6` | 10 |
-| `stm32f103r4-smoke` | `stm32f103r4` | 16 |
-| `stm32f103r4h-smoke` | `stm32f103r4h` | 15 |
-| `stm32f103r6-smoke` | `stm32f103r6` | 16 |
-| `stm32f103r6h-smoke` | `stm32f103r6h` | 15 |
-| `stm32f103r8-smoke` | `stm32f103r8` | 16 |
-| `stm32f103t4-smoke` | `stm32f103t4` | 10 |
-| `stm32f103t6-smoke` | `stm32f103t6` | 10 |
-| `stm32f401cb-smoke` | `stm32f401cb` | 10 |
-| `stm32f401cc-smoke` | `stm32f401cc` | 10 |
-| `stm32f401cd-smoke` | `stm32f401cd` | 10 |
-| `stm32f401ce-smoke` | `stm32f401ce` | 10 |
-| `stm32f401rb-smoke` | `stm32f401rb` | 16 |
-| `stm32f401rc-smoke` | `stm32f401rc` | 16 |
-| `stm32f401rd-smoke` | `stm32f401rd` | 16 |
-| `stm32f401re-smoke` | `stm32f401re` | 16 |
-| `stm32f401vb-smoke` | `stm32f401vb` | 16 |
-| `stm32f401vc-smoke` | `stm32f401vc` | 16 |
-| `stm32f401vd-smoke` | `stm32f401vd` | 16 |
-| `stm32f401ve-smoke` | `stm32f401ve` | 16 |
-| `stm32f407ie-smoke` | `stm32f407ie` | 16 |
-| `stm32f407ig-smoke` | `stm32f407ig` | 16 |
-| `stm32f407ve-smoke` | `stm32f407ve` | 16 |
-| `stm32f407vg-smoke` | `stm32f407vg` | 16 |
-| `stm32f407ze-smoke` | `stm32f407ze` | 16 |
-| `stm32f407zg-smoke` | `stm32f407zg` | 16 |
-| `stm32f103-bare` | `stm32f103` | 10 |
-| `stm32f103-blue-pill-bme280` | `stm32f103` | 10 |
-| `stm32f103-blue-pill` | `stm32f103` | 10 |
-| `stm32f4-discovery` | `stm32f407vg` | 16 |
-| `stm32f401cdu6-blackpill` | `stm32f401cdu6` | 10 |
-| `stm32f401cdu6` | `stm32f401cdu6` | 10 |
-| `stm32f411ceu6-blackpill` | `stm32f411ceu6` | 10 |
+None.
 
 ## Not covered
 
 | Profile | Chip | Analog pad map |
 | --- | --- | ---: |
 | `adafruit-feather-esp32-v2-bme280` | `esp32` | 0 |
-| `adafruit-feather-rp2040-bme280` | `rp2040-feather` | 0 |
-| `adafruit-feather-rp2040` | `rp2040-feather` | 0 |
-| `adafruit-feather-rp2350` | `rp2350-feather` | 0 |
-| `adxl345-sensor-lab` | `stm32f103` | 10 |
 | `apollo4p-evb` | `amap42kp` | 0 |
-| `arduino-leonardo` | `atmega32u4` | 0 |
-| `arduino-nano-33-ble-bme280` | `nrf52840` | 8 |
-| `arduino-nano-33-iot-bme280` | `atsamd21g18a` | 0 |
 | `arduino-nano-esp32-bme280` | `esp32s3` | 0 |
 | `arduino-nano-esp32` | `esp32s3` | 0 |
 | `arduino-nano-every-bme280` | `atmega4809` | 0 |
 | `arduino-nano-every-max31855` | `atmega4809` | 0 |
 | `arduino-nano-every` | `atmega4809` | 0 |
-| `arduino-uno-r4-minima-bme280` | `ra4m1` | 0 |
-| `arduino-uno-r4-minima` | `ra4m1` | 0 |
-| `arduino-zero` | `atsamd21g18a` | 0 |
 | `arty-litex-vexriscv` | `arty-litex-vexriscv` | 0 |
 | `atmega1281` | `atmega1281` | 0 |
 | `atmega2561` | `atmega2561` | 0 |
@@ -158,7 +100,6 @@ count is what the generic decks can reach without new routing.
 | `iolink-multiport-demo` | `stm32l476` | 0 |
 | `iolinki-g0-startup` | `stm32g0b1re` | 0 |
 | `kv260-r5` | `xck26-rpu` | 0 |
-| `labwired-demo-board` | `stm32f103` | 10 |
 | `litex-vexriscv` | `litex-vexriscv` | 0 |
 | `lp-mspm0g3507` | `mspm0g3507` | 0 |
 | `luckfox-pico-mini-a` | `rv1103` | 0 |
@@ -177,7 +118,6 @@ count is what the generic decks can reach without new routing.
 | `nrf54lm20dk` | `nrf54lm20a` | 0 |
 | `nucleo-c031c6` | `stm32c031c6` | 0 |
 | `nucleo-f103rb-bme280` | `stm32f103rb-nucleo-bme280-smoke` | 0 |
-| `nucleo-f103rb-epaper` | `stm32f103rb` | 16 |
 | `nucleo-g071rb` | `stm32g071` | 0 |
 | `nucleo-g0b1re` | `stm32g0b1re` | 0 |
 | `nucleo-g431rb` | `stm32g431rb` | 0 |
@@ -188,12 +128,9 @@ count is what the generic decks can reach without new routing.
 | `nucleo-h753zi` | `stm32h753zi` | 0 |
 | `nucleo-l031k6` | `stm32l031k6` | 0 |
 | `nucleo-l073rz` | `stm32l073` | 0 |
-| `nucleo-l432kc` | `stm32l432kc` | 0 |
 | `nucleo-l476rg` | `stm32l476` | 0 |
 | `nucleo-l552ze-q` | `stm32l552` | 0 |
 | `nucleo-u545re` | `stm32u545` | 0 |
-| `nucleo-u575zi` | `stm32u575` | 0 |
-| `nucleo-u5a5zj` | `stm32u5a5zj` | 0 |
 | `nucleo_g474re` | `stm32g474re` | 0 |
 | `nucleo_wba52cg` | `stm32wba52` | 0 |
 | `A2_CV32E40P` | `A2_CV32E40P` | 0 |
@@ -314,7 +251,6 @@ count is what the generic decks can reach without new routing.
 | `murax_vexriscv_verilated_uart` | `murax_vexriscv_verilated_uart` | 0 |
 | `nrf52840` | `nrf52840` | 0 |
 | `nrf52840dk_nrf52840` | `nrf52840dk_nrf52840` | 0 |
-| `nucleo_f767zi` | `nucleo_f767zi` | 0 |
 | `nucleo_h753zi` | `nucleo_h753zi` | 0 |
 | `nucleo_wba52cg` | `nucleo_wba52cg` | 0 |
 | `nuvoton_npcx9` | `nuvoton_npcx9` | 0 |
@@ -400,21 +336,7 @@ count is what the generic decks can reach without new routing.
 | `stm32f042` | `stm32f042` | 0 |
 | `stm32f072` | `stm32f072` | 0 |
 | `stm32f072b_discovery` | `stm32f072b_discovery` | 0 |
-| `stm32f103` | `stm32f103` | 2 |
-| `stm32f4` | `stm32f4` | 1 |
 | `stm32f401cdu6-blackpill` | `stm32f401cdu6-blackpill` | 0 |
-| `stm32f412` | `stm32f412` | 2 |
-| `stm32f429` | `stm32f429` | 2 |
-| `stm32f4_discovery-kit` | `stm32f4_discovery-kit` | 2 |
-| `stm32f4_discovery` | `stm32f4_discovery` | 2 |
-| `stm32f746` | `stm32f746` | 2 |
-| `stm32f777` | `stm32f777` | 0 |
-| `stm32f7_discovery-bb` | `stm32f7_discovery-bb` | 0 |
-| `stm32h7` | `stm32h7` | 1 |
-| `stm32h743` | `stm32h743` | 1 |
-| `stm32h747-disco` | `stm32h747-disco` | 1 |
-| `stm32h747` | `stm32h747` | 1 |
-| `stm32h753` | `stm32h753` | 1 |
 | `stm32l071` | `stm32l071` | 0 |
 | `stm32l072` | `stm32l072` | 0 |
 | `stm32l151` | `stm32l151` | 0 |
@@ -444,17 +366,7 @@ count is what the generic decks can reach without new routing.
 | `pic16f1829-curiosity` | `pic16f1829` | 0 |
 | `pic16f877a-demo` | `pic16f877a` | 0 |
 | `pic18f4520-demo` | `pic18f4520` | 0 |
-| `pico-bme280` | `rp2040` | 0 |
-| `pico-selftest` | `rp2040` | 0 |
-| `pico-w-bme280` | `rp2040` | 0 |
-| `pico` | `rp2040` | 0 |
-| `pico2-bme280` | `rp2350` | 0 |
-| `pico2` | `rp2350` | 0 |
 | `pybadge` | `atsamd51-pybadge` | 0 |
-| `rp2040-pico` | `rp2040` | 0 |
-| `rp2350-zero` | `rp2350` | 0 |
-| `rpi-pico-2-w-bme280` | `rp2350` | 0 |
-| `rpi-pico-2-w` | `rp2350` | 0 |
 | `s32k388-evb` | `s32k388` | 0 |
 | `sam-e70-xplained` | `same70q21b` | 0 |
 | `sam4s-xplained` | `sam4s16c` | 0 |
@@ -464,42 +376,8 @@ count is what the generic decks can reach without new routing.
 | `simctl-selftest` | `ci-fixture-cortex-m3-uart1` | 0 |
 | `sk-am62` | `am6234` | 0 |
 | `smart-ring` | `nrf54l15` | 0 |
-| `stm32f103c4-smoke` | `stm32f103c4` | 10 |
-| `stm32f103c6-smoke` | `stm32f103c6` | 10 |
-| `stm32f103r4-smoke` | `stm32f103r4` | 16 |
-| `stm32f103r4h-smoke` | `stm32f103r4h` | 15 |
-| `stm32f103r6-smoke` | `stm32f103r6` | 16 |
-| `stm32f103r6h-smoke` | `stm32f103r6h` | 15 |
-| `stm32f103r8-smoke` | `stm32f103r8` | 16 |
-| `stm32f103t4-smoke` | `stm32f103t4` | 10 |
-| `stm32f103t6-smoke` | `stm32f103t6` | 10 |
-| `stm32f401cb-smoke` | `stm32f401cb` | 10 |
-| `stm32f401cc-smoke` | `stm32f401cc` | 10 |
-| `stm32f401cd-smoke` | `stm32f401cd` | 10 |
-| `stm32f401ce-smoke` | `stm32f401ce` | 10 |
-| `stm32f401rb-smoke` | `stm32f401rb` | 16 |
-| `stm32f401rc-smoke` | `stm32f401rc` | 16 |
-| `stm32f401rd-smoke` | `stm32f401rd` | 16 |
-| `stm32f401re-smoke` | `stm32f401re` | 16 |
-| `stm32f401vb-smoke` | `stm32f401vb` | 16 |
-| `stm32f401vc-smoke` | `stm32f401vc` | 16 |
-| `stm32f401vd-smoke` | `stm32f401vd` | 16 |
-| `stm32f401ve-smoke` | `stm32f401ve` | 16 |
-| `stm32f407ie-smoke` | `stm32f407ie` | 16 |
-| `stm32f407ig-smoke` | `stm32f407ig` | 16 |
-| `stm32f407ve-smoke` | `stm32f407ve` | 16 |
-| `stm32f407vg-smoke` | `stm32f407vg` | 16 |
-| `stm32f407ze-smoke` | `stm32f407ze` | 16 |
-| `stm32f407zg-smoke` | `stm32f407zg` | 16 |
 | `stm32f072b-disco` | `stm32f072` | 0 |
-| `stm32f103-bare` | `stm32f103` | 10 |
-| `stm32f103-blue-pill-bme280` | `stm32f103` | 10 |
-| `stm32f103-blue-pill` | `stm32f103` | 10 |
 | `stm32f103-integrated-test` | `-` | 0 |
-| `stm32f4-discovery` | `stm32f407vg` | 16 |
-| `stm32f401cdu6-blackpill` | `stm32f401cdu6` | 10 |
-| `stm32f401cdu6` | `stm32f401cdu6` | 10 |
-| `stm32f411ceu6-blackpill` | `stm32f411ceu6` | 10 |
 | `stm32f7-discovery` | `stm32f746` | 0 |
 | `stm32h735-smoke` | `stm32h735` | 0 |
 | `teensy-41` | `imxrt1064` | 0 |
@@ -510,22 +388,97 @@ count is what the generic decks can reach without new routing.
 | Profile | Chip | Evidence |
 | --- | --- | --- |
 | `adafruit-feather-esp32-v2` | `esp32` | `crates/core/tests/analog/cosim_esp32_analog_diode.rs` |
+| `adafruit-feather-rp2040-bme280` | `rp2040-feather` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `adafruit-feather-rp2040` | `rp2040-feather` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `adafruit-feather-rp2350` | `rp2350-feather` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `adxl345-sensor-lab` | `stm32f103` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `arduino-leonardo` | `atmega32u4` | `crates/core/tests/analog/cosim_avr_atmega32u4_analog.rs` |
 | `arduino-mega-2560` | `atmega2560` | `crates/core/tests/cosim/cosim_pin_routing.rs` |
+| `arduino-nano-33-ble-bme280` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
 | `arduino-nano-33-ble` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
+| `arduino-nano-33-iot-bme280` | `atsamd21g18a` | `crates/core/tests/analog/cosim_samd21_family_analog.rs` |
 | `arduino-nano` | `atmega328p` | `crates/core/tests/analog/cosim_avr_atmega328p_analog.rs` |
+| `arduino-uno-r4-minima-bme280` | `ra4m1` | `crates/core/tests/analog/cosim_ra4m1_analog.rs` |
+| `arduino-uno-r4-minima` | `ra4m1` | `crates/core/tests/analog/cosim_ra4m1_analog.rs` |
 | `arduino-uno` | `atmega328p` | `crates/core/tests/analog/cosim_avr_atmega328p_analog.rs` |
+| `arduino-zero` | `atsamd21g18a` | `crates/core/tests/analog/cosim_samd21_family_analog.rs` |
 | `at32f421g8u7` | `at32f421g8u7` | `crates/core/tests/analog/cosim_at32f421_analog.rs` |
 | `controllino-mini` | `atmega328p` | `crates/core/tests/analog/cosim_avr_atmega328p_analog.rs` |
 | `feather-f405` | `stm32f405` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
+| `labwired-demo-board` | `stm32f103` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `microbit-v2` | `nrf52833` | `crates/core/tests/analog/cosim_microbit_v2_analog.rs` |
 | `nrf52840-dk` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
+| `nucleo-f103rb-epaper` | `stm32f103rb` | `crates/core/tests/analog/cosim_nucleo_f103rb_analog.rs` |
 | `nucleo-f103rb` | `stm32f103rb` | `crates/core/tests/analog/cosim_nucleo_f103rb_analog.rs` |
 | `nucleo-f401re` | `stm32f401` | `crates/core/tests/analog/cosim_nucleo_f401re_analog.rs` |
 | `nucleo-f407` | `stm32f407` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `nucleo-f411re` | `stm32f411re` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `nucleo-f446re` | `stm32f446re` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `nucleo-f767zi` | `stm32f767` | `crates/core/tests/analog/cosim_nucleo_f767zi_analog.rs` |
+| `nucleo-l432kc` | `stm32l432kc` | `crates/core/tests/analog/cosim_stm32l4u5_pin_functions_analog.rs` |
+| `nucleo-u575zi` | `stm32u575` | `crates/core/tests/analog/cosim_stm32l4u5_pin_functions_analog.rs` |
+| `nucleo-u5a5zj` | `stm32u5a5zj` | `crates/core/tests/analog/cosim_stm32l4u5_pin_functions_analog.rs` |
+| `nucleo_f767zi` | `nucleo_f767zi` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f103` | `stm32f103` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f4` | `stm32f4` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f412` | `stm32f412` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f429` | `stm32f429` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f4_discovery-kit` | `stm32f4_discovery-kit` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f4_discovery` | `stm32f4_discovery` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f746` | `stm32f746` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f777` | `stm32f777` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f7_discovery-bb` | `stm32f7_discovery-bb` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32h7` | `stm32h7` | `crates/core/tests/analog/cosim_stm32h7_analog.rs` |
+| `stm32h743` | `stm32h743` | `crates/core/tests/analog/cosim_stm32h7_analog.rs` |
+| `stm32h747-disco` | `stm32h747-disco` | `crates/core/tests/analog/cosim_stm32h7_analog.rs` |
+| `stm32h747` | `stm32h747` | `crates/core/tests/analog/cosim_stm32h7_analog.rs` |
+| `stm32h753` | `stm32h753` | `crates/core/tests/analog/cosim_stm32h7_analog.rs` |
+| `pico-bme280` | `rp2040` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `pico-selftest` | `rp2040` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `pico-w-bme280` | `rp2040` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `pico` | `rp2040` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `pico2-bme280` | `rp2350` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `pico2` | `rp2350` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `rp2040-pico` | `rp2040` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `rp2350-zero` | `rp2350` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `rpi-pico-2-w-bme280` | `rp2350` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
+| `rpi-pico-2-w` | `rp2350` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
 | `seeed-xiao-nrf52840-sense` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
+| `stm32f103c4-smoke` | `stm32f103c4` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f103c6-smoke` | `stm32f103c6` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f103r4-smoke` | `stm32f103r4` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f103r4h-smoke` | `stm32f103r4h` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f103r6-smoke` | `stm32f103r6` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f103r6h-smoke` | `stm32f103r6h` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f103r8-smoke` | `stm32f103r8` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f103t4-smoke` | `stm32f103t4` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f103t6-smoke` | `stm32f103t6` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f401cb-smoke` | `stm32f401cb` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f401cc-smoke` | `stm32f401cc` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f401cd-smoke` | `stm32f401cd` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f401ce-smoke` | `stm32f401ce` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f401rb-smoke` | `stm32f401rb` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f401rc-smoke` | `stm32f401rc` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f401rd-smoke` | `stm32f401rd` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f401re-smoke` | `stm32f401re` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f401vb-smoke` | `stm32f401vb` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f401vc-smoke` | `stm32f401vc` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f401vd-smoke` | `stm32f401vd` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f401ve-smoke` | `stm32f401ve` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f407ie-smoke` | `stm32f407ie` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f407ig-smoke` | `stm32f407ig` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f407ve-smoke` | `stm32f407ve` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f407vg-smoke` | `stm32f407vg` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f407ze-smoke` | `stm32f407ze` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f407zg-smoke` | `stm32f407zg` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f103-bare` | `stm32f103` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f103-blue-pill-bme280` | `stm32f103` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f103-blue-pill` | `stm32f103` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f4-discovery` | `stm32f407vg` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
+| `stm32f401cdu6-blackpill` | `stm32f401cdu6` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f401cdu6` | `stm32f401cdu6` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `stm32f411ceu6-blackpill` | `stm32f411ceu6` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `wch-ch32v003evt-bme280` | `ch32v003f4p6` | `crates/core/tests/analog/cosim_ch32v003_analog.rs` |
 | `wch-ch32v003evt` | `ch32v003f4p6` | `crates/core/tests/analog/cosim_ch32v003_analog.rs` |
 
 ## How to add a board
@@ -537,3 +490,24 @@ count is what the generic decks can reach without new routing.
    advances the session to a boundary, and asserts the firmware-visible
    endpoint (ADC data register or input level).
 3. Rerun this script and commit the regenerated document.
+
+## Reference solver
+
+`examples/nucleo-f401re/analog-ntc-diode-ngspice.yaml` is the same deck shape
+with both models on `adapter: ngspice`. `ntc-beta.cir` writes the Beta NTC as a
+behavioural current and `diode-load-line.cir` keeps the in-core diode model card;
+the manifest keeps the same `ui.ntc.temperature_c` input and
+`board.analog.pa0_volts` / `pa1_volts` routes. The diode deck pins
+`.options temp=26.85 tnom=26.85` to match the in-core engine's 300.00 K.
+
+```bash
+labwired cosim-step examples/nucleo-f401re/analog-ntc-diode-system.yaml \
+  --set ui.ntc.temperature_c=25 --steps 4 --json
+labwired cosim-step examples/nucleo-f401re/analog-ntc-diode-ngspice.yaml \
+  --set ui.ntc.temperature_c=25 --steps 4 --json
+```
+
+`crates/cli/tests/analog_vs_ngspice_differential.rs` compares the two runs and
+requires the NTC output to change with temperature. It is a solver-parity check
+for this shape, not evidence that every board listing above has been re-run on
+ngspice.

@@ -1,0 +1,16 @@
+* SNS_AN1 network of the pinned HeyPCB ESP32-S3 LDR board (revision A),
+* solved by ngspice instead of the in-core engine. Nets and parts come from
+* source-map.json: U4 pad 2, R6 pad 1, C7 pad 1 and U3 pad 39 (IO1) are on
+* SNS_AN1; U4 pad 1 is on 3V3; R6 pad 2 and C7 pad 2 are on GND.
+*
+* Vlux carries the bench illuminance in lux as volts (1 V = 1 lx).
+* U4 follows R = R10 * (E / 10 lx)^-gamma with R10 = 15 kOhm, the midpoint of
+* the manual's 10-20 kOhm range at 10 lx, and gamma = 0.6, written as a
+* behavioural current. The manifest declares the manual's 1..100 lx domain.
+V3V3 3v3 0 dc 3.3
+Vlux lux 0 dc 10
+Bldr 3v3 sns_an1 I = V(3v3,sns_an1) / (15k * pow(max(V(lux), 0.01) / 10, -0.6))
+R6 sns_an1 0 10k
+C7 sns_an1 0 100n
+.tran 10u 10
+.end

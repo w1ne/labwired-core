@@ -672,6 +672,15 @@ impl WasmWorld {
             .map(|input| {
                 let system: SystemManifest = serde_yaml::from_str(&input.system_yaml)
                     .map_err(|error| format!("node '{}': system YAML: {error}", input.id))?;
+                if system.resolved_motor_models().map_err(|error| error.to_string())?.iter().any(|motor| {
+                    matches!(motor, labwired_config::MotorModelConfig::Dc(config)
+                        if config.shaft_owner == labwired_config::MotorShaftOwner::External)
+                }) {
+                    return Err(format!(
+                        "node '{}': external mechanical shafts currently require a single-MCU WasmSimulator; World coupling is unsupported",
+                        input.id
+                    ));
+                }
                 let chip: ChipDescriptor = serde_yaml::from_str(&input.chip_yaml)
                     .map_err(|error| format!("node '{}': chip YAML: {error}", input.id))?;
                 board_io.insert(input.id.clone(), system.board_io.clone());
@@ -704,6 +713,54 @@ impl WasmWorld {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn external_mechanical_world_is_rejected_before_any_node_is_constructed() {
+        let environment: EnvironmentManifest = serde_yaml::from_str(
+            r#"
+schema_version: "1.0"
+name: mechanical-world-refusal
+nodes:
+  - { id: motor, system: system.yaml, firmware: firmware.bin }
+interconnects: []
+"#,
+        )
+        .unwrap();
+        let input = ResolvedNodeInput {
+            id: "motor".to_owned(),
+            system_yaml: r#"
+name: external-shaft
+chip: chip.yaml
+motor_models:
+  - kind: dc
+    id: shaft
+    shaft_owner: external
+    resistance_ohm: 2.0
+    inductance_h: 0.001
+    torque_constant_nm_per_a: 0.02
+    back_emf_constant_v_per_rad_s: 0.02
+    rotor_inertia_kg_m2: 0.0
+    viscous_friction_nm_per_rad_s: 0.0
+    supply_voltage_v: 3.7
+    load_torque_nm: 0.0
+    encoder_cpr: 4
+    pwm_pin: 3V3
+    direction_pin: 3V3
+"#
+            .to_owned(),
+            chip_yaml: "intentionally not a chip document".to_owned(),
+            firmware: Vec::new(),
+            blobs: HashMap::new(),
+        };
+        let error = match WasmWorld::from_node_inputs(environment, vec![input]) {
+            Ok(_) => panic!("World must reject external shaft ownership"),
+            Err(error) => error,
+        };
+        assert!(
+            error.contains("single-MCU") && error.contains("World coupling is unsupported"),
+            "{error}"
+        );
+    }
+
     use super::*;
 
     /// The browser's world path end to end, minus the JS boundary: a

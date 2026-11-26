@@ -125,6 +125,14 @@
       "sensor_v": "source.net.SNS_AN1 (v(sns_an1), read on IO1)",
       "user_led_drive": "source.U3.GPIO48",
       "user_led_state": "source.D1.logic_state"
+    },
+    "reference_solver": {
+      "manifest": "system-ngspice.yaml",
+      "netlist": "./ntc.cir",
+      "adapter": "ngspice",
+      "scripts": ["ngspice-overtemp-alarm.yaml", "ngspice-range-ends.yaml", "ngspice-below-threshold.yaml"],
+      "host": "python3 with libngspice; the browser needs a host-owned ngspice callback",
+      "evidence": "labwired_test_runs_the_heypcb_ntc_deck_on_ngspice: equal entry_result, console and instrument counts, netlist pin, 61 C stop on both engines"
     }
   },
   "library_asset_id": "heypcb:HeyPCB/esp32-sensors-1:boards/ntc/kicad/esp32_ntc",

@@ -140,6 +140,10 @@ impl Syscon {
 }
 
 impl Peripheral for Syscon {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     // Inert walk: SYSCON register bank; the RNG word advances on read, never in the walk; tick() is an explicit no-op.
     fn needs_legacy_walk(&self) -> bool {
         false

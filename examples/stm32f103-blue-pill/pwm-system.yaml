@@ -1,0 +1,44 @@
+schema_version: "1.0"
+name: "stm32f103-blue-pill-pwm"
+# The board's PLL clock, 72 MHz. Every real Blue Pill project (and the stock
+# STM32duino `SystemClock_Config()`) runs from the 8 MHz crystal through the
+# PLL; this engine's `cpu_hz` is a static per-run value, so it must name the
+# clock the firmware actually programs.
+# `configs/systems/stm32f103-blue-pill.yaml` stays at the 8 MHz HSI reset clock
+# its bare-metal smoke boots at; that is a different firmware, not a different
+# board.
+chip: "../../configs/chips/stm32f103.yaml"
+cpu_hz: 72_000_000
+debug_uart: uart1
+# One L298N channel. ENA is the TIM3_CH1 PWM speed input; IN1/IN2 select the
+# direction. The driver chip itself is not simulated: its truth table is the
+# plant's terminal drive.
+external_devices:
+  - id: motor
+    type: dc-motor
+    connection: gpio
+    config:
+      resistance_ohm: 1.2
+      inductance_h: 0.002
+      torque_constant_nm_per_a: 0.08
+      back_emf_constant_v_per_rad_s: 0.08
+      rotor_inertia_kg_m2: 0.00004
+      viscous_friction_nm_per_rad_s: 0.00001
+      coulomb_friction_nm: 0.006
+      supply_voltage_v: 12.0
+      load_torque_nm: 0.0
+      encoder_cpr: 1024
+      simulation_clock_hz: 72000000
+      in1_pin: PB12
+      in2_pin: PB13
+      both_inputs_low: brake
+      pwm_pin: PA6
+      timer_name: tim3
+      timer_channel: 1
+board_io:
+  - id: "led_user"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "output"
+    active_high: false

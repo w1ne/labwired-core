@@ -126,10 +126,58 @@ This replaces an in-deck clamp such as `max(V(lux), 0.01)`: the clamp still
 keeps the solver finite, but the run now stops instead of reporting a plausible
 voltage for an input the model was not fitted to. It is what lets a circuit that
 the in-core engine modelled as a bounded element (a `photoresistors` or
-`thermistors` entry) run as a behavioural deck with the same explicit stop. The
-differential test
-`cosim_ngspice::a_photoresistor_deck_matches_the_in_core_curve_within_its_range`
-compares both engines at 1, 10 and 100 lx and asserts both refuse 150 lx.
+`thermistors` entry) run as a behavioural deck with the same explicit stop. Two
+differential tests compare both engines and assert both refuse a value outside
+the declared range:
+
+- `cosim_ngspice::a_photoresistor_deck_matches_the_in_core_curve_within_its_range`
+  compares a GL5528 power law at 1, 10 and 100 lx and refuses 150 lx;
+- `cosim_ngspice::a_thermistor_deck_matches_the_in_core_curve_within_its_range`
+  compares an NCP18XH103F03RB beta curve at 10, 25 and 60 °C and refuses
+  61 °C.
+
+The committed decks are
+[`examples/cosim-ngspice-ldr`](../examples/cosim-ngspice-ldr/README.md) and
+[`examples/cosim-ngspice-ntc`](../examples/cosim-ngspice-ntc/README.md).
+
+The same parity now holds at project level, not only per element. The
+source-pinned HeyPCB ESP32-S3 NTC fixture carries `system-ngspice.yaml` and
+`ntc.cir` beside the in-core `system.yaml`, and three `ngspice-*.yaml` scripts
+repeat the in-core sequences through `labwired test --script`. Measured on
+2026-11-25: every firmware `loop` result, the console text, the asserted scope
+values and the instrument counts are identical on both engines; settled scope
+samples agree within 2·10⁻⁷ V (f32), and the range script's fastest transient
+sample differs by 1.05·10⁻² V because the in-core backward-Euler curve lags the
+analytic one, which ngspice follows within 0.1 mV. The scripts are not named
+`test-*.yaml`
+because the generic fixture matrix and the browser receipt run without a solver
+host; `labwired_test_runs_the_heypcb_ntc_deck_on_ngspice` runs them on both
+engines and also requires the `source.sha256` netlist pin and the 61 °C stop on
+both.
+
+The HeyPCB ESP32-S3 LDR sensor-network fixture repeats the pattern with
+`ldr.cir` and two `ngspice-*.yaml` scripts. Measured on 2026-11-25: the ADC count of both
+scripts and both instrument counts are identical, the bright 3.95 ms sample
+agrees within 4·10⁻⁷ V, and the bright 350 µs transient differs by 3.6·10⁻³ V
+for the same backward-Euler reason. 0, 0.5 and 100000 lx stop both engines.
+`labwired_test_runs_the_heypcb_ldr_network_deck_on_ngspice` requires that,
+plus the `source.sha256` pin; the in-core manifest keeps the committed browser
+receipt because the receipt has no solver host.
+
+The same replacement is verified for the deck shape most board examples share.
+`examples/nucleo-f401re/analog-ntc-diode-ngspice.yaml` solves the generic Beta
+NTC divider and Shockley diode load line of `analog-ntc-diode-system.yaml` with
+`adapter: ngspice`, `ntc-beta.cir` and `diode-load-line.cir`; names, routes,
+nets and model parameters are unchanged. `labwired cosim-step` drives both
+manifests through the STM32F401 ADC pad routes. Measured on 2026-11-25 with
+ngspice-42 at 0, 25 and 60 °C: the NTC route agrees to 4.4·10⁻¹⁶ V and the diode
+route to 2.1·10⁻⁷ V. The diode deck must pin `.options temp=26.85 tnom=26.85`
+because the in-core engine solves at 300.00 K; ngspice's 27 °C default alone
+moves the forward voltage by 0.3 mV, 1,500 times the agreement measured here.
+`ngspice_solves_the_generic_ntc_and_diode_decks_the_in_core_engine_solves`
+checks both routes and requires the NTC output to move with temperature, so
+agreement on a flat wrong value cannot pass. This covers one deck shape and its
+manifest routing, not every board that shares it.
 
 ### Pinning the circuit a Flex run solved
 

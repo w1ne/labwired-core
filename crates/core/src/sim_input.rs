@@ -100,6 +100,17 @@ pub trait SimInput {
     /// Apply `value` (in the channel's `unit`) to channel `key`.
     fn set_input(&mut self, key: &str, value: f64) -> Result<(), SimInputError>;
 
+    /// Preflight a mechanically coupled batch in its exact application order.
+    ///
+    /// Implementations must guarantee that every subsequent set_input in this
+    /// batch succeeds without any intervening machine step. Default refusal is
+    /// deliberate: a range check cannot prove a stateful action will succeed.
+    fn validate_atomic_inputs(&self, _sets: &[(&str, f64)]) -> Result<(), SimInputError> {
+        Err(SimInputError::Evaluation(
+            "device does not support atomic external mechanical input frames".to_owned(),
+        ))
+    }
+
     /// This device instance's identity: the `external_devices` id the author
     /// wrote in system.yaml (e.g. `fxos8700`), stamped at attach time via
     /// [`SimInput::set_component_id`]. Discovery reports it as the owner and

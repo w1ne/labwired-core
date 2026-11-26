@@ -89,6 +89,14 @@ pins:
 # Atomic SET/CLR/XOR aliases, same scheme as RP2040 (rp2350 addressmap.h
 # REG_ALIAS_*_BITS).
 atomic_register_aliases: true
+# Analog inputs: ADC0..ADC3 are GPIO26..GP29 on the RP2350A; the Feather
+# RP2350 brings them out as A0..A3 (Adafruit pinout). ADC4..7 belong to the
+# 48-GPIO RP2350B package, which this board does not use.
+analog_pins:
+  GP26: { peripheral: "adc", channel: 0 }
+  GP27: { peripheral: "adc", channel: 1 }
+  GP28: { peripheral: "adc", channel: 2 }
+  GP29: { peripheral: "adc", channel: 3 }
 peripherals:
   # SYSINFO (CHIP_ID 0x30004927 = revision 3, part 0x0004, manufacturer 0x927
   # — rp2350 sysinfo.h). The pico-sdk USB errata workaround asserts the
@@ -283,6 +291,14 @@ peripherals:
     size: "4B"
     config:
       path: "../peripherals/rp2350/actlr.yaml"
+  # CoreDebug (Armv8-M D1.2: DHCSR/DCRSR/DCRDR/DEMCR). Part of the M33 and
+  # reachable from software without a debugger: CMSIS/Betaflight set
+  # DEMCR.TRCENA before enabling the DWT cycle counter. Without a probe,
+  # software DHCSR writes are ignored (C_DEBUGEN is debugger-only).
+  - id: "scs_debug"
+    type: "cortex_m_coredebug"
+    base_address: 0xE000EDF0
+    size: "16B"
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010

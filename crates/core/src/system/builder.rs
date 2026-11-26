@@ -135,6 +135,7 @@ pub fn build_esp32_system_from_manifest_with_plugins(
         labwired_config::ChipDescriptor::resolve_with(&manifest.chip, chip_dir, plugin_chips)?;
 
     let mut bus = SystemBus::new();
+    bus.cpu_hz = manifest.cpu_hz.unwrap_or(chip.cpu_hz);
     let pro_cpu = crate::system::xtensa::configure_xtensa_esp32(&mut bus);
     // The peripheral bank is programmatic, but voltage routes still need the
     // resolved descriptor's electrical data, just as SystemBus::from_config does.
@@ -519,6 +520,104 @@ mod esp32_input_threshold_tests {
                 Some(dt_high),
                 "GPIO33 at {dt_volts} V"
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod esp32_clock_tests {
+    use super::{
+        build_esp32_system_from_manifest, build_machine, BlobMap, BootMode, BuildOptions,
+        BuildRequest, FirmwareSource,
+    };
+    use crate::bus::Bus;
+    use crate::cosim::CosimSession;
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use std::path::Path;
+
+    fn inputs() -> (ChipDescriptor, SystemManifest) {
+        let chip = serde_yaml::from_str(include_str!("../../../../configs/chips/esp32.yaml"))
+            .expect("ESP32 chip descriptor");
+        let manifest = serde_yaml::from_str(
+            r#"
+name: esp32-clock
+chip: esp32
+cosim_models:
+  - id: pad
+    adapter: analog
+    step_ns: 1000
+    outputs: { pad: board.gpio_in.gpio18 }
+    config:
+      netlist_text: |
+        Vpad pad 0 dc 3.3
+        Rload pad 0 10k
+      probes: { pad: "v(pad)" }
+"#,
+        )
+        .expect("analog clock manifest");
+        (chip, manifest)
+    }
+
+    #[test]
+    fn classic_esp32_clock_reaches_hosted_cosim_and_peripheral_registration() {
+        let (chip, mut manifest) = inputs();
+        for override_hz in [None, Some(chip.cpu_hz / 2)] {
+            manifest.cpu_hz = override_hz;
+            let expected_hz = override_hz.unwrap_or(chip.cpu_hz);
+            let (mut bus, _, _) =
+                build_esp32_system_from_manifest(&manifest, Path::new("system.yaml"))
+                    .expect("hosted ESP32 constructor");
+            let cosim = CosimSession::new(&manifest.cosim_models, Path::new("."), &bus)
+                .expect("analog routes bind")
+                .expect("analog model exists");
+            assert_eq!(cosim.cpu_hz(), expected_hz, "hosted analog clock");
+
+            // APB timer 0, 8-bit PWM, divider 1, duty 50%. The first pulse
+            // latches at overflow. Its edges must use the clock that was
+            // present when the constructor registered LEDC on the bus.
+            bus.write_u32(0x3ff5_9140, 8 | (256 << 5) | (1 << 25))
+                .unwrap();
+            bus.write_u32(0x3ff5_9000, 1 << 2).unwrap();
+            bus.write_u32(0x3ff5_9008, 128 << 4).unwrap();
+            bus.write_u32(0x3ff5_900c, 1 << 31).unwrap();
+            let index = bus.find_peripheral_index_by_name("ledc").expect("LEDC");
+            let ledc = &mut bus.peripherals[index].dev;
+            let period_cycles = 256 * expected_hz / 80_000_000;
+            ledc.sync_to(period_cycles + 1);
+            assert!(
+                ledc.wire_lines().expect("LEDC pad wire").level(0),
+                "LEDC pulse rises at selected clock"
+            );
+            ledc.sync_to(period_cycles + period_cycles / 2 + 1);
+            assert!(
+                !ledc.wire_lines().expect("LEDC pad wire").level(0),
+                "LEDC pulse falls at selected clock"
+            );
+        }
+    }
+
+    #[test]
+    fn classic_esp32_clock_reaches_session_cosimulation() {
+        let (chip, mut manifest) = inputs();
+        let firmware = include_bytes!("../../../../tests/fixtures/tier1/esp32.elf");
+        let blobs = BlobMap::new();
+        for override_hz in [None, Some(chip.cpu_hz / 2)] {
+            manifest.cpu_hz = override_hz;
+            let built = build_machine(BuildRequest {
+                chip: &chip,
+                system: &manifest,
+                firmware: FirmwareSource::Elf(firmware),
+                boot: BootMode::FastBoot,
+                blobs: &blobs,
+                options: BuildOptions::default(),
+            })
+            .expect("session ESP32 constructor");
+            let cosim = built
+                .machine
+                .bind_cosim(&manifest.cosim_models, Path::new("."))
+                .expect("analog routes bind")
+                .expect("analog model exists");
+            assert_eq!(cosim.cpu_hz(), override_hz.unwrap_or(chip.cpu_hz));
         }
     }
 }
