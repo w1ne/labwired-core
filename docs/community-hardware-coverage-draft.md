@@ -764,6 +764,8 @@ physical-hardware claim.
 - [Dated ST lifecycle and board availability receipt](../examples/stm32f103-blue-pill/vendor-status.md)
 - [Committed local simulator evidence](../examples/stm32f103-blue-pill/evidence/)
 - [BME280 on I2C1 PB6/PB7: wiring, Arduino example, CHIP_ID smoke and evidence](../examples/stm32f103-blue-pill-bme280/README.md)
+- [PWM + L298N: stock `analogWrite()` measured at 1 kHz, with a motor reaching 325.9 rpm](../examples/stm32f103-blue-pill/README.md#hardware-pwm-stock-analogwrite-driving-an-l298n)
+- [PWM receipt: measured waveform, negative controls, and what is still stubbed](receipts/2026-11-25-stm32f103-bluepill-pwm/README.md)
 
 ```cpp
 #include <Arduino.h>

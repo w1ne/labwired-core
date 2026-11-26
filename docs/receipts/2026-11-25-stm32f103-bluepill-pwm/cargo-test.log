@@ -1,0 +1,25 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/h735-telematics-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-hw-onboarding/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-hw-onboarding/Cargo.toml
+    Finished `test` profile [optimized] target(s) in 0.19s
+     Running tests/stm32/main.rs (/data/cargo-pool/labwired-core/lanes/hw-onboarding/debug/deps/stm32-877f4cca0d44a926)
+
+running 2 tests
+test stm32f103_arduino_pwm::analogwrite_zero_drops_pa6_while_pa1_keeps_its_duty ... ok
+test stm32f103_arduino_pwm::blue_pill_analogwrite_pwm_reaches_pa6_and_pa1_at_1_khz ... PA6 TIM3_CH1: 1000.0 Hz at 25.10 %; PA1 TIM2_CH2: 1000.0 Hz at 75.29 %
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 188 filtered out; finished in 23.26s
+
