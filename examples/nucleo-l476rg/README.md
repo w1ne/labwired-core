@@ -53,6 +53,33 @@ Port. Drift between the two breaks `test_nucleo_l476rg_demo_survival` in
 | I2C1_SDA     | PB7   | AF4    | header CN7 D7                         |
 | ADC1_IN5     | PA0   | analog | header CN8 A0                         |
 
+## Analog inputs
+
+`analog-ntc-diode-pa0-pa1-system.yaml` drives a generic Beta-parameter NTC
+divider and a Shockley diode load line into `board.analog.pa0_volts` and
+`board.analog.pa1_volts`. The descriptor's `analog_pins:` map is the chip's
+full LQFP64 ADC1 set
+(PC0-PC3 = IN1-IN4, PA0-PA7 = IN5-IN12, PC4/PC5 = IN13/IN14,
+PB0/PB1 = IN15/IN16, DS10198 pin definitions), so any board on this die can route a
+deck to any ADC pad. The Arduino header uses six of them:
+
+| Header | Pad | ADC1 channel |
+| --- | --- | ---: |
+| A0 | PA0 | 5 |
+| A1 | PA1 | 6 |
+| A2 | PA4 | 9 |
+| A3 | PB0 | 15 |
+| A4 | PC1 | 2 |
+| A5 | PC0 | 1 |
+
+The header pad set comes from Zephyr's `arduino_r3_connector.dtsi` for this
+board, and the board DTS enables `adc1_in1_pc0`, which cross-checks the A5
+entry. On this board PA2/PA3 carry the ST-LINK virtual COM port by default;
+the chip map still lists them because the silicon has the ADC inputs. The
+test converts A0 and A1 through the production L4 ADC block and asserts the
+firmware-visible `DR` code, routes a deck to the off-header pad PA3 (IN8),
+and requires the router to refuse PA9, which has no ADC input.
+
 ## What's modelled
 
 | Peripheral | Status      | Hardware-validated against           |

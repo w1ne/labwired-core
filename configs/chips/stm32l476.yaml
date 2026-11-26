@@ -52,6 +52,33 @@ ram:
   base: 0x20000000
   size: "96KB"
 
+# Regular ADC1 inputs by pad, from the DS10198 LQFP64 pin definitions:
+# PC0-PC3 are IN1-IN4, PA0-PA7 are IN5-IN12, PC4/PC5 are IN13/IN14 and
+# PB0/PB1 are IN15/IN16. The map is the chip's, not one board's: every board
+# on this die (NUCLEO-L476RG, iolink-multiport-demo) reads the same table. The
+# NUCLEO-L476RG Arduino A0-A5 header (Zephyr `arduino_r3_connector.dtsi`) is
+# PA0, PA1, PA4, PB0, PC1, PC0; its DTS enables `adc1_in1_pc0`, which
+# cross-checks PC0 = IN1. Consumed by co-simulation
+# `board.analog.<pad>_volts`; pads not listed (PA8 up, PB2 up, PC6 up) are
+# refused instead of guessing a channel.
+analog_pins:
+  PC0: { peripheral: "adc1", channel: 1 }
+  PC1: { peripheral: "adc1", channel: 2 }
+  PC2: { peripheral: "adc1", channel: 3 }
+  PC3: { peripheral: "adc1", channel: 4 }
+  PA0: { peripheral: "adc1", channel: 5 }
+  PA1: { peripheral: "adc1", channel: 6 }
+  PA2: { peripheral: "adc1", channel: 7 }
+  PA3: { peripheral: "adc1", channel: 8 }
+  PA4: { peripheral: "adc1", channel: 9 }
+  PA5: { peripheral: "adc1", channel: 10 }
+  PA6: { peripheral: "adc1", channel: 11 }
+  PA7: { peripheral: "adc1", channel: 12 }
+  PC4: { peripheral: "adc1", channel: 13 }
+  PC5: { peripheral: "adc1", channel: 14 }
+  PB0: { peripheral: "adc1", channel: 15 }
+  PB1: { peripheral: "adc1", channel: 16 }
+
 peripherals:
   # RM0351 / CMSIS UID_BASE: exactly 96 read-only bits. The descriptor
   # documents its unspecified simulated identity; it is not a silicon UID.
