@@ -19,7 +19,17 @@ cd "$ROOT" || exit 1
 STRICT=0
 [ "${1:-}" = "--strict" ] && STRICT=1
 
-CLI=(cargo run -q -p labwired-cli --)
+if [ -n "${LABWIRED_BIN:-}" ]; then
+  CLI_BIN="$LABWIRED_BIN"
+else
+  TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/target}"
+  CLI_BIN="$TARGET_DIR/release/labwired"
+  cargo build -q --release -p labwired-cli || exit $?
+fi
+if [ ! -x "$CLI_BIN" ]; then
+  echo "ERROR: labwired binary is not executable: $CLI_BIN" >&2
+  exit 127
+fi
 OUT_ROOT="${OUT_DIR:-out/example-smokes}"
 mkdir -p "$OUT_ROOT"
 
@@ -44,7 +54,7 @@ for yaml in examples/*/*smoke*.yaml examples/*/test*.yaml; do
     continue
   fi
   od="$OUT_ROOT/$name-$(basename "$yaml" .yaml)"
-  if "${CLI[@]}" test --script "$yaml" --output-dir "$od" --no-uart-stdout >/dev/null 2>&1; then
+  if "$CLI_BIN" test --script "$yaml" --output-dir "$od" --no-uart-stdout >/dev/null 2>&1; then
     printf '%-30s %-10s %s\n' "$name" "PASS" "$(basename "$yaml")"
     pass=$((pass + 1))
   else
