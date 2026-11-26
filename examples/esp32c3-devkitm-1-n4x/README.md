@@ -64,6 +64,26 @@ void setup() {
 void loop() {}
 ```
 
+## Analog inputs
+
+`configs/chips/esp32c3.yaml` publishes the SAR ADC1 pad map: GPIO0..GPIO4 are
+ADC1_CH0..CH4 on `apb_saradc`. GPIO5 (ADC2_CH0) is not on the map, because
+ESP-IDF refuses ADC2 one-shot reads on the C3. A co-simulation deck names a
+pad only, as `board.analog.<pad>_volts`, and the router finds the channel.
+
+[`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) is the generic
+deck: a Beta NTC divider on GPIO3 and a Shockley diode load line on GPIO4.
+`crates/core/tests/analog/cosim_esp32c3_boards_analog.rs` runs it on all
+eleven ESP32-C3 profiles. It asserts the solved voltages and the
+`SAR1DATA_STATUS` codes of the one-shot conversion (25 C NTC = 2047 counts):
+
+```bash
+cargo test -p labwired-core --test analog esp32c3
+```
+
+The ADC model is behavioural: 12 bits on a fixed 3.3 V reference. It does not
+model attenuation, eFuse calibration or the SAR input impedance.
+
 ## Scope
 
 - Modeled in this profile: C3 fast-boot ELF loading, UART0 FIFO/console, GPIO
