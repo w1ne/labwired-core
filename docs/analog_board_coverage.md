@@ -14,8 +14,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **441**
-- Covered end to end: **101**
-- Not covered: **340**
+- Covered end to end: **108**
+- Not covered: **333**
 - Not covered but with an ADC pad map: **0** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` block or `adc` pin functions, an ADC model, or a digital
@@ -35,7 +35,6 @@ None.
 
 | Profile | Chip | Analog pad map |
 | --- | --- | ---: |
-| `adafruit-feather-esp32-v2-bme280` | `esp32` | 0 |
 | `apollo4p-evb` | `amap42kp` | 0 |
 | `arduino-nano-esp32-bme280` | `esp32s3` | 0 |
 | `arduino-nano-esp32` | `esp32s3` | 0 |
@@ -50,16 +49,10 @@ None.
 | `curiosity-pic32mz-ef` | `pic32mz2048efm144` | 0 |
 | `dspic33fj32mc202-demo` | `dspic33fj32mc202` | 0 |
 | `dspic33fj32mc204-demo` | `dspic33fj32mc204` | 0 |
-| `ek-ra6m5` | `r7fa6m5bh` | 0 |
-| `ek-ra8m1` | `r7fa8m1ah` | 0 |
 | `ek-rx261` | `r5f52618bgfp` | 0 |
 | `esp32-devkitc-32e-gpio-smoke` | `esp32-devkitc-32e-gpio-smoke` | 0 |
 | `esp32-devkitc-32e-uart1` | `esp32-devkitc-32e-uart1` | 0 |
-| `esp32-devkitm-1-bme280` | `esp32` | 0 |
-| `esp32-devkitm-1` | `esp32` | 0 |
 | `esp32-s3-devkitc-1-n16r8-adc` | `esp32s3-devkitc-1-n16r8-adc` | 0 |
-| `esp32-wroom-32` | `esp32` | 0 |
-| `esp32-wroom-epaper` | `esp32` | 0 |
 | `esp32c3-ble-pong` | `esp32c3` | 0 |
 | `esp32c3-devkit` | `esp32c3` | 0 |
 | `esp32c3-devkitm-1-n4x` | `esp32c3` | 0 |
@@ -380,6 +373,7 @@ None.
 
 | Profile | Chip | Evidence |
 | --- | --- | --- |
+| `adafruit-feather-esp32-v2-bme280` | `esp32` | `crates/core/tests/analog/cosim_esp32_classic_boards_analog.rs` |
 | `adafruit-feather-esp32-v2` | `esp32` | `crates/core/tests/analog/cosim_esp32_analog_diode.rs` |
 | `adafruit-feather-rp2040-bme280` | `rp2040-feather` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
 | `adafruit-feather-rp2040` | `rp2040-feather` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
@@ -402,6 +396,12 @@ None.
 | `atmega1281` | `atmega1281` | `crates/core/tests/analog/cosim_avr_atmega_mega_analog.rs` |
 | `atmega2561` | `atmega2561` | `crates/core/tests/analog/cosim_avr_atmega_mega_analog.rs` |
 | `controllino-mini` | `atmega328p` | `crates/core/tests/analog/cosim_avr_atmega328p_analog.rs` |
+| `ek-ra6m5` | `r7fa6m5bh` | `crates/core/tests/analog/cosim_ek_ra_adc_pad_analog.rs` |
+| `ek-ra8m1` | `r7fa8m1ah` | `crates/core/tests/analog/cosim_ek_ra_adc_pad_analog.rs` |
+| `esp32-devkitm-1-bme280` | `esp32` | `crates/core/tests/analog/cosim_esp32_classic_boards_analog.rs` |
+| `esp32-devkitm-1` | `esp32` | `crates/core/tests/analog/cosim_esp32_classic_boards_analog.rs` |
+| `esp32-wroom-32` | `esp32` | `crates/core/tests/analog/cosim_esp32_classic_boards_analog.rs` |
+| `esp32-wroom-epaper` | `esp32` | `crates/core/tests/analog/cosim_esp32_classic_boards_analog.rs` |
 | `feather-f405` | `stm32f405` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `iolinki-g0-startup` | `stm32g0b1re` | `crates/core/tests/analog/cosim_stm32g0b1_analog.rs` |
 | `labwired-demo-board` | `stm32f103` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
