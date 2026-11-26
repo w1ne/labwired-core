@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#next-queue-not-covered-analog_pins-map-already-present" class="md-nav__link">
+  <a href="#next-queue-not-covered-adc-pads-already-mapped" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Next queue: not covered, analog_pins: map already present
+        Next queue: not covered, ADC pads already mapped
       
     </span>
   </a>
@@ -4937,23 +4937,26 @@ the script after adding or removing a board test.</p>
 <code>CosimSession</code> that loads that profile (or one of its
 <code>examples/&lt;dir&gt;/analog-*.yaml</code> decks) and reaches an endpoint route the
 manifest declares: <code>board.analog.&lt;pad&gt;_volts</code>, which the chip's
-<code>analog_pins:</code> map resolves to an ADC channel or a voltage-thresholded
-digital pad, or an explicit <code>adc.&lt;peripheral&gt;.&lt;channel&gt;_volts</code> route.
+<code>analog_pins:</code> map or the pad's <code>adc</code> pin function resolves to an ADC
+channel, or an explicit <code>adc.&lt;peripheral&gt;.&lt;channel&gt;_volts</code> route.
 Device-only unit tests, ADC register tests with no netlist, files that only
 list fixture paths, and helper tests do not count: they prove the model,
 not the board.</p>
 <ul>
 <li>Profiles in <code>configs/systems/</code>: <strong>440</strong></li>
-<li>Covered end to end: <strong>90</strong></li>
-<li>Not covered: <strong>350</strong></li>
-<li>Not covered but with an <code>analog_pins:</code> map: <strong>0</strong> (these are the
+<li>Covered end to end: <strong>93</strong></li>
+<li>Not covered: <strong>347</strong></li>
+<li>Not covered but with an ADC pad map: <strong>0</strong> (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
-  <code>analog_pins:</code> map, an ADC model, or a digital endpoint first)</li>
+  <code>analog_pins:</code> block or <code>adc</code> pin functions, an ADC model, or a digital
+  endpoint first)</li>
 </ul>
-<p>The <code>Analog pad map</code> column counts <code>analog_pins:</code> entries in the chip
-descriptor. Every such entry in this tree names an ADC peripheral, so the
-count is what the generic decks can reach without new routing.</p>
-<h2 id="next-queue-not-covered-analog_pins-map-already-present">Next queue: not covered, <code>analog_pins:</code> map already present</h2>
+<p>The <code>Analog pad map</code> column counts the pads a chip can hand to an ADC:
+<code>analog_pins:</code> entries plus pads whose <code>pins:</code> table carries an
+<code>{ type: adc, peripheral, channel }</code> function (the union the router uses).
+Every such entry in this tree names an ADC peripheral, so the count is what
+the generic decks can reach without new routing.</p>
+<h2 id="next-queue-not-covered-adc-pads-already-mapped">Next queue: not covered, ADC pads already mapped</h2>
 <p>None.</p>
 <h2 id="not-covered">Not covered</h2>
 <table>
@@ -5431,11 +5434,6 @@ count is what the generic decks can reach without new routing.</p>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
-<td><code>nucleo-l432kc</code></td>
-<td><code>stm32l432kc</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
 <td><code>nucleo-l476rg</code></td>
 <td><code>stm32l476</code></td>
 <td style="text-align: right;">0</td>
@@ -5448,16 +5446,6 @@ count is what the generic decks can reach without new routing.</p>
 <tr>
 <td><code>nucleo-u545re</code></td>
 <td><code>stm32u545</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>nucleo-u575zi</code></td>
-<td><code>stm32u575</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>nucleo-u5a5zj</code></td>
-<td><code>stm32u5a5zj</code></td>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
@@ -6866,6 +6854,21 @@ count is what the generic decks can reach without new routing.</p>
 <td><code>nucleo-f767zi</code></td>
 <td><code>stm32f767</code></td>
 <td><code>crates/core/tests/analog/cosim_nucleo_f767zi_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>nucleo-l432kc</code></td>
+<td><code>stm32l432kc</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32l4u5_pin_functions_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>nucleo-u575zi</code></td>
+<td><code>stm32u575</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32l4u5_pin_functions_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>nucleo-u5a5zj</code></td>
+<td><code>stm32u5a5zj</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32l4u5_pin_functions_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>nucleo_f767zi</code></td>
