@@ -287,3 +287,24 @@ peripherals:
     size: "4KB"
     config:
       debug_schema: "../peripherals/esp32/pcnt.yaml"
+
+# ADC1 input pads. Espressif ESP32 datasheet, "ADC1 channel and pin
+# assignment": CH0..CH7 are GPIO36, GPIO37, GPIO38, GPIO39, GPIO32, GPIO33,
+# GPIO34 and GPIO35. The analog router reads this table (and any `adc`
+# function in a pad's pin list) and resolves `board.analog.gpio34_volts` to
+# `sens_sar_adc` channel 6 without a board- or part-specific route.
+#
+# ADC2 pads are deliberately absent. The classic SENS model keeps ONE input
+# table for both SAR units (`adc_channel_count` is 10; see
+# `peripherals/esp32/sar_adc.rs`), so publishing ADC2 CH0..CH9 here would
+# alias ADC1 CH0..CH7 and let an ADC2 pad sample an ADC1 node. Model the two
+# units separately before adding ADC2 pads.
+analog_pins:
+  GPIO36: { peripheral: sens_sar_adc, channel: 0 }
+  GPIO37: { peripheral: sens_sar_adc, channel: 1 }
+  GPIO38: { peripheral: sens_sar_adc, channel: 2 }
+  GPIO39: { peripheral: sens_sar_adc, channel: 3 }
+  GPIO32: { peripheral: sens_sar_adc, channel: 4 }
+  GPIO33: { peripheral: sens_sar_adc, channel: 5 }
+  GPIO34: { peripheral: sens_sar_adc, channel: 6 }
+  GPIO35: { peripheral: sens_sar_adc, channel: 7 }

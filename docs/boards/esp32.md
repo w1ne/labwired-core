@@ -22,6 +22,12 @@ models the memory map probed against a real ESP32-WROOM-32 module (chip type
 - Timer group `timg0` (`0x3FF5_F000`)
 - RTC_CNTL and the DPORT interrupt matrix (declared as stubs)
 - SPI3 (`esp32_spi`), I2C0 (`esp32_i2c`), SAR ADC, LEDC
+- ADC1 pad map for analog co-simulation: GPIO36/37/38/39/32/33/34/35 are
+  ADC1_CH0..CH7 in `analog_pins:`, so `board.analog.<pad>_volts` resolves to
+  the `sens_sar_adc` channel. ADC2 pads are not published: the classic SENS
+  model shares one input table between the two SAR units. Evidence:
+  `crates/core/tests/analog/cosim_esp32_pin_table_analog.rs` runs the generic
+  Beta NTC and Shockley decks on five profiles and reads `DATA_SAR`.
 - RTC IO MUX / RTC GPIO (`esp32_rtc_io`, `0x3FF4_8400`): RTC_GPIO0..17 on
   GPIO36..39, 34, 35, 25, 26, 33, 32, 4, 0, 2, 15, 13, 12, 14, 27 at bit
   `14 + n`; `MUX_SEL` hands a pad to `RTC_GPIO_OUT` / `ENABLE`, the RTC_IO

@@ -1,0 +1,43 @@
+# Generic Beta NTC divider (GPIO34 = ADC1_CH6) and Shockley diode load line
+# (GPIO35 = ADC1_CH7) for the classic ESP32 SENS SAR ADC.
+#
+# Neither netlist names the board, the ADC or a channel: each solves its own
+# circuit and publishes a probe voltage to `board.analog.<pad>_volts`. The
+# `esp32.yaml` descriptor maps those pads to `sens_sar_adc` channels, so any
+# profile that loads that descriptor resolves this deck unchanged.
+name: "adafruit-feather-esp32-v2-analog-ntc-diode"
+chip: "../../configs/chips/esp32.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.gpio34_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 3.3
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.gpio35_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF
+        .model DREF D(IS=2.52n N=1.752 RS=0.568)
+      probes:
+        v_diode: "v(sense)"
+      vdd: 3.3

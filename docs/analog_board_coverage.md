@@ -14,8 +14,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **441**
-- Covered end to end: **99**
-- Not covered: **342**
+- Covered end to end: **104**
+- Not covered: **337**
 - Not covered but with an ADC pad map: **0** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` block or `adc` pin functions, an ADC model, or a digital
@@ -35,7 +35,6 @@ None.
 
 | Profile | Chip | Analog pad map |
 | --- | --- | ---: |
-| `adafruit-feather-esp32-v2-bme280` | `esp32` | 0 |
 | `apollo4p-evb` | `amap42kp` | 0 |
 | `arduino-nano-esp32-bme280` | `esp32s3` | 0 |
 | `arduino-nano-esp32` | `esp32s3` | 0 |
@@ -55,11 +54,7 @@ None.
 | `ek-rx261` | `r5f52618bgfp` | 0 |
 | `esp32-devkitc-32e-gpio-smoke` | `esp32-devkitc-32e-gpio-smoke` | 0 |
 | `esp32-devkitc-32e-uart1` | `esp32-devkitc-32e-uart1` | 0 |
-| `esp32-devkitm-1-bme280` | `esp32` | 0 |
-| `esp32-devkitm-1` | `esp32` | 0 |
 | `esp32-s3-devkitc-1-n16r8-adc` | `esp32s3-devkitc-1-n16r8-adc` | 0 |
-| `esp32-wroom-32` | `esp32` | 0 |
-| `esp32-wroom-epaper` | `esp32` | 0 |
 | `esp32c3-ble-pong` | `esp32c3` | 0 |
 | `esp32c3-devkit` | `esp32c3` | 0 |
 | `esp32c3-devkitm-1-n4x` | `esp32c3` | 0 |
@@ -382,6 +377,7 @@ None.
 
 | Profile | Chip | Evidence |
 | --- | --- | --- |
+| `adafruit-feather-esp32-v2-bme280` | `esp32` | `crates/core/tests/analog/cosim_esp32_pin_table_analog.rs` |
 | `adafruit-feather-esp32-v2` | `esp32` | `crates/core/tests/analog/cosim_esp32_analog_diode.rs` |
 | `adafruit-feather-rp2040-bme280` | `rp2040-feather` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
 | `adafruit-feather-rp2040` | `rp2040-feather` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
@@ -404,6 +400,10 @@ None.
 | `atmega1281` | `atmega1281` | `crates/core/tests/analog/cosim_avr_atmega_mega_analog.rs` |
 | `atmega2561` | `atmega2561` | `crates/core/tests/analog/cosim_avr_atmega_mega_analog.rs` |
 | `controllino-mini` | `atmega328p` | `crates/core/tests/analog/cosim_avr_atmega328p_analog.rs` |
+| `esp32-devkitm-1-bme280` | `esp32` | `crates/core/tests/analog/cosim_esp32_pin_table_analog.rs` |
+| `esp32-devkitm-1` | `esp32` | `crates/core/tests/analog/cosim_esp32_pin_table_analog.rs` |
+| `esp32-wroom-32` | `esp32` | `crates/core/tests/analog/cosim_esp32_pin_table_analog.rs` |
+| `esp32-wroom-epaper` | `esp32` | `crates/core/tests/analog/cosim_esp32_pin_table_analog.rs` |
 | `feather-f405` | `stm32f405` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `labwired-demo-board` | `stm32f103` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `microbit-v2` | `nrf52833` | `crates/core/tests/analog/cosim_microbit_v2_analog.rs` |

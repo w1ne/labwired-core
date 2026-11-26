@@ -46,6 +46,7 @@ mod cosim_avr_atmega4809_analog;
 mod cosim_avr_atmega_mega_analog;
 mod cosim_ch32v003_analog;
 mod cosim_esp32_analog_diode;
+mod cosim_esp32_pin_table_analog;
 mod cosim_microbit_v2_analog;
 mod cosim_nrf52840_family_analog;
 mod cosim_nucleo_f103rb_analog;
