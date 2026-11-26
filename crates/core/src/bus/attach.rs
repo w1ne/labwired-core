@@ -212,6 +212,28 @@ const STM32G4_TIMER_PADS: &[TimerAfPad] = &[
     ("tim3", 'c', 9, 2, 3, "TIM3_CH4"),
 ];
 
+/// STM32G4 TIM1 complementary outputs, selected by `pad_map: stm32g4`.
+/// Read off stm32duino's `PinMap_TIM` for the G431R and G474R variants
+/// (`variants/STM32G4xx/G431R(6-8)(I-T)_G431RB(I-T)x(Z)_G441RB(I-T)/` and
+/// `G473R(B-C)T_G473RETx(Z)_G474R(B-C-E)T_G483RET_G484RET/PeripheralPins.c`
+/// agree row for row): AF6, except PB15/PC13 on AF4 and PB9 on AF12.
+/// Native timer wire indices 4..6 are CH1N..CH3N. TIM1_CH4N (PC5 AF6) has
+/// no timer wire and is left out. Output-only: the capture pass ignores
+/// `ti >= 4`.
+const STM32G4_COMPLEMENTARY_PADS: &[TimerAfPad] = &[
+    ("tim1", 'a', 7, 6, 4, "TIM1_CH1N"),
+    ("tim1", 'a', 11, 6, 4, "TIM1_CH1N"),
+    ("tim1", 'b', 13, 6, 4, "TIM1_CH1N"),
+    ("tim1", 'c', 13, 4, 4, "TIM1_CH1N"),
+    ("tim1", 'a', 12, 6, 5, "TIM1_CH2N"),
+    ("tim1", 'b', 0, 6, 5, "TIM1_CH2N"),
+    ("tim1", 'b', 14, 6, 5, "TIM1_CH2N"),
+    ("tim1", 'b', 1, 6, 6, "TIM1_CH3N"),
+    ("tim1", 'b', 9, 12, 6, "TIM1_CH3N"),
+    ("tim1", 'b', 15, 4, 6, "TIM1_CH3N"),
+    ("tim1", 'f', 0, 6, 6, "TIM1_CH3N"),
+];
+
 /// STM32L0 timer channel pads, selected by the timer's `pad_map: stm32l0`.
 /// Read off stm32duino's `PinMap_TIM` for the L072R/L073R variant
 /// (`variants/STM32L0xx/L072R(B-Z)T_L073R(B-Z)T_L083R(B-Z)T/PeripheralPins.c`):
@@ -535,6 +557,7 @@ const V2_TIMER_PAD_TABLES: &[(&[TimerAfPad], Option<&str>)] = &[
     (STM32G0_TIMER_PADS, Some("stm32g0")),
     (STM32C0_TIMER_PADS, Some("stm32c0")),
     (STM32G4_TIMER_PADS, Some("stm32g4")),
+    (STM32G4_COMPLEMENTARY_PADS, Some("stm32g4")),
     (STM32L0_TIMER_PADS, Some("stm32l0")),
     (STM32L4_TIMER_PADS, Some("stm32l4")),
     (STM32L4_COMPLEMENTARY_PADS, Some("stm32l4")),

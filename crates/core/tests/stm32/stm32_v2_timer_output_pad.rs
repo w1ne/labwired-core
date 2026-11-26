@@ -553,3 +553,158 @@ mod l476_complementary {
         assert_edges(&inverted, 1, &[(80, true), (0, false)]);
     }
 }
+
+/// STM32G4 TIM1 complementary outputs (`STM32G4_COMPLEMENTARY_PADS`) on the
+/// NUCLEO-G431RB matrix system. The PA8/PA7 pair is the one the stock
+/// stm32duino sketch in labwired-ip `examples/nucleog431rb-arduino` drives;
+/// before this table PA7 stayed flat with CC1NE and MOE set.
+mod g431_complementary {
+    use super::*;
+    use labwired_core::logic_capture::LogicEdge;
+
+    const SYSTEM: &str = "validation/arduino-matrix/systems/nucleo-g431rb.yaml";
+    const RCC_AHB2ENR: u64 = 0x4002_1000 + 0x4C;
+    const RCC_APB2ENR: u64 = 0x4002_1000 + 0x60;
+    const TIM1: u64 = 0x4001_2C00;
+    const TIM_CCMR2: u64 = 0x1C;
+    const BDTR: u64 = 0x44;
+    const MOE: u32 = 1 << 15;
+
+    fn port_base(port: char) -> u64 {
+        0x4800_0000 + 0x400 * u64::from(port as u8 - b'a')
+    }
+
+    fn set_af(m: &mut Cm, port: char, pin: u32, af: u32) {
+        let base = port_base(port);
+        let moder = m.bus.read_u32(base).unwrap();
+        m.bus
+            .write_u32(base, (moder & !(3 << (pin * 2))) | (2 << (pin * 2)))
+            .unwrap();
+        let afr = base + if pin < 8 { 0x20 } else { 0x24 };
+        let shift = (pin % 8) * 4;
+        let old = m.bus.read_u32(afr).unwrap();
+        m.bus
+            .write_u32(afr, (old & !(15 << shift)) | (af << shift))
+            .unwrap();
+    }
+
+    /// TIM1 channel `ch` (0-based) in PWM mode 1, ARR 199, CCR 80, with the
+    /// given CCER and BDTR. `pads` are (port, pin, AF) put on their AF and
+    /// watched in order. Returns the edges over 2 000 cycles.
+    fn capture(ch: u32, pads: &[(char, u32, u32)], ccer: u32, bdtr: u32) -> Vec<LogicEdge> {
+        let mut m = machine(SYSTEM);
+        set_bits(&mut m, RCC_AHB2ENR, 0b111); // GPIOA/B/C.
+        set_bits(&mut m, RCC_APB2ENR, 1 << 11); // TIM1EN.
+        for &(port, pin, af) in pads {
+            set_af(&mut m, port, pin, af);
+        }
+        let (ccmr, shift) = if ch < 2 {
+            (TIM_CCMR1, 8 * ch)
+        } else {
+            (TIM_CCMR2, 8 * (ch - 2))
+        };
+        for (offset, value) in [
+            (TIM_PSC, 0),
+            (TIM_ARR, 199),
+            (TIM_CCR1 + 4 * u64::from(ch), 80),
+            (ccmr, 6 << (4 + shift)),
+            (TIM_CCER, ccer),
+            (BDTR, bdtr),
+            (TIM_EGR, 1),
+            (TIM_CR1, 1),
+        ] {
+            m.bus.write_u32(TIM1 + offset, value).unwrap();
+        }
+        let sources: Vec<_> = pads
+            .iter()
+            .map(|&(port, pin, _)| {
+                let idx = m
+                    .bus
+                    .find_peripheral_index_by_name(&format!("gpio{port}"))
+                    .unwrap();
+                Some(LogicSource::pad(idx, pin as u8))
+            })
+            .collect();
+        m.logic_watch(&sources);
+        for _ in 0..2_000 {
+            m.step().unwrap();
+        }
+        m.logic_read_edges(0).edges
+    }
+
+    fn count(edges: &[LogicEdge], ch: u32) -> usize {
+        edges.iter().filter(|e| e.ch == ch).count()
+    }
+
+    /// Every CHxN row whose port the G431RB descriptor carries. PF0 (CH3N,
+    /// AF6) is in the table but the descriptor has no GPIOF.
+    const ROWS: &[(char, u32, u32, u32)] = &[
+        ('a', 7, 6, 0),
+        ('a', 11, 6, 0),
+        ('b', 13, 6, 0),
+        ('c', 13, 4, 0),
+        ('a', 12, 6, 1),
+        ('b', 0, 6, 1),
+        ('b', 14, 6, 1),
+        ('b', 1, 6, 2),
+        ('b', 9, 12, 2),
+        ('b', 15, 4, 2),
+    ];
+
+    #[test]
+    fn g431_tim1_every_chxn_pad_follows_the_n_output() {
+        for &(port, pin, af, ch) in ROWS {
+            let ccxne = 1 << (4 * ch + 2);
+            let on = capture(ch, &[(port, pin, af)], ccxne, MOE | 2);
+            assert!(
+                count(&on, 0) >= 10,
+                "P{}{pin} AF{af} TIM1_CH{}N: saw {} edges",
+                port.to_ascii_uppercase(),
+                ch + 1,
+                count(&on, 0)
+            );
+            let wrong = capture(ch, &[(port, pin, (af + 1) % 16)], ccxne, MOE | 2);
+            assert!(
+                count(&wrong, 0) <= 1,
+                "P{}{pin} on AF{} is not TIM1_CH{}N",
+                port.to_ascii_uppercase(),
+                (af + 1) % 16,
+                ch + 1
+            );
+        }
+    }
+
+    #[test]
+    fn g431_tim1_pa8_pa7_pair_has_exact_two_cycle_dead_time() {
+        let edges = capture(0, &[('a', 8, 6), ('a', 7, 6)], 0b101, MOE | 2);
+        for (ch, expected) in [(0, [(2, true), (80, false)]), (1, [(82, true), (0, false)])] {
+            let late: Vec<_> = edges
+                .iter()
+                .filter(|e| e.ch == ch && e.cycle >= 200)
+                .collect();
+            assert!(late.len() >= 10, "channel {ch}: {late:?}");
+            for e in late {
+                assert!(
+                    expected.contains(&(e.cycle % 200, e.value)),
+                    "unexpected edge {e:?}"
+                );
+            }
+        }
+        let mut levels = [false; 2];
+        for e in &edges {
+            levels[e.ch as usize] = e.value;
+            assert!(!(levels[0] && levels[1]), "overlap at cycle {}", e.cycle);
+        }
+    }
+
+    #[test]
+    fn g431_tim1_pa7_needs_cc1ne_and_moe() {
+        for (ccer, bdtr) in [(0b001, MOE | 2), (0b101, 2)] {
+            let edges = capture(0, &[('a', 7, 6)], ccer, bdtr);
+            assert!(
+                count(&edges, 0) <= 1,
+                "PA7 must stay dark for CCER={ccer:#b}, BDTR={bdtr:#x}"
+            );
+        }
+    }
+}
