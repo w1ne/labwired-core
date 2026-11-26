@@ -180,7 +180,8 @@ fn cosim_series(manifest: &Path, steps: u64, sets: &[&str], model: &str, signal:
 /// temperatures, and the temperature must move the NTC output, so agreement on
 /// a flat wrong value cannot pass. The diode needs ngspice's temperature pinned
 /// to the in-core engine's 300.00 K (26.85 degC); the default 27 degC shifts a
-/// forward-biased diode by 0.3 mV, which is 30x the agreement measured here.
+/// forward-biased diode by 0.3 mV, about 1,500 times the agreement measured
+/// here.
 #[test]
 fn ngspice_solves_the_generic_ntc_and_diode_decks_the_in_core_engine_solves() {
     const STEPS: u64 = 4;
