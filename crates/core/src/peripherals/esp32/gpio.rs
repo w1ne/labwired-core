@@ -1530,6 +1530,10 @@ impl PinPort for Esp32Gpio {
 }
 
 impl Peripheral for Esp32Gpio {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     fn register_esp_gpio_observer(
         &mut self,
         observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,

@@ -45,6 +45,10 @@ impl Esp32c3Rng {
 }
 
 impl Peripheral for Esp32c3Rng {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     // Inert walk: xorshift state advances on read, never in the walk; tick() is the trait-default no-op.
     fn needs_legacy_walk(&self) -> bool {
         false

@@ -71,14 +71,24 @@ def analog_pad_count(chip: Path | None) -> int:
     return len(re.findall(r"^\s+[A-Za-z0-9_.]+\s*:\s*\{", match.group(1), re.MULTILINE))
 
 
-def resolve_profile_keys() -> tuple[dict[str, str], list[str]]:
-    """Translate file stems and example directories to declared profile names."""
-    by_stem: dict[str, str] = {}
+def resolve_profile_keys() -> tuple[dict[str, Path], list[str]]:
+    """Translate manifest references and example directories to manifest paths.
+
+    The key is the manifest's path relative to `configs/systems/`, always. A
+    top-level manifest keeps the long-standing short form
+    (`configs/systems/nucleo-f103rb.yaml` names `nucleo-f103rb`); a nested one
+    must be named with its directory
+    (`configs/systems/stm32-catalog/stm32f103c4.yaml` names
+    `stm32-catalog/stm32f103c4`). Registering a bare stem for a nested file as
+    well would make `stm32f401cdu6-blackpill` ambiguous: the onboarding tree
+    keeps a file of that name whose chip declares no analog pad at all.
+    """
+    by_key: dict[str, Path] = {}
     names: list[str] = []
     for name, path in profiles():
-        by_stem[path.stem] = name
+        by_key[path.relative_to(SYSTEMS).with_suffix("").as_posix()] = path
         names.append(name)
-    return by_stem, names
+    return by_key, names
 
 
 def profile_for_example_dir(directory: str, names: list[str]) -> str | None:
@@ -97,10 +107,20 @@ def profile_for_example_dir(directory: str, names: list[str]) -> str | None:
     return max(candidates, key=len) if candidates else None
 
 
-def evidence() -> dict[str, str]:
-    """Map profile name -> the test file that proves its analog endpoint."""
-    by_stem, names = resolve_profile_keys()
-    by_profile: dict[str, str] = {}
+def evidence() -> dict[Path, str]:
+    """Map manifest path -> the test file that proves its analog endpoint.
+
+    Keyed by path, not by declared `name:`: the onboarding tree keeps its own
+    `stm32f401cdu6-blackpill.yaml` under the same name as the catalog one, and
+    a name-keyed map credited that uncovered board from its sibling's test.
+    Example-deck directories resolve through the declared name, first manifest
+    in path order winning, because a directory carries no path of its own.
+    """
+    by_key, names = resolve_profile_keys()
+    by_name: dict[str, Path] = {}
+    for name, path in profiles():
+        by_name.setdefault(name, path)
+    by_profile: dict[Path, str] = {}
     for test in sorted(TESTS.rglob("*.rs")):
         text = test.read_text(encoding="utf-8", errors="replace")
         fixtures = EXAMPLE_REF.findall(text)
@@ -116,14 +136,14 @@ def evidence() -> dict[str, str]:
         if not routed and not fixtures:
             continue
         rel = test.relative_to(ROOT).as_posix()
-        for stem in PROFILE_REF.findall(text):
-            name = by_stem.get(stem)
-            if name:
-                by_profile.setdefault(name, rel)
+        for reference in PROFILE_REF.findall(text):
+            path = by_key.get(reference)
+            if path:
+                by_profile.setdefault(path, rel)
         for directory in fixtures:
             name = profile_for_example_dir(directory, names)
-            if name:
-                by_profile.setdefault(name, rel)
+            if name and name in by_name:
+                by_profile.setdefault(by_name[name], rel)
     return by_profile
 
 
@@ -132,7 +152,14 @@ def report() -> str:
     rows: list[tuple[str, str, int, str]] = []
     for name, path in profiles():
         chip = read_chip(path)
-        rows.append((name, chip.stem if chip else "-", analog_pad_count(chip), covered_by.get(name, "")))
+        rows.append(
+            (
+                name,
+                chip.stem if chip else "-",
+                analog_pad_count(chip),
+                covered_by.get(path, ""),
+            )
+        )
     covered = [row for row in rows if row[3]]
     uncovered = [row for row in rows if not row[3]]
     routable = [row for row in uncovered if row[2] > 0]

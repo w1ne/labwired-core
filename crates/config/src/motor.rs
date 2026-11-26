@@ -49,6 +49,10 @@ pub struct BrushedMotorConfig {
     /// integrating its own current from pin levels as it always has.
     #[serde(default, skip_serializing_if = "MotorArmature::is_bridge")]
     pub armature: MotorArmature,
+    /// The only solver allowed to integrate q/qd. External ownership is
+    /// supported for bridge DC motors; current and torque remain native.
+    #[serde(default, skip_serializing_if = "MotorShaftOwner::is_native")]
+    pub shaft_owner: MotorShaftOwner,
     /// Speed / enable input: the low-side switch gate, an H-bridge's ENA or
     /// PWMA. A rail label (`VCC`, `3V3`, ...) means "jumpered full on".
     /// Required for `armature: bridge`; must be absent for `armature: circuit`.
@@ -111,6 +115,21 @@ pub struct BrushedMotorConfig {
     /// powered, the same asymmetry as every other placement's `powered` key.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub powered: Option<bool>,
+}
+
+/// Ownership of a DC motor's mechanical position and velocity.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MotorShaftOwner {
+    #[default]
+    Native,
+    External,
+}
+
+impl MotorShaftOwner {
+    fn is_native(&self) -> bool {
+        *self == Self::Native
+    }
 }
 
 /// Who drives a motor's winding or three phase windings.
@@ -286,13 +305,38 @@ impl MotorModelConfig {
         match self {
             Self::Dc(config) => {
                 let circuit = config.armature == MotorArmature::Circuit;
+                if circuit && config.shaft_owner == MotorShaftOwner::External {
+                    issues.push(format!(
+                        "motor_models[{}].shaft_owner external requires armature bridge",
+                        config.id
+                    ));
+                }
+                let external = config.shaft_owner == MotorShaftOwner::External;
+                if external {
+                    for (field, value) in [
+                        ("rotor_inertia_kg_m2", config.rotor_inertia_kg_m2),
+                        (
+                            "viscous_friction_nm_per_rad_s",
+                            config.viscous_friction_nm_per_rad_s,
+                        ),
+                        ("coulomb_friction_nm", config.coulomb_friction_nm),
+                        ("load_torque_nm", config.load_torque_nm),
+                    ] {
+                        if value != 0.0 {
+                            issues.push(format!(
+                                "motor_models[{}].{field} must be zero when shaft_owner is external; the external solver owns inertia and losses",
+                                config.id
+                            ));
+                        }
+                    }
+                }
                 validate_motor_common(
                     &config.id,
                     config.resistance_ohm,
                     config.inductance_h,
                     config.torque_constant_nm_per_a,
                     config.back_emf_constant_v_per_rad_s,
-                    config.rotor_inertia_kg_m2,
+                    (!external).then_some(config.rotor_inertia_kg_m2),
                     config.viscous_friction_nm_per_rad_s,
                     config.coulomb_friction_nm,
                     (!circuit).then_some(config.supply_voltage_v),
@@ -433,7 +477,7 @@ impl MotorModelConfig {
                     config.inductance_h,
                     config.torque_constant_nm_per_a,
                     config.back_emf_constant_v_per_rad_s,
-                    config.rotor_inertia_kg_m2,
+                    Some(config.rotor_inertia_kg_m2),
                     config.viscous_friction_nm_per_rad_s,
                     config.coulomb_friction_nm,
                     (!circuit).then_some(config.supply_voltage_v),
@@ -692,7 +736,7 @@ pub(crate) fn validate_motor_common(
     inductance_h: f64,
     torque_constant_nm_per_a: f64,
     back_emf_constant_v_per_rad_s: f64,
-    rotor_inertia_kg_m2: f64,
+    rotor_inertia_kg_m2: Option<f64>,
     viscous_friction_nm_per_rad_s: f64,
     coulomb_friction_nm: f64,
     // `None`: the motor has no supply of its own (a circuit-driven winding).
@@ -713,9 +757,9 @@ pub(crate) fn validate_motor_common(
             "back_emf_constant_v_per_rad_s",
             back_emf_constant_v_per_rad_s,
         ),
-        ("rotor_inertia_kg_m2", rotor_inertia_kg_m2),
     ]
     .into_iter()
+    .chain(rotor_inertia_kg_m2.map(|v| ("rotor_inertia_kg_m2", v)))
     .chain(supply_voltage_v.map(|v| ("supply_voltage_v", v)))
     {
         if !value.is_finite() || value <= 0.0 {
@@ -763,5 +807,80 @@ pub(crate) fn validate_required_motor_pins<'a>(
         issues.push(format!(
             "motor_models[{id}].encoder_index_pin must be nonblank when present"
         ));
+    }
+}
+
+#[cfg(test)]
+mod external_shaft_tests {
+    use super::*;
+
+    fn config() -> MotorModelConfig {
+        serde_yaml::from_str(
+            r#"
+kind: dc
+id: shaft
+resistance_ohm: 2.0
+inductance_h: 0.001
+torque_constant_nm_per_a: 0.02
+back_emf_constant_v_per_rad_s: 0.02
+rotor_inertia_kg_m2: 0.0001
+viscous_friction_nm_per_rad_s: 0.00001
+supply_voltage_v: 3.7
+load_torque_nm: 0.0
+encoder_cpr: 4
+pwm_pin: 3V3
+direction_pin: 3V3
+"#,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn omitted_owner_preserves_native_validation_and_serialization() {
+        let model = config();
+        let MotorModelConfig::Dc(config) = &model else {
+            unreachable!()
+        };
+        assert_eq!(config.shaft_owner, MotorShaftOwner::Native);
+        assert!(model.validate().is_empty());
+        assert!(!serde_yaml::to_string(&model)
+            .unwrap()
+            .contains("shaft_owner"));
+    }
+
+    #[test]
+    fn external_owner_requires_explicit_zero_native_mechanics_and_bridge_armature() {
+        let mut model = config();
+        let MotorModelConfig::Dc(config) = &mut model else {
+            unreachable!()
+        };
+        config.shaft_owner = MotorShaftOwner::External;
+        assert!(model
+            .validate()
+            .iter()
+            .any(|issue| issue.contains("rotor_inertia")));
+        let MotorModelConfig::Dc(config) = &mut model else {
+            unreachable!()
+        };
+        config.rotor_inertia_kg_m2 = 0.0;
+        config.viscous_friction_nm_per_rad_s = 0.0;
+        assert!(model.validate().is_empty());
+        let MotorModelConfig::Dc(config) = &mut model else {
+            unreachable!()
+        };
+        config.coulomb_friction_nm = 0.006;
+        assert!(model
+            .validate()
+            .iter()
+            .any(|issue| issue.contains("coulomb_friction")));
+        let MotorModelConfig::Dc(config) = &mut model else {
+            unreachable!()
+        };
+        config.coulomb_friction_nm = 0.0;
+        config.armature = MotorArmature::Circuit;
+        assert!(model
+            .validate()
+            .iter()
+            .any(|issue| issue.contains("requires armature bridge")));
     }
 }
