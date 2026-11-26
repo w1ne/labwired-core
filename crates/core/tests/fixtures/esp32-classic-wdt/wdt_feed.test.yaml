@@ -1,0 +1,16 @@
+schema_version: "1.0"
+# Fed classic-ESP32 MWDT: 20,000 feed writes must keep the chain out of
+# stage 0's expiry, so INT_RAW_TIMERS bit 2 stays clear.
+# Run from the repository root:
+#   labwired test --script crates/core/tests/fixtures/esp32-classic-wdt/wdt_feed.test.yaml
+inputs:
+  firmware: wdt_feed.elf
+  system: ../../../../../configs/systems/esp32-devkitm-1.yaml
+limits:
+  max_steps: 20000000
+  wall_time_ms: 120000
+  max_uart_bytes: 4096
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 1000
+assertions:
+  - uart_contains: "WDT_FED_OK"

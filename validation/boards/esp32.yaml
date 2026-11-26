@@ -32,6 +32,10 @@ models:
   - crates/core/src/peripherals/esp32/sha.rs
   - crates/core/src/peripherals/esp32/spi.rs
   - crates/core/src/peripherals/esp32/syscon.rs
+  # 2026-11-26: the classic TIMG Main System Watchdog (MWDT0/MWDT1) now
+  # counts, latches INT_RAW_TIMERS bit 2 and raises the DPORT WDT source on an
+  # interrupt-action stage (docs/receipts/2026-11-26-esp32-classic-mwdt).
+  # STG=2/3 reset actions are not performed. No silicon capture.
   - crates/core/src/peripherals/esp32/timg.rs
   - crates/core/src/peripherals/esp32/twai.rs
   - crates/core/src/peripherals/esp32/uart.rs

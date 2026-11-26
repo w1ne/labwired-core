@@ -55,7 +55,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // (the C3 path in generic_factory.rs deliberately does not opt in —
         // it put INT_ST/INT_CLR/RTCCALICFG2 at those offsets).
         "esp32_timg" => {
-            let model = timg::Timg::new(base).with_lact();
+            let model = timg::Timg::new(base).with_lact().with_classic_mwdt();
             match base {
                 0x3FF5_F000 => Box::new(model.with_alarms(14)),
                 0x3FF6_0000 => Box::new(model.with_alarms(18)),

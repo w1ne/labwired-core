@@ -88,10 +88,11 @@ _Broad model surface (~35); the rubric grid proves ~9, plus a TMP102 functional 
 
 ### `esp32`
 
-_tier1 fixture drives 8 rubric classes incl. a BMP280 chip-id read over the I2C command-list engine and a real LEDC duty-latch. The PR-gated ESP32-DevKitM-1 profile adds a BME280 chip-id read on classic I2C0._
+_tier1 fixture drives 8 rubric classes incl. a BMP280 chip-id read over the I2C command-list engine and a real LEDC duty-latch. The PR-gated ESP32-DevKitM-1 profile adds a BME280 chip-id read on classic I2C0. The classic TIMG main-system watchdog now times out and latches (docs/receipts/2026-11-26-esp32-classic-mwdt); it is not part of the tier-1 fixture, so tier1-matrix.json still records esp32/wdt as 'na'._
 
 **Functional device/protocol reads** (real driver, decoded value):
 - ESP32-DevKitM-1 + BME280 — CHIP_ID 0x60 over I2C0 GPIO21/22, GPIO23 high on match — `esp32-devkitm-1-bme280` · examples/esp32-devkitm-1/evidence/bme280 (local smoke 5/5; fast-boot fixture) (PR gate)
+- TIMG0 MWDT — a 16-cycle STG0_HOLD with an interrupt action latches INT_RAW_TIMERS bit 2 and INT_CLR bit 2 clears it; 20,000 feeds keep it clear — `esp32-classic-wdt (register-level Xtensa, committed ELF)` · crates/core/tests/esp/esp32_classic_wdt.rs; docs/receipts/2026-11-26-esp32-classic-mwdt (PR gate)
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `efuse`, `sha`, `syscon`, `twai`, `mcpwm`, `rtc_cntl`
 
