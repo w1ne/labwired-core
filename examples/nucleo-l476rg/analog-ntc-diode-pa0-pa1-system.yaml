@@ -1,9 +1,8 @@
 # Generic Beta NTC divider (PA0 / Arduino A0) and Shockley diode load line
 # (PA1 / Arduino A1).
 #
-# The STM32L476RG descriptor publishes the six Arduino analog header pads in
-# `analog_pins:`, using the board's connector map and RM0351's ADC1 channel
-# table. Neither netlist names the board, the ADC or a channel: each solves its
+# The STM32L476 descriptor publishes the chip's full LQFP64 ADC1 pad set in
+# `analog_pins:` (DS10198 pin definitions); A0/A1 are two of those pads. Neither netlist names the board, the ADC or a channel: each solves its
 # own circuit and publishes a probe voltage to `board.analog.<pad>_volts`.
 name: "nucleo-l476rg-analog"
 chip: "../../configs/chips/stm32l476.yaml"

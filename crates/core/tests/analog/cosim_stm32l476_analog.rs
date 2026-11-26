@@ -8,16 +8,17 @@
 //! `board.analog.pa1_volts`; nothing in the solver, router or converter is
 //! L476-specific.
 //!
-//! The map is the chip's full LQFP64 ADC1 input set from RM0351 Table 18
+//! The map is the chip's full LQFP64 ADC1 input set from the DS10198 pin-definitions
 //! (PC0-PC3 = IN1-IN4, PA0-PA7 = IN5-IN12, PC4/PC5 = IN13/IN14,
 //! PB0/PB1 = IN15/IN16), so it serves every board on this die. The
 //! NUCLEO-L476RG Arduino header (Zephyr's connector DTS: A0-A5 = PA0, PA1,
 //! PA4, PB0, PC1, PC0) is a subset, and the board DTS enables `adc1_in1_pc0`,
 //! which cross-checks the PC0 → channel 1 entry.
 //!
-//! The conversion is the production L4 block: clock gate in `AHB2ENR`, select
+//! The conversion uses the model's L4 register map: clock gate in `AHB2ENR`, select
 //! `SQR1.SQ1`, raise `ADVREGEN` then `ADEN`/`ADRDY`, start, read a 12-bit
-//! `DR`. A route that landed on another family's register layout would fail
+//! `DR`. It is not a silicon bring-up sequence (it skips the ADC clock source,
+//! regulator delay, calibration and `ASCR`). A route that landed on another family's register layout would fail
 //! the conversion, not just the binding.
 //!
 //! `iolink-multiport-demo` is a second board on the same die. It reads an
@@ -58,7 +59,7 @@ const DIODE_N: f64 = 1.752;
 const DIODE_RS_OHMS: f64 = 0.568;
 const THERMAL_V: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
 
-/// Every LQFP64 ADC1 regular input and its RM0351 Table 18 channel.
+/// Every LQFP64 ADC1 regular input and its DS10198 pin-definitions channel.
 const PADS: [(&str, u8); 16] = [
     ("PC0", 1),
     ("PC1", 2),
@@ -142,7 +143,7 @@ fn adc1_convert(machine: &mut Machine<CortexM>, channel: u8) -> u32 {
 
     bus.write_u32(ADC1_BASE + ADC_SQR1, u32::from(channel) << 6)
         .expect("select SQR1 SQ1 channel");
-    // The L4 power-up order: raise ADVREGEN, then ADEN (ADRDY), then ADSTART.
+    // The model's L4 order: raise ADVREGEN, then ADEN (ADRDY), then ADSTART.
     bus.write_u32(ADC1_BASE + ADC_CR, CR_ADVREGEN)
         .expect("start the ADC regulator");
     bus.write_u32(ADC1_BASE + ADC_CR, CR_ADVREGEN | CR_ADEN)
@@ -191,7 +192,7 @@ fn board_bench(
         );
         assert_eq!(
             chip.analog_pins[pad].channel, channel,
-            "{pad} is ADC1 channel {channel} (RM0351 Table 18)"
+            "{pad} is ADC1 channel {channel} (DS10198 pin definitions)"
         );
     }
     assert_eq!(
@@ -282,9 +283,8 @@ fn nucleo_l476rg_solves_generic_decks_and_converts_through_adc1() {
         "ADC counts track the solved temperature-dependent voltage: {samples:?}"
     );
     assert_eq!(
-        samples[1].2,
-        expected_adc_count(SUPPLY_V / 2.0),
-        "the 25 C NTC divider is exactly half scale on 3.3 V Vref"
+        samples[1].2, 2047,
+        "the 25 C NTC divider is exactly half scale: 1650 mV * 4095 / 3300 = 2047"
     );
 }
 

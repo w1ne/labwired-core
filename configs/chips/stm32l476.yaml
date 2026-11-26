@@ -52,7 +52,7 @@ ram:
   base: 0x20000000
   size: "96KB"
 
-# Regular ADC1 inputs by pad, from RM0351 Table 18 / DS10198 LQFP64 pinout:
+# Regular ADC1 inputs by pad, from the DS10198 LQFP64 pin definitions:
 # PC0-PC3 are IN1-IN4, PA0-PA7 are IN5-IN12, PC4/PC5 are IN13/IN14 and
 # PB0/PB1 are IN15/IN16. The map is the chip's, not one board's: every board
 # on this die (NUCLEO-L476RG, iolink-multiport-demo) reads the same table. The

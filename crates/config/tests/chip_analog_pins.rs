@@ -538,7 +538,7 @@ fn f1_f4_f7_descriptors_carry_the_datasheet_assignment() {
     }
 }
 
-/// The L476 numbers its regular inputs from PC0, not PA0 (RM0351 Table 18,
+/// The L476 numbers its regular inputs from PC0, not PA0 (DS10198 pin definitions,
 /// LQFP64): PC0..PC3 = IN1..IN4, PA0..PA7 = IN5..IN12, PC4/PC5 = IN13/IN14,
 /// PB0/PB1 = IN15/IN16. A copy of the F1/F4 map would put PA0 on IN0.
 #[test]

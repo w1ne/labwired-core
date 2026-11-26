@@ -57,10 +57,10 @@ Port. Drift between the two breaks `test_nucleo_l476rg_demo_survival` in
 
 `analog-ntc-diode-pa0-pa1-system.yaml` drives a generic Beta-parameter NTC
 divider and a Shockley diode load line into `board.analog.pa0_volts` and
-`board.analog.pa1_volts`. The descriptor publishes the six Arduino header
-pads and their ADC1 channels. The map is the chip's full LQFP64 set
+`board.analog.pa1_volts`. The descriptor's `analog_pins:` map is the chip's
+full LQFP64 ADC1 set
 (PC0-PC3 = IN1-IN4, PA0-PA7 = IN5-IN12, PC4/PC5 = IN13/IN14,
-PB0/PB1 = IN15/IN16, RM0351 Table 18), so any board on this die can route a
+PB0/PB1 = IN15/IN16, DS10198 pin definitions), so any board on this die can route a
 deck to any ADC pad. The Arduino header uses six of them:
 
 | Header | Pad | ADC1 channel |
