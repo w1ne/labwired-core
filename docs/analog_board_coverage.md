@@ -14,8 +14,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **441**
-- Covered end to end: **97**
-- Not covered: **344**
+- Covered end to end: **99**
+- Not covered: **342**
 - Not covered but with an ADC pad map: **0** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` block or `adc` pin functions, an ADC model, or a digital
@@ -40,8 +40,6 @@ None.
 | `arduino-nano-esp32-bme280` | `esp32s3` | 0 |
 | `arduino-nano-esp32` | `esp32s3` | 0 |
 | `arty-litex-vexriscv` | `arty-litex-vexriscv` | 0 |
-| `atmega1281` | `atmega1281` | 0 |
-| `atmega2561` | `atmega2561` | 0 |
 | `brd2709a` | `efr32mg26` | 0 |
 | `calliope-mini-v1` | `nrf51822` | 0 |
 | `cc2538dk` | `cc2538sf53` | 0 |
@@ -403,6 +401,8 @@ None.
 | `arduino-uno` | `atmega328p` | `crates/core/tests/analog/cosim_avr_atmega328p_analog.rs` |
 | `arduino-zero` | `atsamd21g18a` | `crates/core/tests/analog/cosim_samd21_family_analog.rs` |
 | `at32f421g8u7` | `at32f421g8u7` | `crates/core/tests/analog/cosim_at32f421_analog.rs` |
+| `atmega1281` | `atmega1281` | `crates/core/tests/analog/cosim_avr_atmega_mega_analog.rs` |
+| `atmega2561` | `atmega2561` | `crates/core/tests/analog/cosim_avr_atmega_mega_analog.rs` |
 | `controllino-mini` | `atmega328p` | `crates/core/tests/analog/cosim_avr_atmega328p_analog.rs` |
 | `feather-f405` | `stm32f405` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `labwired-demo-board` | `stm32f103` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |

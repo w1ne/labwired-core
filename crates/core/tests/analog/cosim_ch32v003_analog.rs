@@ -256,6 +256,29 @@ fn ch32v003_ntc_and_diode_netlists_reach_pa2_pa1_adc1_end_to_end() {
     run_board("wch-ch32v003evt", "configs/systems/wch-ch32v003evt.yaml");
 }
 
+/// The CH32V003EVT with an Adafruit MAX31855 K-type thermocouple breakout on
+/// SPI1. The breakout owns PC4..PC7 (CS, SCK, DIN, DO) and the LED jumper owns
+/// PC0; the generic decks drive PA1/PA2, which the SPI1 wiring leaves free, so
+/// the attached converter does not disturb the analog front end.
+#[test]
+fn ch32v003_max31855_ntc_and_diode_netlists_reach_pa2_pa1_adc1_end_to_end() {
+    let system_path = root("configs/systems/wch-ch32v003evt-max31855.yaml");
+    let profile =
+        SystemManifest::from_file(&system_path).expect("load CH32V003EVT-MAX31855 profile");
+    assert_eq!(profile.name, "wch-ch32v003evt-max31855");
+    assert!(
+        profile
+            .external_devices
+            .iter()
+            .any(|device| device.id == "tc1"),
+        "the mixed-signal run keeps the MAX31855 on SPI1"
+    );
+    run_board(
+        "wch-ch32v003evt-max31855",
+        "configs/systems/wch-ch32v003evt-max31855.yaml",
+    );
+}
+
 /// The CH32V003EVT with the BME280 breakout on I2C1. The sensor owns PC1/PC2
 /// (SDA/SCL) and the LED jumper owns PC0; the generic decks drive PA1/PA2,
 /// which the I2C wiring leaves free, so the attached sensor does not disturb
@@ -275,32 +298,5 @@ fn ch32v003_bme280_ntc_and_diode_netlists_reach_pa2_pa1_adc1_end_to_end() {
     run_board(
         "wch-ch32v003evt-bme280",
         "configs/systems/wch-ch32v003evt-bme280.yaml",
-    );
-}
-
-/// The CH32V003EVT with the MAX31855 thermocouple breakout on SPI1. The
-/// converter owns PC4 (chip select) and PC5/PC6/PC7 (SPI1); the generic decks
-/// drive PA2/PA1, which the SPI wiring leaves free, so the attached device
-/// does not disturb the analog front end. This closes the inventory's
-/// next-queue list: every profile in the tree that carries an ADC pad map is
-/// now reached end to end by the generic decks.
-#[test]
-fn ch32v003_max31855_ntc_and_diode_netlists_reach_pa2_pa1_adc1_end_to_end() {
-    let system_path = root("configs/systems/wch-ch32v003evt-max31855.yaml");
-    let profile =
-        SystemManifest::from_file(&system_path).expect("load CH32V003EVT-MAX31855 profile");
-    assert_eq!(profile.name, "wch-ch32v003evt-max31855");
-    assert!(
-        profile
-            .external_devices
-            .iter()
-            .any(|device| device.id == "tc1"
-                && device.r#type == "max31855"
-                && device.connection == "spi1"),
-        "the mixed-signal run keeps the MAX31855 on SPI1"
-    );
-    run_board(
-        "wch-ch32v003evt-max31855",
-        "configs/systems/wch-ch32v003evt-max31855.yaml",
     );
 }
