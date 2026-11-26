@@ -218,8 +218,8 @@ const STM32G4_TIMER_PADS: &[TimerAfPad] = &[
 /// `G473R(B-C)T_G473RETx(Z)_G474R(B-C-E)T_G483RET_G484RET/PeripheralPins.c`
 /// agree row for row): AF6, except PB15/PC13 on AF4 and PB9 on AF12.
 /// Native timer wire indices 4..6 are CH1N..CH3N. TIM1_CH4N (PC5 AF6) has
-/// no timer wire and is left out. Output-only: the capture pass ignores
-/// `ti >= 4`.
+/// no timer wire and is left out. Output-only: the capture pass also binds
+/// these rows, but the timer drops capture edges on `ti >= 4`.
 const STM32G4_COMPLEMENTARY_PADS: &[TimerAfPad] = &[
     ("tim1", 'a', 7, 6, 4, "TIM1_CH1N"),
     ("tim1", 'a', 11, 6, 4, "TIM1_CH1N"),
