@@ -5517,6 +5517,20 @@ for the same backward-Euler reason. 0, 0.5 and 100000 lx stop both engines.
 <code>labwired_test_runs_the_heypcb_ldr_network_deck_on_ngspice</code> requires that,
 plus the <code>source.sha256</code> pin; the in-core manifest keeps the committed browser
 receipt because the receipt has no solver host.</p>
+<p>The same replacement is verified for the deck shape most board examples share.
+<code>examples/nucleo-f401re/analog-ntc-diode-ngspice.yaml</code> solves the generic Beta
+NTC divider and Shockley diode load line of <code>analog-ntc-diode-system.yaml</code> with
+<code>adapter: ngspice</code>, <code>ntc-beta.cir</code> and <code>diode-load-line.cir</code>; names, routes,
+nets and model parameters are unchanged. <code>labwired cosim-step</code> drives both
+manifests through the STM32F401 ADC pad routes. Measured on 2026-11-25 with
+ngspice-42 at 0, 25 and 60 °C: the NTC route agrees to 4.4·10⁻¹⁶ V and the diode
+route to 2.1·10⁻⁷ V. The diode deck must pin <code>.options temp=26.85 tnom=26.85</code>
+because the in-core engine solves at 300.00 K; ngspice's 27 °C default alone
+moves the forward voltage by 0.3 mV, 1,500 times the agreement measured here.
+<code>ngspice_solves_the_generic_ntc_and_diode_decks_the_in_core_engine_solves</code>
+checks both routes and requires the NTC output to move with temperature, so
+agreement on a flat wrong value cannot pass. This covers one deck shape and its
+manifest routing, not every board that shares it.</p>
 <h3 id="pinning-the-circuit-a-flex-run-solved">Pinning the circuit a Flex run solved</h3>
 <p>A Flex manifest's <code>manifest_sha256</code> covers the manifest bytes. It cannot cover
 an external netlist, so <code>run_report()</code> carries one <code>source</code> pin per model whose
