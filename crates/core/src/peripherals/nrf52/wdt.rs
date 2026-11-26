@@ -86,8 +86,9 @@ impl Default for Nrf52Wdt {
             runstatus: 0,
             reqstatus_pending: 0,
             crv: 0xFFFF_FFFF, // nRF52840 PS §6.34: CRV reset value
-            rren: 0,
-            config: 0,
+            // PS §6.34.9: RREN resets to RR[0] enabled, CONFIG to SLEEP=Run.
+            rren: 0x1,
+            config: 0x1,
             counter: 0,
             cpu_hz: CPU_HZ_DEFAULT,
             lf_phase: 0,
@@ -171,7 +172,9 @@ impl Peripheral for Nrf52Wdt {
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
             OFF_TASKS_START
-                if value & 1 != 0 && !self.bitten => {
+                // A START while running has no effect on silicon; it must
+                // not reload the counter.
+                if value & 1 != 0 && !self.bitten && !self.running() => {
                     self.runstatus = 1;
                     self.counter = self.reload_ticks();
                     self.lf_phase = 0;
@@ -504,5 +507,61 @@ mod tests {
         w.write_u32(OFF_TASKS_START, 1).unwrap();
         // CRV reset value 0xFFFF_FFFF: 2^32 LFCLK ticks, about 36.4 hours.
         assert_eq!(w.cycles_until_timeout(), (1u64 << 32) * 64_000_000 / 32_768);
+    }
+
+    #[test]
+    fn rren_and_config_reset_values() {
+        let w = Nrf52Wdt::new();
+        assert_eq!(w.read_u32(OFF_RREN).unwrap(), 0x1);
+        assert_eq!(w.read_u32(OFF_CONFIG).unwrap(), 0x1);
+    }
+
+    #[test]
+    fn start_while_running_does_not_reload() {
+        let mut w = Nrf52Wdt::new_fast();
+        w.write_u32(OFF_CRV, 9).unwrap();
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        for _ in 0..7 {
+            w.tick();
+        }
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        assert_eq!(walk_until_timeout(&mut w, 20), Some(3));
+    }
+
+    /// Scheduler path at 64 MHz with a mid-period reload: the LFCLK phase
+    /// carries across RR, and `on_event` bites on the exact cycle.
+    #[test]
+    fn on_event_bites_on_exact_cycle_after_mid_period_reload() {
+        fn fire(w: &mut Nrf52Wdt, token: u32, at: u64) -> crate::sched::EventResult {
+            let mut sched = crate::sched::EventScheduler::new();
+            sched.advance_to(at);
+            let mut bus = crate::bus::SystemBus::new();
+            w.on_event(token, &mut sched, &mut bus)
+        }
+        let mut w = Nrf52Wdt::new();
+        w.attach_cycle_clock(CycleClock::default());
+        w.write_u32(OFF_CRV, 32).unwrap();
+        w.write_u32(OFF_INTENSET, INTEN_TIMEOUT).unwrap();
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        let _ = w.take_scheduled_events();
+        // 30_000 cycles = 15 LFCLK ticks + 23_040_000 / 64e6 of a tick.
+        w.sync_to(30_000);
+        w.write_u32(OFF_RR0, RR_RELOAD_KEY).unwrap();
+        // 33 ticks from that phase: (33 * 64e6 - 23_040_000) / 32768
+        // = 63_750 cycles exactly -> cycle 93_750.
+        let ev = w.take_scheduled_events();
+        assert_eq!(ev.len(), 1);
+        let (delay, token) = ev[0];
+        assert_eq!(30_000 + delay + 1, 93_750);
+        // A stale token from before the reload is ignored.
+        assert!(!fire(&mut w, token.wrapping_sub(1), 93_749).raise_own_irq);
+        let early = fire(&mut w, token, 93_749);
+        assert!(!early.raise_own_irq);
+        assert_eq!(w.read_u32(OFF_EVENTS_TIMEOUT).unwrap(), 0);
+        assert_eq!(early.reschedule_delay, Some(0));
+        let bite = fire(&mut w, token, 93_750);
+        assert!(bite.raise_own_irq);
+        assert_eq!(w.read_u32(OFF_EVENTS_TIMEOUT).unwrap(), 1);
+        assert_eq!(bite.reschedule_delay, None);
     }
 }

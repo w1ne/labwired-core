@@ -39,4 +39,15 @@ set at `ceil(33 * cpu_hz / 32768)` cycles.
 - The model still does not reset the CPU on timeout. It sets
   EVENTS_TIMEOUT and pends the IRQ only.
 - CONFIG.SLEEP / CONFIG.HALT pause behaviour is not modelled.
+
+## Review follow-up
+
+Independent review (in-session subagent): APPROVE WITH NITS. Actioned:
+
+- Scheduler path now tested: `on_event` at 64 MHz after a mid-period
+  RR reload bites on cycle 93 750 exactly, ignores a stale token.
+- RREN and CONFIG reset to 0x1 (PS §6.34.9), not 0.
+- TASKS_START while running no longer reloads the counter.
+
+Unit tests 17/17, default and `event-scheduler`.
 - nRF54L WDT30/WDT31 remain `nrf54l_wdt_stub` windows.
