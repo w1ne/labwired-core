@@ -1,0 +1,5 @@
+ELF Entry Point: 0x40080020
+Loading chip descriptor: ../chips/esp32.yaml
+labwired-cli test: idle_ff=on (event_scheduler=on)
+WDT_ARM
+WDT_FED_OKPASS  1/1 checks · wdt_feed.test · 410000 steps · 0.16s
