@@ -52,6 +52,8 @@ pub mod riscv;
 pub mod riscv64;
 pub mod riscv64_plic;
 #[deny(clippy::let_underscore_must_use)]
+pub(crate) mod riscv_block_cache;
+#[deny(clippy::let_underscore_must_use)]
 pub mod rx;
 pub mod xtensa_lockstep;
 pub mod xtensa_lx7;
