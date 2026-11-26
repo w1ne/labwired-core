@@ -4991,8 +4991,12 @@ declares <code>nrf54l_grtc</code>, assembles the real descriptors, and rewrites 
 <p>Result: 2/2 pass in default and <code>event-scheduler</code> modes. Unit tests
 <code>peripherals::nrf54l::grtc::tests::core_clock</code> add the fractional 2.5 MHz
 ratio, the zero-clock default, the no-op default attach and the armed-compare
-deadline at 16 MHz: 5/5 pass. <code>peripherals::nrf54l::grtc::tests::scheduler_mode</code>
-adds the mid-run clock change: 8/8 pass with <code>event-scheduler</code>.</p>
+deadline at 16 MHz: 5/5 pass. The deadline test reads
+<code>cycles_until_next_compare()</code> directly (16 cycles armed, 1 cycle after 15
+elapsed, <code>None</code> after the event fires), so it pins the new <code>u128</code> ceiling
+arithmetic as well as the latched event.
+<code>peripherals::nrf54l::grtc::tests::scheduler_mode</code> adds the mid-run clock
+change: 8/8 pass with <code>event-scheduler</code>.</p>
 <h2 id="negative-control">Negative control</h2>
 <p><code>negative-control.log</code> is the same tree with <code>Nrf54lGrtc::attach_cpu_hz</code> turned
 into a no-op. The 128 MHz row passes in the same run, so the gate is sensitive
@@ -5011,6 +5015,14 @@ cannot sync the lazy clock and hide a missing re-anchor.</p>
   the new rate).</li>
 <li>Fixed model: reads 15 (10 ticks at the old rate, then 5 at the new one).</li>
 </ul>
+<p><code>default-reattach-negative-control.log</code> is a second negative control, on the
+test rather than the model. The shipped 128 MHz clock is attached again after
+each of 97 slices of 1,234,567 cycles, so <code>attach_cpu_hz</code> takes its
+<code>hz == self.cpu_hz</code> early return after a remainder was left behind. Replacing
+that guard with <code>hz == 0</code> (an unconditional <code>cycle_accum.set(0)</code>) reads
+<code>935565</code> against the untouched model's <code>935570</code>, losing five ticks over the
+run. The positive run passes. This pins the sub-tick phase, which the earlier
+cycle-0-only call could not observe.</p>
 <p>A mid-run clock change does not move a compare event that is already in the
 scheduler queue. The bus only attaches the descriptor clock at assembly, before
 the first instruction, so this remains a documented limitation of the static
