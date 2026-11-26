@@ -614,7 +614,7 @@ input at a different element.
 .model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> CJ=<f/m²> CJSW=<f/m> PB=<v> MJ=<ratio> MJSW=<ratio> FC=<ratio> TOX=<m> W=<m> L=<m> [CHARGEMOD=MEYER|WARD_DUTTON])
 .model <name> PMOS (...)      ; VTO is negative, as in ngspice
 .model <name> NJF  (VTO=<v> BETA=<a/v2> LAMBDA=<1/v> RD=<ohms> RS=<ohms> IS=<a>)
-.model <name> PJF  (...)
+.model <name> PJF  (...)      ; VTO is negative for a depletion PJF too, as in ngspice
 ```
 
 The parentheses are optional, parameters may be separated by spaces or commas,

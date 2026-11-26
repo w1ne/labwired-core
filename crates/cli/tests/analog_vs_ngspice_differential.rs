@@ -515,8 +515,10 @@ fn an_unsupported_element_fails_manifest_validation() {
 /// with.** 2 % was measured to be vacuous here. The decks below actually
 /// agree with ngspice to 2.5e-3 % (rectifier), 4.0e-5 % (common emitter),
 /// 1.0e-6 % (NMOS inverter), 1.1e-3 % (RL low-pass), 6.1e-5 % (JFET
-/// follower), 1.2e-3 % (pulsed sag into an RC) and 7.3e-3 % (pulsed sag into a
-/// bypassed load) of full scale, and perturbing the engine's thermal voltage by
+/// follower), 1.2e-3 % (pulsed sag into an RC), 7.3e-3 % (pulsed sag into a
+/// bypassed load), 5.9e-4 % (coupled-inductor transformer), 8.0e-5 % (PNP
+/// follower), 2.6e-3 % (CMOS inverter) and 6.1e-5 % (P-channel JFET
+/// follower) of full scale, and perturbing the engine's thermal voltage by
 /// 1 % — a wrong physical constant, the exact class of bug this test exists
 /// to catch — moves the rectifier by 0.13 % and the amplifier by 0.24 %. At
 /// 2 % that sabotage passes. At 0.05 % it fails with 2.5x margin, while still
@@ -703,6 +705,87 @@ const DIFFERENTIALS: &[Differential] = &[
         full_scale: 9.0,
         minimum_swing: 4.0,
         nonlinear: false,
+    },
+    Differential {
+        name: "coupled-inductor transformer",
+        // The mutual term is the only path to the secondary, so a missing or
+        // sign-flipped `K` stamp leaves `sec` flat or inverted. k = 0.95, not
+        // 1: a perfect coupling makes the inductance matrix singular.
+        deck: "* 1:2 transformer at k = 0.95: K + L + R + VSIN\n\
+               Vin in 0 SIN(0 1 1k)\n\
+               Rp in pri 10\n\
+               L1 pri 0 10m\n\
+               L2 sec 0 40m\n\
+               K1 L1 L2 0.95\n\
+               Rl sec 0 1k\n",
+        node: "sec",
+        sample: 10e-6,
+        substeps: 20,
+        samples: 300,
+        full_scale: 2.0,
+        minimum_swing: 1.0,
+        nonlinear: false,
+    },
+    Differential {
+        name: "PNP emitter follower",
+        // The mirrored polarity of the common-emitter deck: the emitter sits
+        // one V_BE above the base and follows it.
+        deck: "* PNP emitter follower: Q(PNP) + R + VDC + VSIN\n\
+               Vee vee 0 dc -12\n\
+               Vin in 0 SIN(-6 2 1k)\n\
+               Rb in b 1k\n\
+               Re 0 e 4.7k\n\
+               Q1 vee b e QMOD\n\
+               .model QMOD PNP(IS=1e-14 BF=150 BR=2 NF=1 NR=1 VAF=60 VAR=100)\n",
+        node: "e",
+        sample: 20e-6,
+        substeps: 20,
+        samples: 100,
+        full_scale: 12.0,
+        minimum_swing: 3.0,
+        nonlinear: true,
+    },
+    Differential {
+        name: "CMOS inverter",
+        // A PMOS pull-up against an NMOS pull-down: both channels conduct
+        // through the transition, so the output is set by the two level-1
+        // curves against each other, not by one FET against a resistor.
+        // 40 substeps, not 10: the 10 pF node slews fast mid-transition, and
+        // at a 10 ns step both integrators measured 4.5e-2 % apart, inside the
+        // tolerance by only 1.1x. At 2.5 ns they agree to 2.6e-3 %, so the
+        // 10 ns gap was the step, not the device equations.
+        deck: "* CMOS inverter: M(PMOS) + M(NMOS) + VPULSE + C\n\
+               Vdd vdd 0 dc 5\n\
+               Vg g 0 PULSE(0 5 2u 2u 2u 8u 20u)\n\
+               M1 d g vdd vdd PMOD\n\
+               M2 d g 0 0 NMOD\n\
+               Cl d 0 10p\n\
+               .model PMOD PMOS(VTO=-1 KP=10u LAMBDA=0.02 W=40u L=2u)\n\
+               .model NMOD NMOS(VTO=1 KP=20u LAMBDA=0.02 W=20u L=2u)\n",
+        node: "d",
+        sample: 100e-9,
+        substeps: 40,
+        samples: 400,
+        full_scale: 5.0,
+        minimum_swing: 4.0,
+        nonlinear: true,
+    },
+    Differential {
+        name: "P-channel JFET source follower",
+        deck: "* PJF source follower: J(PJF) + R + VDC + VSIN\n\
+               Vss vss 0 dc -12\n\
+               Vin in 0 SIN(0 2 1k)\n\
+               Rg in g 100k\n\
+               J1 vss g s JMOD\n\
+               Rs s 0 1k\n\
+               .model JMOD PJF(VTO=-2 BETA=1m LAMBDA=0.02)\n",
+        node: "s",
+        sample: 20e-6,
+        substeps: 20,
+        samples: 100,
+        full_scale: 12.0,
+        minimum_swing: 0.5,
+        nonlinear: true,
     },
 ];
 
