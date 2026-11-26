@@ -542,7 +542,7 @@ fn f1_f4_f7_descriptors_carry_the_datasheet_assignment() {
 /// LQFP64): PC0..PC3 = IN1..IN4, PA0..PA7 = IN5..IN12, PC4/PC5 = IN13/IN14,
 /// PB0/PB1 = IN15/IN16. A copy of the F1/F4 map would put PA0 on IN0.
 #[test]
-fn stm32l476_descriptor_carries_the_rm0351_assignment() {
+fn stm32l476_descriptor_carries_the_ds10198_assignment() {
     let mut pads: Vec<(String, u8)> = (0..4).map(|i| (format!("PC{i}"), 1 + i)).collect();
     pads.extend((0..8).map(|i| (format!("PA{i}"), 5 + i)));
     pads.extend([
