@@ -19,6 +19,10 @@
 //! `SQR1.SQ1`, raise `ADVREGEN` then `ADEN`/`ADRDY`, start, read a 12-bit
 //! `DR`. A route that landed on another family's register layout would fail
 //! the conversion, not just the binding.
+//!
+//! `iolink-multiport-demo` is a second board on the same die. It reads an
+//! unrelated device (a 24 V IO-Link L+ supply monitor) plus the NTC divider on
+//! PC0/PC1 through the same map, with no board-specific code.
 
 use crate::common;
 use common::root;
@@ -156,15 +160,27 @@ fn adc1_convert(machine: &mut Machine<CortexM>, channel: u8) -> u32 {
         .expect("read firmware-visible ADC DR")
 }
 
-fn bench() -> (ChipDescriptor, Machine<CortexM>, CosimSession) {
-    let system_path = root("configs/systems/nucleo-l476rg.yaml");
-    let mut profile = SystemManifest::from_file(&system_path).expect("load nucleo-l476rg profile");
-    assert_eq!(profile.name, "nucleo-l476rg");
-    let deck = SystemManifest::from_file(root(
-        "examples/nucleo-l476rg/analog-ntc-diode-pa0-pa1-system.yaml",
-    ))
-    .expect("load the generic NTC divider and diode netlists");
-    profile.cosim_models = deck.cosim_models;
+/// Load `profile` (a `configs/systems` name), replace its co-simulation with
+/// the example `deck`, prove the chip map, and bind the deck to the board bus.
+fn board_bench(
+    profile_name: &str,
+    deck: &str,
+    reroute: Option<&str>,
+) -> (Machine<CortexM>, CosimSession, Vec<RoutingError>) {
+    let system_path = root(&format!("configs/systems/{profile_name}.yaml"));
+    let mut profile = SystemManifest::from_file(&system_path)
+        .unwrap_or_else(|error| panic!("load {profile_name} profile: {error}"));
+    assert_eq!(profile.name, profile_name);
+    let mut models = SystemManifest::from_file(root(deck))
+        .unwrap_or_else(|error| panic!("load {deck}: {error}"))
+        .cosim_models;
+    if let Some(pad) = reroute {
+        models[0].outputs.insert(
+            "v_sense".to_string(),
+            format!("board.analog.{}_volts", pad.to_ascii_lowercase()),
+        );
+    }
+    profile.cosim_models = models;
 
     let chip_path = system_path.parent().unwrap().join(&profile.chip);
     let chip = ChipDescriptor::from_file(&chip_path).expect("load the STM32L476 descriptor");
@@ -189,23 +205,32 @@ fn bench() -> (ChipDescriptor, Machine<CortexM>, CosimSession) {
         "the pin table and the analog pad map must agree"
     );
 
-    let bus = SystemBus::from_config(&chip, &profile).expect("build the nucleo-l476rg bus");
+    let bus = SystemBus::from_config(&chip, &profile)
+        .unwrap_or_else(|error| panic!("build the {profile_name} bus: {error}"));
     let machine = board_machine(bus);
     let session = CosimSession::new(&profile.cosim_models, Path::new("."), &machine.bus)
         .expect("build analog co-simulation")
         .expect("deck carries the selected analog devices");
+    let errors = session.binding_errors().to_vec();
+    (machine, session, errors)
+}
+
+const NUCLEO_DECK: &str = "examples/nucleo-l476rg/analog-ntc-diode-pa0-pa1-system.yaml";
+
+fn bench() -> (Machine<CortexM>, CosimSession) {
+    let (machine, session, errors) = board_bench("nucleo-l476rg", NUCLEO_DECK, None);
     assert_eq!(
-        session.binding_errors(),
-        &[] as &[RoutingError],
+        errors,
+        Vec::new(),
         "PA0/PA1 must resolve through the board pad map without naming a channel"
     );
-    (chip, machine, session)
+    (machine, session)
 }
 
 #[test]
 fn nucleo_l476rg_solves_generic_decks_and_converts_through_adc1() {
     let expected_diode_v = diode_load_line_voltage();
-    let (_chip, mut machine, mut session) = bench();
+    let (mut machine, mut session) = bench();
     let mut cycles = 0;
     let mut samples = Vec::new();
 
@@ -266,28 +291,7 @@ fn nucleo_l476rg_solves_generic_decks_and_converts_through_adc1() {
 /// Build a session whose NTC divider output is routed to `pad` instead of
 /// PA0, and return any binding errors with the bench.
 fn rerouted_bench(pad: &str) -> (Machine<CortexM>, CosimSession, Vec<RoutingError>) {
-    let system_path = root("configs/systems/nucleo-l476rg.yaml");
-    let mut profile = SystemManifest::from_file(&system_path).expect("load nucleo-l476rg profile");
-    let deck = SystemManifest::from_file(root(
-        "examples/nucleo-l476rg/analog-ntc-diode-pa0-pa1-system.yaml",
-    ))
-    .expect("load the generic NTC divider and diode netlists");
-    let mut models = deck.cosim_models;
-    models[0].outputs.insert(
-        "v_sense".to_string(),
-        format!("board.analog.{}_volts", pad.to_ascii_lowercase()),
-    );
-    profile.cosim_models = models;
-
-    let chip_path = system_path.parent().unwrap().join(&profile.chip);
-    let chip = ChipDescriptor::from_file(&chip_path).expect("load the STM32L476 descriptor");
-    let bus = SystemBus::from_config(&chip, &profile).expect("build the nucleo-l476rg bus");
-    let machine = board_machine(bus);
-    let session = CosimSession::new(&profile.cosim_models, Path::new("."), &machine.bus)
-        .expect("build analog co-simulation")
-        .expect("deck carries the selected analog devices");
-    let errors = session.binding_errors().to_vec();
-    (machine, session, errors)
+    board_bench("nucleo-l476rg", NUCLEO_DECK, Some(pad))
 }
 
 /// PA3 is off the Arduino header (the board wires it to the ST-LINK VCP), but
@@ -331,5 +335,83 @@ fn nucleo_l476rg_router_refuses_a_non_adc_pad() {
             pad: "pa9".to_string(),
         }],
         "PA9 is not an ADC input: the router must say so"
+    );
+}
+
+/// Divider ratio of the IO-Link L+ monitor (100k over 12k).
+const LPLUS_RATIO: f64 = 12_000.0 / 112_000.0;
+
+/// The second board on this die, `iolink-multiport-demo`, reads a different
+/// device (a 24 V L+ supply monitor) and the generic NTC divider on PC0/PC1,
+/// pads the NUCLEO deck never uses. The same chip map, router and L4 ADC
+/// serve it with the board's IO-Link master still attached to USART1. The
+/// L+ sweep covers the IEC 61131-9 supply range (18 V to 30 V), so a wrong
+/// source binding, divider or channel moves a code.
+#[test]
+fn iolink_multiport_demo_monitors_lplus_and_ntc_through_adc1() {
+    let (mut machine, mut session, errors) = board_bench(
+        "iolink-multiport-demo",
+        "examples/iolink-multiport-demo/analog-lplus-ntc-system.yaml",
+        None,
+    );
+    assert_eq!(
+        errors,
+        Vec::new(),
+        "PC0/PC1 must resolve through the chip pad map without naming a channel"
+    );
+
+    let mut cycles = 0;
+    let mut codes = Vec::new();
+    for (l_plus_v, temperature_c) in [(18.0_f64, -20.0_f64), (24.0, 25.0), (30.0, 85.0)] {
+        session
+            .set_signal_number("ui.iolink.l_plus_volts", l_plus_v)
+            .expect("set the L+ rail");
+        session
+            .set_signal_number("ui.ntc.temperature_c", temperature_c)
+            .expect("set generic NTC temperature");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut machine.bus)
+            .unwrap_or_else(|error| panic!("solve the iolink-multiport-demo decks: {error}"));
+        assert_eq!(steps.len(), 2, "both netlists cross the boundary");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let lplus_sense_v = signal_voltage(&session, "PC0");
+        assert!(
+            (lplus_sense_v - l_plus_v * LPLUS_RATIO).abs() < 1e-9,
+            "L+ = {l_plus_v} V must divide to {} V on PC0, got {lplus_sense_v} V",
+            l_plus_v * LPLUS_RATIO
+        );
+        let ntc_v = signal_voltage(&session, "PC1");
+        let expected_ntc_v = SUPPLY_V * 10_000.0 / (ntc_resistance_ohms(temperature_c) + 10_000.0);
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "at {temperature_c} C the Beta divider on PC1 should be {expected_ntc_v} V, got {ntc_v} V"
+        );
+
+        let lplus_code = adc1_convert(&mut machine, 1);
+        let ntc_code = adc1_convert(&mut machine, 2);
+        assert_eq!(
+            lplus_code,
+            expected_adc_count(lplus_sense_v),
+            "ADC1 channel 1 (PC0) must report the divided L+ rail"
+        );
+        assert_eq!(
+            ntc_code,
+            expected_adc_count(ntc_v),
+            "ADC1 channel 2 (PC1) must report the solved NTC voltage"
+        );
+        codes.push((l_plus_v, lplus_code, ntc_code));
+    }
+
+    // 24 V divides to 2.5714 V: 2571 mV * 4095 / 3300 = 3190.
+    assert_eq!(codes[1].1, 3190, "nominal 24 V L+ code: {codes:?}");
+    assert!(
+        codes[2].1 > codes[1].1 && codes[1].1 > codes[0].1,
+        "L+ codes rise with the rail: {codes:?}"
+    );
+    assert!(
+        codes[2].2 > codes[1].2 && codes[1].2 > codes[0].2,
+        "NTC codes rise with temperature: {codes:?}"
     );
 }

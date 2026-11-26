@@ -14,9 +14,9 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **441**
-- Covered end to end: **109**
-- Not covered: **332**
-- Not covered but with an ADC pad map: **1** (these are the
+- Covered end to end: **110**
+- Not covered: **331**
+- Not covered but with an ADC pad map: **0** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` block or `adc` pin functions, an ADC model, or a digital
   endpoint first)
@@ -29,9 +29,7 @@ the generic decks can reach without new routing.
 
 ## Next queue: not covered, ADC pads already mapped
 
-| Profile | Chip | Analog pad map |
-| --- | --- | ---: |
-| `iolink-multiport-demo` | `stm32l476` | 16 |
+None.
 
 ## Not covered
 
@@ -87,7 +85,6 @@ the generic decks can reach without new routing.
 | `frdm-k64f` | `mk64f12` | 0 |
 | `frdm-kw41z-lcd` | `mkw41z4` | 0 |
 | `frdm-kw41z` | `mkw41z4` | 0 |
-| `iolink-multiport-demo` | `stm32l476` | 16 |
 | `kv260-r5` | `xck26-rpu` | 0 |
 | `litex-vexriscv` | `litex-vexriscv` | 0 |
 | `lp-mspm0g3507` | `mspm0g3507` | 0 |
@@ -404,6 +401,7 @@ the generic decks can reach without new routing.
 | `esp32-wroom-32` | `esp32` | `crates/core/tests/analog/cosim_esp32_classic_boards_analog.rs` |
 | `esp32-wroom-epaper` | `esp32` | `crates/core/tests/analog/cosim_esp32_classic_boards_analog.rs` |
 | `feather-f405` | `stm32f405` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
+| `iolink-multiport-demo` | `stm32l476` | `crates/core/tests/analog/cosim_stm32l476_analog.rs` |
 | `iolinki-g0-startup` | `stm32g0b1re` | `crates/core/tests/analog/cosim_stm32g0b1_analog.rs` |
 | `labwired-demo-board` | `stm32f103` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `microbit-v2` | `nrf52833` | `crates/core/tests/analog/cosim_microbit_v2_analog.rs` |
