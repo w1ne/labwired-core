@@ -107,9 +107,11 @@ fn syscounter_after_one_millisecond(
     // is the whole advance; the walk is a no-op for this model in that mode
     // (`needs_legacy_walk()` is false and `legacy_advance` returns default),
     // so skipping it only keeps the run cheap and the drive mode unambiguous.
-    // Without the feature the walk is the only path.
+    // Without the feature the walk is the only path. Ask the bus's own clock
+    // rather than a local `cfg!`: the frontend must read the core's compiled
+    // feature, and the harness ratchet counts every new conditional site.
     bus.set_current_cycle(cycles);
-    if !cfg!(feature = "event-scheduler") {
+    if !bus.cycle_clock.scheduler_enabled() {
         for _ in 0..cycles {
             let _ = bus.tick_peripherals_fully_forced();
         }
