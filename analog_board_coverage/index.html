@@ -4955,9 +4955,9 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.</p>
 <ul>
 <li>Profiles in <code>configs/systems/</code>: <strong>441</strong></li>
-<li>Covered end to end: <strong>96</strong></li>
-<li>Not covered: <strong>345</strong></li>
-<li>Not covered but with an ADC pad map: <strong>1</strong> (these are the
+<li>Covered end to end: <strong>99</strong></li>
+<li>Not covered: <strong>342</strong></li>
+<li>Not covered but with an ADC pad map: <strong>0</strong> (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   <code>analog_pins:</code> block or <code>adc</code> pin functions, an ADC model, or a digital
   endpoint first)</li>
@@ -4968,22 +4968,7 @@ not the board.</p>
 Every such entry in this tree names an ADC peripheral, so the count is what
 the generic decks can reach without new routing.</p>
 <h2 id="next-queue-not-covered-adc-pads-already-mapped">Next queue: not covered, ADC pads already mapped</h2>
-<table>
-<thead>
-<tr>
-<th>Profile</th>
-<th>Chip</th>
-<th style="text-align: right;">Analog pad map</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>wch-ch32v003evt-max31855</code></td>
-<td><code>ch32v003f4p6</code></td>
-<td style="text-align: right;">8</td>
-</tr>
-</tbody>
-</table>
+<p>None.</p>
 <h2 id="not-covered">Not covered</h2>
 <table>
 <thead>
@@ -5017,16 +5002,6 @@ the generic decks can reach without new routing.</p>
 <tr>
 <td><code>arty-litex-vexriscv</code></td>
 <td><code>arty-litex-vexriscv</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>atmega1281</code></td>
-<td><code>atmega1281</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>atmega2561</code></td>
-<td><code>atmega2561</code></td>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
@@ -6714,11 +6689,6 @@ the generic decks can reach without new routing.</p>
 <td><code>vegaboard-ri5cy</code></td>
 <td style="text-align: right;">0</td>
 </tr>
-<tr>
-<td><code>wch-ch32v003evt-max31855</code></td>
-<td><code>ch32v003f4p6</code></td>
-<td style="text-align: right;">8</td>
-</tr>
 </tbody>
 </table>
 <h2 id="covered">Covered</h2>
@@ -6825,6 +6795,16 @@ the generic decks can reach without new routing.</p>
 <td><code>at32f421g8u7</code></td>
 <td><code>at32f421g8u7</code></td>
 <td><code>crates/core/tests/analog/cosim_at32f421_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>atmega1281</code></td>
+<td><code>atmega1281</code></td>
+<td><code>crates/core/tests/analog/cosim_avr_atmega_mega_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>atmega2561</code></td>
+<td><code>atmega2561</code></td>
+<td><code>crates/core/tests/analog/cosim_avr_atmega_mega_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>controllino-mini</code></td>
@@ -7203,6 +7183,11 @@ the generic decks can reach without new routing.</p>
 </tr>
 <tr>
 <td><code>wch-ch32v003evt-bme280</code></td>
+<td><code>ch32v003f4p6</code></td>
+<td><code>crates/core/tests/analog/cosim_ch32v003_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>wch-ch32v003evt-max31855</code></td>
 <td><code>ch32v003f4p6</code></td>
 <td><code>crates/core/tests/analog/cosim_ch32v003_analog.rs</code></td>
 </tr>
