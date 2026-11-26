@@ -4955,8 +4955,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.</p>
 <ul>
 <li>Profiles in <code>configs/systems/</code>: <strong>441</strong></li>
-<li>Covered end to end: <strong>110</strong></li>
-<li>Not covered: <strong>331</strong></li>
+<li>Covered end to end: <strong>121</strong></li>
+<li>Not covered: <strong>320</strong></li>
 <li>Not covered but with an ADC pad map: <strong>0</strong> (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   <code>analog_pins:</code> block or <code>adc</code> pin functions, an ADC model, or a digital
@@ -5067,56 +5067,6 @@ the generic decks can reach without new routing.</p>
 <tr>
 <td><code>esp32-s3-devkitc-1-n16r8-adc</code></td>
 <td><code>esp32s3-devkitc-1-n16r8-adc</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>esp32c3-ble-pong</code></td>
-<td><code>esp32c3</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>esp32c3-devkit</code></td>
-<td><code>esp32c3</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>esp32c3-devkitm-1-n4x</code></td>
-<td><code>esp32c3</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>esp32c3-epaper-workshop</code></td>
-<td><code>esp32c3</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>esp32c3-jtag-watch</code></td>
-<td><code>esp32c3</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>esp32c3-mlx90640-thermal</code></td>
-<td><code>esp32c3</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>esp32c3-nokia5110-workshop</code></td>
-<td><code>esp32c3</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>esp32c3-oled-128x32-workshop</code></td>
-<td><code>esp32c3</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>esp32c3-oled-demo</code></td>
-<td><code>esp32c3</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>esp32c3-tm1637-clock-workshop</code></td>
-<td><code>esp32c3</code></td>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
@@ -6575,11 +6525,6 @@ the generic decks can reach without new routing.</p>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
-<td><code>seeed-xiao-esp32c3-bme280</code></td>
-<td><code>esp32c3</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
 <td><code>seeed-xiao-esp32c6</code></td>
 <td><code>esp32c6fh4</code></td>
 <td style="text-align: right;">0</td>
@@ -6790,6 +6735,56 @@ the generic decks can reach without new routing.</p>
 <td><code>esp32-wroom-epaper</code></td>
 <td><code>esp32</code></td>
 <td><code>crates/core/tests/analog/cosim_esp32_classic_boards_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>esp32c3-ble-pong</code></td>
+<td><code>esp32c3</code></td>
+<td><code>crates/core/tests/analog/cosim_esp32c3_boards_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>esp32c3-devkit</code></td>
+<td><code>esp32c3</code></td>
+<td><code>crates/core/tests/analog/cosim_esp32c3_boards_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>esp32c3-devkitm-1-n4x</code></td>
+<td><code>esp32c3</code></td>
+<td><code>crates/core/tests/analog/cosim_esp32c3_boards_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>esp32c3-epaper-workshop</code></td>
+<td><code>esp32c3</code></td>
+<td><code>crates/core/tests/analog/cosim_esp32c3_boards_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>esp32c3-jtag-watch</code></td>
+<td><code>esp32c3</code></td>
+<td><code>crates/core/tests/analog/cosim_esp32c3_boards_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>esp32c3-mlx90640-thermal</code></td>
+<td><code>esp32c3</code></td>
+<td><code>crates/core/tests/analog/cosim_esp32c3_boards_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>esp32c3-nokia5110-workshop</code></td>
+<td><code>esp32c3</code></td>
+<td><code>crates/core/tests/analog/cosim_esp32c3_boards_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>esp32c3-oled-128x32-workshop</code></td>
+<td><code>esp32c3</code></td>
+<td><code>crates/core/tests/analog/cosim_esp32c3_boards_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>esp32c3-oled-demo</code></td>
+<td><code>esp32c3</code></td>
+<td><code>crates/core/tests/analog/cosim_esp32c3_boards_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>esp32c3-tm1637-clock-workshop</code></td>
+<td><code>esp32c3</code></td>
+<td><code>crates/core/tests/analog/cosim_esp32c3_boards_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>feather-f405</code></td>
@@ -7005,6 +7000,11 @@ the generic decks can reach without new routing.</p>
 <td><code>rpi-pico-2-w</code></td>
 <td><code>rp2350</code></td>
 <td><code>crates/core/tests/analog/cosim_rp2040_family_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>seeed-xiao-esp32c3-bme280</code></td>
+<td><code>esp32c3</code></td>
+<td><code>crates/core/tests/analog/cosim_esp32c3_boards_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>seeed-xiao-nrf52840-sense</code></td>
