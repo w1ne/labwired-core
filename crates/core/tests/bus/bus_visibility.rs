@@ -309,6 +309,38 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "F4P6-die package variant: the I2C bring-up machines in this gate are \
          Cortex-M only; master traffic is proven by ch32v003_compiled_firmware",
     ),
+    // CH32V003 SPI1: the SPI bring-up machines in this gate build a
+    // `Machine<CortexM>`, while the CH32V003 is RISC-V. Master traffic over
+    // SPI1 is proven by
+    // ch32v003_compiled_firmware::ch32v003_openwch_spi_reads_a_max31855_frame_over_spi1.
+    (
+        "ch32v003f4p6",
+        BusKind::Spi,
+        "the SPI bring-up machines in this gate are Cortex-M only; the CH32V003 \
+         is RISC-V. Master traffic is proven by \
+         ch32v003_compiled_firmware::ch32v003_openwch_spi_reads_a_max31855_frame_over_spi1",
+    ),
+    (
+        "ch32v003f4u6",
+        BusKind::Spi,
+        "F4P6-die package variant: the SPI bring-up machines in this gate are \
+         Cortex-M only; the CH32V003 is RISC-V. Master traffic is proven by \
+         ch32v003_compiled_firmware::ch32v003_openwch_spi_reads_a_max31855_frame_over_spi1",
+    ),
+    (
+        "ch32v003a4m6",
+        BusKind::Spi,
+        "F4P6-die package variant: this gate is Cortex-M only and SOP16 has no \
+         bonded 3-wire SPI pads; proven by \
+         ch32v003_compiled_firmware::ch32v003_spi1_is_on_every_package_but_the_pads_only_where_bonded",
+    ),
+    (
+        "ch32v003j4m6",
+        BusKind::Spi,
+        "F4P6-die package variant: this gate is Cortex-M only and SOP8 has no \
+         bonded 3-wire SPI pads; proven by \
+         ch32v003_compiled_firmware::ch32v003_spi1_is_on_every_package_but_the_pads_only_where_bonded",
+    ),
     // nRF51822: the bring-up drives the nRF52 EasyDMA personalities (UARTE
     // ENABLE=8, TWIM), which the nRF51 does not have; its UART0 is the legacy
     // UART (ENABLE=4, TXD + EVENTS_TXDRDY) and its TWI is the legacy TWI. No
