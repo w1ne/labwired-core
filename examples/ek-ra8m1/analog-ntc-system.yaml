@@ -1,0 +1,27 @@
+# Generic Beta NTC divider on the EK-RA8M1's AN000 pad (P004, ADC0 channel 0).
+#
+# r7fa8m1ah.yaml publishes AN000 in `analog_pins:`, so the netlist names only
+# `board.analog.p004_volts`: no board name, ADC id or channel appears here.
+name: "ek-ra8m1-analog-ntc"
+chip: "../../configs/chips/r7fa8m1ah.yaml"
+cpu_hz: 8000000
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.p004_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 3.3

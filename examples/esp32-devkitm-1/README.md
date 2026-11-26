@@ -39,6 +39,18 @@ validates UART0 and GPIO23 for the serial path and external indicator. It does
 not validate Wi-Fi, Bluetooth, the physical USB-to-UART bridge, USB,
 reset/download buttons, regulator, power LED, or other peripherals.
 
+## Analog inputs
+
+`analog-ntc-diode-system.yaml` drives a generic Beta-parameter NTC divider and
+a Shockley diode load line into `board.analog.gpio34_volts` and
+`board.analog.gpio35_volts`. The classic ESP32 descriptor maps the eight ADC1
+pads (GPIO36-GPIO39 and GPIO32-GPIO35) to SENS SAR1 channels 0-7, so a deck
+names a header pad and never a channel. The map is ADC1-only on purpose: the
+Wi-Fi driver owns ADC2, so firmware cannot use ADC2 while Wi-Fi is enabled.
+ADC2 and every other SAR channel stay reachable through the explicit
+`adc.sens_sar_adc.<channel>_volts` route. A pad outside the map, including the
+ADC2 pad GPIO25, is refused at binding time.
+
 ## Evidence provenance
 
 The committed receipts in `evidence/` were captured on 2026-11-10 with the

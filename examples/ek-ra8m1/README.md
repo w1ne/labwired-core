@@ -117,6 +117,16 @@ hb=0 podr6=0001 s1=1 s2=1
 | Console UART | SCI9 PA14 (TX) / PA15 (RX), SCI_B | Zephyr `ek_ra8m1-pinctrl.dtsi`, `zephyr,console = &uart9`, `renesas,ra8-uart-sci-b` |
 | SCI9 clock / gate | SCICLK (`SCICKCR`/`SCICKDIVCR`), `MSTPCRB` bit 22 | FSP `bsp_clocks.c`, `bsp_module_stop.h` |
 
+## Analog inputs
+
+`analog-ntc-system.yaml` drives a generic Beta-parameter NTC divider into
+`board.analog.p004_volts`. The RA8M1 descriptor maps P004 (AN000, Arduino
+header A0) to ADC0 channel 0, and the test converts it with the production
+`ra_adc12` single-scan path (`ADANSA0`, `ADST`, `ADDR0`). This slice maps only
+AN000: the other Arduino header inputs (A1-A5) are not transcribed from the
+board manual yet, and the router refuses a pad that is not in the map rather
+than guessing a channel.
+
 ## Explicitly not claimed
 
 - **Cortex-M85 extensions.** Helium/MVE, the tail-predicated loops
