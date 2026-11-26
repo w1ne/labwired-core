@@ -148,6 +148,7 @@ fn committed_scripts_reproduce_the_pinned_native_reference() {
 
         // The run identifies itself and pins exactly what it ran.
         let report = &result["run_report"];
+        let stdout = String::from_utf8_lossy(&output.stdout);
         assert_eq!(report["execution_path"], "flex_portable_wasm");
         assert_eq!(report["target_cpu_emulated"], false);
         assert_eq!(report["time_unit"], "ns");
@@ -179,8 +180,24 @@ fn committed_scripts_reproduce_the_pinned_native_reference() {
         assert_eq!(analog["source"]["kind"], "spice_netlist");
         assert_eq!(analog["source"]["origin"], "inline");
         assert_eq!(analog["source"]["sha256"].as_str().unwrap().len(), 64);
-        assert!(!report["assumptions"].as_array().unwrap().is_empty());
-        assert!(!report["unsupported_checks"].as_array().unwrap().is_empty());
+        let assumptions = report["assumptions"].as_array().unwrap();
+        assert!(!assumptions.is_empty());
+        for assumption in assumptions {
+            let note = assumption.as_str().expect("assumption text");
+            assert!(
+                stdout.contains(&format!("  assumption: {note}")),
+                "CLI summary omitted assumption {note:?}:\n{stdout}"
+            );
+        }
+        let unsupported = report["unsupported_checks"].as_array().unwrap();
+        assert!(!unsupported.is_empty());
+        for check in unsupported {
+            let note = check.as_str().expect("unsupported check text");
+            assert!(
+                stdout.contains(&format!("  unsupported check: {note}")),
+                "CLI summary omitted unsupported check {note:?}:\n{stdout}"
+            );
+        }
 
         // Same instrument captures as the committed native reference, which
         // the Chromium receipt is already compared against.

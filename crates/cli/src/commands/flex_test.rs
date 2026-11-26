@@ -451,6 +451,20 @@ pub(crate) fn run_flex_test(args: &TestArgs, script: FlexTestScript) -> FlexRunO
             report.unsupported_checks.len(),
             report.execution_scope.chip_parity
         );
+        if report.assumptions.is_empty() {
+            println!("  assumptions: none declared");
+        } else {
+            for assumption in &report.assumptions {
+                println!("  assumption: {assumption}");
+            }
+        }
+        if report.unsupported_checks.is_empty() {
+            println!("  unsupported checks: none declared");
+        } else {
+            for check in &report.unsupported_checks {
+                println!("  unsupported check: {check}");
+            }
+        }
     }
 
     FlexRunOutcome {
