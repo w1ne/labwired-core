@@ -1,0 +1,42 @@
+# Generic Beta NTC divider (PA0 / Arduino A0) and Shockley diode load line
+# (PA1 / Arduino A1).
+#
+# The STM32L476 descriptor publishes the chip's full LQFP64 ADC1 pad set in
+# `analog_pins:` (DS10198 pin definitions); A0/A1 are two of those pads. Neither netlist names the board, the ADC or a channel: each solves its
+# own circuit and publishes a probe voltage to `board.analog.<pad>_volts`.
+name: "nucleo-l476rg-analog"
+chip: "../../configs/chips/stm32l476.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.pa0_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 3.3
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.pa1_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF
+        .model DREF D(IS=2.52n N=1.752 RS=0.568)
+      probes:
+        v_diode: "v(sense)"
+      vdd: 3.3

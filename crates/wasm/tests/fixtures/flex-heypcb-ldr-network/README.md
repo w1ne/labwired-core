@@ -101,10 +101,18 @@ LABWIRED_REQUIRE_NGSPICE=1 cargo test -p labwired-cli --test cosim_pin_routing l
 
 The regression test runs both scripts on both engines and requires equal
 `entry_result` and instrument counts, the netlist pin, and both range stops.
-The browser keeps the in-core manifest: the committed browser receipt has no
-ngspice host, and a page must supply the ngspice WASM callback before this deck
-can run there. This is not a chip-parity claim and does not prove the part's
-tolerance or a physical board.
+The committed `browser.json` records the in-core browser run. The existing
+[`test_browser_ngspice.mjs`](../../../../scripts/test_browser_ngspice.mjs)
+harness now runs these same bright and dim scripts through
+`WasmFlexTestRun.run_with_ngspice_callback`, checks the pinned source identity
+and deck digest, and reads the existing logic-analyzer and oscilloscope traces
+plus `run_report()`. The report keeps the portable-firmware scope and every
+assumption and unsupported check visible. Run it with the web package, browser
+driver, app ngspice host module, and ngspice WASM asset paths listed at the top
+of the harness; its JSON output is the browser run evidence.
+
+This is not a chip-parity claim and does not prove the part's tolerance or a
+physical board.
 
 ## Scope
 
