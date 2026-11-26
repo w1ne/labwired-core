@@ -538,12 +538,40 @@ fn f1_f4_f7_descriptors_carry_the_datasheet_assignment() {
     }
 }
 
+/// The L476 numbers its regular inputs from PC0, not PA0 (RM0351 Table 18,
+/// LQFP64): PC0..PC3 = IN1..IN4, PA0..PA7 = IN5..IN12, PC4/PC5 = IN13/IN14,
+/// PB0/PB1 = IN15/IN16. A copy of the F1/F4 map would put PA0 on IN0.
+#[test]
+fn stm32l476_descriptor_carries_the_rm0351_assignment() {
+    let mut pads: Vec<(String, u8)> = (0..4).map(|i| (format!("PC{i}"), 1 + i)).collect();
+    pads.extend((0..8).map(|i| (format!("PA{i}"), 5 + i)));
+    pads.extend([
+        ("PC4".to_string(), 13),
+        ("PC5".to_string(), 14),
+        ("PB0".to_string(), 15),
+        ("PB1".to_string(), 16),
+    ]);
+    let expected: BTreeMap<String, AdcPinFn> = pads
+        .into_iter()
+        .map(|(pad, channel)| {
+            (
+                pad,
+                AdcPinFn {
+                    peripheral: "adc1".to_string(),
+                    channel,
+                },
+            )
+        })
+        .collect();
+    assert_eq!(load("stm32l476").analog_pins, expected);
+}
+
 /// Families whose assignment differs from the F1/F4 map were deliberately NOT
-/// transcribed. On an L476 PA0 is ADC1_IN5 and on a G474 it is ADC1_IN1; an
-/// entry there must come from that part's datasheet, not from this map.
+/// transcribed. On a G474 PA0 is ADC1_IN1; an entry there must come from that
+/// part's datasheet, not from this map.
 #[test]
 fn families_with_a_different_assignment_declare_nothing_yet() {
-    for chip in ["stm32l476", "stm32g474re", "stm32h563", "stm32wb55"] {
+    for chip in ["stm32g474re", "stm32h563", "stm32wb55"] {
         assert!(
             load(chip).analog_pins.is_empty(),
             "{chip} gained analog_pins; check them against its own datasheet and update this test"

@@ -14,9 +14,9 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **441**
-- Covered end to end: **108**
-- Not covered: **333**
-- Not covered but with an ADC pad map: **0** (these are the
+- Covered end to end: **109**
+- Not covered: **332**
+- Not covered but with an ADC pad map: **1** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` block or `adc` pin functions, an ADC model, or a digital
   endpoint first)
@@ -29,7 +29,9 @@ the generic decks can reach without new routing.
 
 ## Next queue: not covered, ADC pads already mapped
 
-None.
+| Profile | Chip | Analog pad map |
+| --- | --- | ---: |
+| `iolink-multiport-demo` | `stm32l476` | 16 |
 
 ## Not covered
 
@@ -85,7 +87,7 @@ None.
 | `frdm-k64f` | `mk64f12` | 0 |
 | `frdm-kw41z-lcd` | `mkw41z4` | 0 |
 | `frdm-kw41z` | `mkw41z4` | 0 |
-| `iolink-multiport-demo` | `stm32l476` | 0 |
+| `iolink-multiport-demo` | `stm32l476` | 16 |
 | `kv260-r5` | `xck26-rpu` | 0 |
 | `litex-vexriscv` | `litex-vexriscv` | 0 |
 | `lp-mspm0g3507` | `mspm0g3507` | 0 |
@@ -114,7 +116,6 @@ None.
 | `nucleo-h753zi` | `stm32h753zi` | 0 |
 | `nucleo-l031k6` | `stm32l031k6` | 0 |
 | `nucleo-l073rz` | `stm32l073` | 0 |
-| `nucleo-l476rg` | `stm32l476` | 0 |
 | `nucleo-l552ze-q` | `stm32l552` | 0 |
 | `nucleo-u545re` | `stm32u545` | 0 |
 | `nucleo_g474re` | `stm32g474re` | 0 |
@@ -416,6 +417,7 @@ None.
 | `nucleo-f767zi` | `stm32f767` | `crates/core/tests/analog/cosim_nucleo_f767zi_analog.rs` |
 | `nucleo-g0b1re` | `stm32g0b1re` | `crates/core/tests/analog/cosim_stm32g0b1_analog.rs` |
 | `nucleo-l432kc` | `stm32l432kc` | `crates/core/tests/analog/cosim_stm32l4u5_pin_functions_analog.rs` |
+| `nucleo-l476rg` | `stm32l476` | `crates/core/tests/analog/cosim_stm32l476_analog.rs` |
 | `nucleo-u575zi` | `stm32u575` | `crates/core/tests/analog/cosim_stm32l4u5_pin_functions_analog.rs` |
 | `nucleo-u5a5zj` | `stm32u5a5zj` | `crates/core/tests/analog/cosim_stm32l4u5_pin_functions_analog.rs` |
 | `nucleo_f767zi` | `nucleo_f767zi` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
