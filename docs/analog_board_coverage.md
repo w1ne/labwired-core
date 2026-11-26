@@ -13,10 +13,10 @@ Device-only unit tests, ADC register tests with no netlist, files that only
 list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
-- Profiles in `configs/systems/`: **440**
-- Covered end to end: **93**
-- Not covered: **347**
-- Not covered but with an ADC pad map: **0** (these are the
+- Profiles in `configs/systems/`: **441**
+- Covered end to end: **96**
+- Not covered: **345**
+- Not covered but with an ADC pad map: **1** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` block or `adc` pin functions, an ADC model, or a digital
   endpoint first)
@@ -29,7 +29,9 @@ the generic decks can reach without new routing.
 
 ## Next queue: not covered, ADC pads already mapped
 
-None.
+| Profile | Chip | Analog pad map |
+| --- | --- | ---: |
+| `wch-ch32v003evt-max31855` | `ch32v003f4p6` | 8 |
 
 ## Not covered
 
@@ -39,9 +41,6 @@ None.
 | `apollo4p-evb` | `amap42kp` | 0 |
 | `arduino-nano-esp32-bme280` | `esp32s3` | 0 |
 | `arduino-nano-esp32` | `esp32s3` | 0 |
-| `arduino-nano-every-bme280` | `atmega4809` | 0 |
-| `arduino-nano-every-max31855` | `atmega4809` | 0 |
-| `arduino-nano-every` | `atmega4809` | 0 |
 | `arty-litex-vexriscv` | `arty-litex-vexriscv` | 0 |
 | `atmega1281` | `atmega1281` | 0 |
 | `atmega2561` | `atmega2561` | 0 |
@@ -382,6 +381,7 @@ None.
 | `stm32h735-smoke` | `stm32h735` | 0 |
 | `teensy-41` | `imxrt1064` | 0 |
 | `vegaboard-ri5cy` | `vegaboard-ri5cy` | 0 |
+| `wch-ch32v003evt-max31855` | `ch32v003f4p6` | 8 |
 
 ## Covered
 
@@ -397,6 +397,9 @@ None.
 | `arduino-nano-33-ble-bme280` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
 | `arduino-nano-33-ble` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
 | `arduino-nano-33-iot-bme280` | `atsamd21g18a` | `crates/core/tests/analog/cosim_samd21_family_analog.rs` |
+| `arduino-nano-every-bme280` | `atmega4809` | `crates/core/tests/analog/cosim_avr_atmega4809_analog.rs` |
+| `arduino-nano-every-max31855` | `atmega4809` | `crates/core/tests/analog/cosim_avr_atmega4809_analog.rs` |
+| `arduino-nano-every` | `atmega4809` | `crates/core/tests/analog/cosim_avr_atmega4809_analog.rs` |
 | `arduino-nano` | `atmega328p` | `crates/core/tests/analog/cosim_avr_atmega328p_analog.rs` |
 | `arduino-uno-r4-minima-bme280` | `ra4m1` | `crates/core/tests/analog/cosim_ra4m1_analog.rs` |
 | `arduino-uno-r4-minima` | `ra4m1` | `crates/core/tests/analog/cosim_ra4m1_analog.rs` |
