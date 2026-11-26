@@ -28,7 +28,7 @@
 //! property (`nrf54l_05_10_15.dtsi`: TIMER00 -> hfpll, TIMER10 -> hfxo
 //! 32 MHz, TIMER2x -> PCLK16M), and nRF5340 PS v1.5 (TIMER counts PCLK16M).
 //!
-//! Four checks:
+//! Five checks:
 //! 1. Every `nrf52840_timer` instance in every nRF chip descriptor either
 //!    declares the expected `peripheral_hz`, or its base clock equals the core
 //!    clock so no key is needed. A new timer instance must make that choice.
@@ -39,6 +39,8 @@
 //!    model's default four.
 //! 4. The nRF54L full profiles declare every TIMER instance the vendor SVD
 //!    defines, at the SVD's base address and IRQ.
+//! 5. nRF52832/33/40 and the imported nRF52840 profile expose four CC channels
+//!    on TIMER0..2 and six on TIMER3..4, matching the Nordic product specs.
 
 use crate::common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
@@ -399,5 +401,79 @@ fn nrf5340_timers_expose_six_compare_channels() {
             *expected_capture,
             "timer at {base:#x}: TASKS_CAPTURE[5] did not capture (num_cc < 6?)"
         );
+    }
+}
+
+/// Nordic nRF52832/33/40 Product Specification, TIMER configuration tables:
+/// TIMER0..2 have CC[0..3], and TIMER3..4 have CC[0..5]. The onboarding
+/// nRF52840 profile is included because its imported peripheral list is
+/// maintained separately from the shipped chip descriptor.
+#[test]
+fn nrf52_profiles_match_the_timer_compare_channel_estate() {
+    const CHIP_FILES: &[&str] = &[
+        "nrf52832.yaml",
+        "nrf52833.yaml",
+        "nrf52840.yaml",
+        "onboarding/nrf52840.yaml",
+    ];
+
+    for chip_file in CHIP_FILES {
+        let chip_path = root(&format!("configs/chips/{chip_file}"));
+        let chip = ChipDescriptor::from_file(&chip_path)
+            .unwrap_or_else(|e| panic!("load {chip_file}: {e}"));
+        let manifest = SystemManifest {
+            chip: chip_path.to_string_lossy().into_owned(),
+            ..Default::default()
+        };
+        let mut bus = SystemBus::from_config(&chip, &manifest)
+            .unwrap_or_else(|e| panic!("assemble {chip_file}: {e}"));
+
+        let mut checked = 0usize;
+        for timer in chip
+            .peripherals
+            .iter()
+            .filter(|p| p.r#type == "nrf52840_timer")
+        {
+            let expected_cc = match timer.id.as_str() {
+                "timer0" | "timer1" | "timer2" => 4usize,
+                "timer3" | "timer4" => 6usize,
+                other => panic!("{chip_file}: add `{other}` to the Nordic TIMER CC audit"),
+            };
+            let configured_cc = timer
+                .config
+                .get("num_cc")
+                .and_then(|v| v.as_u64())
+                .map(|n| n as usize)
+                .unwrap_or(4);
+            assert_eq!(
+                configured_cc, expected_cc,
+                "{chip_file} `{}`: descriptor/model channel count disagrees with the Nordic PS",
+                timer.id
+            );
+
+            // Probe the highest implemented CC register and the first absent
+            // one through the assembled bus. The model must retain the former
+            // and ignore the latter, so the descriptor count is the hardware
+            // surface the firmware actually sees.
+            let last_cc = timer.base_address + CC0 + ((expected_cc as u64 - 1) * 4);
+            let first_absent_cc = timer.base_address + CC0 + (expected_cc as u64 * 4);
+            let marker = 0x5A00_0000 | expected_cc as u32;
+            bus.write_u32(last_cc, marker).unwrap();
+            assert_eq!(
+                bus.read_u32(last_cc).unwrap(),
+                marker,
+                "{chip_file} `{}`: highest implemented CC register did not retain its value",
+                timer.id
+            );
+            bus.write_u32(first_absent_cc, marker).unwrap();
+            assert_eq!(
+                bus.read_u32(first_absent_cc).unwrap(),
+                0,
+                "{chip_file} `{}`: first absent CC register is exposed",
+                timer.id
+            );
+            checked += 1;
+        }
+        assert!(checked > 0, "{chip_file}: no nRF52 TIMER instances found");
     }
 }
