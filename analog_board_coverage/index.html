@@ -4955,8 +4955,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.</p>
 <ul>
 <li>Profiles in <code>configs/systems/</code>: <strong>441</strong></li>
-<li>Covered end to end: <strong>99</strong></li>
-<li>Not covered: <strong>342</strong></li>
+<li>Covered end to end: <strong>101</strong></li>
+<li>Not covered: <strong>340</strong></li>
 <li>Not covered but with an ADC pad map: <strong>0</strong> (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   <code>analog_pins:</code> block or <code>adc</code> pin functions, an ADC model, or a digital
@@ -5270,11 +5270,6 @@ the generic decks can reach without new routing.</p>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
-<td><code>iolinki-g0-startup</code></td>
-<td><code>stm32g0b1re</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
 <td><code>kv260-r5</code></td>
 <td><code>xck26-rpu</code></td>
 <td style="text-align: right;">0</td>
@@ -5372,11 +5367,6 @@ the generic decks can reach without new routing.</p>
 <tr>
 <td><code>nucleo-g071rb</code></td>
 <td><code>stm32g071</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>nucleo-g0b1re</code></td>
-<td><code>stm32g0b1re</code></td>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
@@ -6817,6 +6807,11 @@ the generic decks can reach without new routing.</p>
 <td><code>crates/core/tests/analog/cosim_stm32f4_family_analog.rs</code></td>
 </tr>
 <tr>
+<td><code>iolinki-g0-startup</code></td>
+<td><code>stm32g0b1re</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32g0b1_analog.rs</code></td>
+</tr>
+<tr>
 <td><code>labwired-demo-board</code></td>
 <td><code>stm32f103</code></td>
 <td><code>crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs</code></td>
@@ -6865,6 +6860,11 @@ the generic decks can reach without new routing.</p>
 <td><code>nucleo-f767zi</code></td>
 <td><code>stm32f767</code></td>
 <td><code>crates/core/tests/analog/cosim_nucleo_f767zi_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>nucleo-g0b1re</code></td>
+<td><code>stm32g0b1re</code></td>
+<td><code>crates/core/tests/analog/cosim_stm32g0b1_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>nucleo-l432kc</code></td>
