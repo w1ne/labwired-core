@@ -1,6 +1,18 @@
 # STM32F103C8T6 Blue Pill availability and lifecycle
 
-Checked live on 2026-11-12.
+## Re-checked live on 2026-11-25 (PWM round)
+
+- ST's [STM32F103C8 product page](https://www.st.com/en/microcontrollers-microprocessors/stm32f103c8.html)
+  renders status **ACTIVE** with the summary "Mainstream Performance line, Arm
+  Cortex-M3 MCU with 64 Kbytes of Flash memory, 72 MHz CPU, motor control, USB
+  and CAN". The site answers no plain HTTP client, so the page was read through
+  the real Chrome session.
+- ElectroPeak's [Blue Pill listing](https://electropeak.com/stm32f103c8t6-arm-board)
+  showed **In Stock**, SKU `MIC-02-012`, EUR 2.42, title
+  "STM32F103C8T6 Blue Pill ARM Development Board".
+- Neither page carried an NRND or EOL notice.
+
+## Checked live on 2026-11-12
 
 - ST's [STM32F103C8 product page](https://www.st.com/en/microcontrollers-microprocessors/stm32f103c8.html)
   lists order code `STM32F103C8T6` as **Active** and describes the product as in

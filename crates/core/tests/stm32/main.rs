@@ -39,6 +39,7 @@ mod stm32_v2_timer_output_pad;
 mod stm32_variant_geometry;
 mod stm32duino_i2c_multibyte_bme280;
 mod stm32duino_print_float_vmov;
+mod stm32f103_arduino_pwm;
 mod stm32f1_gpio_lock_reset;
 mod stm32f401_conformance;
 mod stm32f407_dma_walk_differential;
