@@ -329,16 +329,17 @@ impl Esp32s3SarAdc {
     }
 
     /// Perform a complete ADC1 one-time/forced conversion immediately.
-    /// When a board analog source has explicitly set this channel, the
-    /// conversion is controlled by that voltage rather than random data.
-    /// This ideal ADC transfer is deliberately not silicon-calibrated: the
-    /// attenuation setting, transfer curve, input impedance and noise are not
-    /// modeled. Missing channels retain the historical deterministic fallback.
+    /// When a board analog source has explicitly set this channel, converts
+    /// the injected pad voltage through [`esp32s3_adc1_mv_to_raw`] at ATTEN3
+    /// (matching [`Esp32s3Sens`] and [`EfuseStub`]'s V1 curve-fitting table).
+    /// Missing channels retain the historical deterministic fallback.
     fn complete_adc1_conversion(&mut self, channel: u32) {
         let sample = self
             .adc1_pads
             .get_mv(channel as u8)
-            .map(|mv| (u32::from(mv).min(3300) * 4095 + 1650) / 3300)
+            .map(|mv| {
+                u32::from(crate::peripherals::esp_xtensa_common::esp32s3_adc1_mv_to_raw(mv, 3))
+            })
             .unwrap_or_else(|| self.next_sample_12bit());
         let packed = Self::pack_result(channel, sample);
         self.adc1_data = packed;
@@ -658,7 +659,9 @@ mod tests {
         );
         assert!(!adc.clear_adc_channel_input(10));
 
-        for (mv, expected) in [(0, 0), (1650, 2048), (3300, 4095), (5000, 4095)] {
+        for mv in [0u16, 660, 1650, 2970, 3100, 3300, 5000] {
+            let expected =
+                u32::from(crate::peripherals::esp_xtensa_common::esp32s3_adc1_mv_to_raw(mv, 3));
             assert!(adc.set_adc_channel_input(7, mv));
             adc.write_u32(INT_CLR, INT_ADC1_DONE).unwrap();
             adc.write_u32(
@@ -670,6 +673,17 @@ mod tests {
             assert_eq!((packed >> 13) & 15, 7, "channel tag");
             assert_eq!(packed & 0xFFF, expected, "sample at {mv} mV");
             assert_ne!(adc.read_u32(INT_RAW).unwrap() & INT_ADC1_DONE, 0);
+            if mv <= 3200 {
+                let recovered = crate::peripherals::esp_xtensa_common::esp32s3_atten3_curve_fit_mv(
+                    (packed & 0xFFF) as u16,
+                );
+                assert!(
+                    recovered.abs_diff(mv) <= 2,
+                    "ATTEN3 curve fit round-trip at {mv} mV returned {recovered} mV"
+                );
+            } else {
+                assert_eq!(packed & 0xFFF, 4095, "saturation at {mv} mV");
+            }
         }
 
         // A different, unset channel must not inherit channel 7's voltage.
@@ -710,7 +724,9 @@ mod tests {
         let saved = original.snapshot();
         let mut restored = Esp32s3SarAdc::new(SRC);
         restored.restore(saved).unwrap();
-        for (channel, expected) in [(1, 2048), (9, 4095)] {
+        let expected_ch1 =
+            u32::from(crate::peripherals::esp_xtensa_common::esp32s3_adc1_mv_to_raw(1650, 3));
+        for (channel, expected) in [(1, expected_ch1), (9, 4095)] {
             restored
                 .write_u32(
                     ONETIME_SAMPLE,

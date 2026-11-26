@@ -584,6 +584,48 @@ fn st7789_visible_window_crops_the_artifact_to_the_glass() {
     assert_eq!(art.meta["total_bytes"], 170 * 320 * 2);
 }
 
+/// Command-framed RGB panels (ST7789/GC9A01/ILI9341/ST7735) leave `Framing::Ram`
+/// open after the final RAMWR write until another command arrives. Inspecting
+/// the panel must still include that final frame in `frames_seen` without
+/// requiring a dummy trailing command such as NORON (0x13).
+#[test]
+fn st7789_frames_seen_includes_final_frame_without_trailing_command() {
+    let mut frames: Vec<(bool, u8)> = vec![(false, 0x11), (false, 0x29)];
+    for color in [0xF800u16, 0x07E0u16, 0x001Fu16] {
+        frames.push((false, 0x2A)); // CASET: col 0..=1
+        frames.extend([(true, 0), (true, 0), (true, 0), (true, 1)]);
+        frames.push((false, 0x2B)); // RASET: row 0..=0
+        frames.extend([(true, 0), (true, 0), (true, 0), (true, 0)]);
+        frames.push((false, 0x2C)); // RAMWR: 2 pixels, no trailing command
+        let [hi, lo] = color.to_be_bytes();
+        frames.extend([(true, hi), (true, lo), (true, hi), (true, lo)]);
+    }
+    let mut bus = rig(
+        "st7789-170x320",
+        "spi1",
+        &[("cs_pin", "PA4".into()), ("dc_pin", "PC7".into())],
+    );
+    spi_write(&mut bus, "spi1", &frames);
+
+    let device = inspect_panel(bus);
+    let art = evidence(&device);
+    let hist = art.meta["frames_seen"].as_array().expect("frames_seen");
+    assert_eq!(
+        hist.len(),
+        3,
+        "all 3 RAMWR frames must appear in frames_seen without a trailing command"
+    );
+    let shas: std::collections::HashSet<&str> = hist
+        .iter()
+        .map(|f| f["sha256"].as_str().expect("sha256"))
+        .collect();
+    assert_eq!(
+        shas.len(),
+        3,
+        "each distinct RAMWR frame must hash distinctly"
+    );
+}
+
 /// The Nokia 5110's controller: bank-addressed 1-bpp, D/C framed.
 #[test]
 fn pcd8544_that_painted_reports_its_ink() {
