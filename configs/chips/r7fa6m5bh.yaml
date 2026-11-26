@@ -116,6 +116,13 @@ pins:
   # User switches S1/S2 (Zephyr ek_ra6m5.dts).
   P005: { gpio: port0, bit: 5, functions: [{ type: gpio, peripheral: port0 }] }
   P004: { gpio: port0, bit: 4, functions: [{ type: gpio, peripheral: port0 }] }
+# ADC0 group-A inputs this package bonds. FSP's `ra6m5` pin data and the
+# board's `adc0_default` pinctrl entry put AN000 on P000; the EK-RA6M5 DAC
+# loopback fixture wires DA0 to that same pad. Only the pad the board data
+# names is published, so the router never guesses a channel for a pad nobody
+# transcribed. `analog_pins:` is consumed by `board.analog.<pad>_volts`.
+analog_pins:
+  P000: { peripheral: "adc0", channel: 0 }
 peripherals:
   # R_SYSTEM @ 0x4001E000 (the Renode SYSC tag spans 0x4001E000-0x4001E62B).
   # Full R_SYSTEM register file (0x700 bytes, ends with VBTBKR[512] at
