@@ -613,25 +613,23 @@ impl FlashXipPeripheral {
         if out.is_empty() {
             return;
         }
-        let Some((target, phys0)) = self.translate(offset) else {
-            out.fill(0);
-            return;
-        };
-        // PSRAM is writable, so it must NOT go through the page mirror: the
-        // mirror caches immutable flash bytes and would hand back a stale copy
-        // of memory the guest has since written.
-        if target == XipTarget::Psram {
-            self.read_psram(phys0, out);
-            return;
-        }
         let in_page = (offset % PAGE_SIZE as u64) as usize;
-        if in_page + out.len() <= PAGE_BYTES {
-            let phys_page = (phys0 / PAGE_SIZE as u64) as u32;
-            let way = self.ensure_page_mirror(phys_page);
-            self.page_mirror.copy_from(way, in_page, out);
+        if out.len() <= PAGE_BYTES - in_page {
+            match self.translate(offset) {
+                // PSRAM is writable, so it must bypass the flash page mirror.
+                Some((XipTarget::Psram, phys)) => self.read_psram(phys, out),
+                Some((XipTarget::Flash, phys)) => {
+                    let phys_page = (phys / PAGE_SIZE as u64) as u32;
+                    let way = self.ensure_page_mirror(phys_page);
+                    self.page_mirror.copy_from(way, in_page, out);
+                }
+                None => out.fill(0),
+            }
             return;
         }
-        // Rare: multi-page span — fall back to per-byte path via mirror.
+        // Rare: multi-page span — translate every byte. This also applies when
+        // the first page is PSRAM or unmapped: the next page can use a different
+        // physical page, a different backing array, or a different validity.
         for (i, b) in out.iter_mut().enumerate() {
             match self.translate(offset + i as u64) {
                 Some((XipTarget::Psram, phys)) => {
@@ -1020,6 +1018,50 @@ mod tests {
         // Map virtual page 0 → physical page 1.
         p.map_page(0, 1);
         assert_eq!(p.read(0).unwrap(), 0xAB);
+    }
+
+    /// Bulk reads must translate each virtual page, even when the first
+    /// page is PSRAM or unmapped. Adjacent virtual pages need not be adjacent
+    /// in physical memory or even use the same backing array.
+    #[test]
+    fn cross_page_reads_match_byte_reads_for_each_backing() {
+        let page = PAGE_BYTES;
+        let flash = Arc::new(Mutex::new(vec![0xF1; page * 3]));
+        let psram = Arc::new(Mutex::new(vec![0xA2; page * 3]));
+        psram.lock().unwrap()[page * 2..].fill(0xB3);
+        let ram_bit = MMU_FMT_S3.spiram_bit;
+        let invalid = MMU_FMT_S3.invalid_bit;
+        for (label, first, second) in [
+            ("PSRAM to nonadjacent PSRAM", ram_bit, ram_bit | 2),
+            ("PSRAM to flash", ram_bit, 2),
+            ("PSRAM to unmapped", ram_bit, invalid),
+            ("unmapped to flash", invalid, 2),
+            ("flash to PSRAM", 0, ram_bit | 2),
+        ] {
+            let mmu = new_mmu_table();
+            {
+                let mut entries = mmu.entries.lock().unwrap();
+                entries[0] = first;
+                entries[1] = second;
+            }
+            let mut p = FlashXipPeripheral::new_mmu(flash.clone(), 0x3C00_0000, mmu);
+            p.attach_psram(psram.clone());
+            let offset = PAGE_SIZE as u64 - 2;
+            let expected: [u8; 4] = std::array::from_fn(|i| p.read(offset + i as u64).unwrap());
+            let mut span = [0; 4];
+            p.read_span(offset, &mut span);
+            assert_eq!(span, expected, "{label}: bulk span");
+            assert_eq!(
+                p.read_u32(offset).unwrap(),
+                u32::from_le_bytes(expected),
+                "{label}: u32"
+            );
+            assert_eq!(
+                p.read_u16(offset + 1).unwrap(),
+                u16::from_le_bytes([expected[1], expected[2]]),
+                "{label}: u16"
+            );
+        }
     }
 
     #[test]
