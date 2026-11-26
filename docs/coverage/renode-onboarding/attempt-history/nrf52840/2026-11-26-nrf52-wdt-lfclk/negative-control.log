@@ -1,0 +1,20 @@
+---- nrf_wdt_lfclk_clock::nrf_wdt_times_out_after_crv_plus_one_lfclk_ticks stdout ----
+
+thread 'nrf_wdt_lfclk_clock::nrf_wdt_times_out_after_crv_plus_one_lfclk_ticks' (2253395) panicked at crates/core/tests/nrf/nrf_wdt_lfclk_clock.rs:123:5:
+WDT timeout does not follow (CRV + 1) / 32768 s on 7 instance(s):
+  nrf51822.yaml `wdt` at 0x40010000, cpu_hz=16000000: EVENTS_TIMEOUT=1 after 16113 cycles (want 0), 1 after 16114 (want 1)
+  nrf52832.yaml `wdt` at 0x40010000, cpu_hz=64000000: EVENTS_TIMEOUT=1 after 64453 cycles (want 0), 1 after 64454 (want 1)
+  nrf52833.yaml `wdt` at 0x40010000, cpu_hz=64000000: EVENTS_TIMEOUT=1 after 64453 cycles (want 0), 1 after 64454 (want 1)
+  nrf52840.yaml `wdt` at 0x40010000, cpu_hz=64000000: EVENTS_TIMEOUT=1 after 64453 cycles (want 0), 1 after 64454 (want 1)
+  onboarding/arduino_nano_33_ble.yaml `wdt` at 0x40010000, cpu_hz=64000000: EVENTS_TIMEOUT=1 after 64453 cycles (want 0), 1 after 64454 (want 1)
+  onboarding/nrf52840.yaml `wdt` at 0x40010000, cpu_hz=64000000: EVENTS_TIMEOUT=1 after 64453 cycles (want 0), 1 after 64454 (want 1)
+  onboarding/nrf52840dk_nrf52840.yaml `wdt` at 0x40010000, cpu_hz=64000000: EVENTS_TIMEOUT=1 after 64453 cycles (want 0), 1 after 64454 (want 1)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    nrf_wdt_lfclk_clock::nrf_wdt_times_out_after_crv_plus_one_lfclk_ticks
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 79 filtered out; finished in 1.14s
+
+error: test failed, to rerun pass `-p labwired-core --test nrf`
