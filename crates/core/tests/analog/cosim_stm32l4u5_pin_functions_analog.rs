@@ -473,8 +473,29 @@ fn no_chip_descriptor_assigns_a_pad_two_different_adc_channels() {
 /// Every profile whose chip publishes ADC inputs through its pin table is in
 /// the sweep above. A new such part in `configs/systems/` cannot be left
 /// uncovered by adding a chip descriptor alone.
+///
+/// "Covered" means what the inventory script means: a test under
+/// `crates/core/tests/analog/` names the profile's manifest AND advances a
+/// co-simulation session. The ATmega4809 boards and the 64-pin mega parts
+/// prove the same union from their own files, so a ratchet that only knew this
+/// file's sweep would report them as gaps that are not gaps.
 #[test]
 fn sweep_covers_every_profile_that_reaches_an_adc_through_pin_functions() {
+    let mut advancing_sources = Vec::new();
+    for entry in std::fs::read_dir(root("crates/core/tests/analog")).expect("list the analog tests")
+    {
+        let path = entry.expect("read an analog test entry").path();
+        if path.extension().is_none_or(|ext| ext != "rs") {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        if text.contains("advance_to(") {
+            advancing_sources.push(text);
+        }
+    }
+
     let mut found = Vec::new();
     for directory in ["configs/systems", "configs/systems/onboarding"] {
         let Ok(entries) = std::fs::read_dir(root(directory)) else {
@@ -496,7 +517,15 @@ fn sweep_covers_every_profile_that_reaches_an_adc_through_pin_functions() {
                 continue;
             };
             if chip.analog_pins.is_empty() && !chip.analog_pin_table().is_empty() {
-                found.push(manifest.name);
+                let needle = format!(
+                    "configs/systems/{}",
+                    path.strip_prefix(root("configs/systems"))
+                        .expect("manifest lives under configs/systems")
+                        .display()
+                );
+                if !advancing_sources.iter().any(|text| text.contains(&needle)) {
+                    found.push(manifest.name);
+                }
             }
         }
     }

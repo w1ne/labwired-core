@@ -14,9 +14,9 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **441**
-- Covered end to end: **96**
-- Not covered: **345**
-- Not covered but with an ADC pad map: **1** (these are the
+- Covered end to end: **99**
+- Not covered: **342**
+- Not covered but with an ADC pad map: **0** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` block or `adc` pin functions, an ADC model, or a digital
   endpoint first)
@@ -29,9 +29,7 @@ the generic decks can reach without new routing.
 
 ## Next queue: not covered, ADC pads already mapped
 
-| Profile | Chip | Analog pad map |
-| --- | --- | ---: |
-| `wch-ch32v003evt-max31855` | `ch32v003f4p6` | 8 |
+None.
 
 ## Not covered
 
@@ -42,8 +40,6 @@ the generic decks can reach without new routing.
 | `arduino-nano-esp32-bme280` | `esp32s3` | 0 |
 | `arduino-nano-esp32` | `esp32s3` | 0 |
 | `arty-litex-vexriscv` | `arty-litex-vexriscv` | 0 |
-| `atmega1281` | `atmega1281` | 0 |
-| `atmega2561` | `atmega2561` | 0 |
 | `brd2709a` | `efr32mg26` | 0 |
 | `calliope-mini-v1` | `nrf51822` | 0 |
 | `cc2538dk` | `cc2538sf53` | 0 |
@@ -381,7 +377,6 @@ the generic decks can reach without new routing.
 | `stm32h735-smoke` | `stm32h735` | 0 |
 | `teensy-41` | `imxrt1064` | 0 |
 | `vegaboard-ri5cy` | `vegaboard-ri5cy` | 0 |
-| `wch-ch32v003evt-max31855` | `ch32v003f4p6` | 8 |
 
 ## Covered
 
@@ -406,6 +401,8 @@ the generic decks can reach without new routing.
 | `arduino-uno` | `atmega328p` | `crates/core/tests/analog/cosim_avr_atmega328p_analog.rs` |
 | `arduino-zero` | `atsamd21g18a` | `crates/core/tests/analog/cosim_samd21_family_analog.rs` |
 | `at32f421g8u7` | `at32f421g8u7` | `crates/core/tests/analog/cosim_at32f421_analog.rs` |
+| `atmega1281` | `atmega1281` | `crates/core/tests/analog/cosim_avr_atmega_mega_analog.rs` |
+| `atmega2561` | `atmega2561` | `crates/core/tests/analog/cosim_avr_atmega_mega_analog.rs` |
 | `controllino-mini` | `atmega328p` | `crates/core/tests/analog/cosim_avr_atmega328p_analog.rs` |
 | `feather-f405` | `stm32f405` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `labwired-demo-board` | `stm32f103` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
@@ -482,6 +479,7 @@ the generic decks can reach without new routing.
 | `stm32f401cdu6` | `stm32f401cdu6` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `stm32f411ceu6-blackpill` | `stm32f411ceu6` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `wch-ch32v003evt-bme280` | `ch32v003f4p6` | `crates/core/tests/analog/cosim_ch32v003_analog.rs` |
+| `wch-ch32v003evt-max31855` | `ch32v003f4p6` | `crates/core/tests/analog/cosim_ch32v003_analog.rs` |
 | `wch-ch32v003evt` | `ch32v003f4p6` | `crates/core/tests/analog/cosim_ch32v003_analog.rs` |
 
 ## How to add a board
