@@ -28,6 +28,7 @@ mod e2e_labwired_ereader;
 mod esp32_classic_aids_stability;
 mod esp32_classic_console;
 mod esp32_classic_walk_differential;
+mod esp32_classic_wdt;
 mod esp32_family_gpio_head;
 mod esp32_onboarding_exec_oracle;
 mod esp32_syscon_overlap;

@@ -1,0 +1,28 @@
+BEFORE — classic ESP32 TIMG watchdog is a no-op
+Measured 2026-11-26 on origin/main (3ee0f38575) with the fixtures from this
+receipt, using the same board system and the same 2,000,000-cycle budget.
+
+Instrumentation: a temporary test harness that opens
+configs/systems/esp32-devkitm-1.yaml, loads the ELF, runs 10,000-cycle batches
+and stops when the expected console string appears (or the cycle budget is
+exhausted). The only change between this run and after/ is whether
+`peripherals/esp32/factory.rs` builds the classic TIMG with
+`.with_classic_mwdt()`.
+
+wdt_starve.elf (arms a 16-cycle STG0_HOLD with an interrupt action, never
+feeds, polls INT_RAW_TIMERS bit 2):
+
+  found=false cycles=2000000 transcript="WDT_ARM\r\n"
+
+The firmware asked for a watchdog timeout and the engine never produced one.
+The old model answered WDTFEED and never latched, so the poll loop ran until
+the harness budget ended.
+
+wdt_feed.elf (same arming, feeds on every loop iteration):
+
+  found=true cycles=440000 transcript="WDT_ARM\r\nWDT_FED_OK\r\n"
+
+This is the failure mode the census calls a green run that models nothing:
+the fed fixture passes on the old engine for the same reason the starved one
+does — no watchdog state exists, so "no timeout" is indistinguishable from
+"timeout correctly avoided".
