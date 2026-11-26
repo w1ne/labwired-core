@@ -272,7 +272,7 @@ fn rv32e_reg_operands(instruction: &Instruction) -> [Option<u8>; 3] {
     }
 }
 
-fn rv32e_uses_high_register(instruction: &Instruction) -> bool {
+pub(crate) fn rv32e_uses_high_register(instruction: &Instruction) -> bool {
     rv32e_reg_operands(instruction)
         .into_iter()
         .flatten()
@@ -326,6 +326,7 @@ pub struct RiscV {
 
     waiting_for_interrupt: bool,
     decode_cache: Box<[Option<RiscVDecodeCacheEntry>; 4096]>,
+    block_cache: super::riscv_block_cache::Rv32BlockCache,
 
     /// Side-effect-free instruction-fetch window over flash-XIP and linear
     /// code memories (`extra_mem` IRAM/ROM). Avoids per-instruction
@@ -411,6 +412,7 @@ impl RiscV {
             triggers: trigger::TriggerModule::default(),
             waiting_for_interrupt: false,
             decode_cache: Box::new([None; 4096]),
+            block_cache: super::riscv_block_cache::Rv32BlockCache::new(),
             fetch_base: 0,
             fetch_len: 0,
             fetch_bytes: [0; FETCH_WINDOW_BYTES],
@@ -501,6 +503,7 @@ impl RiscV {
     /// outside it (the common case: stack/data stores while fetching code).
     #[inline]
     fn invalidate_fetch_if_store_overlaps(&mut self, addr: u32, size: u32) {
+        self.block_cache.invalidate_if_store_overlaps(addr, size);
         if self.fetch_len == 0 || size == 0 {
             return;
         }
@@ -1164,6 +1167,7 @@ impl RiscV {
     fn invalidate_fetch_window(&mut self) {
         self.fetch_len = 0;
         self.fetch_refill_failed_base = None;
+        self.block_cache.invalidate();
     }
 
     fn read_reg(&self, n: u8) -> u32 {
@@ -1399,6 +1403,618 @@ impl RiscV {
     }
 }
 
+#[inline]
+fn pending_schedule_deadline(_bus: &dyn Bus) -> Option<u64> {
+    #[cfg(feature = "event-scheduler")]
+    {
+        if _bus.has_pending_schedule() {
+            return _bus.earliest_pending_deadline();
+        }
+    }
+    None
+}
+
+impl RiscV {
+    /// Would a compiled or cached block that retires `n` instructions from the
+    /// current state step *across* an interrupt the interpreter would have
+    /// taken mid-block? If so the caller interprets the stretch instead, so
+    /// the trap lands at exactly the instruction the interpreter would trap on.
+    ///
+    /// The interpreter's interrupt check ([`RiscV::step`] tail) fires only
+    /// when global `mstatus.MIE` is set. Within one `Machine::run` batch the
+    /// external IRQ lines are stable (peripherals tick only *between* batches),
+    /// so the sole source that can *become* pending mid-block is the internal
+    /// CLINT timer: the block advances `mtime` by exactly `n`, so if that
+    /// crosses `mtimecmp` (with the timer unmasked in `mie`) the MTIP edge —
+    /// and its trap — must be observed inside the block.
+    fn block_would_cross_irq(&self, bus: &dyn Bus, n: u32) -> bool {
+        // Interrupts globally disabled: no trap is taken regardless.
+        if (self.mstatus & (1 << 3)) == 0 {
+            return false;
+        }
+        // Something is already pending (or an external line is asserted): the
+        // interpreter would trap within one instruction. Do not batch past it.
+        if (self.mip & self.mie) != 0 || bus.external_irq_lines() != 0 || self.pfic_ready() {
+            return true;
+        }
+        // Internal timer edge inside the block's mtime span.
+        let timer_unmasked = (self.mie & (1 << 7)) != 0;
+        timer_unmasked && self.cycles_until_mtip().is_some_and(|c| c <= u64::from(n))
+    }
+
+    /// Execute one or more cached decoded basic blocks via [`Rv32BlockCache`]
+    /// (MIT design adapted from `mikroverk/esp32sim` EX265), returning the
+    /// number of instructions retired (`0` if the current PC is not eligible
+    /// for block execution and should fall back to [`Self::step`]).
+    fn try_step_cached_blocks(
+        &mut self,
+        bus: &mut dyn Bus,
+        max_count: u32,
+        exact_clock: bool,
+        batch_start: u64,
+        already_retired: u32,
+    ) -> SimResult<u32> {
+        use super::riscv_block_cache::{
+            FLAG_HAS_MEM, FLAG_HAS_STORE, FLAG_SELF_LOOP, FLAG_VERIFY_ENTRY, MAX_BLOCK_LEN,
+        };
+
+        if max_count == 0 || self.waiting_for_interrupt || self.triggers.armed() {
+            return Ok(0);
+        }
+
+        // Fast guard against cycle-accurate buses and active debug watches.
+        if !bus.block_cache_eligible() {
+            return Ok(0);
+        }
+
+        let mut total_retired: u32 = 0;
+
+        loop {
+            let remaining = max_count - total_retired;
+            if remaining == 0 {
+                break;
+            }
+            if exact_clock {
+                if let Some(dl) = pending_schedule_deadline(bus) {
+                    let now = batch_start.wrapping_add(u64::from(already_retired + total_retired));
+                    if dl <= now {
+                        break;
+                    }
+                }
+            }
+
+            let pc = self.pc;
+            let meta = if let Some(m) = self.block_cache.lookup(pc) {
+                // Re-verify synthetic base-zero flash entry word so debugger
+                // host-patching tests see patched words immediately.
+                if (m.flags & FLAG_VERIFY_ENTRY) != 0
+                    && bus.read_flash_entry_word(pc as u64) != Some(m.entry_word)
+                {
+                    self.block_cache.invalidate();
+                    break;
+                }
+                m
+            } else {
+                // Compile a fresh decoded block from side-effect-free code
+                // memory. Warm the fetch window first so spin/poll fast paths
+                // (`try_spin_window`) also see the live window bytes.
+                if bus.check_fetch_permission(pc as u64) != crate::FetchPermission::Allowed {
+                    break;
+                }
+                self.refill_fetch_window(bus, pc);
+                let Some((code_bytes, writable_code, verify_entry)) =
+                    bus.read_block_cache_code(pc as u64, MAX_BLOCK_LEN * 4)
+                else {
+                    break;
+                };
+
+                // Clamp `code_bytes` before any 256-byte window whose fetch
+                // permission is not `Allowed` (preserves PMS violation traps).
+                let mut allowed_len = code_bytes.len();
+                let start_win = pc & !0xFF;
+                let end_pc = pc.wrapping_add(allowed_len as u32);
+                let mut win = start_win.wrapping_add(0x100);
+                while win > start_win && win < end_pc {
+                    if bus.check_fetch_permission(win as u64) != crate::FetchPermission::Allowed {
+                        allowed_len = (win - pc) as usize;
+                        break;
+                    }
+                    win = win.wrapping_add(0x100);
+                }
+
+                let Some(m) = self.block_cache.compile_block(
+                    pc,
+                    &code_bytes[..allowed_len],
+                    self.core_profile,
+                    writable_code,
+                    verify_entry,
+                ) else {
+                    break;
+                };
+                m
+            };
+
+            let block_len = meta.len as u32;
+            if block_len > remaining {
+                break;
+            }
+            if self.block_would_cross_irq(bus, block_len) {
+                break;
+            }
+            if exact_clock {
+                if let Some(dl) = pending_schedule_deadline(bus) {
+                    let now = batch_start.wrapping_add(u64::from(already_retired + total_retired));
+                    if dl < now.saturating_add(u64::from(block_len)) {
+                        break;
+                    }
+                }
+            }
+
+            let has_mem = (meta.flags & FLAG_HAS_MEM) != 0;
+            let has_store = (meta.flags & FLAG_HAS_STORE) != 0;
+            let is_self_loop = (meta.flags & FLAG_SELF_LOOP) != 0;
+
+            // Temporarily move `block_cache` out or copy the tiny block slice
+            // (<= 32 steps) onto the stack so `self` is free for `load`/`store`.
+            let mut local_steps = [super::riscv_block_cache::DecodedStep {
+                inst: Instruction::Fence,
+                pc: 0,
+                next_pc: 0,
+            }; MAX_BLOCK_LEN];
+            local_steps[..meta.len].copy_from_slice(self.block_cache.steps(meta));
+            let steps = &local_steps[..meta.len];
+
+            // Self-loop tight execution (from `mikroverk/esp32sim` EX265):
+            // repeat the decoded block without re-indexing the cache table
+            // while it jumps back to `meta.tag_pc`, budget permits, and no
+            // interrupt deadline is crossed.
+            let mut streak_retired: u32 = 0;
+            loop {
+                let mut next_pc = meta.tag_pc;
+                let mut broke_early = false;
+                for (idx, step) in steps.iter().enumerate() {
+                    self.pc = step.pc;
+                    next_pc = step.next_pc;
+
+                    if exact_clock && has_mem {
+                        bus.publish_cycle(batch_start.wrapping_add(u64::from(
+                            already_retired + total_retired + streak_retired + idx as u32,
+                        )));
+                    }
+
+                    match step.inst {
+                        Instruction::Lui { rd, imm } => self.write_reg(rd, imm),
+                        Instruction::Auipc { rd, imm } => {
+                            self.write_reg(rd, step.pc.wrapping_add(imm));
+                        }
+                        Instruction::Addi { rd, rs1, imm } => {
+                            let val = self.read_reg(rs1).wrapping_add(imm as u32);
+                            self.write_reg(rd, val);
+                        }
+                        Instruction::Slti { rd, rs1, imm } => {
+                            let val = u32::from((self.read_reg(rs1) as i32) < imm);
+                            self.write_reg(rd, val);
+                        }
+                        Instruction::Sltiu { rd, rs1, imm } => {
+                            let val = u32::from(self.read_reg(rs1) < imm as u32);
+                            self.write_reg(rd, val);
+                        }
+                        Instruction::Xori { rd, rs1, imm } => {
+                            self.write_reg(rd, self.read_reg(rs1) ^ (imm as u32));
+                        }
+                        Instruction::Ori { rd, rs1, imm } => {
+                            self.write_reg(rd, self.read_reg(rs1) | (imm as u32));
+                        }
+                        Instruction::Andi { rd, rs1, imm } => {
+                            self.write_reg(rd, self.read_reg(rs1) & (imm as u32));
+                        }
+                        Instruction::Slli { rd, rs1, shamt } => {
+                            self.write_reg(rd, self.read_reg(rs1) << (shamt & 0x1F));
+                        }
+                        Instruction::Srli { rd, rs1, shamt } => {
+                            self.write_reg(rd, self.read_reg(rs1) >> (shamt & 0x1F));
+                        }
+                        Instruction::Srai { rd, rs1, shamt } => {
+                            self.write_reg(
+                                rd,
+                                ((self.read_reg(rs1) as i32) >> (shamt & 0x1F)) as u32,
+                            );
+                        }
+                        Instruction::Add { rd, rs1, rs2 } => {
+                            self.write_reg(rd, self.read_reg(rs1).wrapping_add(self.read_reg(rs2)));
+                        }
+                        Instruction::Sub { rd, rs1, rs2 } => {
+                            self.write_reg(rd, self.read_reg(rs1).wrapping_sub(self.read_reg(rs2)));
+                        }
+                        Instruction::Sll { rd, rs1, rs2 } => {
+                            let shamt = self.read_reg(rs2) & 0x1F;
+                            self.write_reg(rd, self.read_reg(rs1) << shamt);
+                        }
+                        Instruction::Slt { rd, rs1, rs2 } => {
+                            let val = u32::from(
+                                (self.read_reg(rs1) as i32) < (self.read_reg(rs2) as i32),
+                            );
+                            self.write_reg(rd, val);
+                        }
+                        Instruction::Sltu { rd, rs1, rs2 } => {
+                            let val = u32::from(self.read_reg(rs1) < self.read_reg(rs2));
+                            self.write_reg(rd, val);
+                        }
+                        Instruction::Xor { rd, rs1, rs2 } => {
+                            self.write_reg(rd, self.read_reg(rs1) ^ self.read_reg(rs2));
+                        }
+                        Instruction::Srl { rd, rs1, rs2 } => {
+                            let shamt = self.read_reg(rs2) & 0x1F;
+                            self.write_reg(rd, self.read_reg(rs1) >> shamt);
+                        }
+                        Instruction::Sra { rd, rs1, rs2 } => {
+                            let shamt = self.read_reg(rs2) & 0x1F;
+                            self.write_reg(rd, ((self.read_reg(rs1) as i32) >> shamt) as u32);
+                        }
+                        Instruction::Or { rd, rs1, rs2 } => {
+                            self.write_reg(rd, self.read_reg(rs1) | self.read_reg(rs2));
+                        }
+                        Instruction::And { rd, rs1, rs2 } => {
+                            self.write_reg(rd, self.read_reg(rs1) & self.read_reg(rs2));
+                        }
+                        Instruction::Fence => {}
+                        Instruction::Mul { rd, rs1, rs2 } => {
+                            self.write_reg(rd, self.read_reg(rs1).wrapping_mul(self.read_reg(rs2)));
+                        }
+                        Instruction::Mulh { rd, rs1, rs2 } => {
+                            let a = self.read_reg(rs1) as i32 as i64;
+                            let b = self.read_reg(rs2) as i32 as i64;
+                            self.write_reg(rd, ((a.wrapping_mul(b)) >> 32) as u32);
+                        }
+                        Instruction::Mulhsu { rd, rs1, rs2 } => {
+                            let a = self.read_reg(rs1) as i32 as i64 as u64;
+                            let b = self.read_reg(rs2) as u64;
+                            self.write_reg(rd, ((a.wrapping_mul(b)) >> 32) as u32);
+                        }
+                        Instruction::Mulhu { rd, rs1, rs2 } => {
+                            let a = self.read_reg(rs1) as u64;
+                            let b = self.read_reg(rs2) as u64;
+                            self.write_reg(rd, ((a.wrapping_mul(b)) >> 32) as u32);
+                        }
+                        Instruction::Div { rd, rs1, rs2 } => {
+                            let dividend = self.read_reg(rs1) as i32;
+                            let divisor = self.read_reg(rs2) as i32;
+                            let res = if divisor == 0 {
+                                -1
+                            } else if dividend == i32::MIN && divisor == -1 {
+                                dividend
+                            } else {
+                                dividend / divisor
+                            };
+                            self.write_reg(rd, res as u32);
+                        }
+                        Instruction::Divu { rd, rs1, rs2 } => {
+                            let res = self
+                                .read_reg(rs1)
+                                .checked_div(self.read_reg(rs2))
+                                .unwrap_or(u32::MAX);
+                            self.write_reg(rd, res);
+                        }
+                        Instruction::Rem { rd, rs1, rs2 } => {
+                            let dividend = self.read_reg(rs1) as i32;
+                            let divisor = self.read_reg(rs2) as i32;
+                            let res = if divisor == 0 {
+                                dividend
+                            } else if dividend == i32::MIN && divisor == -1 {
+                                0
+                            } else {
+                                dividend % divisor
+                            };
+                            self.write_reg(rd, res as u32);
+                        }
+                        Instruction::Remu { rd, rs1, rs2 } => {
+                            let dividend = self.read_reg(rs1);
+                            let divisor = self.read_reg(rs2);
+                            let res = if divisor == 0 {
+                                dividend
+                            } else {
+                                dividend % divisor
+                            };
+                            self.write_reg(rd, res);
+                        }
+                        Instruction::CAddi { rd, imm } => {
+                            if rd != 0 {
+                                let res = self.read_reg(rd).wrapping_add(imm as u32);
+                                self.write_reg(rd, res);
+                            }
+                        }
+                        Instruction::CLi { rd, imm } => {
+                            if rd != 0 {
+                                self.write_reg(rd, imm as u32);
+                            }
+                        }
+                        Instruction::CMv { rd, rs2 } => {
+                            if rd != 0 {
+                                let val = self.read_reg(rs2);
+                                self.write_reg(rd, val);
+                            }
+                        }
+                        Instruction::CAddi16sp { imm } => {
+                            let sp = self.read_reg(2);
+                            self.write_reg(2, sp.wrapping_add(imm as u32));
+                        }
+                        Instruction::CAddi4spn { rd, imm } => {
+                            let sp = self.read_reg(2);
+                            self.write_reg(rd, sp.wrapping_add(imm));
+                        }
+                        Instruction::CSli { rd, shamt } => {
+                            if rd != 0 {
+                                let res = self.read_reg(rd).wrapping_shl(u32::from(shamt));
+                                self.write_reg(rd, res);
+                            }
+                        }
+                        Instruction::Lb { rd, rs1, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm as u32);
+                            match self.load(bus, addr, 1) {
+                                Ok(v) => self.write_reg(rd, (v as u8 as i8) as i32 as u32),
+                                Err(e) => {
+                                    self.update_mtime_after_elapsed_cycles(u64::from(
+                                        streak_retired + idx as u32,
+                                    ));
+                                    return Err(e);
+                                }
+                            }
+                        }
+                        Instruction::Lh { rd, rs1, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm as u32);
+                            match self.load(bus, addr, 2) {
+                                Ok(v) => self.write_reg(rd, (v as u16 as i16) as i32 as u32),
+                                Err(e) => {
+                                    self.update_mtime_after_elapsed_cycles(u64::from(
+                                        streak_retired + idx as u32,
+                                    ));
+                                    return Err(e);
+                                }
+                            }
+                        }
+                        Instruction::Lw { rd, rs1, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm as u32);
+                            match self.load(bus, addr, 4) {
+                                Ok(v) => self.write_reg(rd, v),
+                                Err(e) => {
+                                    self.update_mtime_after_elapsed_cycles(u64::from(
+                                        streak_retired + idx as u32,
+                                    ));
+                                    return Err(e);
+                                }
+                            }
+                        }
+                        Instruction::Lbu { rd, rs1, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm as u32);
+                            match self.load(bus, addr, 1) {
+                                Ok(v) => self.write_reg(rd, v),
+                                Err(e) => {
+                                    self.update_mtime_after_elapsed_cycles(u64::from(
+                                        streak_retired + idx as u32,
+                                    ));
+                                    return Err(e);
+                                }
+                            }
+                        }
+                        Instruction::Lhu { rd, rs1, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm as u32);
+                            match self.load(bus, addr, 2) {
+                                Ok(v) => self.write_reg(rd, v),
+                                Err(e) => {
+                                    self.update_mtime_after_elapsed_cycles(u64::from(
+                                        streak_retired + idx as u32,
+                                    ));
+                                    return Err(e);
+                                }
+                            }
+                        }
+                        Instruction::CLw { rd, rs1, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm);
+                            match self.load(bus, addr, 4) {
+                                Ok(v) => self.write_reg(rd, v),
+                                Err(e) => {
+                                    self.update_mtime_after_elapsed_cycles(u64::from(
+                                        streak_retired + idx as u32,
+                                    ));
+                                    return Err(e);
+                                }
+                            }
+                        }
+                        Instruction::CLwsp { rd, imm } => {
+                            let addr = self.read_reg(2).wrapping_add(imm);
+                            match self.load(bus, addr, 4) {
+                                Ok(v) => self.write_reg(rd, v),
+                                Err(e) => {
+                                    self.update_mtime_after_elapsed_cycles(u64::from(
+                                        streak_retired + idx as u32,
+                                    ));
+                                    return Err(e);
+                                }
+                            }
+                        }
+                        Instruction::Sb { rs1, rs2, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm as u32);
+                            let val = self.read_reg(rs2);
+                            if let Err(e) = self.store(bus, addr, 1, val) {
+                                self.update_mtime_after_elapsed_cycles(u64::from(
+                                    streak_retired + idx as u32,
+                                ));
+                                return Err(e);
+                            }
+                            self.invalidate_fetch_if_store_overlaps(addr, 1);
+                            self.reservation = None;
+                            if exact_clock && pending_schedule_deadline(bus).is_some() {
+                                self.pc = next_pc;
+                                streak_retired += idx as u32 + 1;
+                                broke_early = true;
+                                break;
+                            }
+                        }
+                        Instruction::Sh { rs1, rs2, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm as u32);
+                            let val = self.read_reg(rs2);
+                            if let Err(e) = self.store(bus, addr, 2, val) {
+                                self.update_mtime_after_elapsed_cycles(u64::from(
+                                    streak_retired + idx as u32,
+                                ));
+                                return Err(e);
+                            }
+                            self.invalidate_fetch_if_store_overlaps(addr, 2);
+                            self.reservation = None;
+                            if exact_clock && pending_schedule_deadline(bus).is_some() {
+                                self.pc = next_pc;
+                                streak_retired += idx as u32 + 1;
+                                broke_early = true;
+                                break;
+                            }
+                        }
+                        Instruction::Sw { rs1, rs2, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm as u32);
+                            let val = self.read_reg(rs2);
+                            if let Err(e) = self.store(bus, addr, 4, val) {
+                                self.update_mtime_after_elapsed_cycles(u64::from(
+                                    streak_retired + idx as u32,
+                                ));
+                                return Err(e);
+                            }
+                            self.invalidate_fetch_if_store_overlaps(addr, 4);
+                            self.reservation = None;
+                            if exact_clock && pending_schedule_deadline(bus).is_some() {
+                                self.pc = next_pc;
+                                streak_retired += idx as u32 + 1;
+                                broke_early = true;
+                                break;
+                            }
+                        }
+                        Instruction::CSw { rs2, rs1, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm);
+                            let val = self.read_reg(rs2);
+                            if let Err(e) = self.store(bus, addr, 4, val) {
+                                self.update_mtime_after_elapsed_cycles(u64::from(
+                                    streak_retired + idx as u32,
+                                ));
+                                return Err(e);
+                            }
+                            self.invalidate_fetch_if_store_overlaps(addr, 4);
+                            self.reservation = None;
+                            if exact_clock && pending_schedule_deadline(bus).is_some() {
+                                self.pc = next_pc;
+                                streak_retired += idx as u32 + 1;
+                                broke_early = true;
+                                break;
+                            }
+                        }
+                        Instruction::CSwsp { rs2, imm } => {
+                            let addr = self.read_reg(2).wrapping_add(imm);
+                            let val = self.read_reg(rs2);
+                            if let Err(e) = self.store(bus, addr, 4, val) {
+                                self.update_mtime_after_elapsed_cycles(u64::from(
+                                    streak_retired + idx as u32,
+                                ));
+                                return Err(e);
+                            }
+                            self.invalidate_fetch_if_store_overlaps(addr, 4);
+                            self.reservation = None;
+                            if exact_clock && pending_schedule_deadline(bus).is_some() {
+                                self.pc = next_pc;
+                                streak_retired += idx as u32 + 1;
+                                broke_early = true;
+                                break;
+                            }
+                        }
+                        Instruction::Jal { rd, imm } => {
+                            let target = step.pc.wrapping_add(imm as u32);
+                            self.write_reg(rd, step.next_pc);
+                            next_pc = target;
+                        }
+                        Instruction::Jalr { rd, rs1, imm } => {
+                            let target = self.read_reg(rs1).wrapping_add(imm as u32) & !1;
+                            self.write_reg(rd, step.next_pc);
+                            next_pc = target;
+                        }
+                        Instruction::Beq { rs1, rs2, imm } => {
+                            if self.read_reg(rs1) == self.read_reg(rs2) {
+                                next_pc = step.pc.wrapping_add(imm as u32);
+                            }
+                        }
+                        Instruction::Bne { rs1, rs2, imm } => {
+                            if self.read_reg(rs1) != self.read_reg(rs2) {
+                                next_pc = step.pc.wrapping_add(imm as u32);
+                            }
+                        }
+                        Instruction::Blt { rs1, rs2, imm } => {
+                            if (self.read_reg(rs1) as i32) < (self.read_reg(rs2) as i32) {
+                                next_pc = step.pc.wrapping_add(imm as u32);
+                            }
+                        }
+                        Instruction::Bge { rs1, rs2, imm } => {
+                            if (self.read_reg(rs1) as i32) >= (self.read_reg(rs2) as i32) {
+                                next_pc = step.pc.wrapping_add(imm as u32);
+                            }
+                        }
+                        Instruction::Bltu { rs1, rs2, imm } => {
+                            if self.read_reg(rs1) < self.read_reg(rs2) {
+                                next_pc = step.pc.wrapping_add(imm as u32);
+                            }
+                        }
+                        Instruction::Bgeu { rs1, rs2, imm } => {
+                            if self.read_reg(rs1) >= self.read_reg(rs2) {
+                                next_pc = step.pc.wrapping_add(imm as u32);
+                            }
+                        }
+                        Instruction::CJr { rs1 } => {
+                            next_pc = self.read_reg(rs1) & !1;
+                        }
+                        Instruction::CJalr { rs1 } => {
+                            let target = self.read_reg(rs1) & !1;
+                            self.write_reg(1, step.pc.wrapping_add(2));
+                            next_pc = target;
+                        }
+                        Instruction::CJ { imm } => {
+                            next_pc = step.pc.wrapping_add(imm as u32);
+                        }
+                        Instruction::CBeqz { rs1, imm } => {
+                            if self.read_reg(rs1) == 0 {
+                                next_pc = step.pc.wrapping_add(imm as u32);
+                            }
+                        }
+                        Instruction::CBnez { rs1, imm } => {
+                            if self.read_reg(rs1) != 0 {
+                                next_pc = step.pc.wrapping_add(imm as u32);
+                            }
+                        }
+                        _ => unreachable!("unsupported instruction in Rv32BlockCache"),
+                    }
+                }
+
+                if !broke_early {
+                    self.pc = next_pc;
+                    streak_retired += block_len;
+                }
+
+                // Stay inside the decoded self-loop if the branch jumped back
+                // to `meta.tag_pc` and no store/deadline/IRQ forces an exit.
+                if !broke_early
+                    && is_self_loop
+                    && !has_store
+                    && next_pc == meta.tag_pc
+                    && (max_count - total_retired - streak_retired) >= block_len
+                    && !self.block_would_cross_irq(bus, streak_retired + block_len)
+                    && !(exact_clock && pending_schedule_deadline(bus).is_some())
+                {
+                    continue;
+                }
+                break;
+            }
+
+            self.update_mtime_after_elapsed_cycles(u64::from(streak_retired));
+            total_retired += streak_retired;
+        }
+
+        Ok(total_retired)
+    }
+}
+
 /// Chunk H: RV32IMC wasm-JIT dispatch helpers for `Machine<RiscV>`.
 ///
 /// These drive the [`RiscvJitEngine`](crate::cpu::jit_framework::riscv::RiscvJitEngine)
@@ -1456,33 +2072,6 @@ impl RiscV {
         true
     }
 
-    /// Would a compiled block that retires `n` instructions from the current
-    /// state step *across* an interrupt the interpreter would have taken
-    /// mid-block? If so the caller interprets the stretch instead, so the
-    /// trap lands at exactly the instruction the interpreter would trap on.
-    ///
-    /// The interpreter's interrupt check ([`RiscV::step`] tail) fires only
-    /// when global `mstatus.MIE` is set. Within one `Machine::run` batch the
-    /// external IRQ lines are stable (peripherals tick only *between* batches),
-    /// so the sole source that can *become* pending mid-block is the internal
-    /// CLINT timer: the block advances `mtime` by exactly `n`, so if that
-    /// crosses `mtimecmp` (with the timer unmasked in `mie`) the MTIP edge —
-    /// and its trap — must be observed inside the block.
-    fn block_would_cross_irq(&self, bus: &dyn Bus, n: u32) -> bool {
-        // Interrupts globally disabled: no trap is taken regardless.
-        if (self.mstatus & (1 << 3)) == 0 {
-            return false;
-        }
-        // Something is already pending (or an external line is asserted): the
-        // interpreter would trap within one instruction. Do not batch past it.
-        if (self.mip & self.mie) != 0 || bus.external_irq_lines() != 0 || self.pfic_ready() {
-            return true;
-        }
-        // Internal timer edge inside the block's mtime span.
-        let timer_unmasked = (self.mie & (1 << 7)) != 0;
-        timer_unmasked && self.cycles_until_mtip().is_some_and(|c| c <= u64::from(n))
-    }
-
     /// Drive one batch through the JIT engine, returning the true retired
     /// instruction count (never past `max_count`). The engine is moved out of
     /// `self` for the duration so its methods can borrow `self.x` / `self.pc`
@@ -1526,6 +2115,13 @@ impl RiscV {
         let exact_clock = cfg!(feature = "event-scheduler") && config.peripheral_tick_interval > 1;
         let batch_start = if exact_clock { bus.current_cycle() } else { 0 };
 
+        let flush_jit_ram = |engine: &mut crate::cpu::jit_framework::riscv::RiscvJitEngine,
+                             bus: &mut dyn Bus| {
+            if let Some(ram) = bus.ram_data_mut() {
+                engine.flush_ram(ram);
+            }
+        };
+
         let mut retired: u32 = 0;
         while retired < max_count {
             if exact_clock {
@@ -1545,6 +2141,7 @@ impl RiscV {
                         || self.triggers.armed()
                         || self.block_would_cross_irq(bus, n);
                     if must_interpret {
+                        flush_jit_ram(engine, bus);
                         self.step(bus, observers, config)?;
                         engine.note_interpreted();
                         retired += 1;
@@ -1552,7 +2149,7 @@ impl RiscV {
                         bus.as_any_mut().and_then(|a| a.downcast_mut::<SystemBus>())
                     {
                         let (actual_n, next_pc, clear_reservation, needs_interp) =
-                            engine.run_ready(pc, &mut self.x, &mut sb.ram.data);
+                            engine.run_ready_batched(pc, &mut self.x, &mut sb.ram.data);
                         if clear_reservation {
                             self.reservation = None;
                         }
@@ -1570,6 +2167,7 @@ impl RiscV {
                         // Entry-instruction memory fault: nothing retired and
                         // the PC did not move — interpret one for progress.
                         if actual_n == 0 && needs_interp {
+                            flush_jit_ram(engine, bus);
                             self.step(bus, observers, config)?;
                             engine.note_interpreted();
                             retired += 1;
@@ -1577,12 +2175,14 @@ impl RiscV {
                     } else {
                         // Not a `SystemBus` (never happens in production): fall
                         // back to the interpreter for this instruction.
+                        flush_jit_ram(engine, bus);
                         self.step(bus, observers, config)?;
                         engine.note_interpreted();
                         retired += 1;
                     }
                 }
                 Lookup::Interpret { promote } => {
+                    flush_jit_ram(engine, bus);
                     if promote {
                         if let Some(sb) = bus.as_any().and_then(|a| a.downcast_ref::<SystemBus>()) {
                             engine.try_compile_from_bus(pc, sb);
@@ -1599,19 +2199,21 @@ impl RiscV {
                 && self.waiting_for_interrupt
                 && self.idle_fast_forward_budget(bus).is_some()
             {
+                flush_jit_ram(engine, bus);
                 return Ok(retired);
             }
             // Mirror the interpreter's Gap #1 deadline clamp (see `step_batch`).
-            #[cfg(feature = "event-scheduler")]
-            if config.peripheral_tick_interval > 1 && bus.has_pending_schedule() {
-                if let Some(dl) = bus.earliest_pending_deadline() {
+            if config.peripheral_tick_interval > 1 {
+                if let Some(dl) = pending_schedule_deadline(bus) {
                     let max_ret = dl.saturating_sub(batch_start);
                     if (retired as u64) >= max_ret {
+                        flush_jit_ram(engine, bus);
                         return Ok(retired);
                     }
                 }
             }
         }
+        flush_jit_ram(engine, bus);
         Ok(retired)
     }
 
@@ -2459,6 +3061,7 @@ impl Cpu for RiscV {
         // view. Once the loop head is reached the fast path consumes the rest
         // of the batch; non-poll code pays only three cold decode probes.
         let mut masked_poll_probes = 3u8;
+        let block_cache_ok = config.decode_cache_enabled && observers.is_empty() && tap.is_none();
         while i < limit {
             if i != 0 && masked_poll_probes != 0 && limit - i >= 4 {
                 masked_poll_probes -= 1;
@@ -2468,6 +3071,26 @@ impl Cpu for RiscV {
                     i += retired;
                     if exact_clock {
                         bus.publish_cycle(batch_start + u64::from(i - 1));
+                    }
+                    continue;
+                }
+            }
+            if block_cache_ok && limit - i >= 2 {
+                let retired =
+                    self.try_step_cached_blocks(bus, limit - i, exact_clock, batch_start, i)?;
+                if retired != 0 {
+                    i += retired;
+                    if exact_clock {
+                        bus.publish_cycle(batch_start + u64::from(i - 1));
+                        if let Some(dl) = pending_schedule_deadline(bus) {
+                            let max_ret = dl.saturating_sub(batch_start);
+                            if (i as u64) >= max_ret {
+                                return Ok(i);
+                            }
+                            if max_ret < u32::MAX as u64 {
+                                limit = limit.min(max_ret as u32);
+                            }
+                        }
                     }
                     continue;
                 }
@@ -2491,9 +3114,8 @@ impl Cpu for RiscV {
             if tap.as_ref().is_some_and(|t| t.batch_stop_hit()) {
                 return Ok(i);
             }
-            #[cfg(feature = "event-scheduler")]
-            if exact_clock && bus.has_pending_schedule() {
-                if let Some(dl) = bus.earliest_pending_deadline() {
+            if exact_clock {
+                if let Some(dl) = pending_schedule_deadline(bus) {
                     // After `i` instructions, total_cycles will be batch_start+i.
                     // Do not advance total_cycles past `dl` before drain enqueues.
                     let max_ret = dl.saturating_sub(batch_start);

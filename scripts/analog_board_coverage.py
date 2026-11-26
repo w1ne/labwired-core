@@ -33,6 +33,12 @@ PROFILE_REF = re.compile(r"configs/systems/([\w./-]+)\.ya?ml")
 EXAMPLE_REF = re.compile(r"examples/([\w./-]+)/analog-[\w.-]+\.ya?ml")
 ADC_ROUTE = re.compile(r"adc\.[A-Za-z0-9_]+\.\d+_volts")
 ANALOG_ROUTE = "board.analog."
+# One flow-style pin-table entry that names an ADC function:
+#   PA0: { gpio: gpioa, bit: 0, functions: [{ type: adc, peripheral: adc1, channel: 5 }, ...] }
+ADC_PIN_FUNCTION = re.compile(
+    r"^\s+\"?([A-Za-z0-9_.]+)\"?\s*:\s*\{[^\n]*\btype:\s*\"?adc\"?[^\n]*\bchannel:\s*(\d+)",
+    re.MULTILINE,
+)
 
 
 def profiles() -> list[tuple[str, Path]]:
@@ -61,14 +67,28 @@ def read_chip(path: Path) -> Path | None:
 
 
 def analog_pad_count(chip: Path | None) -> int:
+    """Pads this chip can hand to an ADC, from either table that may name one.
+
+    `analog_pins:` is the dedicated block. A chip that transcribes its pin
+    table can instead (or as well) record `{ type: adc, peripheral, channel }`
+    in a pad's `functions:` list — that is the list the analog router reads
+    (`ChipDescriptor::analog_pin_table`), so a pad named there is reachable
+    without a duplicate block. Counting both keeps this inventory and the
+    engine's answer to "can this pad reach an ADC?" the same number.
+    """
     if chip is None or not chip.is_file():
         return 0
     text = chip.read_text(encoding="utf-8", errors="replace")
+    pads: set[str] = set()
     match = re.search(r"^analog_pins:\n((?:[ \t]+.*\n)+)", text, re.MULTILINE)
-    if not match:
-        return 0
-    # Pad labels are not all `PA0`: nRF parts use `P0.02` and friends.
-    return len(re.findall(r"^\s+[A-Za-z0-9_.]+\s*:\s*\{", match.group(1), re.MULTILINE))
+    if match:
+        # Pad labels are not all `PA0`: nRF parts use `P0.02` and friends.
+        pads.update(
+            re.findall(r"^\s+([A-Za-z0-9_.]+)\s*:\s*\{", match.group(1), re.MULTILINE)
+        )
+    for pad, _channel in ADC_PIN_FUNCTION.findall(text):
+        pads.add(pad)
+    return len(pads)
 
 
 def resolve_profile_keys() -> tuple[dict[str, Path], list[str]]:
@@ -174,8 +194,8 @@ def report() -> str:
         "`CosimSession` that loads that profile (or one of its",
         "`examples/<dir>/analog-*.yaml` decks) and reaches an endpoint route the",
         "manifest declares: `board.analog.<pad>_volts`, which the chip's",
-        "`analog_pins:` map resolves to an ADC channel or a voltage-thresholded",
-        "digital pad, or an explicit `adc.<peripheral>.<channel>_volts` route.",
+        "`analog_pins:` map or the pad's `adc` pin function resolves to an ADC",
+        "channel, or an explicit `adc.<peripheral>.<channel>_volts` route.",
         "Device-only unit tests, ADC register tests with no netlist, files that only",
         "list fixture paths, and helper tests do not count: they prove the model,",
         "not the board.",
@@ -183,15 +203,18 @@ def report() -> str:
         f"- Profiles in `configs/systems/`: **{len(rows)}**",
         f"- Covered end to end: **{len(covered)}**",
         f"- Not covered: **{len(uncovered)}**",
-        f"- Not covered but with an `analog_pins:` map: **{len(routable)}** (these are the",
+        f"- Not covered but with an ADC pad map: **{len(routable)}** (these are the",
         "  boards the generic NTC and diode decks can reach next; the rest need an",
-        "  `analog_pins:` map, an ADC model, or a digital endpoint first)",
+        "  `analog_pins:` block or `adc` pin functions, an ADC model, or a digital",
+        "  endpoint first)",
         "",
-        "The `Analog pad map` column counts `analog_pins:` entries in the chip",
-        "descriptor. Every such entry in this tree names an ADC peripheral, so the",
-        "count is what the generic decks can reach without new routing.",
+        "The `Analog pad map` column counts the pads a chip can hand to an ADC:\n"
+        "`analog_pins:` entries plus pads whose `pins:` table carries an\n"
+        "`{ type: adc, peripheral, channel }` function (the union the router uses).\n"
+        "Every such entry in this tree names an ADC peripheral, so the count is what\n"
+        "the generic decks can reach without new routing.",
         "",
-        "## Next queue: not covered, `analog_pins:` map already present",
+        "## Next queue: not covered, ADC pads already mapped",
         "",
     ]
     if routable:

@@ -286,6 +286,25 @@ pub struct EngineStats {
     pub interpreted: u64,
 }
 
+/// Shared-memory compiled block held inside [`RiscvJitEngine`].
+///
+/// Unlike standalone [`CompiledBlock`] (which owns its own `Store` and
+/// `Memory`), every `SharedCompiledBlock` shares ONE `wasmtime::Store` and ONE
+/// `wasmtime::Memory` owned by [`RiscvJitEngine`]. Guest RAM is synced into
+/// that shared memory ONCE per contiguous JIT streak and flushed back ONCE on
+/// interpreter exit — eliminating the per-block full-RAM memcpy that previously
+/// copied 800 KiB–1 MiB per block on ESP32-C3/P4 SRAM.
+///
+/// Persistent-memory execution model inspired by `mikroverk/esp32sim`
+/// (`riscv-rv32/src/jit.rs`, MIT License).
+struct SharedCompiledBlock {
+    run: TypedFunc<(), i32>,
+    end_pc: Pc,
+    instr_count: u32,
+    ram_len: usize,
+    has_store: bool,
+}
+
 /// A minimal RISC-V dispatch engine: block-cache promotion + the
 /// [`RiscVFrontend`] emitter + the `wasmtime` executor, driving a
 /// `Machine<RiscV>` one *unit* (a compiled-block run or a single interpreted
@@ -300,8 +319,12 @@ pub struct EngineStats {
 pub struct RiscvJitEngine {
     frontend: RiscVFrontend,
     jit: RiscvWasmJit,
-    cache: BlockCache<CompiledBlock>,
+    store: Store<()>,
+    shared_mem: Memory,
+    cache: BlockCache<SharedCompiledBlock>,
     stats: EngineStats,
+    ram_synced_len: usize,
+    ram_dirty: bool,
 }
 
 impl std::fmt::Debug for RiscvJitEngine {
@@ -318,17 +341,201 @@ impl std::fmt::Debug for RiscvJitEngine {
 impl RiscvJitEngine {
     /// New engine with the given hot-promotion threshold.
     pub fn new(hot_threshold: u32) -> Self {
+        let jit = RiscvWasmJit::new();
+        let mut store = Store::new(&jit.engine, ());
+        let shared_mem =
+            Memory::new(&mut store, MemoryType::new(1, None)).expect("create shared jit memory");
         Self {
             frontend: RiscVFrontend::new(),
-            jit: RiscvWasmJit::new(),
+            jit,
+            store,
+            shared_mem,
             cache: BlockCache::new(hot_threshold),
             stats: EngineStats::default(),
+            ram_synced_len: 0,
+            ram_dirty: false,
         }
     }
 
     /// Accumulated statistics.
     pub fn stats(&self) -> EngineStats {
         self.stats
+    }
+
+    /// Ensure the shared wasm linear memory has enough pages to cover
+    /// `RAM_WINDOW_OFF + ram_len`.
+    fn ensure_shared_mem_capacity(&mut self, ram_len: usize) -> bool {
+        const WASM_PAGE_BYTES: usize = 65_536;
+        let total_bytes = (RAM_WINDOW_OFF as usize).saturating_add(ram_len).max(1);
+        let cur_bytes = self.shared_mem.data_size(&self.store);
+        if total_bytes <= cur_bytes {
+            return true;
+        }
+        let needed_pages = total_bytes.div_ceil(WASM_PAGE_BYTES) as u64;
+        let cur_pages = (cur_bytes / WASM_PAGE_BYTES) as u64;
+        let delta = needed_pages.saturating_sub(cur_pages);
+        if delta == 0 {
+            return true;
+        }
+        self.shared_mem.grow(&mut self.store, delta).is_ok()
+    }
+
+    /// Compile and instantiate a block against this engine's shared `Store`
+    /// and `Memory`.
+    fn compile_shared(
+        &mut self,
+        plan: &BlockPlan,
+        binding: Option<MemBinding>,
+    ) -> Option<SharedCompiledBlock> {
+        if plan.is_stub() {
+            return None;
+        }
+        let module = Module::new(&self.jit.engine, &plan.code).ok()?;
+        let (ram_len, has_store) = match binding {
+            Some(b) => (b.ram_len, b.has_store),
+            None => (0usize, false),
+        };
+        if !self.ensure_shared_mem_capacity(ram_len) {
+            return None;
+        }
+        let instance = Instance::new(&mut self.store, &module, &[self.shared_mem.into()]).ok()?;
+        let run = instance
+            .get_typed_func::<(), i32>(&mut self.store, "run")
+            .ok()?;
+        Some(SharedCompiledBlock {
+            run,
+            end_pc: plan.end_pc,
+            instr_count: plan.instr_count,
+            ram_len,
+            has_store,
+        })
+    }
+
+    /// Execute `block` against `self.shared_mem`, loading guest RAM into
+    /// `self.shared_mem` lazily on the first memory-using block of a streak
+    /// and leaving it resident until [`flush_ram`](Self::flush_ram) is called.
+    fn run_shared_inner(
+        &mut self,
+        pc: Pc,
+        x: &mut [u32; 32],
+        ram: &mut [u8],
+    ) -> (SideExit, u32, bool) {
+        let (run, end_pc, instr_count, ram_len, has_store) = {
+            let block = self.cache.run_artifact(pc).expect("run_ready on a hot PC");
+            (
+                block.run.clone(),
+                block.end_pc,
+                block.instr_count,
+                block.ram_len,
+                block.has_store,
+            )
+        };
+
+        let ram_n = ram_len.min(ram.len());
+        if ram_n > 0 && self.ram_synced_len != ram_n {
+            if self.ram_synced_len > 0 && self.ram_dirty {
+                let prev_n = self.ram_synced_len.min(ram.len());
+                let ram_off = RAM_WINDOW_OFF as usize;
+                let mem = self.shared_mem.data(&self.store);
+                ram[..prev_n].copy_from_slice(&mem[ram_off..ram_off + prev_n]);
+                self.ram_dirty = false;
+            }
+            let ram_off = RAM_WINDOW_OFF as usize;
+            let mem = self.shared_mem.data_mut(&mut self.store);
+            mem[ram_off..ram_off + ram_n].copy_from_slice(&ram[..ram_n]);
+            self.ram_synced_len = ram_n;
+        }
+
+        // Direct slice write for the 128-byte register file + reservation flag
+        // clear (no per-call `Memory::write` wrapper overhead).
+        {
+            let mem = self.shared_mem.data_mut(&mut self.store);
+            for (i, &v) in x.iter().enumerate() {
+                let off = i * 4;
+                mem[off..off + 4].copy_from_slice(&v.to_le_bytes());
+            }
+            if ram_len > 0 && has_store {
+                let r_off = RES_FLAG_SLOT as usize;
+                mem[r_off..r_off + 4].fill(0);
+            }
+        }
+
+        let wire = run
+            .call(&mut self.store, ())
+            .expect("compiled block never traps");
+
+        let (exit, n, clear_reservation) = {
+            let mem = self.shared_mem.data(&self.store);
+            for (i, dst) in x.iter_mut().enumerate().skip(1) {
+                let off = i * 4;
+                *dst = u32::from_le_bytes([mem[off], mem[off + 1], mem[off + 2], mem[off + 3]]);
+            }
+            x[0] = 0;
+
+            let clear_res = if ram_len > 0 && has_store {
+                let r_off = RES_FLAG_SLOT as usize;
+                u32::from_le_bytes([mem[r_off], mem[r_off + 1], mem[r_off + 2], mem[r_off + 3]])
+                    != 0
+            } else {
+                false
+            };
+
+            let (exit, n) = match wire {
+                WIRE_FALL_THROUGH => (SideExit::Chain { next_pc: end_pc }, instr_count),
+                WIRE_CHAIN_DYNAMIC => {
+                    let s = NEXT_PC_SLOT as usize;
+                    let next_pc =
+                        u32::from_le_bytes([mem[s], mem[s + 1], mem[s + 2], mem[s + 3]]) as Pc;
+                    (SideExit::Chain { next_pc }, instr_count)
+                }
+                WIRE_MEM_FAULT => {
+                    let fp = FAULT_PC_SLOT as usize;
+                    let fr = FAULT_RETIRED_SLOT as usize;
+                    let resume_pc =
+                        u32::from_le_bytes([mem[fp], mem[fp + 1], mem[fp + 2], mem[fp + 3]]) as Pc;
+                    let retired =
+                        u32::from_le_bytes([mem[fr], mem[fr + 1], mem[fr + 2], mem[fr + 3]]);
+                    (
+                        SideExit::EnterInterpreter {
+                            resume_pc,
+                            reason: BailReason::MemoryFault,
+                        },
+                        retired,
+                    )
+                }
+                _ => (
+                    SideExit::EnterInterpreter {
+                        resume_pc: end_pc,
+                        reason: BailReason::PartialBlock,
+                    },
+                    instr_count,
+                ),
+            };
+            (exit, n, clear_res)
+        };
+
+        if clear_reservation && ram_n > 0 {
+            self.ram_dirty = true;
+        }
+
+        (exit, n, clear_reservation)
+    }
+
+    /// Flush any dirty guest RAM held in the shared JIT linear memory back to
+    /// `ram` and end the current resident-RAM streak. Must be called before
+    /// any interpreter instruction runs or when leaving `run_jit_loop`.
+    #[inline]
+    pub fn flush_ram(&mut self, ram: &mut [u8]) {
+        if self.ram_synced_len > 0 {
+            if self.ram_dirty {
+                let n = self.ram_synced_len.min(ram.len());
+                let ram_off = RAM_WINDOW_OFF as usize;
+                let mem = self.shared_mem.data(&self.store);
+                ram[..n].copy_from_slice(&mem[ram_off..ram_off + n]);
+                self.ram_dirty = false;
+            }
+            self.ram_synced_len = 0;
+        }
     }
 
     // ── Production dispatch primitives (chunk H) ──────────────────────────
@@ -355,29 +562,17 @@ impl RiscvJitEngine {
         self.cache.peek(pc).map(|b| b.instr_count)
     }
 
-    /// Run the compiled block installed at `pc` against the guest register
-    /// file `x` and guest-RAM window `ram`, mutating both in place. Returns
-    /// `(retired, next_pc, clear_reservation, needs_interpreter)`:
-    ///
-    /// * `retired` — guest instructions the block actually retired (`0` on an
-    ///   entry-instruction memory fault).
-    /// * `next_pc` — the PC the machine must continue from.
-    /// * `clear_reservation` — an inline store executed; caller clears
-    ///   `cpu.reservation`.
-    /// * `needs_interpreter` — the exit is a bail (memory fault / partial);
-    ///   with `retired == 0` the caller interprets one instruction to
-    ///   guarantee forward progress.
-    ///
-    /// Panics only if `pc` is not a ready block (the caller guarantees it via
-    /// a preceding [`observe`](Self::observe) == [`Lookup::Ready`]).
-    pub fn run_ready(
+    /// Run the compiled block installed at `pc` keeping guest RAM resident in
+    /// the shared JIT memory across consecutive compiled blocks. Caller MUST
+    /// call [`flush_ram`](Self::flush_ram) before running any interpreter
+    /// instruction or returning from the batch.
+    pub fn run_ready_batched(
         &mut self,
         pc: Pc,
         x: &mut [u32; 32],
         ram: &mut [u8],
     ) -> (u32, Pc, bool, bool) {
-        let block = self.cache.run_artifact(pc).expect("run_ready on a hot PC");
-        let (exit, n, clear_reservation) = block.run(x, ram);
+        let (exit, n, clear_reservation) = self.run_shared_inner(pc, x, ram);
         self.stats.block_runs += 1;
         self.stats.block_instrs += n as u64;
         (
@@ -386,6 +581,20 @@ impl RiscvJitEngine {
             clear_reservation,
             exit.needs_interpreter(),
         )
+    }
+
+    /// Run the compiled block installed at `pc` against the guest register
+    /// file `x` and guest-RAM window `ram`, mutating both in place and
+    /// flushing RAM immediately.
+    pub fn run_ready(
+        &mut self,
+        pc: Pc,
+        x: &mut [u32; 32],
+        ram: &mut [u8],
+    ) -> (u32, Pc, bool, bool) {
+        let res = self.run_ready_batched(pc, x, ram);
+        self.flush_ram(ram);
+        res
     }
 
     /// Count an interpreter-fallback instruction (the caller runs the
@@ -443,7 +652,7 @@ impl RiscvJitEngine {
         if plan.instr_count < min_instrs {
             return;
         }
-        if let Some(block) = self.jit.compile(&plan, binding) {
+        if let Some(block) = self.compile_shared(&plan, binding) {
             self.cache.install(pc, block);
             self.stats.compiled += 1;
         }
@@ -453,6 +662,8 @@ impl RiscvJitEngine {
     /// (see [`BlockCache::invalidate_all`]).
     pub fn invalidate_blocks(&mut self) {
         self.cache.invalidate_all();
+        self.ram_synced_len = 0;
+        self.ram_dirty = false;
     }
 
     /// Advance `machine` by exactly one dispatch unit. Returns the number of
@@ -464,24 +675,21 @@ impl RiscvJitEngine {
         let pc = machine.cpu.pc as Pc;
         match self.cache.observe(pc) {
             Lookup::Ready => {
-                let Some(block) = self.cache.run_artifact(pc) else {
+                if self.cache.peek(pc).is_none() {
                     return self.interpret_one(machine);
-                };
-                // `cpu.x` and `bus.ram.data` are disjoint fields of `machine`.
-                let (exit, n, clear_reservation) =
-                    block.run(&mut machine.cpu.x, &mut machine.bus.ram.data);
+                }
+                let (n, next_pc, clear_reservation, needs_interpreter) =
+                    self.run_ready(pc, &mut machine.cpu.x, &mut machine.bus.ram.data);
                 if clear_reservation {
                     machine.cpu.reservation = None;
                 }
-                self.stats.block_runs += 1;
-                self.stats.block_instrs += n as u64;
-                machine.cpu.pc = exit.continuation_pc() as u32;
+                machine.cpu.pc = next_pc as u32;
                 // A memory fault on the block's *entry* instruction retires
                 // nothing (`n == 0`) and leaves the PC unchanged. Interpret one
                 // instruction to guarantee forward progress — otherwise the
                 // dispatcher would re-run the same always-faulting block
                 // forever (and a bare `0` reads as a halt).
-                if n == 0 && exit.needs_interpreter() {
+                if n == 0 && needs_interpreter {
                     return self.interpret_one(machine);
                 }
                 n

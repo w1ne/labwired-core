@@ -1,0 +1,5 @@
+2026-11-25T23:57:48.296380Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../configs/chips/stm32f103.yaml
+2026-11-25T23:57:48.372503Z  INFO labwired_loader: ELF Entry Point: 0x80037a1
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+PASS  5/5 checks · pwm · 7305497 steps · 7.32s

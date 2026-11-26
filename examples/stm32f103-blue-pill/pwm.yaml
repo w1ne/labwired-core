@@ -1,0 +1,32 @@
+schema_version: "1.2"
+inputs:
+  # Stock STM32duino sketch, rebuilt by:
+  #   cd tests/fixtures/stm32duino-f103-bluepill-pwm && pio run -e bluepill
+  #   arm-none-eabi-strip -o ../stm32duino-f103-bluepill-pwm.elf \
+  #       .pio/build/bluepill/firmware.elf
+  firmware: "../../tests/fixtures/stm32duino-f103-bluepill-pwm.elf"
+  system: "pwm-system.yaml"
+limits:
+  max_steps: 20000000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_ordered:
+      - "F103PWM READY"
+      - "PA6_DUTY 64"
+      - "PA1_DUTY 192"
+      - "F103PWM STOP"
+      - "PA6_DUTY 0"
+  # Both timer channels reach their pads: TIM3_CH1 on PA6, TIM2_CH2 on PA1.
+  - gpio_edges:
+      pin: "gpioa:6"
+      min_edges: 40
+  - gpio_edges:
+      pin: "gpioa:1"
+      min_edges: 40
+  # analogWrite(PA6, 64) is a 64/255 duty on 12 V through a 0.08 V/(rad/s)
+  # motor: ~360 rpm before friction, measured 325.9 rpm once the plant settles.
+  - motor_speed_reached:
+      id: motor
+      min_abs_rpm: 250.0
+      direction: forward
+  - expected_stop_reason: assertions_passed
