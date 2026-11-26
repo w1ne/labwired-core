@@ -1723,8 +1723,9 @@ pub(crate) fn run_test(
                             break;
                         }
                     }
-                    // No `xthal_window_spill_nw` thunk here: it spills only
-                    // the shadow stack. Both cores run faithful windows (below), so the
+                    // No `install_xtensa_freertos_workarounds` here: its
+                    // `xthal_window_spill_nw` thunk spills only the shadow
+                    // stack. Both cores run faithful windows (below), so the
                     // firmware's own spill routine is the correct one.
                     // Real APP_CPU: start_cpu0 waits on s_system_inited[0]&[1];
                     // APP sets [1] in do_system_init_fn after s_resume_cores.
@@ -1877,20 +1878,18 @@ pub(crate) fn run_test(
                     &mut machine.bus,
                     &firmware_bytes,
                 );
-                // Real window overflow/underflow on both cores, as the S3
-                // branch above runs. Shadow-window mode keeps displaced frames
-                // off the stack, so an interrupt that walked the stack on
-                // APP_CPU read garbage: the task watchdog's cross-core "print
-                // backtrace" request raised an exception there and halted the
-                // core. The firmware's own `xthal_window_spill` is correct
-                // under faithful windows, so no spill thunk is installed. The
-                // `arduino-esp32` profile below keeps shadow mode: it installs
-                // its own shadow-only `xthal_window_spill_nw` thunk.
+                // Skipped under the arduino-esp32 profile: that profile installs
+                // the SAME `xthal_window_spill_nw` thunk. Installing it twice
+                // patches BREAK bytes over an already-patched site, so the saved
+                // original instruction is lost and the spill helper returns to
+                // garbage — setup() still completed but loop() then produced
+                // nothing, which looked like a firmware hang rather than a
+                // double-install. One owner per thunk.
                 if script_profile.as_deref() != Some("arduino-esp32") {
-                    labwired_core::boot::esp32s3::prime_faithful_windows(&mut machine.cpu);
-                    if let Some(cpu1) = machine.cpu_secondary.as_mut() {
-                        labwired_core::boot::esp32s3::prime_faithful_windows(cpu1);
-                    }
+                    super::esp32_boot_state::install_xtensa_freertos_workarounds(
+                        &mut machine.bus,
+                        &firmware_bytes,
+                    );
                 }
                 // `inputs.profile: arduino-esp32` opts into the FAST BOOT — the
                 // same profile `snapshot capture` installs, from the one shared

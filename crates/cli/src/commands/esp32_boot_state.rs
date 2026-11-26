@@ -56,6 +56,28 @@ pub fn esp_appdesc_page_offset(firmware_path: &Path, window: u64) -> Option<usiz
     labwired_core::boot::esp32c6_rom::appdesc_page_offset(&bytes, window)
 }
 
+/// Install hybrid-preserve TCB base + xthal window spill CPU-model workaround
+/// (not a flash-init firmware thunk). Shared by classic and S3 test paths.
+pub fn install_xtensa_freertos_workarounds(bus: &mut SystemBus, elf_bytes: &[u8]) {
+    use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
+    for sym in ["pxCurrentTCBs", "pxCurrentTCB"] {
+        if let Some(a) = labwired_loader::resolve_symbol_in_elf(elf_bytes, sym) {
+            rom_thunks::PX_CURRENT_TCB_ADDR.with(|s| s.set(Some(a)));
+            eprintln!("labwired-cli test: pxCurrentTCBs @0x{a:08x} (hybrid preserve key)");
+            break;
+        }
+    }
+    if let Some(pc) = labwired_loader::resolve_symbol_in_elf(elf_bytes, "xthal_window_spill_nw") {
+        if let Err(e) = bus.install_flash_thunk(pc, rom_thunks::xthal_window_spill_thunk) {
+            eprintln!("labwired-cli test: warn: xthal_window_spill_nw install failed: {e}");
+        } else {
+            eprintln!(
+                "labwired-cli test: installed xthal_window_spill_nw CPU spill workaround @0x{pc:08x}"
+            );
+        }
+    }
+}
+
 /// Install ESP32-C3 fast-boot behavioral twins used by `labwired test`.
 ///
 /// Chip yaml alone is not enough for Arduino FreeRTOS app-entry: SPIMEM CMD
