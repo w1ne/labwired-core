@@ -144,6 +144,15 @@ pins:
   # User switches S1/S2 (Zephyr ek_ra8m1.dts).
   P009: { gpio: port0, bit: 9, functions: [{ type: gpio, peripheral: port0 }] }
   P008: { gpio: port0, bit: 8, functions: [{ type: gpio, peripheral: port0 }] }
+# ADC0 group-A inputs this package bonds. FSP's `ra8m1` pin data and the
+# board's `adc0_default` pinctrl entry put AN000 on P004; the EK-RA8M1 DAC
+# loopback fixture wires DA0 to that same pad. This slice publishes only the
+# AN000 / Arduino A0 pad: the other Arduino header inputs (A1-A5) are not
+# transcribed from the board manual yet, and the router must refuse a pad
+# nobody transcribed rather than guess its channel. `analog_pins:` is consumed
+# by `board.analog.<pad>_volts`.
+analog_pins:
+  P004: { peripheral: "adc0", channel: 0 }
 peripherals:
   # R_SYSTEM @ 0x4001E000 (R_SYSTEM_Type, 0xD80 bytes; PRCR at +0x3FA).
   # Register file with derived OSCSF and xxxCKCR CKSRDY; see the header.
