@@ -14,9 +14,9 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **441**
-- Covered end to end: **96**
-- Not covered: **345**
-- Not covered but with an ADC pad map: **1** (these are the
+- Covered end to end: **97**
+- Not covered: **344**
+- Not covered but with an ADC pad map: **0** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` block or `adc` pin functions, an ADC model, or a digital
   endpoint first)
@@ -29,9 +29,7 @@ the generic decks can reach without new routing.
 
 ## Next queue: not covered, ADC pads already mapped
 
-| Profile | Chip | Analog pad map |
-| --- | --- | ---: |
-| `wch-ch32v003evt-max31855` | `ch32v003f4p6` | 8 |
+None.
 
 ## Not covered
 
@@ -381,7 +379,6 @@ the generic decks can reach without new routing.
 | `stm32h735-smoke` | `stm32h735` | 0 |
 | `teensy-41` | `imxrt1064` | 0 |
 | `vegaboard-ri5cy` | `vegaboard-ri5cy` | 0 |
-| `wch-ch32v003evt-max31855` | `ch32v003f4p6` | 8 |
 
 ## Covered
 
@@ -482,6 +479,7 @@ the generic decks can reach without new routing.
 | `stm32f401cdu6` | `stm32f401cdu6` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `stm32f411ceu6-blackpill` | `stm32f411ceu6` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `wch-ch32v003evt-bme280` | `ch32v003f4p6` | `crates/core/tests/analog/cosim_ch32v003_analog.rs` |
+| `wch-ch32v003evt-max31855` | `ch32v003f4p6` | `crates/core/tests/analog/cosim_ch32v003_analog.rs` |
 | `wch-ch32v003evt` | `ch32v003f4p6` | `crates/core/tests/analog/cosim_ch32v003_analog.rs` |
 
 ## How to add a board
