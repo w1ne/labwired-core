@@ -13,7 +13,7 @@ covered. One prior check existed: the Arduino matrix's L6 level counted **61
 logic edges on PA0** for a NUCLEO-F103RB (2026-11-21, `min_edges: 20`), which
 proves the route fires but not the frequency, duty, channel independence, or
 the 0 % case; the matrix's Blue Pill row has no committed evidence directory.
-The public Tier-1 grid still showed *pwm: 🚧 (not modelled)* for the F103 row.
+The public Tier-1 grid still showed the F103 `pwm` cell as *not modelled*.
 This round measures the waveform on the Blue Pill board profile with unmodified
 stock firmware, adds the four missing properties as assertions, and records
 what is still missing.
@@ -131,10 +131,11 @@ Not modelled, and not claimed:
   static per run, so the two firmware clocks need two profiles; the PLL itself
   is a register bit in the RCC model, not a live clock tree.
 - **Tier-1 grid bookkeeping.** The `pwm` cell for `stm32f103` in
-  `docs/coverage/tier1-matrix.json` still reads `na` (rendered 🚧). The cell is
-  derived from peripheral-id class markers, and the F103 descriptors name
-  their timers `tim1..tim4` with no `_pwm` id; the tier-1 fixtures themselves
-  (built from an external repository revision) report no `TIER1 pwm` line.
+  `docs/coverage/tier1-matrix.json` still reads `na`, which the scoreboard
+  renders as "not modelled". The cell is derived from peripheral-id class
+  markers, and the F103 descriptors name their timers `tim1..tim4` with no
+  `_pwm` id; the tier-1 fixtures themselves (built from an external repository
+  revision) report no `TIER1 pwm` line.
   Renaming a timer id would churn eleven descriptors and the variant-geometry
   test for a reporting-only change, so it is left as a known reporting gap
   rather than a silent claim. The capability itself is proven above.
