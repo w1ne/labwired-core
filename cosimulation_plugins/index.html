@@ -6043,7 +6043,7 @@ input at a different element.</p>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>.model &lt;name&gt; NMOS (VTO=&lt;v&gt; KP=&lt;a/v2&gt; LAMBDA=&lt;1/v&gt; GAMMA=&lt;sqrt(v)&gt; PHI=&lt;v&gt; RD=&lt;ohms&gt; RS=&lt;ohms&gt; RSH=&lt;ohms/square&gt; CBD=&lt;f&gt; CBS=&lt;f&gt; CJ=&lt;f/m²&gt; CJSW=&lt;f/m&gt; PB=&lt;v&gt; MJ=&lt;ratio&gt; MJSW=&lt;ratio&gt; FC=&lt;ratio&gt; TOX=&lt;m&gt; W=&lt;m&gt; L=&lt;m&gt; [CHARGEMOD=MEYER|WARD_DUTTON])
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>.model &lt;name&gt; PMOS (...)      ; VTO is negative, as in ngspice
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>.model &lt;name&gt; NJF  (VTO=&lt;v&gt; BETA=&lt;a/v2&gt; LAMBDA=&lt;1/v&gt; RD=&lt;ohms&gt; RS=&lt;ohms&gt; IS=&lt;a&gt;)
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>.model &lt;name&gt; PJF  (...)
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>.model &lt;name&gt; PJF  (...)      ; VTO is negative for a depletion PJF too, as in ngspice
 </span></code></pre></div>
 <p>The parentheses are optional, parameters may be separated by spaces or commas,
 and a card may be written after the elements that use it. A parameter omitted
