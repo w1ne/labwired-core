@@ -1,13 +1,14 @@
 // LabWired - Firmware Simulation Platform
 // SPDX-License-Identifier: MIT
 
-//! Nordic nRF52 WDT peripheral.
+//! Nordic nRF52 and bounded nRF54L WDT peripheral.
 //!
-//! Source: nRF52840 PS rev 1.7 §6.34 (WDT). One-shot watchdog: once
-//! TASKS_START is written, CRV/RREN/CONFIG become RO. The model doesn't
-//! enforce the latch in *register* terms (writes are silently dropped
-//! while running), so MMIO diff tests that pin pre-start state see
-//! round-trip behavior matching silicon.
+//! Source: nRF52840 PS rev 1.7 §6.34 (WDT); nRF54L15 Product Specification,
+//! WDT chapter. One-shot watchdog: once TASKS_START is written,
+//! CRV/RREN/CONFIG become RO until reset (nRF52) or a permitted stop
+//! (nRF54L). The nRF54L addition is the documented STOPEN + TSEN + STOP
+//! sequence and STOPPED event/interrupt. CONFIG.SLEEP/HALT pause behavior,
+//! watchdog reset, NMI delivery, and DPPI subscribe/publish are not modelled.
 //!
 //! # Dynamics
 //!
@@ -29,7 +30,9 @@ use crate::peripherals::nrf52::rtc::LFCLK_HZ;
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 const OFF_TASKS_START: u64 = 0x000;
+const OFF_TASKS_STOP: u64 = 0x004;
 const OFF_EVENTS_TIMEOUT: u64 = 0x100;
+const OFF_EVENTS_STOPPED: u64 = 0x104;
 const OFF_INTENSET: u64 = 0x304;
 const OFF_INTENCLR: u64 = 0x308;
 const OFF_RUNSTATUS: u64 = 0x400;
@@ -37,14 +40,21 @@ const OFF_REQSTATUS: u64 = 0x404;
 const OFF_CRV: u64 = 0x504;
 const OFF_RREN: u64 = 0x508;
 const OFF_CONFIG: u64 = 0x50C;
+const OFF_TSEN: u64 = 0x520;
 const OFF_RR0: u64 = 0x600;
 const OFF_RR7: u64 = 0x61C;
 
 /// Magic value firmware must write to RR[i] to reload the watchdog
 /// (PS §6.34.5, table 263).
 const RR_RELOAD_KEY: u32 = 0x6E52_4635;
+/// nRF54L TSEN key that permits TASKS_STOP when CONFIG.STOPEN is enabled.
+const TSEN_STOP_KEY: u32 = 0x6E52_4635;
 
 const INTEN_TIMEOUT: u32 = 1;
+const INTEN_STOPPED: u32 = 1 << 1;
+// nRF54L CONFIG.STOPEN is bit 6 (the nRF52 bit 3 is HALT); see the
+// nRF54L15 SVD and Product Specification, WDT.CONFIG.
+const CONFIG_STOPEN: u32 = 1 << 6;
 
 /// Core clock assumed until [`Peripheral::attach_cpu_hz`] runs: the 64 MHz
 /// nRF52 application core.
@@ -53,6 +63,7 @@ pub const CPU_HZ_DEFAULT: u64 = 64_000_000;
 #[derive(Debug)]
 pub struct Nrf52Wdt {
     events_timeout: u32,
+    events_stopped: u32,
     inten: u32,
     runstatus: u32,
     /// Per-RR pending acknowledgment bits: set when firmware writes the
@@ -61,6 +72,10 @@ pub struct Nrf52Wdt {
     crv: u32,
     rren: u32,
     config: u32,
+    /// nRF54L-only STOP task and TSEN register support. nRF52 leaves the
+    /// added register offsets as unknown/reserved.
+    supports_stop: bool,
+    stop_enabled: bool,
 
     /// LFCLK ticks left before the timeout. `CRV + 1` after start or reload,
     /// so it needs 33 bits.
@@ -82,6 +97,7 @@ impl Default for Nrf52Wdt {
     fn default() -> Self {
         Self {
             events_timeout: 0,
+            events_stopped: 0,
             inten: 0,
             runstatus: 0,
             reqstatus_pending: 0,
@@ -89,6 +105,8 @@ impl Default for Nrf52Wdt {
             // PS §6.34.9: RREN resets to RR[0] enabled, CONFIG to SLEEP=Run.
             rren: 0x1,
             config: 0x1,
+            supports_stop: false,
+            stop_enabled: false,
             counter: 0,
             cpu_hz: CPU_HZ_DEFAULT,
             lf_phase: 0,
@@ -103,6 +121,15 @@ impl Default for Nrf52Wdt {
 impl Nrf52Wdt {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Bounded nRF54L WDT profile. It shares the LFCLK/RR countdown and adds
+    /// the documented CONFIG.STOPEN + TSEN + TASKS_STOP behavior.
+    pub fn new_nrf54l() -> Self {
+        Self {
+            supports_stop: true,
+            ..Self::default()
+        }
     }
 
     /// A WDT whose LFCLK runs at the CPU clock, one tick per cycle. For
@@ -154,13 +181,16 @@ impl Peripheral for Nrf52Wdt {
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         Ok(match offset {
             OFF_TASKS_START => 0,
+            OFF_TASKS_STOP if self.supports_stop => 0,
             OFF_EVENTS_TIMEOUT => self.events_timeout,
+            OFF_EVENTS_STOPPED if self.supports_stop => self.events_stopped,
             OFF_INTENSET | OFF_INTENCLR => self.inten,
             OFF_RUNSTATUS => self.runstatus & 1,
             OFF_REQSTATUS => self.reqstatus_view(),
             OFF_CRV => self.crv,
             OFF_RREN => self.rren & 0xFF,
-            OFF_CONFIG => self.config & 0x9,
+            OFF_CONFIG => self.config & if self.supports_stop { 0x49 } else { 0x9 },
+            OFF_TSEN if self.supports_stop => 0, // WO
             OFF_RR0..=OFF_RR7 if offset.is_multiple_of(4) => 0, // WO
             _ => {
                 crate::census_reg!("nrf52.wdt:Nrf52Wdt", offset, "read");
@@ -181,8 +211,24 @@ impl Peripheral for Nrf52Wdt {
                     // On start every enabled channel needs a fresh ack.
                     self.reqstatus_pending = 0;
                 }
+            OFF_TASKS_STOP
+                if self.supports_stop
+                    && value & 1 != 0
+                    && self.running()
+                    && !self.bitten
+                    && self.config & CONFIG_STOPEN != 0
+                    && self.stop_enabled =>
+                {
+                    self.runstatus = 0;
+                    self.counter = 0;
+                    self.lf_phase = 0;
+                    self.events_stopped = 1;
+                }
             OFF_EVENTS_TIMEOUT => self.events_timeout = value & 1,
-            OFF_INTENSET => self.inten |= value & 1,
+            OFF_EVENTS_STOPPED if self.supports_stop => self.events_stopped = value & 1,
+            OFF_INTENSET => {
+                self.inten |= value & if self.supports_stop { 0x3 } else { 1 };
+            }
             OFF_INTENCLR => self.inten &= !value,
             OFF_CRV
                 // Per PS §6.34.5 CRV is RO once running; drop writes silently.
@@ -195,8 +241,9 @@ impl Peripheral for Nrf52Wdt {
                 }
             OFF_CONFIG
                 if !self.running() => {
-                    self.config = value & 0x9;
+                    self.config = value & if self.supports_stop { 0x49 } else { 0x9 };
                 }
+            OFF_TSEN if self.supports_stop => self.stop_enabled = value == TSEN_STOP_KEY,
             OFF_RR0..=OFF_RR7 if offset.is_multiple_of(4)
                 && self.running() && value == RR_RELOAD_KEY => {
                     let i = ((offset - OFF_RR0) / 4) as usize;
@@ -214,6 +261,18 @@ impl Peripheral for Nrf52Wdt {
             _ => { crate::census_reg!("nrf52.wdt:Nrf52Wdt", offset, "write"); }
         }
         Ok(())
+    }
+
+    /// Nordic WDT IRQ is a level: a latched event whose INTEN bit is set.
+    /// nRF54L adds STOPPED at event bit 1; nRF52 implements TIMEOUT only.
+    fn irq_line_level(&self) -> Option<bool> {
+        if !self.supports_stop {
+            // Preserve the nRF52 model's existing pulse IRQ behavior.
+            return None;
+        }
+        let timeout = self.events_timeout != 0 && self.inten & INTEN_TIMEOUT != 0;
+        let stopped = self.events_stopped != 0 && self.inten & INTEN_STOPPED != 0;
+        Some(timeout || stopped)
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
@@ -526,6 +585,74 @@ mod tests {
         }
         w.write_u32(OFF_TASKS_START, 1).unwrap();
         assert_eq!(walk_until_timeout(&mut w, 20), Some(3));
+    }
+
+    #[test]
+    fn nrf54l_stop_requires_stopen_and_tsen_key() {
+        for (config, tsen, should_stop) in [
+            (0x1, TSEN_STOP_KEY, false),
+            (0x9, TSEN_STOP_KEY, false), // bit 3 is HALT, not STOPEN
+            (0x41, TSEN_STOP_KEY ^ 1, false),
+            (0x41, TSEN_STOP_KEY, true),
+        ] {
+            let mut w = Nrf52Wdt::new_nrf54l();
+            w.write_u32(OFF_CRV, 20).unwrap();
+            w.write_u32(OFF_CONFIG, config).unwrap();
+            w.write_u32(OFF_TSEN, tsen).unwrap();
+            w.write_u32(OFF_TASKS_START, 1).unwrap();
+            w.write_u32(OFF_TASKS_STOP, 1).unwrap();
+            assert_eq!(
+                w.read_u32(OFF_RUNSTATUS).unwrap(),
+                u32::from(!should_stop),
+                "config={config:#x}, tsen={tsen:#x}"
+            );
+            assert_eq!(
+                w.read_u32(OFF_EVENTS_STOPPED).unwrap(),
+                u32::from(should_stop),
+                "config={config:#x}, tsen={tsen:#x}"
+            );
+        }
+    }
+
+    #[test]
+    fn nrf54l_stopped_irq_is_level_latched_and_can_restart() {
+        let mut w = Nrf52Wdt::new_nrf54l();
+        w.write_u32(OFF_CRV, 20).unwrap();
+        w.write_u32(OFF_CONFIG, 0x41).unwrap(); // SLEEP=Run, STOPEN(bit 6)=Enable
+        w.write_u32(OFF_INTENSET, INTEN_STOPPED | 0x80).unwrap();
+        w.write_u32(OFF_TSEN, TSEN_STOP_KEY).unwrap();
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        w.write_u32(OFF_TASKS_STOP, 1).unwrap();
+
+        assert_eq!(w.read_u32(OFF_RUNSTATUS).unwrap(), 0);
+        assert_eq!(w.read_u32(OFF_CONFIG).unwrap(), 0x41);
+        assert_eq!(w.read_u32(OFF_INTENSET).unwrap(), INTEN_STOPPED);
+        assert_eq!(w.irq_line_level(), Some(true));
+        // Writes are unlocked after STOP, and the stopped counter no longer
+        // advances toward TIMEOUT.
+        w.write_u32(OFF_CRV, 99).unwrap();
+        assert_eq!(w.read_u32(OFF_CRV).unwrap(), 99);
+        for _ in 0..100_000 {
+            w.tick();
+        }
+        assert_eq!(w.read_u32(OFF_EVENTS_TIMEOUT).unwrap(), 0);
+
+        w.write_u32(OFF_EVENTS_STOPPED, 0).unwrap();
+        assert_eq!(w.irq_line_level(), Some(false));
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        assert_eq!(w.read_u32(OFF_RUNSTATUS).unwrap(), 1);
+    }
+
+    #[test]
+    fn nrf52_constructor_does_not_gain_nrf54l_stop_behavior() {
+        let mut w = Nrf52Wdt::new_fast();
+        w.write_u32(OFF_CONFIG, 0xD).unwrap();
+        w.write_u32(OFF_TSEN, TSEN_STOP_KEY).unwrap();
+        w.write_u32(OFF_CRV, 20).unwrap();
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        w.write_u32(OFF_TASKS_STOP, 1).unwrap();
+        assert_eq!(w.read_u32(OFF_RUNSTATUS).unwrap(), 1);
+        assert_eq!(w.read_u32(OFF_EVENTS_STOPPED).unwrap(), 0);
     }
 
     /// Scheduler path at 64 MHz with a mid-period reload: the LFCLK phase

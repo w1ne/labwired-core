@@ -25,6 +25,8 @@ models:
   - crates/core/src/peripherals/rp2040/spi.rs
   - crates/core/src/peripherals/rp2040/timer.rs
   - crates/core/src/peripherals/rp2040/watchdog.rs
+  # 2026-11-26: CoreDebug is now registered as a real model in the RP2350 profile.
+  - crates/core/src/peripherals/scs_debug.rs
   - crates/core/src/peripherals/stub.rs
   - crates/core/src/peripherals/systick.rs
   - crates/core/src/peripherals/uart.rs

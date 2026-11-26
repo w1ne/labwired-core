@@ -18,6 +18,7 @@ models:
   - crates/core/src/peripherals/nrf52/gpiote.rs
   - crates/core/src/peripherals/nrf52/temp.rs
   - crates/core/src/peripherals/nrf52/timer.rs
+  - crates/core/src/peripherals/nrf52/wdt.rs
   - crates/core/src/peripherals/nrf54l/clock.rs
   - crates/core/src/peripherals/nrf54l/grtc.rs
   - crates/core/src/peripherals/nrf54l/twim.rs

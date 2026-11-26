@@ -2496,6 +2496,24 @@ fn nvic_ipr_priority_drives_irq_dispatch_order() {
     );
 }
 
+#[test]
+fn nrf54l_irq_264_dispatches_through_high_exception_bitmap_word() {
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+    let nvic = Arc::new(crate::peripherals::nvic::NvicState::default());
+    cpu.set_shared_nvic_state(Arc::clone(&nvic));
+    cpu.pc = 0x1000;
+    cpu.sp = 0x8000;
+
+    // nRF54L WDT30 is IRQ 264, exception 280. It occupies word 8 in the
+    // NVIC banks and word 4 in the CPU's 64-bit pending-exception bitmap.
+    take_exception(&mut cpu, &mut bus, 280, 0x3000);
+
+    assert_eq!(cpu.active_exception, 280);
+    assert_eq!(cpu.pc, 0x3000);
+    assert_ne!(nvic.iabr[8].load(Ordering::Relaxed) & (1 << 8), 0);
+}
+
 // --- Banked MSP/PSP + CONTROL.SPSEL + EXC_RETURN (ARMv7-M) ---
 
 /// Pend `exc`, point its vector at `handler`, and take the exception by

@@ -212,10 +212,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "nRF54L UICR window, authored placeholder. Used by: nrf54l15.",
     ),
     (
-        "nrf54l_wdt_stub",
-        "nRF54L WDT window, authored placeholder. Used by: nrf54l15.",
-    ),
-    (
         "nvic",
         "Cortex-M NVIC. The stub is a construction-time transient: `configure_cortex_m` \
          finds this entry (by name or by base 0xE000_E100) and REPLACES it with the real \

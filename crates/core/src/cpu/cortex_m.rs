@@ -156,11 +156,9 @@ pub struct CortexM {
     pub lr: u32, // R14
     pub pc: u32, // R15
     pub xpsr: u32,
-    /// Pending-exception bitmask, 4x64 = exceptions 0..255. The H5-class
-    /// parts wire external interrupts past IRQ 47 (STM32H563 TIM12 = IRQ
-    /// 120 -> exception 136), which a single u64 silently dropped —
-    /// caught by foreign firmware whose time driver never ticked.
-    pub pending_exceptions: [u64; 4],
+    /// Pending-exception bitmask, 8x64 = exceptions 0..511. This covers the
+    /// ARMv8-M maximum of 496 external interrupts (exception numbers 16..511).
+    pub pending_exceptions: [u64; 8],
     pub primask: bool, // Interrupt mask (true = disabled)
     /// FAULTMASK: when set, masks every exception except NMI (it raises the
     /// effective priority to -1). Set by `CPSID f` / `MSR FAULTMASK`, cleared by
@@ -385,7 +383,7 @@ impl Default for CortexM {
             lr: 0,
             pc: 0,
             xpsr: 0x01000000, // Typical reset state (Thumb bit set)
-            pending_exceptions: [0; 4],
+            pending_exceptions: [0; 8],
             primask: false,
             faultmask: false,
             basepri: 0,
@@ -2275,16 +2273,16 @@ impl CortexM {
     /// Whether ANY exception is pending — the cheap precondition every
     /// pending-exception decision starts with.
     ///
-    /// A four-way OR rather than `self.pending_exceptions.iter().any(..)`:
+    /// An eight-way OR rather than `self.pending_exceptions.iter().any(..)`:
     /// the iterator form compiled to a real loop over the array and cost
     /// 16 Ir per retired instruction in `step_batch` alone
     /// (docs/performance/2026-09-17-bus-scheduler-pass.md). Same answer —
-    /// `w0 | w1 | w2 | w3 != 0` is true exactly when some word is non-zero —
+    /// the OR of every word is true exactly when some word is non-zero —
     /// with no branch per word.
     #[inline(always)]
     fn any_exception_pending(&self) -> bool {
-        let [w0, w1, w2, w3] = self.pending_exceptions;
-        (w0 | w1 | w2 | w3) != 0
+        let [w0, w1, w2, w3, w4, w5, w6, w7] = self.pending_exceptions;
+        (w0 | w1 | w2 | w3 | w4 | w5 | w6 | w7) != 0
     }
 
     /// Among the pending exceptions, return the one with the highest
@@ -3281,7 +3279,7 @@ impl Cpu for CortexM {
     fn reset(&mut self, bus: &mut dyn Bus) -> SimResult<()> {
         self.pc = 0x0000_0000;
         self.sp = 0x2000_0000;
-        self.pending_exceptions = [0; 4];
+        self.pending_exceptions = [0; 8];
         self.systick_pending_live.store(false, Ordering::Relaxed);
         self.pendsv_pending_live.store(false, Ordering::Relaxed);
         // Reset is not exception return: no interrupt mask, IT block or
@@ -3358,7 +3356,7 @@ impl Cpu for CortexM {
         if trace_exc_enabled() {
             eprintln!("EXC pend num={} pc=0x{:08X}", exception_num, self.pc);
         }
-        if exception_num < 256 {
+        if exception_num < 512 {
             if exception_num == 15 {
                 self.systick_pending_live.store(true, Ordering::Relaxed);
             } else if exception_num == 14 {
@@ -3452,9 +3450,9 @@ impl Cpu for CortexM {
             }
             self.xpsr = s.xpsr;
             self.primask = s.primask;
-            self.pending_exceptions = [0; 4];
+            self.pending_exceptions = [0; 8];
             self.pending_exceptions[0] = s.pending_exceptions;
-            for (i, w) in s.pending_exceptions_hi.iter().take(3).enumerate() {
+            for (i, w) in s.pending_exceptions_hi.iter().take(7).enumerate() {
                 self.pending_exceptions[i + 1] = *w;
             }
             self.systick_pending_live.store(

@@ -166,12 +166,9 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     // verbatim and actually orders pre-emption. The registers were modelled;
     // only the bus window hid them.
     //
-    // Known remaining gap (deliberately NOT papered over here): the
-    // set-enable / set-pending / active arrays are 8 registers each, so
-    // interrupts >= 256 can have a priority but cannot be enabled or pended.
-    // nRF54L15 declares IRQ 260 and 261. Fixing that means widening
-    // `NvicState` and the `idx < 8` guards in `bus/tick.rs`, `bus/accessors.rs`
-    // and `bus/construct.rs` — a separate change with its own blast radius.
+    // The set-enable / pending / active banks and CortexM pending-exception
+    // bitmap cover the architectural 496 external IRQ limit. nRF54L IRQs
+    // 264..270 therefore have real pending, enable, active, and priority state.
     let nvic = Nvic::new(nvic_state.clone());
     const NVIC_WINDOW_SIZE: u64 = 0x4F0;
     bus.replace_or_add_peripheral_at("nvic", 0xE000_E100, NVIC_WINDOW_SIZE, None, Box::new(nvic));
