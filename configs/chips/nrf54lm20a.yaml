@@ -344,16 +344,18 @@ peripherals:
     base_address: 0x500EF000
     size: "4KB"
 
-  # WDT30 / WDT31 — mapped so the MDK's approtect-invalid-state path (which
-  # pokes WDT30 to force a reset) writes somewhere real rather than faulting.
-  # Not reached on a healthy boot.
+  # WDT30 / WDT31 — LFCLK/RR countdown and the product-spec STOPEN + TSEN +
+  # STOP sequence are modelled. CONFIG.SLEEP/HALT pause behavior, watchdog
+  # reset, WDT30 NMI delivery, and DPPI subscribe/publish are outside this
+  # model's current scope. WDT30 supports NMI on silicon; both instances also
+  # expose maskable IRQs 264/265.
   - id: "wdt30"
-    type: "nrf54l_wdt_stub"
+    type: "nrf54l_wdt"
     base_address: 0x50108000
     size: "4KB"
     irq: 264
   - id: "wdt31"
-    type: "nrf54l_wdt_stub"
+    type: "nrf54l_wdt"
     base_address: 0x50109000
     size: "4KB"
     irq: 265

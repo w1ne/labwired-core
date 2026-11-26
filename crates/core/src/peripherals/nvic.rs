@@ -15,12 +15,13 @@ pub struct NvicState {
     /// still generate events when they transition to pending with SEVONPEND.
     pub event_register: AtomicBool,
     pub sev_on_pend: AtomicBool,
-    pub iser: [AtomicU32; 8],
+    /// Up to 496 external IRQs, as allowed by ARMv7-M/ARMv8-M.
+    pub iser: [AtomicU32; 16],
     /// Cached "any ISER bit is set" so the per-boundary interrupt collection
-    /// can skip its eight-word scan on a machine that never enabled one.
+    /// can skip its sixteen-word scan on a machine that never enabled one.
     pub any_enabled: AtomicBool,
-    pub ispr: [AtomicU32; 8],
-    pub iabr: [AtomicU32; 8],
+    pub ispr: [AtomicU32; 16],
+    pub iabr: [AtomicU32; 16],
     pub ipr: [AtomicU32; 240], // Priority registers (simplified)
     /// Which ISPR bits were set by an asserted LEVEL source (a peripheral
     /// whose `irq_line_level()` is `Some(..)`). The bus drops them when that
@@ -30,7 +31,7 @@ pub struct NvicState {
     /// handler must not be re-entered for the same event. Bits set by a
     /// software ISPR write are NOT marked here and are never auto-cleared — a
     /// software pend of a low line is taken once, as on hardware.
-    pub level_pended: [AtomicU32; 8],
+    pub level_pended: [AtomicU32; 16],
 }
 
 impl NvicState {
@@ -101,7 +102,7 @@ impl Nvic {
         }
         let idx = ((irq - 16) / 32) as usize;
         let bit = (irq - 16) % 32;
-        if idx < 8 {
+        if idx < self.state.iser.len() {
             (self.state.iser[idx].load(Ordering::SeqCst) & (1 << bit)) != 0
         } else {
             false
@@ -112,7 +113,7 @@ impl Nvic {
         if irq >= 16 {
             let idx = ((irq - 16) / 32) as usize;
             let bit = (irq - 16) % 32;
-            if idx < 8 {
+            if idx < self.state.ispr.len() {
                 // Clear pending, set active. Entry does not re-pend a level
                 // source; see `SystemBus::clear_nvic_pending`.
                 self.state.ispr[idx].fetch_and(!(1 << bit), Ordering::SeqCst);
@@ -125,7 +126,7 @@ impl Nvic {
         if irq >= 16 {
             let idx = ((irq - 16) / 32) as usize;
             let bit = (irq - 16) % 32;
-            if idx < 8 {
+            if idx < self.state.iabr.len() {
                 // Clear active
                 self.state.iabr[idx].fetch_and(!(1 << bit), Ordering::SeqCst);
             }
@@ -160,21 +161,21 @@ impl Peripheral for Nvic {
         // the enable state from ICER, writes a mask, then restores through
         // ISER (FreeRTOS tickless idle) depends on this. A read-as-zero ICER
         // made that save 0, so the restore never re-enabled IRQ 17.
-        let val = if offset < 0x20 {
-            // ISER0-7
+        let val = if offset < 0x40 {
+            // ISER0-15
             self.state.iser[reg_idx].load(Ordering::SeqCst)
-        } else if (0x80..0xA0).contains(&offset) {
-            // ICER0-7: same read value as ISER
+        } else if (0x80..0xC0).contains(&offset) {
+            // ICER0-15: same read value as ISER
             self.state.iser[((offset - 0x80) / 4) as usize].load(Ordering::SeqCst)
-        } else if (0x100..0x120).contains(&offset) {
-            // ISPR0-7
+        } else if (0x100..0x140).contains(&offset) {
+            // ISPR0-15
             let real_idx = (offset - 0x100) / 4;
             self.state.ispr[real_idx as usize].load(Ordering::SeqCst)
-        } else if (0x180..0x1A0).contains(&offset) {
-            // ICPR0-7: same read value as ISPR
+        } else if (0x180..0x1C0).contains(&offset) {
+            // ICPR0-15: same read value as ISPR
             self.state.ispr[((offset - 0x180) / 4) as usize].load(Ordering::SeqCst)
-        } else if (0x200..0x220).contains(&offset) {
-            // IABR0-7
+        } else if (0x200..0x240).contains(&offset) {
+            // IABR0-15
             let real_idx = (offset - 0x200) / 4;
             self.state.iabr[real_idx as usize].load(Ordering::SeqCst)
         } else if (0x300..0x6BC).contains(&offset) {
@@ -193,13 +194,13 @@ impl Peripheral for Nvic {
         let byte_offset = (offset % 4) as usize;
         let mask = (value as u32) << (byte_offset * 8);
 
-        if offset < 0x20 {
+        if offset < 0x40 {
             // ISER: Writing 1 sets the enable bit
             self.state.iser[reg_idx].fetch_or(mask, Ordering::SeqCst);
             if mask != 0 {
                 self.state.any_enabled.store(true, Ordering::Relaxed);
             }
-        } else if (0x80..0xA0).contains(&offset) {
+        } else if (0x80..0xC0).contains(&offset) {
             // ICER: Writing 1 clears the enable bit. Recompute the cache only
             // when the write actually changed the word.
             let real_idx = reg_idx - 0x80 / 4;
@@ -213,11 +214,11 @@ impl Peripheral for Nvic {
             {
                 self.state.any_enabled.store(false, Ordering::Relaxed);
             }
-        } else if (0x100..0x120).contains(&offset) {
+        } else if (0x100..0x140).contains(&offset) {
             // ISPR: Writing 1 sets the pending bit
             let real_idx = reg_idx - 0x100 / 4;
             self.state.pend(real_idx, mask);
-        } else if (0x180..0x1A0).contains(&offset) {
+        } else if (0x180..0x1C0).contains(&offset) {
             // ICPR: Writing 1 clears edge/software pending bits. An asserted
             // level source immediately re-pends, as it does on the NVIC.
             let real_idx = reg_idx - 0x180 / 4;
@@ -365,5 +366,27 @@ mod tests {
         state.pend(0, irq17);
         assert_eq!(nvic.read_u32(0x100).unwrap(), irq17);
         assert_eq!(nvic.read_u32(0x180).unwrap(), irq17);
+    }
+
+    #[test]
+    fn irq_264_uses_the_ninth_nvic_word_for_enable_pending_and_active_state() {
+        let state = Arc::new(NvicState::default());
+        let mut nvic = Nvic::new(Arc::clone(&state));
+        let irq = 264u32;
+        let word = (irq / 32) as usize;
+        let bit = 1 << (irq % 32);
+
+        nvic.write_u32((word * 4) as u64, bit).unwrap();
+        assert!(nvic.is_enabled(16 + irq));
+        assert_eq!(nvic.read_u32((word * 4) as u64).unwrap(), bit);
+
+        nvic.write_u32(0x100 + (word * 4) as u64, bit).unwrap();
+        assert_eq!(nvic.read_u32(0x100 + (word * 4) as u64).unwrap(), bit);
+
+        nvic.acknowledge_interrupt(16 + irq);
+        assert_eq!(state.ispr[word].load(Ordering::SeqCst) & bit, 0);
+        assert_eq!(state.iabr[word].load(Ordering::SeqCst) & bit, bit);
+        nvic.complete_interrupt(16 + irq);
+        assert_eq!(state.iabr[word].load(Ordering::SeqCst) & bit, 0);
     }
 }

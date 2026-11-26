@@ -1621,7 +1621,7 @@ impl SystemBus {
             if irq >= 16 {
                 let idx = (irq / 32) as usize;
                 let bit = irq % 32;
-                if idx < 8 {
+                if idx < nvic.ispr.len() {
                     nvic.pend(idx, 1 << bit);
                 }
             } else {

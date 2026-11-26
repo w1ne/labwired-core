@@ -44,7 +44,7 @@ pub(crate) fn reconcile_nvic_level(
     if let Some(nvic) = nvic {
         let idx = (irq / 32) as usize;
         let bit = 1u32 << (irq % 32);
-        if idx < 8 {
+        if idx < nvic.ispr.len() {
             if level {
                 nvic.pend(idx, bit);
                 nvic.level_pended[idx].fetch_or(bit, std::sync::atomic::Ordering::SeqCst);
@@ -76,7 +76,7 @@ fn pend_nvic(
     if let Some(nvic) = nvic {
         let idx = (irq / 32) as usize;
         let bit = irq % 32;
-        if idx < 8 {
+        if idx < nvic.ispr.len() {
             nvic.pend(idx, 1 << bit);
         }
     } else {
@@ -105,7 +105,7 @@ impl SystemBus {
             return false;
         };
         let word = (irq / 32) as usize;
-        word < 8
+        word < nvic.level_pended.len()
             && nvic.level_pended[word].load(std::sync::atomic::Ordering::SeqCst) & (1 << (irq % 32))
                 != 0
     }
@@ -347,7 +347,7 @@ impl SystemBus {
         if let Some(nvic) = &self.nvic {
             let idx = (irq / 32) as usize;
             let bit = irq % 32;
-            if idx < 8 && (nvic.iser[idx].load(Ordering::SeqCst) & (1 << bit)) != 0 {
+            if idx < nvic.iser.len() && (nvic.iser[idx].load(Ordering::SeqCst) & (1 << bit)) != 0 {
                 fallthrough.push(16 + irq);
             }
         }
@@ -1706,7 +1706,7 @@ impl SystemBus {
         let standing = lines.iter().all(|&irq| {
             let word = (irq / 32) as usize;
             let bit = 1u32 << (irq % 32);
-            word < 8
+            word < nvic.level_pended.len()
                 && nvic.iser[word].load(std::sync::atomic::Ordering::SeqCst)
                     & nvic.ispr[word].load(std::sync::atomic::Ordering::SeqCst)
                     & nvic.level_pended[word].load(std::sync::atomic::Ordering::SeqCst)
@@ -1968,7 +1968,7 @@ impl SystemBus {
             if !nvic.any_enabled.load(Ordering::Relaxed) {
                 return;
             }
-            for idx in 0..8 {
+            for idx in 0..nvic.iser.len() {
                 let mask =
                     nvic.iser[idx].load(Ordering::SeqCst) & nvic.ispr[idx].load(Ordering::SeqCst);
                 if mask != 0 {

@@ -1964,7 +1964,7 @@ impl crate::Bus for SystemBus {
                 let irq = exception_num - 16;
                 let idx = (irq / 32) as usize;
                 let bit = irq % 32;
-                if idx < 8 {
+                if idx < nvic.ispr.len() {
                     // Exception entry clears the pending bit outright. A level
                     // source that is still asserted re-pends through the bus
                     // level sampling, as the NVIC does at exception return;
@@ -1985,7 +1985,7 @@ impl crate::Bus for SystemBus {
             let irq = exception_num - 16;
             let idx = (irq / 32) as usize;
             let bit = irq % 32;
-            if idx < 8 {
+            if idx < nvic.ispr.len() {
                 return (nvic.ispr[idx].load(Ordering::SeqCst) & (1 << bit)) != 0;
             }
         }

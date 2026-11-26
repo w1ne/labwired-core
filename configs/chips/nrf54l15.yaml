@@ -413,20 +413,23 @@ peripherals:
     config:
       debug_schema: "../peripherals/nrf54l15/global_tampc_s.yaml"
 
-  # WDT30 / WDT31 — mapped so the MDK's approtect-invalid-state path (which
-  # pokes WDT30 to force a reset) writes somewhere real rather than faulting.
-  # Not reached on a healthy boot; present so a fault here means a genuine
-  # problem rather than a missing window.
+  # WDT30 / WDT31 — LFCLK/RR countdown and the product-spec STOPEN + TSEN +
+  # STOP sequence are modelled. CONFIG.SLEEP/HALT pause behavior, watchdog
+  # reset, WDT30 NMI delivery, and DPPI subscribe/publish are outside this
+  # model's current scope. WDT30 supports NMI on silicon; both instances also
+  # expose maskable IRQs 264/265.
   - id: "wdt30"
-    type: "nrf54l_wdt_stub"
+    type: "nrf54l_wdt"
     base_address: 0x50108000
     size: "4KB"
+    irq: 264
     config:
       debug_schema: "../peripherals/nrf54l15/global_wdt30_s.yaml"
   - id: "wdt31"
-    type: "nrf54l_wdt_stub"
+    type: "nrf54l_wdt"
     base_address: 0x50109000
     size: "4KB"
+    irq: 265
     config:
       debug_schema: "../peripherals/nrf54l15/global_wdt31_s.yaml"
 

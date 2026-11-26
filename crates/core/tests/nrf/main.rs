@@ -36,6 +36,7 @@ mod nrf5340_clock_boot;
 mod nrf54l15_boot;
 mod nrf54l15_smart_ring_probe;
 mod nrf54l_gpio_offsets;
+mod nrf54l_wdt;
 mod nrf54lm20a_peripheral_estate;
 mod nrf_gpio_in_step_vs_run;
 mod nrf_grtc_clock;

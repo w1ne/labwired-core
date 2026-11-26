@@ -24,7 +24,7 @@ mod scb_reset_tests {
         cpu.xpsr = 0xf700_0030;
         cpu.lr = 0xffff_fff9;
         cpu.control = 3;
-        cpu.pending_exceptions = [u64::MAX; 4];
+        cpu.pending_exceptions = [u64::MAX; 8];
         cpu.reset(&mut bus).unwrap();
         assert!(!cpu.primask);
         assert_eq!(cpu.basepri, 0);
@@ -33,7 +33,7 @@ mod scb_reset_tests {
         assert_eq!(cpu.xpsr, 0x0100_0000);
         assert_eq!(cpu.lr, u32::MAX);
         assert_eq!(cpu.control, 0);
-        assert_eq!(cpu.pending_exceptions, [0; 4]);
+        assert_eq!(cpu.pending_exceptions, [0; 8]);
         assert_eq!(cpu.get_pc(), 0x0800_0100);
         assert_eq!(cpu.get_register(13), 0x2000_1000);
     }

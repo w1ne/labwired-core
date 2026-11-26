@@ -98,7 +98,7 @@ struct ArchState {
     psp: u32,
     control: u32,
     xpsr: u32,
-    pending: [u64; 4],
+    pending: [u64; 8],
     primask: bool,
     faultmask: bool,
     basepri: u8,
