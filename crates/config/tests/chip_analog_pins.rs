@@ -68,7 +68,13 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
             Some(p)
                 if !matches!(
                     p.r#type.as_str(),
-                    "adc" | "nrf52840_saadc" | "avr_adc" | "ra_adc12" | "rp2040_adc" | "samd21_adc"
+                    "adc"
+                        | "nrf52840_saadc"
+                        | "avr_adc"
+                        | "ra_adc12"
+                        | "rp2040_adc"
+                        | "samd21_adc"
+                        | "esp32_sar_adc"
                 ) =>
             {
                 problems.push(format!(
@@ -100,7 +106,28 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
             .peripherals
             .iter()
             .any(|p| &p.id == peripheral && p.r#type == "samd21_adc");
-        if ra {
+        let esp32_sar = desc
+            .peripherals
+            .iter()
+            .any(|p| &p.id == peripheral && p.r#type == "esp32_sar_adc");
+        if esp32_sar {
+            // Classic ESP32 datasheet Table 2-2 (ESP32 Series Datasheet,
+            // "Peripheral Pin Configurations"): SAR ADC1 CH0..CH7 are the fixed
+            // pads GPIO36, 37, 38, 39, 32, 33, 34, 35. The pads have no GPIO
+            // matrix choice, so the channel decides the pad exactly.
+            match esp_gpio_number(pad) {
+                Some(gpio) => match ESP32_ADC1_GPIO.get(usize::from(*channel)) {
+                    Some(&expected) if expected != gpio => problems.push(format!(
+                        "{chip}: {pad} must be GPIO{expected} for SAR ADC1 channel {channel}"
+                    )),
+                    Some(_) => {}
+                    None => problems.push(format!(
+                        "{chip}: {pad} names channel {channel}; SAR ADC1 has 8 inputs"
+                    )),
+                },
+                None => problems.push(format!("{chip}: {pad} is not a GPIO<n> ESP32 pad label")),
+            }
+        } else if ra {
             // `ra_adc12` has one data register per channel, ADDR0-ADDR28, so a
             // channel number above 28 addresses nothing (see the `CHANNELS`
             // constant in crates/core/src/peripherals/ra_adc12.rs).
@@ -288,6 +315,18 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
         }
     }
     problems
+}
+
+/// Classic ESP32 SAR ADC1 CH0..CH7 pads, in channel order.
+const ESP32_ADC1_GPIO: [u8; 8] = [36, 37, 38, 39, 32, 33, 34, 35];
+
+/// `GPIO34` -> 34. Espressif names pads by their GPIO number only.
+fn esp_gpio_number(pad: &str) -> Option<u8> {
+    let digits = pad.strip_prefix("GPIO")?;
+    if digits.is_empty() || (digits.len() > 1 && digits.starts_with('0')) {
+        return None;
+    }
+    digits.parse().ok()
 }
 
 /// The two pad shapes an AVR descriptor may name: a `P<port><bit>` GPIO pad
@@ -765,6 +804,37 @@ fn rp2040_validation_rejects_bad_pads_channels_and_the_temperature_input() {
     desc.peripherals
         .iter_mut()
         .find(|p| p.id == "adc")
+        .unwrap()
+        .r#type = "uart".into();
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+}
+
+#[test]
+fn esp32_validation_rejects_bad_pads_channels_and_types() {
+    let original = load("esp32");
+    assert!(analog_pin_problems("esp32", &original).is_empty());
+    for bad_pad in ["GPIO034", "IO34", "GPIO", "P34", "GPIO34x"] {
+        let mut desc = original.clone();
+        let mapping = desc.analog_pins.remove("GPIO34").unwrap();
+        desc.analog_pins.insert(bad_pad.to_string(), mapping);
+        assert!(
+            !analog_pin_problems("bad", &desc).is_empty(),
+            "accepted {bad_pad}"
+        );
+    }
+    // A swap keeps every channel claimed once but routes GPIO34 into CH7.
+    let mut desc = original.clone();
+    desc.analog_pins.get_mut("GPIO34").unwrap().channel = 7;
+    desc.analog_pins.get_mut("GPIO35").unwrap().channel = 6;
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+    // SAR ADC1 has eight inputs; channel 8 names no pad.
+    let mut desc = original.clone();
+    desc.analog_pins.get_mut("GPIO35").unwrap().channel = 8;
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+    let mut desc = original.clone();
+    desc.peripherals
+        .iter_mut()
+        .find(|p| p.id == "sens_sar_adc")
         .unwrap()
         .r#type = "uart".into();
     assert!(!analog_pin_problems("bad", &desc).is_empty());
