@@ -561,6 +561,8 @@ impl SystemBus {
             live_numeric: None,
             ina219_senses: Vec::new(),
             motor_cycle_anchor: 0,
+            external_mechanical_frontier: None,
+            external_mechanical_inputs: Vec::new(),
             analog_inputs: Vec::new(),
             analog_muxes: Vec::new(),
             spi_cs_watches: Vec::new(),
@@ -603,7 +605,7 @@ impl SystemBus {
             bus.pin_map
                 .insert(label.to_ascii_uppercase(), (loc.gpio.clone(), loc.bit));
         }
-        for (label, adc) in &chip.analog_pins {
+        for (label, adc) in &chip.analog_pin_table() {
             bus.analog_pin_map.insert(
                 label.to_ascii_uppercase(),
                 (adc.peripheral.clone(), adc.channel),

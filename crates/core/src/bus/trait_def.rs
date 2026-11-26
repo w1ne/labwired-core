@@ -367,6 +367,31 @@ pub trait Bus {
         false
     }
 
+    /// `true` when this bus supports the decoded basic-block cache without
+    /// bypassing cycle-accurate timing or active debug watches. Default `false`.
+    fn block_cache_eligible(&self) -> bool {
+        false
+    }
+
+    /// Side-effect-free entry-word peek in linear flash for verifying cached
+    /// blocks backed by synthetic base-zero flash. Default `None`.
+    fn read_flash_entry_word(&self, _pc: u64) -> Option<u32> {
+        None
+    }
+
+    /// Side-effect-free code-window slice for the decoded basic-block cache:
+    /// returns `(bytes, writable_code, verify_entry)`. Plain RAM is excluded so
+    /// host-patched RAM tests stay exact. Default `None`.
+    fn read_block_cache_code(&self, _pc: u64, _max_bytes: usize) -> Option<(Vec<u8>, bool, bool)> {
+        None
+    }
+
+    /// Mutable view of primary guest RAM for shared-memory JIT flush/sync,
+    /// avoiding a `SystemBus` downcast on the hot path. Default `None`.
+    fn ram_data_mut(&mut self) -> Option<&mut [u8]> {
+        None
+    }
+
     /// Commit a coalesced RISC-V store-spin loop to ordinary flat RAM: write
     /// `value` at `addr` once and account for `stores` RAM writes, as if the
     /// interpreter had executed every elided `sw`. Returns `false`, having

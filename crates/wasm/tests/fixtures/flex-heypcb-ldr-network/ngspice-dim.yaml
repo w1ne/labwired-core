@@ -1,0 +1,36 @@
+# Negative control for ngspice-bright.yaml: the same sequence as test-dim.yaml
+# solved by ngspice. At 1 lx U4 is 59.7 kΩ, τ = 857 µs, and 4 ms is about 4.7
+# time constants: SNS_AN1 reaches 0.4817 V, the firmware reads ADC count 597,
+# and the user LED stays off with no edge on either LED signal.
+schema_version: "1.0"
+inputs:
+  flex: system-ngspice.yaml
+  firmware: firmware.wasm
+entry:
+  export: run
+  args:
+    - { port: lux }
+    - { port: sensor_v }
+    - { port: user_led_drive }
+    - { port: user_led_state }
+    - { number: 1 }
+limits:
+  max_steps: 100000
+  max_time_ns: 10000000
+assertions:
+  - entry_result: { equals: 597 }
+  - port_value: { port: sensor_v, min: 0.481, max: 0.483 }
+  - port_value: { port: user_led_state, equals: 0 }
+  - digital_edges: { port: user_led_drive, count: 0 }
+  - digital_edges: { port: user_led_state, count: 0 }
+  # Oscilloscope: the same node falls from 1.32 V toward 0.4737 V. ngspice
+  # follows the analytic curve: 1.0698 V at 350 µs.
+  - analog_sample: { port: sensor_v, at_ns: 350000, min: 1.069, max: 1.071 }
+  # Negative control for the bright crossing: the node never rises to 2.001 V.
+  - analog_crossings: { port: sensor_v, level: 2.001, direction: rising, count: 0 }
+  # 63.2 % of the fall to the 0.4737 V end value is 0.785 V. U4 is 59.7 kΩ at
+  # 1 lx, so the time constant is 857 µs; with the 50 µs latch the first sample
+  # at or below the level is at 950 µs.
+  - analog_crossings: { port: sensor_v, level: 0.785, direction: falling, times_ns: [950000] }
+  - analog_window: { port: sensor_v, min: 0.481, max: 1.321 }
+  - final_time_ns: { equals: 4001000 }

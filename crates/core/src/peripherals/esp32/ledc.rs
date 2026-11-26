@@ -728,6 +728,10 @@ struct SnapV2 {
 }
 
 impl Peripheral for Ledc {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     fn add_ledc_duty_observer(&mut self, obs: Arc<dyn LedcDutyObserver>) -> bool {
         self.add_duty_observer(obs);
         true

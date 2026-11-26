@@ -33,6 +33,12 @@ PROFILE_REF = re.compile(r"configs/systems/([\w./-]+)\.ya?ml")
 EXAMPLE_REF = re.compile(r"examples/([\w./-]+)/analog-[\w.-]+\.ya?ml")
 ADC_ROUTE = re.compile(r"adc\.[A-Za-z0-9_]+\.\d+_volts")
 ANALOG_ROUTE = "board.analog."
+# One flow-style pin-table entry that names an ADC function:
+#   PA0: { gpio: gpioa, bit: 0, functions: [{ type: adc, peripheral: adc1, channel: 5 }, ...] }
+ADC_PIN_FUNCTION = re.compile(
+    r"^\s+\"?([A-Za-z0-9_.]+)\"?\s*:\s*\{[^\n]*\btype:\s*\"?adc\"?[^\n]*\bchannel:\s*(\d+)",
+    re.MULTILINE,
+)
 
 
 def profiles() -> list[tuple[str, Path]]:
@@ -61,24 +67,48 @@ def read_chip(path: Path) -> Path | None:
 
 
 def analog_pad_count(chip: Path | None) -> int:
+    """Pads this chip can hand to an ADC, from either table that may name one.
+
+    `analog_pins:` is the dedicated block. A chip that transcribes its pin
+    table can instead (or as well) record `{ type: adc, peripheral, channel }`
+    in a pad's `functions:` list — that is the list the analog router reads
+    (`ChipDescriptor::analog_pin_table`), so a pad named there is reachable
+    without a duplicate block. Counting both keeps this inventory and the
+    engine's answer to "can this pad reach an ADC?" the same number.
+    """
     if chip is None or not chip.is_file():
         return 0
     text = chip.read_text(encoding="utf-8", errors="replace")
+    pads: set[str] = set()
     match = re.search(r"^analog_pins:\n((?:[ \t]+.*\n)+)", text, re.MULTILINE)
-    if not match:
-        return 0
-    # Pad labels are not all `PA0`: nRF parts use `P0.02` and friends.
-    return len(re.findall(r"^\s+[A-Za-z0-9_.]+\s*:\s*\{", match.group(1), re.MULTILINE))
+    if match:
+        # Pad labels are not all `PA0`: nRF parts use `P0.02` and friends.
+        pads.update(
+            re.findall(r"^\s+([A-Za-z0-9_.]+)\s*:\s*\{", match.group(1), re.MULTILINE)
+        )
+    for pad, _channel in ADC_PIN_FUNCTION.findall(text):
+        pads.add(pad)
+    return len(pads)
 
 
-def resolve_profile_keys() -> tuple[dict[str, str], list[str]]:
-    """Translate file stems and example directories to declared profile names."""
-    by_stem: dict[str, str] = {}
+def resolve_profile_keys() -> tuple[dict[str, Path], list[str]]:
+    """Translate manifest references and example directories to manifest paths.
+
+    The key is the manifest's path relative to `configs/systems/`, always. A
+    top-level manifest keeps the long-standing short form
+    (`configs/systems/nucleo-f103rb.yaml` names `nucleo-f103rb`); a nested one
+    must be named with its directory
+    (`configs/systems/stm32-catalog/stm32f103c4.yaml` names
+    `stm32-catalog/stm32f103c4`). Registering a bare stem for a nested file as
+    well would make `stm32f401cdu6-blackpill` ambiguous: the onboarding tree
+    keeps a file of that name whose chip declares no analog pad at all.
+    """
+    by_key: dict[str, Path] = {}
     names: list[str] = []
     for name, path in profiles():
-        by_stem[path.stem] = name
+        by_key[path.relative_to(SYSTEMS).with_suffix("").as_posix()] = path
         names.append(name)
-    return by_stem, names
+    return by_key, names
 
 
 def profile_for_example_dir(directory: str, names: list[str]) -> str | None:
@@ -97,10 +127,20 @@ def profile_for_example_dir(directory: str, names: list[str]) -> str | None:
     return max(candidates, key=len) if candidates else None
 
 
-def evidence() -> dict[str, str]:
-    """Map profile name -> the test file that proves its analog endpoint."""
-    by_stem, names = resolve_profile_keys()
-    by_profile: dict[str, str] = {}
+def evidence() -> dict[Path, str]:
+    """Map manifest path -> the test file that proves its analog endpoint.
+
+    Keyed by path, not by declared `name:`: the onboarding tree keeps its own
+    `stm32f401cdu6-blackpill.yaml` under the same name as the catalog one, and
+    a name-keyed map credited that uncovered board from its sibling's test.
+    Example-deck directories resolve through the declared name, first manifest
+    in path order winning, because a directory carries no path of its own.
+    """
+    by_key, names = resolve_profile_keys()
+    by_name: dict[str, Path] = {}
+    for name, path in profiles():
+        by_name.setdefault(name, path)
+    by_profile: dict[Path, str] = {}
     for test in sorted(TESTS.rglob("*.rs")):
         text = test.read_text(encoding="utf-8", errors="replace")
         fixtures = EXAMPLE_REF.findall(text)
@@ -116,14 +156,14 @@ def evidence() -> dict[str, str]:
         if not routed and not fixtures:
             continue
         rel = test.relative_to(ROOT).as_posix()
-        for stem in PROFILE_REF.findall(text):
-            name = by_stem.get(stem)
-            if name:
-                by_profile.setdefault(name, rel)
+        for reference in PROFILE_REF.findall(text):
+            path = by_key.get(reference)
+            if path:
+                by_profile.setdefault(path, rel)
         for directory in fixtures:
             name = profile_for_example_dir(directory, names)
-            if name:
-                by_profile.setdefault(name, rel)
+            if name and name in by_name:
+                by_profile.setdefault(by_name[name], rel)
     return by_profile
 
 
@@ -132,7 +172,14 @@ def report() -> str:
     rows: list[tuple[str, str, int, str]] = []
     for name, path in profiles():
         chip = read_chip(path)
-        rows.append((name, chip.stem if chip else "-", analog_pad_count(chip), covered_by.get(name, "")))
+        rows.append(
+            (
+                name,
+                chip.stem if chip else "-",
+                analog_pad_count(chip),
+                covered_by.get(path, ""),
+            )
+        )
     covered = [row for row in rows if row[3]]
     uncovered = [row for row in rows if not row[3]]
     routable = [row for row in uncovered if row[2] > 0]
@@ -147,8 +194,8 @@ def report() -> str:
         "`CosimSession` that loads that profile (or one of its",
         "`examples/<dir>/analog-*.yaml` decks) and reaches an endpoint route the",
         "manifest declares: `board.analog.<pad>_volts`, which the chip's",
-        "`analog_pins:` map resolves to an ADC channel or a voltage-thresholded",
-        "digital pad, or an explicit `adc.<peripheral>.<channel>_volts` route.",
+        "`analog_pins:` map or the pad's `adc` pin function resolves to an ADC",
+        "channel, or an explicit `adc.<peripheral>.<channel>_volts` route.",
         "Device-only unit tests, ADC register tests with no netlist, files that only",
         "list fixture paths, and helper tests do not count: they prove the model,",
         "not the board.",
@@ -156,15 +203,18 @@ def report() -> str:
         f"- Profiles in `configs/systems/`: **{len(rows)}**",
         f"- Covered end to end: **{len(covered)}**",
         f"- Not covered: **{len(uncovered)}**",
-        f"- Not covered but with an `analog_pins:` map: **{len(routable)}** (these are the",
+        f"- Not covered but with an ADC pad map: **{len(routable)}** (these are the",
         "  boards the generic NTC and diode decks can reach next; the rest need an",
-        "  `analog_pins:` map, an ADC model, or a digital endpoint first)",
+        "  `analog_pins:` block or `adc` pin functions, an ADC model, or a digital",
+        "  endpoint first)",
         "",
-        "The `Analog pad map` column counts `analog_pins:` entries in the chip",
-        "descriptor. Every such entry in this tree names an ADC peripheral, so the",
-        "count is what the generic decks can reach without new routing.",
+        "The `Analog pad map` column counts the pads a chip can hand to an ADC:\n"
+        "`analog_pins:` entries plus pads whose `pins:` table carries an\n"
+        "`{ type: adc, peripheral, channel }` function (the union the router uses).\n"
+        "Every such entry in this tree names an ADC peripheral, so the count is what\n"
+        "the generic decks can reach without new routing.",
         "",
-        "## Next queue: not covered, `analog_pins:` map already present",
+        "## Next queue: not covered, ADC pads already mapped",
         "",
     ]
     if routable:

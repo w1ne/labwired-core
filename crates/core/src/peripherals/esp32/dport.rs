@@ -359,6 +359,10 @@ impl Dport {
 }
 
 impl Peripheral for Dport {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     fn cross_core_pending(&self, core_id: u8) -> u32 {
         Dport::cross_core_pending(self, core_id)
     }
