@@ -1,0 +1,9 @@
+* Generic Shockley diode load line of analog-ntc-diode-system.yaml, solved by
+* ngspice with the same model card as the in-core D1 element.
+.options temp=26.85 tnom=26.85
+Vcc supply 0 dc 3.3
+Rlim supply sense 1k
+D1 sense 0 DREF
+.model DREF D(IS=2.52n N=1.752 RS=0.568)
+.tran 10u 10
+.end

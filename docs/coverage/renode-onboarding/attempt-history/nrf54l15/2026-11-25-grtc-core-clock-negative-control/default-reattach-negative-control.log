@@ -1,0 +1,36 @@
+# Negative control: `attach_cpu_hz` re-applying the same clock must keep the phase.
+#
+# Applied to the PR head after the review nit: replace the early return
+#
+#     if hz == 0 || hz == self.cpu_hz { return; }
+#
+# with
+#
+#     if hz == 0 { return; }
+#
+# which resets `cycle_accum` on every re-attach of the shipped 128 MHz clock.
+# Same binary command as the positive run: every slice leaves a remainder, so
+# the lost sub-tick phase must accumulate.
+
+$ cargo test -p labwired-core --lib attach_cpu_hz_at_the_default_is_a_no_op
+running 1 test
+test peripherals::nrf54l::grtc::tests::core_clock::attach_cpu_hz_at_the_default_is_a_no_op ... FAILED
+
+failures:
+
+---- peripherals::nrf54l::grtc::tests::core_clock::attach_cpu_hz_at_the_default_is_a_no_op stdout ----
+
+thread '...attach_cpu_hz_at_the_default_is_a_no_op' panicked at crates/core/src/peripherals/nrf54l/grtc_tests.rs:806:9:
+assertion `left == right` failed
+  left: 935565
+ right: 935570
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+failures:
+    tests::core_clock::attach_cpu_hz_at_the_default_is_a_no_op
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6596 filtered out
+
+# Restored model: 5/5 pass in `peripherals::nrf54l::grtc::tests::core_clock`
+# and 8/8 in `scheduler_mode`; the same-clock re-attach now runs after a slice
+# that leaves a remainder, so an unconditional `cycle_accum.set(0)` is caught.

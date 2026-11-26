@@ -46,8 +46,12 @@ declares `nrf54l_grtc`, assembles the real descriptors, and rewrites only
 Result: 2/2 pass in default and `event-scheduler` modes. Unit tests
 `peripherals::nrf54l::grtc::tests::core_clock` add the fractional 2.5 MHz
 ratio, the zero-clock default, the no-op default attach and the armed-compare
-deadline at 16 MHz: 5/5 pass. `peripherals::nrf54l::grtc::tests::scheduler_mode`
-adds the mid-run clock change: 8/8 pass with `event-scheduler`.
+deadline at 16 MHz: 5/5 pass. The deadline test reads
+`cycles_until_next_compare()` directly (16 cycles armed, 1 cycle after 15
+elapsed, `None` after the event fires), so it pins the new `u128` ceiling
+arithmetic as well as the latched event.
+`peripherals::nrf54l::grtc::tests::scheduler_mode` adds the mid-run clock
+change: 8/8 pass with `event-scheduler`.
 
 ## Negative control
 
@@ -70,6 +74,15 @@ cannot sync the lazy clock and hide a missing re-anchor.
 - Sync block removed, clock still stored: reads 10 (all 20 cycles converted at
   the new rate).
 - Fixed model: reads 15 (10 ticks at the old rate, then 5 at the new one).
+
+`default-reattach-negative-control.log` is a second negative control, on the
+test rather than the model. The shipped 128 MHz clock is attached again after
+each of 97 slices of 1,234,567 cycles, so `attach_cpu_hz` takes its
+`hz == self.cpu_hz` early return after a remainder was left behind. Replacing
+that guard with `hz == 0` (an unconditional `cycle_accum.set(0)`) reads
+`935565` against the untouched model's `935570`, losing five ticks over the
+run. The positive run passes. This pins the sub-tick phase, which the earlier
+cycle-0-only call could not observe.
 
 A mid-run clock change does not move a compare event that is already in the
 scheduler queue. The bus only attaches the descriptor clock at assembly, before

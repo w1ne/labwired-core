@@ -283,6 +283,99 @@ fn ngspice_solves_the_generic_ntc_and_diode_decks_the_in_core_engine_solves() {
     );
 }
 
+/// The same generic NTC and diode decks on the WCH CH32V003EVT, the only
+/// non-ARM board in the analog inventory. The pair differs from the NUCLEO
+/// pair only in the pads the descriptor bonds (PA2/PA1 instead of PA0/PA1);
+/// the netlists and the ngspice decks are the generic ones. This proves
+/// `adapter: ngspice` resolves `board.analog.<pad>_volts` through a second
+/// ADC width and a non-ARM descriptor, not only the 12-bit STM32 map.
+#[test]
+fn ngspice_solves_the_wch_ch32v003_generic_decks_the_in_core_engine_solves() {
+    const STEPS: u64 = 4;
+    const NTC_SIGNAL: &str = "board.analog.pa2_volts";
+    const DIODE_SIGNAL: &str = "board.analog.pa1_volts";
+    const TEMPERATURES: [&str; 3] = ["-20", "25", "85"];
+    let root = repo_root();
+    let analog = root.join("examples/wch-ch32v003evt/analog-ntc-diode-system.yaml");
+    let spiced = root.join("examples/wch-ch32v003evt/analog-ntc-diode-ngspice.yaml");
+
+    // The in-core half always runs: a missing ngspice must not hide a deck the
+    // engine can no longer solve.
+    let mut in_core_ntc = Vec::new();
+    for celsius in TEMPERATURES {
+        let set = format!("ui.ntc.temperature_c={celsius}");
+        let series = cosim_series(&analog, STEPS, &[&set], "ntc_divider", NTC_SIGNAL);
+        assert_eq!(series.len() as u64, STEPS);
+        assert!(
+            series.iter().all(|volts| volts.is_finite()),
+            "{celsius} degC: non-finite in-core sample"
+        );
+        in_core_ntc.push(series);
+    }
+    let in_core_diode = cosim_series(&analog, STEPS, &[], "diode_load_line", DIODE_SIGNAL);
+    assert_eq!(in_core_diode.len() as u64, STEPS);
+
+    // The temperatures must not agree with each other, or a differential on a
+    // temperature-insensitive deck would pass while proving nothing.
+    for pair in in_core_ntc.windows(2) {
+        let (cold, warm) = (pair[0].last().unwrap(), pair[1].last().unwrap());
+        assert!(
+            (warm - cold).abs() > 0.1,
+            "the NTC deck does not respond to temperature: {cold} V vs {warm} V"
+        );
+    }
+
+    if !ngspice_available() {
+        eprintln!(
+            "SKIP: libngspice is not loadable on this host, so the ngspice half of the \
+             CH32V003 differential cannot run. Install it (Debian/Ubuntu: \
+             `apt install libngspice0`) or set LABWIRED_NGSPICE_LIB. The in-core decks \
+             produced {STEPS} finite samples each."
+        );
+        return;
+    }
+
+    for (index, celsius) in TEMPERATURES.iter().enumerate() {
+        let set = format!("ui.ntc.temperature_c={celsius}");
+        let theirs = cosim_series(&spiced, STEPS, &[&set], "ntc_divider", NTC_SIGNAL);
+        assert_eq!(theirs.len() as u64, STEPS);
+        let ours = &in_core_ntc[index];
+        let worst = ours
+            .iter()
+            .zip(&theirs)
+            .map(|(a, n)| (a - n).abs())
+            .fold(0.0_f64, f64::max);
+        assert!(
+            worst < 1e-5,
+            "{celsius} degC: in-core NTC {ours:?} V vs ngspice {theirs:?} V, \
+             worst {worst:e} V"
+        );
+        eprintln!(
+            "{celsius} degC NTC: in-core {:.9} V, ngspice {:.9} V, worst {worst:e} V",
+            ours.last().unwrap(),
+            theirs.last().unwrap()
+        );
+    }
+
+    let theirs = cosim_series(&spiced, STEPS, &[], "diode_load_line", DIODE_SIGNAL);
+    assert_eq!(theirs.len() as u64, STEPS);
+    let worst = in_core_diode
+        .iter()
+        .zip(&theirs)
+        .map(|(a, n)| (a - n).abs())
+        .fold(0.0_f64, f64::max);
+    assert!(
+        worst < 1e-5,
+        "diode load line: in-core {in_core_diode:?} V vs ngspice {theirs:?} V, \
+         worst {worst:e} V"
+    );
+    eprintln!(
+        "CH32V003 diode load line: in-core {:.9} V, ngspice {:.9} V, worst {worst:e} V",
+        in_core_diode.last().unwrap(),
+        theirs.last().unwrap()
+    );
+}
+
 #[test]
 fn the_analog_manifest_writes_a_waveform_trace() {
     let root = repo_root();

@@ -9,10 +9,11 @@
 //! only `board.analog.<pad>_volts`, and the CH32V003 descriptor's
 //! `analog_pins:` map selects the ADC channel.
 //!
-//! Two profiles share the run: the bare CH32V003EVT and the same board with a
-//! BME280 on I2C1. The sensor owns PC1/PC2 and the LED jumper owns PC0; the
-//! generic decks drive PA1/PA2, so the attached sensor does not disturb the
-//! analog front end and no engine code changes per board.
+//! Three profiles share the run: the bare CH32V003EVT, the same board with a
+//! BME280 on I2C1, and the same board with a MAX31855 on SPI1. The BME280 owns
+//! PC1/PC2, the MAX31855 owns PC4/PC5/PC6/PC7, and the LED jumper owns PC0;
+//! the generic decks drive PA1/PA2, so no attached device disturbs the analog
+//! front end and no engine code changes per board.
 //!
 //! This is the first mixed-signal board on a non-ARM core. The deck, the
 //! netlist solver, and the routing layer are unchanged; only the descriptor
@@ -253,6 +254,29 @@ fn ch32v003_ntc_and_diode_netlists_reach_pa2_pa1_adc1_end_to_end() {
         "the mixed-signal run keeps the CH32V003EVT LED jumper"
     );
     run_board("wch-ch32v003evt", "configs/systems/wch-ch32v003evt.yaml");
+}
+
+/// The CH32V003EVT with an Adafruit MAX31855 K-type thermocouple breakout on
+/// SPI1. The breakout owns PC4..PC7 (CS, SCK, DIN, DO) and the LED jumper owns
+/// PC0; the generic decks drive PA1/PA2, which the SPI1 wiring leaves free, so
+/// the attached converter does not disturb the analog front end.
+#[test]
+fn ch32v003_max31855_ntc_and_diode_netlists_reach_pa2_pa1_adc1_end_to_end() {
+    let system_path = root("configs/systems/wch-ch32v003evt-max31855.yaml");
+    let profile =
+        SystemManifest::from_file(&system_path).expect("load CH32V003EVT-MAX31855 profile");
+    assert_eq!(profile.name, "wch-ch32v003evt-max31855");
+    assert!(
+        profile
+            .external_devices
+            .iter()
+            .any(|device| device.id == "tc1"),
+        "the mixed-signal run keeps the MAX31855 on SPI1"
+    );
+    run_board(
+        "wch-ch32v003evt-max31855",
+        "configs/systems/wch-ch32v003evt-max31855.yaml",
+    );
 }
 
 /// The CH32V003EVT with the BME280 breakout on I2C1. The sensor owns PC1/PC2

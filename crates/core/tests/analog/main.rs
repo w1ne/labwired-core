@@ -42,6 +42,8 @@ mod circuit_bldc;
 mod cosim_at32f421_analog;
 mod cosim_avr_atmega328p_analog;
 mod cosim_avr_atmega32u4_analog;
+mod cosim_avr_atmega4809_analog;
+mod cosim_avr_atmega_mega_analog;
 mod cosim_ch32v003_analog;
 mod cosim_esp32_analog_diode;
 mod cosim_microbit_v2_analog;
