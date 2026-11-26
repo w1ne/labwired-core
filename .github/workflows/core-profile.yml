@@ -183,7 +183,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          retention-days: 3
+          retention-days: 2
           name: core-profile
           path: |
             profile-report.txt

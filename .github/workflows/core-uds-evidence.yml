@@ -95,7 +95,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          retention-days: 3
+          retention-days: 2
           name: h563-uds-evidence
           path: out/uds-evidence
           if-no-files-found: error

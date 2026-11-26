@@ -216,7 +216,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          retention-days: 3
+          retention-days: 2
           name: board-throughput-report
           path: |
             perf-report.txt

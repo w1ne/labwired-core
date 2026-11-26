@@ -62,7 +62,7 @@ jobs:
         with:
           name: validated-onboarding-manifests
           path: configs/onboarding/*.yaml
-          retention-days: 3
+          retention-days: 2
 
       - name: Upload validation summary
         if: always()
@@ -72,7 +72,7 @@ jobs:
           path: |
             out/hw-target-validation/summary.json
             out/hw-target-validation/summary.md
-          retention-days: 3
+          retention-days: 2
 
       - name: Publish validation summary
         if: always()

@@ -587,7 +587,7 @@ jobs:
         with:
           name: validation-status-report
           path: out/validation/VALIDATION_STATUS.md
-          retention-days: 3
+          retention-days: 1
 
       # The CHEAT(...) surface FIDELITY.md defines had no gate at all: the doc
       # said "grep for it", and a convention nothing counts is a comment. This
@@ -837,7 +837,7 @@ jobs:
       - name: Upload timing reports
         uses: actions/upload-artifact@v4
         with:
-          retention-days: 3
+          retention-days: 1
           name: core-build-timings
           path: target/cargo-timings/
           if-no-files-found: error

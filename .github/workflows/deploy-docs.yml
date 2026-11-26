@@ -52,14 +52,15 @@ jobs:
       - name: Render validation status report
         run: python3 scripts/generate_validation_status.py
 
-      # Before pages-build-deployment uploads the next ~26 MiB artifact, this
-      # bounds steady-state storage to <=2 artifacts / ~52 MiB.
+      # Before pages-build-deployment uploads the next ~26 MiB artifact, prune
+      # all prior github-pages artifacts so steady-state storage stays at 1
+      # artifact (~26 MiB) rather than stacking 2 (~52 MiB).
       - name: Prune superseded github-pages artifacts
         uses: actions/github-script@v7
         continue-on-error: true
         with:
           script: |
-            const KEEP = 1;
+            const KEEP = 0;
             const artifacts = await github.paginate(
               github.rest.actions.listArtifactsForRepo,
               {

@@ -82,7 +82,7 @@ jobs:
           cargo run -p labwired-cli --bin labwired -- test --script validation/iolinki/g0-startup.yaml
       - uses: actions/upload-artifact@v4
         with:
-          retention-days: 3
+          retention-days: 1
           name: iolinki-g0-firmware-prerequisite
           path: .iolinki-g0-build/reference-device.*
           include-hidden-files: true
@@ -141,7 +141,7 @@ jobs:
           cargo test -p labwired-core --features event-scheduler --test stm32 -- --include-ignored u5_exti:: u5_reference_firmware::
       - uses: actions/upload-artifact@v4
         with:
-          retention-days: 3
+          retention-days: 1
           name: iolinki-u5-firmware-prerequisite
           path: |
             .iolinki-u5-build/zephyr/zephyr.elf

@@ -12,7 +12,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = sorted((REPO_ROOT / ".github" / "workflows").glob("*.yml"))
 ACTIONS = sorted((REPO_ROOT / ".github" / "actions").glob("*/action.yml"))
-MAX_RETENTION_DAYS = 3
+MAX_RETENTION_DAYS = 2
 # Frozen one-off historical evidence workflows whose external upstream URLs/refs
 # no longer resolve if re-triggered on PR; they already cap retention at 7 days
 # and do not run on normal PRs.
@@ -89,6 +89,43 @@ def test_deploy_docs_prunes_superseded_github_pages_artifacts():
     assert "listArtifactsForRepo" in script
     assert "deleteArtifact" in script
     assert "name: 'github-pages'" in script
+    assert "const KEEP = 0;" in script
+
+
+@pytest.mark.parametrize(
+    "workflow_name,required_needs",
+    [
+        ("core-python-release.yml", {"wheels", "sdist", "linux-arm64-smoke", "publish"}),
+        ("core-release.yml", {"build", "linux-smoke", "release", "publish", "release-smoke"}),
+    ],
+)
+def test_release_workflows_clean_up_transient_artifacts(workflow_name, required_needs):
+    workflow = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / workflow_name).read_text())
+    jobs = workflow.get("jobs") or {}
+
+    for job_id, job in jobs.items():
+        for step in job.get("steps") or []:
+            if str(step.get("uses", "")).startswith("actions/upload-artifact@"):
+                days = (step.get("with") or {}).get("retention-days")
+                assert days == 1, f"{workflow_name}:{job_id} upload must set retention-days: 1"
+                step_if = str(step.get("if") or "")
+                assert "push" in step_if and "tag" in step_if, (
+                    f"{workflow_name}:{job_id} upload must gate release-only artifacts on tags"
+                )
+
+    cleanup = jobs.get("cleanup-artifacts")
+    assert cleanup is not None, f"{workflow_name} missing cleanup-artifacts job"
+    assert set(cleanup.get("needs") or []) >= required_needs
+    assert str(cleanup.get("if") or "").strip() == "always()"
+    assert (cleanup.get("permissions") or {}).get("actions") == "write"
+    steps = cleanup.get("steps") or []
+    assert any(
+        str(step.get("uses", "")).startswith("actions/github-script@")
+        and step.get("continue-on-error") is True
+        and "listWorkflowRunArtifacts" in (step.get("with") or {}).get("script", "")
+        and "deleteArtifact" in (step.get("with") or {}).get("script", "")
+        for step in steps
+    ), f"{workflow_name}:cleanup-artifacts must delete run artifacts via github-script"
 
 
 @pytest.mark.parametrize("step,max_days", UPLOAD_STEPS)

@@ -178,6 +178,9 @@ jobs:
           exit "$fail"
 
       - name: Upload artifact
+        # Dry-run workflow_dispatch runs only smoke the Linux archives below;
+        # skip uploading macOS/Windows tarballs unless publishing a tag.
+        if: (github.event_name == 'push' && github.ref_type == 'tag') || startsWith(matrix.platform, 'linux-')
         uses: actions/upload-artifact@v4
         with:
           name: labwired-${{ matrix.platform }}
@@ -380,3 +383,46 @@ jobs:
           test -s out/release-action-smoke/junit.xml
           test -s out/release-action-smoke-second/result.json
           test -s out/release-action-smoke-second/junit.xml
+
+  cleanup-artifacts:
+    name: Clean up transient release artifacts
+    needs: [build, linux-smoke, release, publish, release-smoke]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Delete workflow run release artifacts
+        uses: actions/github-script@v7
+        continue-on-error: true
+        with:
+          script: |
+            const artifacts = await github.paginate(
+              github.rest.actions.listWorkflowRunArtifacts,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: context.runId,
+                per_page: 100,
+              }
+            );
+            let deleted = 0;
+            let freedBytes = 0;
+            for (const artifact of artifacts) {
+              if (artifact.expired) continue;
+              try {
+                await github.rest.actions.deleteArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id: artifact.id,
+                });
+                deleted += 1;
+                freedBytes += artifact.size_in_bytes || 0;
+              } catch (error) {
+                core.warning(`Could not delete artifact ${artifact.id}: ${error.message}`);
+              }
+            }
+            core.info(
+              `Deleted ${deleted} transient release artifact(s), freed ${(freedBytes / (1024 * 1024)).toFixed(2)} MiB.`
+            );
