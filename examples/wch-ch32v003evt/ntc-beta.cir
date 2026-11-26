@@ -1,0 +1,9 @@
+* Generic Beta NTC divider of analog-ntc-diode-system.yaml, solved by ngspice.
+* Rntc = 10 kOhm at 25 degC, beta = 3950 K. Vtemp carries Celsius as volts so
+* the same temperature input drives this deck and the in-core Rntc element.
+Vcc vcc 0 dc 3.3
+Vtemp temp 0 dc 25
+Bntc vcc sense I = V(vcc,sense) / (10k * exp(3950 * (1/(273.15 + V(temp)) - 1/298.15)))
+Rpull sense 0 10k
+.tran 10u 10
+.end

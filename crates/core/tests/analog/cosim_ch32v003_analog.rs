@@ -9,10 +9,11 @@
 //! only `board.analog.<pad>_volts`, and the CH32V003 descriptor's
 //! `analog_pins:` map selects the ADC channel.
 //!
-//! Two profiles share the run: the bare CH32V003EVT and the same board with a
-//! BME280 on I2C1. The sensor owns PC1/PC2 and the LED jumper owns PC0; the
-//! generic decks drive PA1/PA2, so the attached sensor does not disturb the
-//! analog front end and no engine code changes per board.
+//! Three profiles share the run: the bare CH32V003EVT, the same board with a
+//! BME280 on I2C1, and the same board with a MAX31855 on SPI1. The BME280 owns
+//! PC1/PC2, the MAX31855 owns PC4/PC5/PC6/PC7, and the LED jumper owns PC0;
+//! the generic decks drive PA1/PA2, so no attached device disturbs the analog
+//! front end and no engine code changes per board.
 //!
 //! This is the first mixed-signal board on a non-ARM core. The deck, the
 //! netlist solver, and the routing layer are unchanged; only the descriptor
