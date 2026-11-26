@@ -314,10 +314,21 @@ impl Esp32s3Sens {
     /// injected). The read-back counterpart of [`Self::set_channel_input`], so
     /// a stimulus test can assert what the next conversion will return without
     /// running one.
+    ///
+    /// On the ESP32-S3 (12-bit), honors the per-channel attenuation in
+    /// `SAR_ATTEN1` (default 12 dB / `ATTEN3`) and applies the inverse of
+    /// ESP-IDF's V1 curve-fitting transfer function so `analogReadMilliVolts()`
+    /// round-trips injected voltages without near-3 V roll-off.
     pub fn channel_input_count(&self, channel: u8) -> u16 {
         match self.adc1_pads.get_mv(channel) {
             Some(millivolts) => {
-                ((millivolts as u32 * self.full_scale) / 3300).min(self.full_scale) as u16
+                if self.full_scale == FULL_SCALE_12 {
+                    let shift = u32::from(channel.min(15)) * 2;
+                    let atten = ((self.reg(SAR_ATTEN1) >> shift) & 0x3) as u8;
+                    crate::peripherals::esp_xtensa_common::esp32s3_adc1_mv_to_raw(millivolts, atten)
+                } else {
+                    ((millivolts as u32 * self.full_scale) / 3300).min(self.full_scale) as u16
+                }
             }
             None => 0xFFFF,
         }
