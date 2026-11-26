@@ -124,6 +124,16 @@ hb=0 podr=0040 s1=1 s2=1
 | Console UART | SCI0 P411 (TX) / P410 (RX) | Zephyr `ek_ra6m5-pinctrl.dtsi`, `zephyr,console = &uart0` |
 | SCI0 clock / gate | PCLKA, `MSTPCRB` bit 31 | Zephyr `ra6-cm33-common.dtsi` (`clocks = <&pclka MSTPB 31>`) |
 
+## Analog inputs
+
+`analog-ntc-system.yaml` drives a generic Beta-parameter NTC divider into
+`board.analog.p000_volts`. The RA6M5 descriptor maps P000 (AN000, Arduino
+header A0) to ADC0 channel 0, and the test converts it with the production
+`ra_adc12` single-scan path (`ADANSA0`, `ADST`, `ADDR0`). This slice maps only
+AN000: the other Arduino header inputs (A1-A5) are not transcribed from the
+board manual yet, and the router refuses a pad that is not in the map rather
+than guessing a channel.
+
 ## Explicitly not claimed
 
 - **Clock generation.** The SYSTEM window models only `HOCOCR`/`OSCSF`.

@@ -42,6 +42,18 @@ const PROFILES: [&str; 6] = [
     "configs/systems/adafruit-feather-esp32-v2-bme280.yaml",
 ];
 
+/// Every ADC1 pad the descriptor publishes, in datasheet channel order.
+const ADC1_PADS: [(&str, u8); 8] = [
+    ("GPIO36", 0),
+    ("GPIO37", 1),
+    ("GPIO38", 2),
+    ("GPIO39", 3),
+    ("GPIO32", 4),
+    ("GPIO33", 5),
+    ("GPIO34", 6),
+    ("GPIO35", 7),
+];
+
 /// Beta-parameter NTC resistance, the model card in the fixture.
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -106,14 +118,20 @@ fn bench(system: &str) -> (ChipDescriptor, SystemBus, CosimSession) {
 
     let chip_path = system_path.parent().unwrap().join(&profile.chip);
     let chip = ChipDescriptor::from_file(&chip_path).expect("load the classic ESP32 descriptor");
-    assert_eq!(chip.analog_pins["GPIO34"].peripheral, "sens_sar_adc");
-    assert_eq!(chip.analog_pins["GPIO34"].channel, 6);
-    assert_eq!(chip.analog_pins["GPIO35"].channel, 7);
-    assert_eq!(chip.analog_pins["GPIO32"].channel, 4);
-    assert_eq!(chip.analog_pins["GPIO39"].channel, 3);
-    assert!(
-        !chip.analog_pins.contains_key("GPIO25"),
-        "ADC2 stays off the board pad map; it is unusable while WiFi runs"
+    for (pad, channel) in ADC1_PADS {
+        assert_eq!(
+            chip.analog_pins[pad].peripheral, "sens_sar_adc",
+            "{system}: {pad} must resolve to SENS SAR1"
+        );
+        assert_eq!(
+            chip.analog_pins[pad].channel, channel,
+            "{system}: {pad} is ADC1 channel {channel} on the datasheet"
+        );
+    }
+    assert_eq!(
+        chip.analog_pins.len(),
+        ADC1_PADS.len(),
+        "{system}: the board map publishes exactly the eight ADC1 pads"
     );
 
     let bus = SystemBus::from_config(&chip, &profile)
@@ -134,7 +152,7 @@ fn every_classic_esp32_profile_solves_generic_netlists_on_adc1_pads() {
     let expected_diode_v = diode_load_line_voltage();
 
     for system in PROFILES {
-        let (chip, mut bus, mut session) = bench(system);
+        let (_chip, mut bus, mut session) = bench(system);
         let mut cycles = 0;
         let mut samples = Vec::new();
 
@@ -195,12 +213,6 @@ fn every_classic_esp32_profile_solves_generic_netlists_on_adc1_pads() {
             expected_adc_count(SUPPLY_V / 2.0),
             "{system}: the 25 C NTC divider is exactly half scale on 3.3 V Vref"
         );
-
-        assert!(
-            chip.analog_pins.len() == 8,
-            "{system}: only the eight ADC1 pads are published, got {}",
-            chip.analog_pins.len()
-        );
     }
 }
 
@@ -216,11 +228,45 @@ fn classic_esp32_pad_map_refuses_pads_it_does_not_publish() {
     );
     assert!(
         !bus.set_analog_pad_mv("GPIO25", 1_650),
-        "ADC2 is not on the board pad map"
+        "ADC2 is not on the board pad map; the Wi-Fi driver owns ADC2"
     );
     assert_eq!(
         session.binding_errors(),
         &[] as &[RoutingError],
         "the negative probes must not disturb the two valid routes"
+    );
+}
+
+/// The refusal also happens on the deck route, not only on the direct bus
+/// seam: a model that writes `board.analog.gpio25_volts` gets a binding error
+/// at session build time instead of a silently dropped netlist output.
+#[test]
+fn classic_esp32_router_refuses_a_deck_route_to_an_adc2_pad() {
+    let system_path = root("configs/systems/esp32-devkitm-1.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load the DevKitM-1 profile");
+    let deck = SystemManifest::from_file(root(
+        "examples/esp32-devkitm-1/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load the generic NTC divider and diode netlists");
+    let mut models = deck.cosim_models;
+    models[0].outputs.insert(
+        "v_adc2_probe".to_string(),
+        "board.analog.gpio25_volts".to_string(),
+    );
+    profile.cosim_models = models;
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load the classic ESP32 descriptor");
+    let bus = SystemBus::from_config(&chip, &profile).expect("build the DevKitM-1 bus");
+    let session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries the selected analog devices");
+    assert_eq!(
+        session.binding_errors(),
+        &[RoutingError::NoAdcChannel {
+            path: "board.analog.gpio25_volts".to_string(),
+            pad: "gpio25".to_string(),
+        }],
+        "GPIO25 is ADC2_CH8 on silicon but not on the board's ADC1 map"
     );
 }

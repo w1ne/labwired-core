@@ -44,9 +44,11 @@ gpio_input_thresholds:
 # list them: ADC1_CH0..CH3 are GPIO36..GPIO39, CH4/CH5 are GPIO32/GPIO33 and
 # CH6/CH7 are GPIO34/GPIO35. The analog router reads this table, so a deck that
 # names only `board.analog.gpio34_volts` reaches SENS SAR1 without naming a
-# channel. ADC2 is deliberately absent: real firmware cannot use it while WiFi
-# or Bluetooth is enabled, and the classic ESP32 model exposes it only through
-# the explicit `adc.sens_sar_adc.<channel>_volts` fixture route.
+# channel. This map is deliberately ADC1-only: the Wi-Fi driver owns ADC2, so
+# firmware cannot use ADC2 while Wi-Fi is enabled (Espressif ADC FAQ). The
+# classic ESP32 model still exposes every SAR channel through the explicit
+# `adc.sens_sar_adc.<channel>_volts` fixture route; only the board pad map is
+# restricted to ADC1.
 analog_pins:
   GPIO36: { peripheral: "sens_sar_adc", channel: 0 }
   GPIO37: { peripheral: "sens_sar_adc", channel: 1 }
