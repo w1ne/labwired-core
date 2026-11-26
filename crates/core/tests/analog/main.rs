@@ -48,6 +48,7 @@ mod cosim_ch32v003_analog;
 mod cosim_ek_ra_adc_pad_analog;
 mod cosim_esp32_analog_diode;
 mod cosim_esp32_classic_boards_analog;
+mod cosim_esp32c3_boards_analog;
 mod cosim_microbit_v2_analog;
 mod cosim_nrf52840_family_analog;
 mod cosim_nucleo_f103rb_analog;

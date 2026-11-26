@@ -21,6 +21,20 @@ io_voltage_v: 3.3
 gpio_input_thresholds:
   vil: 0.25
   vih: 0.75
+# SAR ADC1 inputs, as the ESP32-C3 Series Datasheet pin tables ("Analog
+# Functions": ADC1_CH0..ADC1_CH4) list them: ADC1_CH0..CH4 are GPIO0..GPIO4,
+# one channel per pad. The analog router reads this table, so a deck that
+# names only `board.analog.gpio3_volts` reaches APB_SARADC without naming a
+# channel. The map is deliberately ADC1-only: the ESP32-C3 errata list an
+# ADC2 hardware limitation, and ESP-IDF refuses ADC2 one-shot reads on the C3
+# unless `CONFIG_ADC_ONESHOT_FORCE_USE_ADC2_ON_C3` is set. GPIO5 (ADC2_CH0)
+# is therefore not a board analog pad.
+analog_pins:
+  GPIO0: { peripheral: "apb_saradc", channel: 0 }
+  GPIO1: { peripheral: "apb_saradc", channel: 1 }
+  GPIO2: { peripheral: "apb_saradc", channel: 2 }
+  GPIO3: { peripheral: "apb_saradc", channel: 3 }
+  GPIO4: { peripheral: "apb_saradc", channel: 4 }
 
 flash:
   base: 0x42000000
