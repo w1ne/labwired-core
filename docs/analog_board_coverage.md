@@ -7,24 +7,27 @@ A profile is **covered** only when an integration test advances a
 `CosimSession` that loads that profile (or one of its
 `examples/<dir>/analog-*.yaml` decks) and reaches an endpoint route the
 manifest declares: `board.analog.<pad>_volts`, which the chip's
-`analog_pins:` map resolves to an ADC channel or a voltage-thresholded
-digital pad, or an explicit `adc.<peripheral>.<channel>_volts` route.
+`analog_pins:` map or the pad's `adc` pin function resolves to an ADC
+channel, or an explicit `adc.<peripheral>.<channel>_volts` route.
 Device-only unit tests, ADC register tests with no netlist, files that only
 list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **440**
-- Covered end to end: **90**
-- Not covered: **350**
-- Not covered but with an `analog_pins:` map: **0** (these are the
+- Covered end to end: **93**
+- Not covered: **347**
+- Not covered but with an ADC pad map: **0** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
-  `analog_pins:` map, an ADC model, or a digital endpoint first)
+  `analog_pins:` block or `adc` pin functions, an ADC model, or a digital
+  endpoint first)
 
-The `Analog pad map` column counts `analog_pins:` entries in the chip
-descriptor. Every such entry in this tree names an ADC peripheral, so the
-count is what the generic decks can reach without new routing.
+The `Analog pad map` column counts the pads a chip can hand to an ADC:
+`analog_pins:` entries plus pads whose `pins:` table carries an
+`{ type: adc, peripheral, channel }` function (the union the router uses).
+Every such entry in this tree names an ADC peripheral, so the count is what
+the generic decks can reach without new routing.
 
-## Next queue: not covered, `analog_pins:` map already present
+## Next queue: not covered, ADC pads already mapped
 
 None.
 
@@ -125,12 +128,9 @@ None.
 | `nucleo-h753zi` | `stm32h753zi` | 0 |
 | `nucleo-l031k6` | `stm32l031k6` | 0 |
 | `nucleo-l073rz` | `stm32l073` | 0 |
-| `nucleo-l432kc` | `stm32l432kc` | 0 |
 | `nucleo-l476rg` | `stm32l476` | 0 |
 | `nucleo-l552ze-q` | `stm32l552` | 0 |
 | `nucleo-u545re` | `stm32u545` | 0 |
-| `nucleo-u575zi` | `stm32u575` | 0 |
-| `nucleo-u5a5zj` | `stm32u5a5zj` | 0 |
 | `nucleo_g474re` | `stm32g474re` | 0 |
 | `nucleo_wba52cg` | `stm32wba52` | 0 |
 | `A2_CV32E40P` | `A2_CV32E40P` | 0 |
@@ -415,6 +415,9 @@ None.
 | `nucleo-f411re` | `stm32f411re` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `nucleo-f446re` | `stm32f446re` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `nucleo-f767zi` | `stm32f767` | `crates/core/tests/analog/cosim_nucleo_f767zi_analog.rs` |
+| `nucleo-l432kc` | `stm32l432kc` | `crates/core/tests/analog/cosim_stm32l4u5_pin_functions_analog.rs` |
+| `nucleo-u575zi` | `stm32u575` | `crates/core/tests/analog/cosim_stm32l4u5_pin_functions_analog.rs` |
+| `nucleo-u5a5zj` | `stm32u5a5zj` | `crates/core/tests/analog/cosim_stm32l4u5_pin_functions_analog.rs` |
 | `nucleo_f767zi` | `nucleo_f767zi` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `stm32f103` | `stm32f103` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `stm32f4` | `stm32f4` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |

@@ -1,0 +1,29 @@
+# Generic Beta NTC divider, published to `board.analog.pa0_volts`.
+#
+# The NUCLEO-L432KC descriptor names its ADC inputs in the pin table
+# (`pins: { PA0: { functions: [{ type: adc, peripheral: adc1, channel: 5 }] } }`),
+# not in an `analog_pins:` block. The analog router reads both, so this deck
+# needs no board-specific route: the netlist solves its own circuit and names
+# only a pad. Any part that publishes PA0 as an ADC input loads it unchanged.
+name: "nucleo-l432kc-analog-ntc-pa0"
+chip: "../../configs/chips/stm32l432kc.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.pa0_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 3.3
