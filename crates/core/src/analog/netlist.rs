@@ -3702,7 +3702,7 @@ fn bind_models(
                         vh: 2.0 * model.vh,
                         invert: false,
                         signed: true,
-                        strict: false,
+                        strict: true,
                     }),
                 });
             }
