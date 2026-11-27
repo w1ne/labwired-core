@@ -247,6 +247,21 @@ impl SystemBus {
         self.reset_input = crate::reset_input::ResetInputState::new(chip.reset_input.clone());
     }
 
+    /// Load the descriptor's pad -> ADC channel table (`analog_pins:` plus
+    /// `adc` pin functions), the map `board.analog.<pad>_volts` routes
+    /// resolve through. `from_config` calls it; a builder that registers its
+    /// peripheral bank programmatically (the ESP32 and ESP32-S3 Xtensa paths)
+    /// must call it too, or every analog pad route on that machine fails with
+    /// `NoAdcChannel` even though the descriptor publishes the pad.
+    pub fn attach_chip_analog_pins(&mut self, chip: &ChipDescriptor) {
+        for (label, adc) in &chip.analog_pin_table() {
+            self.analog_pin_map.insert(
+                label.to_ascii_uppercase(),
+                (adc.peripheral.clone(), adc.channel),
+            );
+        }
+    }
+
     pub fn from_config(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<Self> {
         Self::from_config_with_plugins(chip, manifest, &[])
     }
@@ -605,12 +620,7 @@ impl SystemBus {
             bus.pin_map
                 .insert(label.to_ascii_uppercase(), (loc.gpio.clone(), loc.bit));
         }
-        for (label, adc) in &chip.analog_pin_table() {
-            bus.analog_pin_map.insert(
-                label.to_ascii_uppercase(),
-                (adc.peripheral.clone(), adc.channel),
-            );
-        }
+        bus.attach_chip_analog_pins(chip);
         bus.attach_chip_io_levels(chip);
         bus.supply = crate::power::SupplySupervisor::new(chip.supply_monitor.clone());
 
