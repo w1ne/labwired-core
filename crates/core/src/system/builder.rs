@@ -141,6 +141,7 @@ pub fn build_esp32_system_from_manifest_with_plugins(
     // resolved descriptor's electrical data, just as SystemBus::from_config does.
     // Keep absent metadata absent so co-simulation refuses untranscribed levels.
     bus.attach_chip_io_levels(&chip);
+    bus.attach_chip_analog_pins(&chip);
     crate::system::xtensa::attach_esp32_external_devices(&mut bus, manifest)?;
     // The peripheral BANK is programmatic (above), but the chip YAML is still
     // where a peripheral's debugger register schema is declared. Without this,
@@ -456,6 +457,22 @@ mod esp32_input_threshold_tests {
     use labwired_config::{CosimAdapter, CosimModelConfig, SystemManifest};
     use std::collections::HashMap;
     use std::path::Path;
+
+    #[test]
+    fn classic_esp32_hosted_bus_carries_the_descriptor_adc_pad_map() {
+        // The programmatic bank bypasses `from_config`, which is where the
+        // `analog_pins:` table used to be loaded. GPIO34 is SAR ADC1_CH6 in
+        // esp32.yaml; GPIO2 has no ADC1 function there.
+        let manifest: SystemManifest =
+            serde_yaml::from_str("name: esp32-analog-pads\nchip: esp32\n").expect("parse manifest");
+        let (mut bus, _, _) = build_esp32_system_from_manifest(&manifest, Path::new("system.yaml"))
+            .expect("build classic ESP32");
+        assert!(bus.set_analog_pad_mv("GPIO34", 1_650), "GPIO34 is ADC1_CH6");
+        assert!(
+            !bus.set_analog_pad_mv("GPIO2", 1_650),
+            "GPIO2 is not on the map"
+        );
+    }
 
     #[test]
     fn classic_esp32_voltage_routes_use_the_descriptor_thresholds() {

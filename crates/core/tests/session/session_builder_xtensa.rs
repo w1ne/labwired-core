@@ -259,3 +259,73 @@ fn unmodelled_xtensa_boot_paths_are_not_supported() {
         );
     }
 }
+
+/// The production S3 constructor registers its peripheral bank
+/// programmatically instead of through `SystemBus::from_config`, so it must
+/// load the descriptor's `analog_pins:` table itself. Without that the generic
+/// NTC divider deck binds with `NoAdcChannel` on every hosted S3 run even
+/// though `esp32s3.yaml` publishes GPIO4 as ADC1_CH3. Run the committed Tier-1
+/// ELF through `build_machine`, solve the deck across a model boundary, and
+/// read the level back through the SENS SAR1 one-shot registers.
+#[test]
+fn esp32s3_build_machine_routes_the_generic_analog_deck_to_sens_adc1() {
+    use labwired_config::SystemManifest;
+    use labwired_core::machine::AdvanceRequest;
+    use std::path::Path;
+
+    const SAR_MEAS1_CTRL2: u64 = 0x6000_8800 + 0x00C;
+    const SAR1_EN_PAD_CH3: u32 = 1 << (19 + 3);
+    const MEAS_START_SAR: u32 = 1 << 17;
+    const MEAS_DONE_SAR: u32 = 1 << 16;
+
+    let (chip, mut manifest) = common::system("configs/systems/esp32s3-devkitc-1-v11.yaml");
+    let deck = SystemManifest::from_file(common::root(
+        "examples/esp32s3-devkitc-1/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load the generic ESP32-S3 analog deck");
+    manifest.cosim_models = deck.cosim_models;
+    let fw = common::committed("tests/fixtures/tier1/esp32s3.elf");
+    let blobs = BlobMap::new();
+    let mut built = build_machine(BuildRequest {
+        chip: &chip,
+        system: &manifest,
+        firmware: FirmwareSource::Elf(&fw),
+        boot: BootMode::FastBoot,
+        blobs: &blobs,
+        options: BuildOptions::default(),
+    })
+    .expect("build the S3 machine");
+    let mut cosim = built
+        .machine
+        .bind_cosim(&manifest.cosim_models, Path::new("."))
+        .expect("build analog co-simulation")
+        .expect("deck carries analog models");
+    assert!(
+        cosim.binding_errors().is_empty(),
+        "the hosted S3 bus must resolve GPIO4/GPIO5 from esp32s3.yaml: {:?}",
+        cosim.binding_errors()
+    );
+    cosim
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set generic NTC temperature");
+    built
+        .machine
+        .advance_cosim(&mut cosim, AdvanceRequest::run(Some(20_000)))
+        .expect("run firmware across an analog boundary");
+
+    built
+        .machine
+        .bus_write_u32(SAR_MEAS1_CTRL2, SAR1_EN_PAD_CH3)
+        .unwrap();
+    built
+        .machine
+        .bus_write_u32(SAR_MEAS1_CTRL2, SAR1_EN_PAD_CH3 | MEAS_START_SAR)
+        .unwrap();
+    let word = built.machine.bus_read_u32(SAR_MEAS1_CTRL2).unwrap();
+    assert_ne!(word & MEAS_DONE_SAR, 0, "MEAS1_DONE_SAR is raised");
+    assert_eq!(
+        word & 0xFFFF,
+        u32::from(labwired_core::peripherals::esp_xtensa_common::esp32s3_adc1_mv_to_raw(1_650, 3)),
+        "the 25 C NTC divider (1.65 V on GPIO4) reaches SENS ADC1 channel 3"
+    );
+}
