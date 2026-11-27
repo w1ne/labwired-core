@@ -71,6 +71,18 @@ registers_count: 140
 # STM32H735VG maximum core clock, 550 MHz.
 cpu_hz: 550_000_000
 
+# GPIO supply and digital input thresholds used when co-simulation converts a
+# node voltage into a pin level. DS13312 Rev 4 §6.3.17, Table 55 gives the
+# CMOS input limits for normal I/Os (including PA5): VIL max = 0.3·VDD and VIH
+# min = 0.7·VDD for 1.62 V < VDD < 3.6 V. The 3.3 V rail is this descriptor's
+# nominal simulation reference, not a fixed supply requirement; at that value
+# the boundaries are 0.99 V and 2.31 V. BOOT0 has separate thresholds.
+# https://www.st.com/resource/en/datasheet/stm32h735vg.pdf
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+
 flash:
   base: 0x08000000
   # STM32H735VG = 1 MiB single-bank flash (0x100000 bytes) at 0x08000000.
