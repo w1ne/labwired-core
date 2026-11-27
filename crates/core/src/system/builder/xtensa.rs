@@ -192,6 +192,7 @@ fn build_esp32(
     bus.cpu_hz = manifest.cpu_hz.unwrap_or(req.chip.cpu_hz);
     let cpu = crate::system::xtensa::configure_xtensa_esp32(&mut bus);
     bus.attach_chip_io_levels(req.chip);
+    bus.attach_chip_analog_pins(req.chip);
     bus.attach_plugin_peripherals(req.chip, manifest, plugins)?;
 
     // A classic ESP32 has NO USB peripheral: its devkit's CP210x sits on UART0
@@ -286,6 +287,7 @@ fn build_esp32s3_flash(
             "ESP32-S3 flash boot needs the real boot ROM, but the injected images did not resolve"
         ));
     }
+    bus.attach_chip_analog_pins(chip);
     bus.attach_plugin_peripherals(chip, manifest, plugins)?;
     let mut cpu = wiring.cpu;
     // The ROM and the app install the window overflow/underflow vectors and
@@ -354,6 +356,7 @@ fn build_esp32s3(
         ..Esp32s3Opts::for_chip(chip)
     };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+    bus.attach_chip_analog_pins(chip);
     bus.attach_plugin_peripherals(chip, manifest, plugins)?;
     let mut cpu = wiring.cpu;
 
