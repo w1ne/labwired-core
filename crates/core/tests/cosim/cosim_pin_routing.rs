@@ -708,27 +708,46 @@ fn set_signal_refuses_a_path_no_model_reads() {
     );
 }
 
-/// A pad `board.gpio.<pad>` cannot address cannot be asked its direction
-/// either. The RP2040's GPIOs live on the `sio` block, which no board path
-/// resolves, so the session refuses the route instead of reading false.
+/// The app's analog-island compiler uses the generic GPIO<n> spelling. On the
+/// RP2040 it must reach the same descriptor entries used by the Pico GP<n>
+/// labels for output drive state, live pad level, and external input voltage.
 #[test]
-fn a_direction_pad_that_does_not_resolve_is_refused_at_bind_time() {
+fn rp2040_generic_gpio_routes_resolve_and_still_reject_nonexistent_pads() {
     let bus = chip_bus("rp2040");
     let models = [mock_model(
         100_000,
-        &[("drive", "board.gpio_output.gpio5")],
-        &[],
-        &[("unused", serde_yaml::Value::Bool(false))],
+        &[
+            ("driven", "board.gpio_driven.gpio8"),
+            ("pad", "board.gpio_pad.gpio8"),
+        ],
+        &[("voltage", "board.gpio_in.gpio8")],
+        &[("voltage", serde_yaml::Value::from(0.0))],
     )];
     let session = CosimSession::new(&models, Path::new("."), &bus)
         .expect("building the session is not itself an error")
         .expect("models were declared");
     assert_eq!(
         session.binding_errors(),
+        &[] as &[RoutingError],
+        "GPIO8 aliases descriptor pad GP8 for all analog-island routes"
+    );
+
+    let invalid_models = [mock_model(
+        100_000,
+        &[("pad", "board.gpio_pad.gpio30")],
+        &[],
+        &[],
+    )];
+    let invalid_session = CosimSession::new(&invalid_models, Path::new("."), &bus)
+        .expect("building the session is not itself an error")
+        .expect("models were declared");
+    assert_eq!(
+        invalid_session.binding_errors(),
         &[RoutingError::UnknownPad {
-            path: "board.gpio_output.gpio5".to_string(),
-            pad: "gpio5".to_string(),
-        }]
+            path: "board.gpio_pad.gpio30".to_string(),
+            pad: "gpio30".to_string(),
+        }],
+        "RP2040 must not invent pads beyond GP29"
     );
 }
 
