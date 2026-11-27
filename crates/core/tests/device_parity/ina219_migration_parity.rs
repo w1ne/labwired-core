@@ -17,7 +17,8 @@
 //!   * BUS_VOLTAGE on every 4 mV step of the declared 0..32 V range, all 8001
 //!     of them, including the CNVR bit below the count;
 //!   * the 16-bit MSB-first write and read-back of CONFIGURATION and
-//!     CALIBRATION, and writes to the four read-only registers being dropped.
+//!     CALIBRATION with FS0 clear, and writes to the four read-only registers
+//!     being dropped.
 //!
 //! Deliberately DIFFERENT (each with its own test below):
 //!   * BUS_VOLTAGE rounds to the nearest 4 mV LSB where the model TRUNCATED;
@@ -25,6 +26,8 @@
 //!     quantised the stimulus to whole milliamps first;
 //!   * CALIBRATION powers up at the datasheet's zero value and firmware writes
 //!     the operating-point calibration before CURRENT and POWER become nonzero;
+//!   * CALIBRATION.FS0 is hardwired low, so an odd firmware write reads back
+//!     with bit 0 clear and cannot perturb CURRENT;
 //!   * a read that runs PAST the pointed 16-bit word answers 0xFF instead of
 //!     repeating the word forever.
 //!
@@ -284,11 +287,48 @@ fn bus_voltage_matches_on_every_four_millivolt_step() {
 
 #[test]
 fn a_sixteen_bit_write_round_trips_through_both_writable_registers() {
-    for (ptr, name) in [(0x00u8, "CONFIGURATION"), (0x05, "CALIBRATION")] {
-        let steps = script([write_reg(ptr, &[0x5A, 0xA5]), read_reg(ptr, 2)]);
+    for (ptr, name, value) in [
+        (0x00u8, "CONFIGURATION", 0x5AA5u16),
+        (0x05, "CALIBRATION", 0x5AA4),
+    ] {
+        let steps = script([
+            write_reg(ptr, &[(value >> 8) as u8, value as u8]),
+            read_reg(ptr, 2),
+        ]);
         let bytes = assert_parity(name, 3.3, 0.1, &steps);
-        assert_eq!(word(&bytes), 0x5AA5, "{name} did not read back its write");
+        assert_eq!(
+            word(&bytes),
+            value,
+            "{name} did not read back its writable bits"
+        );
     }
+}
+
+#[test]
+fn calibration_bit_zero_is_hardwired_low_and_excluded_from_current() {
+    let mut sensor = declarative();
+    // 3000 SHUNT_VOLTAGE counts make the incorrect use of 0x1001 visible:
+    // it would round CURRENT up to 3001 instead of the FS0-masked 3000.
+    sensor
+        .set_input("shunt_voltage", 0.03)
+        .expect("shunt_voltage");
+
+    let bytes = run_i2c(
+        &mut sensor,
+        &script([
+            write_reg(0x05, &[0x10, 0x01]), // firmware attempts CALIBRATION = 0x1001
+            read_reg(0x05, 2),
+            read_reg(0x04, 2),
+        ]),
+    )
+    .bytes;
+
+    assert_eq!(word(&bytes[0..2]), 0x1000, "CALIBRATION.FS0 reads as zero");
+    assert_eq!(
+        word(&bytes[2..4]),
+        3000,
+        "CURRENT uses the masked calibration"
+    );
 }
 
 #[test]

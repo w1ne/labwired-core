@@ -63,9 +63,10 @@ behavior:
       - { name: POWER, addr: 0x03, width: 2, endian: be, access: r }
       # Stored measurement: CALIBRATION affects it through the TI formula.
       - { name: CURRENT, addr: 0x04, width: 2, endian: be, access: r, signed: true }
-      # TI specifies 0x0000 at power-on. Current and Power remain zero until
-      # firmware writes its chosen calibration value.
-      - { name: CALIBRATION, addr: 0x05, width: 2, endian: be, access: rw, reset: 0 }
+      # TI specifies 0x0000 at power-on. FS0 is hardwired low; firmware writes
+      # cannot store it and the measurement rule therefore never uses it.
+      # Current and Power remain zero until calibration is programmed.
+      - { name: CALIBRATION, addr: 0x05, width: 2, endian: be, access: rw, reset: 0, write_mask: 0xFFFE }
   vars: { shunt_voltage_explicit: 0 }
   rules:
     # Preserve the current-only input shape by deriving the former 0.1 Ω
