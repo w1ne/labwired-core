@@ -25,7 +25,7 @@ use crate::common;
 use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
-use labwired_core::cosim::{CosimSession, CosimSignalValue, RoutingError};
+use labwired_core::cosim::{CosimSession, CosimSignalValue, InputThresholds, RoutingError};
 use labwired_core::cpu::CortexM;
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::{Bus, DebugControl, Machine};
@@ -255,6 +255,34 @@ const RP2350_PROFILES: &[&str] = &[
     "configs/systems/rpi-pico-2-w-bme280.yaml",
     "configs/systems/adafruit-feather-rp2350.yaml",
 ];
+
+/// The RP2040 datasheet release 13, §5.5.3.4, Table 646 specifies VIL(max) =
+/// 0.8 V and VIH(min) = 2.0 V at IOVDD = 3.3 V. These limits are ratios in the
+/// chip descriptor because co-simulation applies them to the active GPIO rail.
+#[test]
+fn every_rp2040_profile_declares_datasheet_gpio_input_thresholds() {
+    for &system in RP2040_PROFILES {
+        let (_chip, machine, _session, _adc) = bench(system, RP2040_DECK);
+        let thresholds = InputThresholds::for_bus(&machine.bus)
+            .unwrap_or_else(|missing| panic!("{system}: missing RP2040 {missing}"));
+
+        assert!(
+            (thresholds.vil_volts - 0.8).abs() < 1e-12,
+            "{system}: VIL(max) from RP2040 datasheet Table 646 is 0.8 V, got {} V",
+            thresholds.vil_volts
+        );
+        assert!(
+            (thresholds.vih_volts - 2.0).abs() < 1e-12,
+            "{system}: VIH(min) from RP2040 datasheet Table 646 is 2.0 V, got {} V",
+            thresholds.vih_volts
+        );
+        assert!(
+            thresholds.next_level(false, 2.0),
+            "{system}: VIH reads high"
+        );
+        assert!(!thresholds.next_level(true, 0.8), "{system}: VIL reads low");
+    }
+}
 
 /// One temperature point: the solved NTC voltage, the solved diode voltage and
 /// the NTC ADC count the firmware reads back.
