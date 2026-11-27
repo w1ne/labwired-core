@@ -14,6 +14,9 @@
 #                        TARGET_MCU=CH32V203): SysTick_Handler through PFIC
 #                        interrupt 12 once per millisecond, advancing the
 #                        64-bit CMP; main prints the millisecond count.
+#   usart_rx_irq.elf     local smoke fixture using ch32fun startup: USART1
+#                        RXNE interrupt 53 captures injected "wch!", then
+#                        USART1 TX prints the received bytes.
 #
 # The compile and link lines are the ones ch32fun.mk emits for
 # TARGET_MCU=CH32V203 with TARGET_MCU_PACKAGE=CH32V203C8T6 (rv32imac/ilp32,
@@ -67,3 +70,16 @@ for example in examples_v20x/blink examples_v20x/debugprintfdemo examples_v20x/e
   chmod 0644 "${out_dir}/${name}.elf"
   "${prefix}size" "${out_dir}/${name}.elf"
 done
+
+"${prefix}gcc" -o "${out_dir}/usart_rx_irq.elf" \
+  "${src}/ch32fun/ch32fun.c" "${repo_root}/examples/ch32v203c8t6/usart_rx_irq.c" \
+  -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \
+  -msmall-data-limit=8 -fno-tree-loop-distribute-patterns \
+  -march=rv32imac -mabi=ilp32 -DCH32V20x=1 -static-libgcc \
+  -I"${newlib}" -I"${src}/extralibs" -I"${src}/ch32fun" \
+  -I"${src}/examples_v20x/exti_blink" -nostdlib \
+  -Wall -lgcc -T "${ld}" -Wl,--gc-sections -lgcc \
+  -ffile-prefix-map="${src}"=ch32fun
+"${prefix}strip" --strip-debug "${out_dir}/usart_rx_irq.elf"
+chmod 0644 "${out_dir}/usart_rx_irq.elf"
+"${prefix}size" "${out_dir}/usart_rx_irq.elf"

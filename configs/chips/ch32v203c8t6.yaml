@@ -24,14 +24,14 @@
 #     nesting and the V4 priority grouping are not modelled: a pending
 #     interrupt waits for `mret`.
 #   - SysTick is the 64-bit QingKe V4 STK (SysTick_IRQn 12). EXTI GPIO
-#     lines reach the PFIC; the event mask (EVENR) is stored only.
-#     No timers, ADC, I2C, SPI, CAN or USB. USART TX is polled only; no USART
-#     `irq` is wired because no interrupt-driven USART run proves it yet.
+#     lines reach the PFIC; the event mask (EVENR) is stored only. USART1/2
+#     RXNE interrupts are wired to PFIC IRQs 53/54; only USART1 is smoke-tested.
+#     No timers, ADC, I2C, SPI, CAN or USB.
 #   - The debug printf block assumes a WCH-LinkE probe is attached and
 #     polling (its sentinel reads 0). Firmware that waits for a probe
 #     therefore never times out here.
 #
-# Buyability screen (2026-11-15): LCSC C3001172 lists CH32V203C8T6 "In Stock". WCH's
+# Buyability screen (2026-11-27): LCSC C3001172 lists CH32V203C8T6 "In Stock". WCH's
 # product page has no lifecycle field; this descriptor is not a lifecycle
 # claim and is not included in the Proteus parity gate.
 # Sources:
@@ -190,10 +190,12 @@ peripherals:
     type: "uart"
     base_address: 0x40013800
     size: "1KB"
+    irq: 53 # USART1_IRQn (WCH ch32v20xhw.h; F1 vector 37 + 16 QingKe core slots)
     clock: { reg: "apb2enr", bit: 14 }
 
   - id: "usart2"
     type: "uart"
     base_address: 0x40004400
     size: "1KB"
+    irq: 54 # USART2_IRQn (WCH ch32v20xhw.h; F1 vector 38 + 16 QingKe core slots)
     clock: { reg: "apb1enr", bit: 17 }
