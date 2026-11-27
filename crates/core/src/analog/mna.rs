@@ -828,7 +828,13 @@ impl Solver {
             let sensed = node_diff(&self.node_v, control.pos, control.neg);
             let v = if control.signed { sensed } else { sensed.abs() };
             let on = control.vt;
-            let off = (control.vt - control.vh).max(0.0);
+            // A magnitude cannot fall below 0, so its dropout is clamped
+            // there. A signed control (ngspice `SW`) may open below 0 V.
+            let off = if control.signed {
+                control.vt - control.vh
+            } else {
+                (control.vt - control.vh).max(0.0)
+            };
             let closed_now = self.switch_closed[index];
             let desired = if control.invert {
                 // NC: stays closed while |V| < vt; re-closes from open only at

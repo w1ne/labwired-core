@@ -255,3 +255,60 @@ fn signed_switch_rejects_non_boolean_mode() {
         parse_netlist("* invalid\nS1 a 0 c 0 vt=1 signed=2 ron=1 roff=1meg\n.end\n").unwrap_err();
     assert!(err.to_string().contains("signed must be 0 or 1"), "{err}");
 }
+
+#[test]
+fn ngspice_sw_model_switches_on_the_signed_band_around_vt() {
+    // ngspice closes at V > VT + VH and opens at V < VT − VH. With VT = 0
+    // the opening edge is below 0 V, which a magnitude switch cannot express.
+    let circuit = parse_netlist(
+        "* ngspice switch\n\
+         Vctrl ctrl 0 dc -1\n\
+         Vdd vdd 0 dc 5\n\
+         Rload vdd out 1k\n\
+         S1 out 0 ctrl 0 SMOD\n\
+         .model SMOD SW(VT=0 VH=0.5 RON=1 ROFF=1meg)\n\
+         .end\n",
+    )
+    .expect("ngspice switch parses");
+    let mut solver = Solver::new(circuit, Integration::BackwardEuler).expect("solver");
+    let out = solver.circuit().node("out").expect("out");
+    let closed = |solver: &Solver| solver.node_voltage(out) < 0.05;
+
+    run_to(&mut solver, 1e-6, 20);
+    assert!(!closed(&solver), "open below the band");
+    solver.set_voltage_source(0, 0.4);
+    run_to(&mut solver, 1e-6, 20);
+    assert!(
+        !closed(&solver),
+        "inside the band an open switch stays open"
+    );
+    solver.set_voltage_source(0, 0.6);
+    run_to(&mut solver, 1e-6, 20);
+    assert!(closed(&solver), "closes above VT + VH");
+    solver.set_voltage_source(0, -0.4);
+    run_to(&mut solver, 1e-6, 20);
+    assert!(
+        closed(&solver),
+        "a closed switch stays closed down to VT − VH"
+    );
+    solver.set_voltage_source(0, -0.6);
+    run_to(&mut solver, 1e-6, 20);
+    assert!(!closed(&solver), "opens below VT − VH");
+}
+
+#[test]
+fn ngspice_sw_model_uses_ngspice_defaults_and_checks_the_card_kind() {
+    let circuit = parse_netlist("* defaults\nS1 a 0 c 0 SMOD\n.model SMOD SW\n.end\n")
+        .expect("a bare SW card parses");
+    let switch = &circuit.switches[0];
+    assert_eq!((switch.ron, switch.roff), (1.0, 1e12));
+    let control = switch.voltage.as_ref().expect("voltage controlled");
+    assert_eq!((control.vt, control.vh), (0.0, 0.0));
+    assert!(control.signed && !control.invert);
+
+    let err = parse_netlist("* wrong card\nS1 a 0 c 0 DMOD\n.model DMOD D\n.end\n").unwrap_err();
+    assert!(err.to_string().contains("is a S element"), "{err}");
+    let err =
+        parse_netlist("* bad card\nS1 a 0 c 0 SMOD\n.model SMOD SW(VH=-1)\n.end\n").unwrap_err();
+    assert!(err.to_string().contains("VH >= 0"), "{err}");
+}
