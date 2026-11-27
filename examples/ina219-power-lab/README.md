@@ -1,6 +1,8 @@
 # INA219 Power Lab
 
 STM32F103 + INA219 high-side current / bus voltage monitor over I²C1.
+The firmware reads the datasheet's zero CALIBRATION power-on value, then
+programs `CALIBRATION=4096` over I²C before reporting current.
 
 ```bash
 cargo build -p ina219-power-lab --release --target thumbv7m-none-eabi

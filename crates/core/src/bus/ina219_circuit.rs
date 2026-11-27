@@ -5,7 +5,8 @@
 //! from the analog island's shunt probe. Each co-sim step feeds one sample;
 //! after [`INA219_CONVERSION_NS`] (12-bit continuous, 532 µs) the averages are
 //! latched into the declarative device's `current` / `bus_voltage` channels so
-//! the existing register encodings (CAL 4096, Adafruit 32V/2A) stay unchanged.
+//! the existing register encodings (firmware-programmed CAL 4096, Adafruit
+//! 32V/2A) stay unchanged.
 
 use super::*;
 

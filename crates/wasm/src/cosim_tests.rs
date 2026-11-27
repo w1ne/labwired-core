@@ -16,6 +16,18 @@ use wasm_bindgen::JsValue;
 
 const CHIP_YAML: &str = include_str!("../../../configs/chips/stm32f401.yaml");
 const FIRMWARE: &[u8] = include_bytes!("../../../tests/fixtures/stm32f401-blinky.elf");
+const INA219_CHIP_YAML: &str = include_str!("../../../configs/chips/stm32f103.yaml");
+const INA219_FIRMWARE: &[u8] = include_bytes!("../tests/fixtures/ina219-power-lab.elf");
+const INA219_SYSTEM: &str = r#"
+name: "wasm-ina219-calibration"
+chip: "stm32f103c8"
+external_devices:
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x40
+"#;
 
 const PLAIN_SYSTEM: &str = r#"
 name: "wasm-blinky"
@@ -483,6 +495,57 @@ fn set_cosim_signal_refuses_what_it_cannot_deliver() {
         .set_cosim_signal_number("ui.touch.pressed", 1.0)
         .expect_err("no session, nothing to set");
     assert!(none.contains("declares no cosim_models"), "{none}");
+}
+
+/// The browser entry point runs real STM32 firmware through the INA219's I²C
+/// registers. At power-on it observes CALIBRATION=0 and CURRENT=0; its actual
+/// 16-bit I²C write programs CALIBRATION=4096, after which simulated current
+/// and bus-voltage inputs become visible to firmware.
+#[test]
+fn ina219_calibration_reset_and_register_write_run_in_browser_backend() {
+    let mut sim = WasmSimulator::new_from_config(
+        INA219_SYSTEM,
+        INA219_CHIP_YAML,
+        INA219_FIRMWARE,
+        JsValue::NULL,
+    )
+    .expect("INA219 firmware and system build in the browser backend");
+    let mut uart = Vec::new();
+    for _ in 0..20 {
+        sim.step_batch(100_000).expect("browser step");
+        uart.extend(sim.drain_uart_output());
+        let text = String::from_utf8_lossy(&uart);
+        if text.contains("Vbus_mV=3300 I_mA=0") {
+            break;
+        }
+    }
+    let startup = String::from_utf8_lossy(&uart);
+    assert!(
+        startup.contains("CAL_POR=0 CURRENT_POR=0 CAL=4096\n"),
+        "firmware did not observe POR and program calibration over I²C: {startup:?}"
+    );
+    assert!(
+        startup.contains("Vbus_mV=3300 I_mA=0"),
+        "uncalibrated startup reading is absent: {startup:?}"
+    );
+
+    sim.set_input("current", 1.5)
+        .expect("INA219 current input is attached");
+    sim.set_input("bus_voltage", 12.0)
+        .expect("INA219 bus voltage input is attached");
+    for _ in 0..20 {
+        sim.step_batch(100_000)
+            .expect("browser step after stimulus");
+        uart.extend(sim.drain_uart_output());
+        if String::from_utf8_lossy(&uart).contains("Vbus_mV=12000 I_mA=1500") {
+            break;
+        }
+    }
+    let stimulated = String::from_utf8_lossy(&uart);
+    assert!(
+        stimulated.contains("Vbus_mV=12000 I_mA=1500"),
+        "calibrated firmware did not report simulated inputs: {stimulated:?}"
+    );
 }
 
 // ── Arduino Nano (ATmega328P) in the browser ───────────────────────────────
