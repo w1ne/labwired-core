@@ -92,8 +92,11 @@ jobs:
       # told people to pass `--system` to `labwired run` for months; that flag
       # has never existed on that subcommand.
       - name: Install the released CLI
+        env:
+          LABWIRED_VERSION: v0.26.0
+          LABWIRED_NO_MODIFY_PATH: "1"
         run: |
-          curl -fsSL https://labwired.com/install.sh | LABWIRED_NO_MODIFY_PATH=1 sh
+          curl -fsSL https://labwired.com/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Every documented command is one the CLI accepts
