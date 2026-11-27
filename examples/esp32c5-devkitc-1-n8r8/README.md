@@ -54,3 +54,29 @@ routing, the physical USB-to-UART bridge, the 8 MiB PSRAM, the addressable RGB
 LED on GPIO27, USB, Wi-Fi, Bluetooth, 802.15.4, or the LP core. The UART smoke
 checks the UART peripheral model and host capture. It does not prove the
 physical bridge or pad route.
+
+## Analog inputs
+
+`chips/esp32c5.yaml` publishes the ADC1 pads in `analog_pins:`. GPIO1..GPIO5
+are ADC1_CH0..CH4 (ESP-IDF `components/soc/esp32c5/include/soc/adc_channel.h`).
+The pad number is not the channel number on this chip. The `apb_saradc`
+instance is the ESP32-C3 one-shot SAR engine at `0x6000E000`, because the C5
+register head matches it.
+
+[`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) is the generic
+Beta NTC divider on GPIO2 and Shockley diode load line on GPIO4. Both C5
+profiles run it unchanged:
+
+```bash
+cargo test -p labwired-core --test analog -- esp32c5
+```
+
+The test solves both netlists at -20, 25 and 85 C, converts ADC1 channels 1
+and 3 through the `adc_oneshot_read` register sequence, and checks that the
+router refuses GPIO0, GPIO7 and GPIO8.
+
+Gaps: GPIO6 (ADC1_CH5) is not published, because the shared model reports
+the C3's five inputs. Raising that count is a change to a file that the
+silicon-validated C3 and C6 boards watch, so it waits for a drift ack. The
+converter has no PCR clock gate, the register reset seeds are the C3 capture,
+and attenuation is not modelled.

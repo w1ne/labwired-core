@@ -50,6 +50,7 @@ mod cosim_ek_ra_adc_pad_analog;
 mod cosim_esp32_analog_diode;
 mod cosim_esp32_classic_boards_analog;
 mod cosim_esp32c3_boards_analog;
+mod cosim_esp32c5_boards_analog;
 mod cosim_esp32c61_boards_analog;
 mod cosim_esp32c6_boards_analog;
 mod cosim_esp32s3_boards_analog;
