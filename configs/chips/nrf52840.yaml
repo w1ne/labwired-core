@@ -5,6 +5,18 @@ core: "cortex-m4"
 # scale their datasheet microseconds by it; a slower board overrides it.
 # nRF52840 runs its Cortex-M4F at a fixed 64 MHz.
 cpu_hz: 64_000_000
+# GPIO supply and digital input thresholds for voltage-driven co-simulation
+# routes. The nRF52840 Product Specification v1.11 (4413_417), §6.9.3.1
+# "GPIO Electrical Specification" specifies VIL max = 0.3·VDD and VIH min =
+# 0.7·VDD. Its normal-voltage VDD is 1.7–3.6 V, nominally 3.0 V; use that
+# nominal rail here, giving 0.9 V / 2.1 V thresholds. A board with another VDD
+# should override the simulation rail rather than treating 3.0 V as a silicon
+# limit.
+# https://docs.nordicsemi.com/r/bundle/ps_nrf52840/page/gpio.html
+io_voltage_v: 3.0
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
 # GPIO pad output resistance, ohms: a driven pad is VDD (or 0 V) behind it.
 # nRF52840 Product Specification v1.11 (4413_417), section 6.9.3.1 "GPIO
 # Electrical Specification", standard drive (PIN_CNF[n].DRIVE reset value
