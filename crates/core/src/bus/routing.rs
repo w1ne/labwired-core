@@ -18,6 +18,27 @@ use super::*;
 pub(crate) const CLOCK_CONTROLLER_IDS: &[&str] = &["rcc", "cmu", "rcu"];
 
 impl SystemBus {
+    /// Look up a pin in the chip's authoritative map, accepting the common
+    /// `GPIO<n>` alias for descriptors that publish the same pads as `GP<n>`
+    /// (and vice versa). Board-level routes use GPIO names while the RP2040
+    /// pinout names these pads GP0..GP29; keep that spelling bridge here so
+    /// every pin-addressed feature resolves through the descriptor.
+    fn pin_map_entry<'a>(bus: &'a SystemBus, pin: &str) -> Option<&'a (String, u8)> {
+        let label = pin.to_ascii_uppercase();
+        if let Some(entry) = bus.pin_map.get(&label) {
+            return Some(entry);
+        }
+
+        let (alias, number) = label
+            .strip_prefix("GPIO")
+            .map(|number| ("GP", number))
+            .or_else(|| label.strip_prefix("GP").map(|number| ("GPIO", number)))?;
+        if number.is_empty() || !number.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        bus.pin_map.get(&format!("{alias}{number}"))
+    }
+
     /// Parse a pin label into `(gpio peripheral id, bit)`. Accepts the STM32
     /// form "PC7" -> `("gpioc", 7)` and the Nordic form "P0.04" / "P1.15" ->
     /// `("gpio0", 4)` / `("gpio1", 15)`.
@@ -73,7 +94,7 @@ impl SystemBus {
         //    declares any pins, resolution goes THROUGH the map — an undeclared pin
         //    returns None rather than silently letter-parsing onto a wrong port.
         if !bus.pin_map.is_empty() {
-            let (gpio_name, bit) = bus.pin_map.get(&pin.to_ascii_uppercase())?;
+            let (gpio_name, bit) = Self::pin_map_entry(bus, pin)?;
             let idx = bus.find_peripheral_index_by_name(gpio_name)?;
             let base = bus.peripherals[idx].base;
             let dev = bus.peripherals[idx].dev.as_ref();
@@ -258,7 +279,7 @@ impl SystemBus {
     /// to the STM32 default `PA9` and fails config.
     pub(crate) fn resolve_pin_idr(bus: &SystemBus, pin: &str) -> Option<(u64, u8)> {
         if !bus.pin_map.is_empty() {
-            if let Some((gpio_name, bit)) = bus.pin_map.get(&pin.to_ascii_uppercase()) {
+            if let Some((gpio_name, bit)) = Self::pin_map_entry(bus, pin) {
                 let idx = bus.find_peripheral_index_by_name(gpio_name)?;
                 let base = bus.peripherals[idx].base;
                 let dev = bus.peripherals[idx].dev.as_ref();

@@ -66,6 +66,10 @@ fn datasheet_transcriptions() {
         ("stm32f411ceu6", 3.3, 0.3, 0.7),
         // DS10198 Table 70, 1.62 V < VDDIOx < 3.6 V, all I/Os except BOOT0.
         ("stm32l476", 3.3, 0.3, 0.7),
+        // DS13312 Rev 4 §6.3.17 Table 55, standard I/Os (including PA5).
+        ("stm32h735", 3.3, 0.3, 0.7),
+        // nRF52840 Product Specification v1.11 §6.9.3.1; nominal VDD = 3.0 V.
+        ("nrf52840", 3.0, 0.3, 0.7),
     ] {
         let desc = load(chip);
         assert_eq!(desc.io_voltage_v, Some(volts), "{chip}");
