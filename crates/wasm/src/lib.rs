@@ -1284,6 +1284,7 @@ impl WasmSimulator {
         // Programmatic peripherals still need the resolved descriptor's GPIO
         // supply and input thresholds before co-simulation binds voltage routes.
         bus.attach_chip_io_levels(chip);
+        bus.attach_chip_analog_pins(chip);
 
         // A classic ESP32 has NO USB peripheral: its devkit's CP210x sits on
         // UART0 and IS the USB device the host enumerates. So `debug_uart:
@@ -1432,6 +1433,9 @@ impl WasmSimulator {
                 "ESP32-S3 flash boot needs the real boot ROM, but the injected images did not resolve",
             ));
         }
+        // The bank is programmatic, so load the descriptor's ADC pad map here
+        // (from_config does it for every other chip).
+        bus.attach_chip_analog_pins(chip);
         let mut cpu = wiring.cpu;
         // Same reason the native `--rom-boot` CLI and `build_esp32s3_node` set
         // it: the ROM and the app install the window overflow/underflow vectors
@@ -1564,6 +1568,7 @@ impl WasmSimulator {
             ..Esp32s3Opts::for_chip(chip)
         };
         let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+        bus.attach_chip_analog_pins(chip);
         let mut cpu = wiring.cpu;
 
         // S3 fast-boot runs no mask ROM, so nothing writes the same bytes to
