@@ -268,8 +268,8 @@ fn every_esp32s3_profile_solves_generic_netlists_on_adc1_pads() {
 }
 
 /// A pad outside the ADC1 table is refused rather than silently seeded on
-/// another channel. GPIO48 is the DevKitC-1 v1.1 RGB LED data pin and GPIO11
-/// is ADC2_CH0 on silicon; neither is in the table.
+/// another channel. GPIO48 (the DevKitC-1 v1.0 RGB LED pin) has no ADC
+/// function and GPIO11 is ADC2_CH0 on silicon; neither is in the table.
 #[test]
 fn esp32s3_pad_map_refuses_pads_it_does_not_publish() {
     let (mut bus, session) = bench("configs/systems/esp32s3-devkitc-1-v11.yaml");

@@ -263,8 +263,9 @@ fn unmodelled_xtensa_boot_paths_are_not_supported() {
 /// The production S3 constructor registers its peripheral bank
 /// programmatically instead of through `SystemBus::from_config`, so it must
 /// load the descriptor's `analog_pins:` table itself. Without that the generic
-/// NTC divider deck binds with `NoAdcChannel` on every hosted S3 run even
-/// though `esp32s3.yaml` publishes GPIO4 as ADC1_CH3. Run the committed Tier-1
+/// NTC divider deck binds with `NoAdcChannel` on the S3 fast-boot run even
+/// though `esp32s3.yaml` publishes GPIO4 as ADC1_CH3 (the flash-image path
+/// has its own test below). Run the committed Tier-1
 /// ELF through `build_machine`, solve the deck across a model boundary, and
 /// read the level back through the SENS SAR1 one-shot registers.
 #[test]
@@ -327,5 +328,45 @@ fn esp32s3_build_machine_routes_the_generic_analog_deck_to_sens_adc1() {
         word & 0xFFFF,
         u32::from(labwired_core::peripherals::esp_xtensa_common::esp32s3_adc1_mv_to_raw(1_650, 3)),
         "the 25 C NTC divider (1.65 V on GPIO4) reaches SENS ADC1 channel 3"
+    );
+}
+
+/// The flash-image ROM-boot constructor is the path hosted S3 runs take, and
+/// it also builds its bank programmatically. It must bind the same generic
+/// deck without `NoAdcChannel` on GPIO4/GPIO5.
+#[test]
+fn esp32s3_flash_image_build_machine_binds_the_generic_analog_deck() {
+    use labwired_config::SystemManifest;
+    use std::path::Path;
+
+    let (chip, mut manifest) = common::system("configs/systems/esp32s3-zero.yaml");
+    let deck = SystemManifest::from_file(common::root(
+        "examples/esp32s3-devkitc-1/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load the generic ESP32-S3 analog deck");
+    manifest.cosim_models = deck.cosim_models;
+    let flash = common::committed("tests/fixtures/tier1/esp32s3-flash.bin");
+    let blobs = s3_rom_blobs();
+    let built = build_machine(BuildRequest {
+        chip: &chip,
+        system: &manifest,
+        firmware: FirmwareSource::FlashImage {
+            image: &flash,
+            symbols: None,
+        },
+        boot: BootMode::RomBoot,
+        blobs: &blobs,
+        options: BuildOptions::default(),
+    })
+    .expect("build the S3 flash-boot machine");
+    let cosim = built
+        .machine
+        .bind_cosim(&manifest.cosim_models, Path::new("."))
+        .expect("build analog co-simulation")
+        .expect("deck carries analog models");
+    assert!(
+        cosim.binding_errors().is_empty(),
+        "the flash-boot S3 bus must resolve GPIO4/GPIO5 from esp32s3.yaml: {:?}",
+        cosim.binding_errors()
     );
 }
