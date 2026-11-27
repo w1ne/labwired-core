@@ -15,6 +15,14 @@ cpu_hz: 133_000_000
 # Read by the diagram compiler, which places it as the pad driver's
 # on-resistance in the analog netlist.
 gpio_output_ohms: 170
+# GPIO input thresholds at the default Feather IOVDD. RP2040 Datasheet release
+# 13, §5.5.3.4, Table 646: at IOVDD = 3.3 V, VIL(max) = 0.8 V and VIH(min) =
+# 2.0 V. Store these guaranteed limits as ratios of the active GPIO rail;
+# VIL's ratio is rounded so the 3.3 V product is exactly 0.8 V in binary float.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.24242424242424246
+  vih: 0.6060606060606061
 # gpio_abs_max_ma is not stated: Table 643 "Absolute maximum ratings for
 # digital IO" gives no per-pin current; Table 646 limits only the bank totals
 # IIOVDD_MAX and IIOVSS_MAX (50 mA each).
