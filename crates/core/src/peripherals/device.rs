@@ -87,6 +87,20 @@ pub trait I2cSlaveHost {
 }
 
 pub trait I2cDevice: Send {
+    /// Full protocol/device state for a mid-flight runtime resume. Unknown
+    /// models decline instead of pretending their mutable state is empty.
+    /// Decorators must opt in explicitly: a wrapper can own mutable supply
+    /// or protocol state even when its readback is transparent.
+    fn runtime_snapshot(&self) -> Option<Vec<u8>> {
+        None
+    }
+
+    fn restore_runtime_snapshot(&mut self, _bytes: &[u8]) -> crate::SimResult<()> {
+        Err(crate::SimulationError::NotImplemented(
+            "I2C device does not support runtime snapshots".into(),
+        ))
+    }
+
     /// Optional transaction epoch. A change invalidates a controller selection.
     fn transaction_generation(&self) -> Option<u64> {
         None

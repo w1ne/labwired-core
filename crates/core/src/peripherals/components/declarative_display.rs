@@ -148,7 +148,7 @@ impl DcWiring {
 }
 
 /// Where the next wire byte goes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 enum Framing {
     /// No command is open. A data byte here is a stray, which is what it is on
     /// silicon too.
@@ -169,6 +169,7 @@ struct SerialColorState {
 /// glass changed over time. `bytes` is the oriented framebuffer (same layout
 /// as the inspect payload); it is stored for the run and only serialised when
 /// the caller asked for artifact bytes.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct LoggedFrame {
     generation: u64,
     t_us: u64,
@@ -2394,6 +2395,14 @@ struct SerialColorSnapshot {
 // ─── I²C door (control-byte framing) ───────────────────────────────────────
 
 impl I2cDevice for GenericDisplay {
+    fn runtime_snapshot(&self) -> Option<Vec<u8>> {
+        self.capture_i2c_runtime_state()
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> crate::SimResult<()> {
+        self.restore_i2c_runtime_state(bytes)
+    }
+
     fn address(&self) -> u8 {
         self.address
     }
@@ -4386,3 +4395,6 @@ mod tests {
         assert_eq!((panel.col_end, panel.row_end), (479, 319));
     }
 }
+
+#[path = "declarative_display_snapshot.rs"]
+mod runtime_snapshot;

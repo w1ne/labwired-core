@@ -405,6 +405,38 @@ impl GatedI2cDevice {
     }
 }
 impl I2cDevice for GatedI2cDevice {
+    fn runtime_snapshot(&self) -> Option<Vec<u8>> {
+        // A legacy gate is immutable wiring. Routed domains also own voltage,
+        // availability, and generation state, which must not be silently lost.
+        if self.gate.is_routed() {
+            return None;
+        }
+        let state = (
+            0x4c57_4947u32,
+            self.gate.enabled,
+            self.inner.runtime_snapshot()?,
+        );
+        Some(bincode::serialize(&state).expect("serialize static I2C supply gate"))
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> crate::SimResult<()> {
+        if self.gate.is_routed() {
+            return Err(crate::SimulationError::NotImplemented(
+                "I2C routed supply domain does not support runtime snapshots".into(),
+            ));
+        }
+        let (tag, enabled, inner): (u32, bool, Vec<u8>) =
+            bincode::deserialize(bytes).map_err(|e| {
+                crate::SimulationError::NotImplemented(format!("I2C supply snapshot decode: {e}"))
+            })?;
+        if tag != 0x4c57_4947 || enabled != self.gate.enabled {
+            return Err(crate::SimulationError::NotImplemented(
+                "I2C static supply snapshot topology mismatch".into(),
+            ));
+        }
+        self.inner.restore_runtime_snapshot(&inner)
+    }
+
     fn is_i2c_mux(&self) -> bool {
         self.inner.is_i2c_mux()
     }
@@ -535,4 +567,40 @@ pub(crate) fn device_rails(
             max_v: r.max_v,
         })
         .collect()
+}
+
+#[cfg(test)]
+mod runtime_snapshot_tests {
+    use super::*;
+    use crate::peripherals::components::ssd1306;
+
+    #[test]
+    fn i2c_supply_runtime_snapshot_preserves_static_gate_and_rejects_dynamic_domains() {
+        let source = GatedI2cDevice::new(Box::new(ssd1306(0x3c)), SupplyGate::legacy(true));
+        let bytes = source.runtime_snapshot().unwrap();
+        let mut restored = GatedI2cDevice::new(Box::new(ssd1306(0x3c)), SupplyGate::legacy(true));
+        restored.restore_runtime_snapshot(&bytes).unwrap();
+        assert_eq!(restored.runtime_snapshot().unwrap(), bytes);
+        assert!(restored.claims_address(0x3c));
+
+        let mut unpowered = GatedI2cDevice::new(Box::new(ssd1306(0x3c)), SupplyGate::legacy(false));
+        assert!(unpowered.restore_runtime_snapshot(&bytes).is_err());
+        let unpowered_bytes = unpowered.runtime_snapshot().unwrap();
+        unpowered
+            .restore_runtime_snapshot(&unpowered_bytes)
+            .unwrap();
+        assert!(!unpowered.claims_address(0x3c));
+
+        let domain = Arc::new(SupplyDomain::new(BTreeMap::from([(
+            String::new(),
+            RailBounds {
+                min_v: 3.0,
+                max_v: None,
+            },
+        )])));
+        let mut routed =
+            GatedI2cDevice::new(Box::new(ssd1306(0x3c)), SupplyGate::routed(domain, true));
+        assert!(routed.runtime_snapshot().is_none());
+        assert!(routed.restore_runtime_snapshot(&bytes).is_err());
+    }
 }
