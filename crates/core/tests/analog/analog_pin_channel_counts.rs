@@ -71,8 +71,10 @@ fn every_published_adc_pad_is_a_channel_the_model_accepts() {
         }
         checked += 1;
     }
+    // 38 chips publish an ADC pad map today. A floor at that count makes a
+    // chip whose YAML stops loading fail here instead of dropping out.
     assert!(
-        checked >= 10,
+        checked >= 38,
         "only {checked} chips with ADC pad maps were built"
     );
     assert!(
