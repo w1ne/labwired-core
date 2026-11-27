@@ -23,6 +23,7 @@
 //! | Current source | `I<name> n+ n- <source>` |
 //! | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` or `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0\|1] ron=<r> roff=<r>` |
 //! | Voltage switch | `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] [signed=0|1] ron=<r> roff=<r>` |
+//! | ngspice switch | `S<name> n1 n2 nc+ nc- <model>` with `.model <model> SW(VT= VH= RON= ROFF=)` |
 //! | Diode | `D<name> n+ n- <model>` |
 //! | BJT | `Q<name> nc nb ne <model>` |
 //! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]` |
@@ -1446,6 +1447,35 @@ impl MosModel {
     }
 }
 
+/// Resolved parameters of a `.model <name> SW(...)` card.
+///
+/// Defaults are ngspice's. ngspice closes the switch when the signed control
+/// voltage rises above `VT + VH` and opens it when the voltage falls below
+/// `VT − VH`, so `VH` is half the hysteresis band, not the dropout.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SwitchModel {
+    /// Threshold voltage, `VT`.
+    pub vt: f64,
+    /// Half-width of the hysteresis band, `VH`.
+    pub vh: f64,
+    /// Closed resistance, `RON`.
+    pub ron: f64,
+    /// Open resistance, `ROFF`.
+    pub roff: f64,
+}
+
+impl Default for SwitchModel {
+    fn default() -> Self {
+        Self {
+            vt: 0.0,
+            vh: 0.0,
+            ron: 1.0,
+            // ngspice's default is `1 / GMIN` with its default GMIN of 1e-12.
+            roff: 1e12,
+        }
+    }
+}
+
 /// One `.model` card, before it is attached to an element.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModelCard {
@@ -1463,6 +1493,8 @@ pub enum ModelCard {
     Comparator(ComparatorModel),
     /// An `LDO`, `LDOADJ` or `BUCK` card (this engine's types).
     Regulator(RegulatorModel),
+    /// An `SW` card, ngspice's voltage-controlled switch.
+    Switch(SwitchModel),
 }
 
 impl ModelCard {
@@ -1477,6 +1509,7 @@ impl ModelCard {
                 RegulatorKind::Buck => "BUCK",
             },
             Self::Diode(_) => "D",
+            Self::Switch(_) => "SW",
             Self::Bjt(model) => match model.polarity {
                 Polarity::N => "NPN",
                 Polarity::P => "PNP",
@@ -2038,12 +2071,17 @@ pub struct VoltageSwitchControl {
     pub neg: NodeRef,
     /// Closing threshold in volts (`|V|` rising through `vt`).
     pub vt: f64,
-    /// Hysteresis in volts; the opening threshold is `vt − vh` (clamped at 0).
+    /// Hysteresis in volts; the opening threshold is `vt − vh` (clamped at 0 unless `signed`).
     pub vh: f64,
     /// When true, the contact is the complement (NC) of the NO threshold rule.
     pub invert: bool,
     /// Sense V(pos)-V(neg) instead of its magnitude (logic/UVLO). Default false.
     pub signed: bool,
+    /// ngspice `SW` comparisons: close only above `vt`, open only below
+    /// `vt − vh`, and hold the last state on either edge. The inline form
+    /// closes at `vt` itself and opens at the dropout itself. Only the
+    /// normally-open rule reads it; an `SW` card never sets `invert`.
+    pub strict: bool,
 }
 
 /// `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` — an ideal switch whose control is a
@@ -2884,6 +2922,39 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 let digital = "S<name> n1 n2 <ctrl> ron=<r> roff=<r>";
                 let voltage = "S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] [signed=0|1] ron=<r> roff=<r>";
                 let rest = &tokens[1..];
+                // ngspice's initial-state keyword is not modelled; say so
+                // instead of reporting the digital form's syntax.
+                if rest.len() == 6
+                    && rest.iter().all(|token| !token.contains('='))
+                    && matches!(rest[5].to_ascii_uppercase().as_str(), "ON" | "OFF")
+                {
+                    return Err(ctx.parse_err(format!(
+                        "switch initial state `{}` is not supported; remove it (the switch starts open)",
+                        rest[5]
+                    )));
+                }
+                // ngspice's own form, `S<name> n1 n2 nc+ nc- <model>`, carries
+                // its thresholds on a `.model SW` card that may come later.
+                if rest.len() == 5 && rest.iter().all(|token| !token.contains('=')) {
+                    let nodes = rest[..4].iter().map(|name| circuit.intern(name)).collect();
+                    pending.push(PendingDevice {
+                        line: ctx.number,
+                        text: line.to_string(),
+                        letter,
+                        name: head.to_string(),
+                        nodes,
+                        model_name: rest[4].to_string(),
+                        width: None,
+                        length: None,
+                        nrd: None,
+                        nrs: None,
+                        ad: None,
+                        as_: None,
+                        pd: None,
+                        ps: None,
+                    });
+                    continue;
+                }
                 let voltage_form = rest.iter().any(|token| {
                     token
                         .split_once('=')
@@ -2960,6 +3031,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                             vh,
                             invert,
                             signed,
+                            strict: false,
                         }),
                     });
                 } else {
@@ -3610,6 +3682,43 @@ fn bind_models(
                     model,
                 });
             }
+            'S' => {
+                let ModelCard::Switch(model) = card else {
+                    return Err(wrong_kind("S"));
+                };
+                if !(model.ron.is_finite()
+                    && model.ron > 0.0
+                    && model.roff.is_finite()
+                    && model.roff > 0.0)
+                {
+                    return Err(ctx.parse_err("a switch model needs RON > 0 and ROFF > 0"));
+                }
+                if !model.vt.is_finite() || !model.vh.is_finite() || model.vh < 0.0 {
+                    return Err(ctx.parse_err(
+                        "a switch model needs finite VT and VH >= 0 (negative VH is not supported)",
+                    ));
+                }
+                // ngspice's band `VT ± VH` on the signed voltage is this
+                // engine's signed switch closing at `VT + VH` with a dropout
+                // of `2·VH` below it.
+                circuit.switches.push(Switch {
+                    name: device.name,
+                    a: device.nodes[0],
+                    b: device.nodes[1],
+                    ctrl: String::new(),
+                    ron: model.ron,
+                    roff: model.roff,
+                    voltage: Some(VoltageSwitchControl {
+                        pos: device.nodes[2],
+                        neg: device.nodes[3],
+                        vt: model.vt + model.vh,
+                        vh: 2.0 * model.vh,
+                        invert: false,
+                        signed: true,
+                        strict: true,
+                    }),
+                });
+            }
             _ => unreachable!("device letter filtered above"),
         }
     }
@@ -3753,10 +3862,11 @@ fn parse_model(
         "LDO" => ModelCard::Regulator(RegulatorModel::defaults(RegulatorKind::Linear)),
         "LDOADJ" => ModelCard::Regulator(RegulatorModel::defaults(RegulatorKind::LinearAdjustable)),
         "BUCK" => ModelCard::Regulator(RegulatorModel::defaults(RegulatorKind::Buck)),
+        "SW" => ModelCard::Switch(SwitchModel::default()),
         other => {
             return Err(ctx.parse_err(format!(
                 "`.model` type `{other}` is not one of `D`, `NPN`, `PNP`, `NMOS`, `PMOS`, `NJF`, `PJF`, \
-                 `OPAMP`, `COMP`, `LDO`, `LDOADJ`, `BUCK`"
+                 `SW`, `OPAMP`, `COMP`, `LDO`, `LDOADJ`, `BUCK`"
             )))
         }
     };
@@ -3798,6 +3908,17 @@ fn parse_model(
         let value = ctx.value(raw, param)?;
         let param = param.to_ascii_uppercase();
         match (&mut card, param.as_str()) {
+            (ModelCard::Switch(model), "VT") => model.vt = value,
+            (ModelCard::Switch(model), "VH") => model.vh = value,
+            (ModelCard::Switch(model), "RON") => model.ron = value,
+            (ModelCard::Switch(model), "ROFF") => model.roff = value,
+            // ngspice rejects an unknown `SW` parameter, and a misspelt
+            // threshold silently left at 0 V would close the switch at 0 V.
+            (ModelCard::Switch(_), other) => {
+                return Err(ctx.parse_err(format!(
+                    "switch model parameter `{other}` is not one of `VT`, `VH`, `RON`, `ROFF`"
+                )))
+            }
             (ModelCard::Diode(model), "IS") => model.is = value,
             (ModelCard::Diode(model), "N") => model.n = value,
             (ModelCard::Diode(model), "IK" | "IKF") => model.ik = value,
