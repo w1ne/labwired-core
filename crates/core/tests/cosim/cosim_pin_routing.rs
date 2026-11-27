@@ -580,6 +580,47 @@ fn volts_on_a_pin_path_read_through_the_datasheet_thresholds() {
     );
 }
 
+/// Regression for issue #4288: these shipped chip descriptors must provide
+/// both the GPIO rail and threshold ratios so a voltage output can bind to the
+/// exact featured-lab GPIO input paths without failing at simulation startup.
+#[test]
+fn h735_and_nrf52840_voltage_driven_gpio_routes_bind() {
+    for (chip, path) in [
+        ("stm32h735", "board.gpio_in.pa5"),
+        ("nrf52840", "board.gpio_in.p0.06"),
+    ] {
+        let bus = chip_bus(chip);
+        let model = mock_model(
+            1_000,
+            &[],
+            &[("v_pin", path)],
+            &[("v_pin", serde_yaml::Value::from(1.5))],
+        );
+        let session = CosimSession::new(&[model], Path::new("."), &bus)
+            .unwrap_or_else(|e| panic!("{chip}: create voltage GPIO route: {e}"))
+            .unwrap_or_else(|| panic!("{chip}: expected a co-simulation session"));
+        assert!(
+            session.binding_errors().is_empty(),
+            "{chip} {path}: {:?}",
+            session.binding_errors()
+        );
+    }
+}
+
+#[test]
+fn canonical_esp32c3_supermini_blinky_led_is_active_low() {
+    let manifest = SystemManifest::from_file(root("examples/esp32c3-blinky/system.yaml"))
+        .expect("load the canonical Super Mini blinky system");
+    let led = manifest
+        .board_io
+        .iter()
+        .find(|io| io.id == "status_led")
+        .expect("the blinky system declares its user LED");
+    assert_eq!(led.peripheral, "gpio");
+    assert_eq!(led.pin, 8);
+    assert!(!led.active_high, "GPIO8's Super Mini LED is active-low");
+}
+
 /// `ui.` inputs start at 0 / false before anyone sets them, typed by what the
 /// model does with them: a switch control is a level, a source is a number.
 #[test]

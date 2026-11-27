@@ -4,6 +4,9 @@
 # GPIO8 (the board's user LED) as an output and toggles it forever, narrating
 # each transition over UART0. This is the demo binary the Playground falls
 # back to when a shared/agent C3 lab carries no firmware of its own.
+# The canonical Super Mini GPIO8 LED is active-low; see the board-specific
+# mapping in Apache NuttX's ESP32-C3 SuperMini notes. SuperMini clones can vary.
+# https://github.com/apache/nuttx/blob/master/Documentation/platforms/risc-v/esp32c3/boards/esp32c3-supermini/index.rst
 name: "esp32c3-blinky"
 chip: "../../configs/chips/esp32c3.yaml"
 external_devices: []
@@ -13,4 +16,4 @@ board_io:
     peripheral: "gpio"
     pin: 8
     signal: "output"
-    active_high: true
+    active_high: false
