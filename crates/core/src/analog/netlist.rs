@@ -2928,10 +2928,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     && rest.iter().all(|token| !token.contains('='))
                     && matches!(rest[5].to_ascii_uppercase().as_str(), "ON" | "OFF")
                 {
-                    return Err(ctx.parse_err(format!(
-                        "switch initial state `{}` is not supported; remove it (the switch starts open)",
-                        rest[5]
-                    )));
+                    return Err(ctx.unsupported());
                 }
                 // ngspice's own form, `S<name> n1 n2 nc+ nc- <model>`, carries
                 // its thresholds on a `.model SW` card that may come later.
@@ -3693,10 +3690,11 @@ fn bind_models(
                 {
                     return Err(ctx.parse_err("a switch model needs RON > 0 and ROFF > 0"));
                 }
-                if !model.vt.is_finite() || !model.vh.is_finite() || model.vh < 0.0 {
-                    return Err(ctx.parse_err(
-                        "a switch model needs finite VT and VH >= 0 (negative VH is not supported)",
-                    ));
+                if !model.vt.is_finite() || !model.vh.is_finite() {
+                    return Err(ctx.parse_err("a switch model needs finite VT and VH"));
+                }
+                if model.vh < 0.0 {
+                    return Err(ctx.unsupported());
                 }
                 // ngspice's band `VT ± VH` on the signed voltage is this
                 // engine's signed switch closing at `VT + VH` with a dropout

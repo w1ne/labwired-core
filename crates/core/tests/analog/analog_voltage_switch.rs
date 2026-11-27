@@ -4,7 +4,7 @@
 
 //! Voltage-controlled switches: the contact that a relay coil closes.
 
-use labwired_core::analog::{parse_netlist, Integration, Solver};
+use labwired_core::analog::{parse_netlist, AnalogError, Integration, Solver};
 
 fn run_to(solver: &mut Solver, h: f64, steps: usize) {
     for _ in 0..steps {
@@ -310,7 +310,8 @@ fn ngspice_sw_model_uses_ngspice_defaults_and_checks_the_card_kind() {
     assert!(err.to_string().contains("is a S element"), "{err}");
     let err =
         parse_netlist("* bad card\nS1 a 0 c 0 SMOD\n.model SMOD SW(VH=-1)\n.end\n").unwrap_err();
-    assert!(err.to_string().contains("VH >= 0"), "{err}");
+    assert!(matches!(&err, AnalogError::Unsupported { .. }), "{err}");
+    assert!(err.to_string().contains("needs ngspice"), "{err}");
 }
 
 #[test]
@@ -387,9 +388,6 @@ fn ngspice_sw_model_rejects_an_unknown_parameter() {
 fn ngspice_sw_initial_state_keyword_is_reported_as_unsupported() {
     let err =
         parse_netlist("* keyword\nS1 a 0 c 0 SMOD OFF\n.model SMOD SW(VT=1)\n.end\n").unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("initial state `OFF` is not supported"),
-        "{err}"
-    );
+    assert!(matches!(&err, AnalogError::Unsupported { .. }), "{err}");
+    assert!(err.to_string().contains("needs ngspice"), "{err}");
 }
