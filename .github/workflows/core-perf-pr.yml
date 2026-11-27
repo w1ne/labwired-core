@@ -1,0 +1,124 @@
+name: Core PR performance admission
+
+# Called in parallel with the library jobs in core-ci. The existing protected
+# pr-core-feature-off aggregate requires this entire workflow to succeed.
+# Scope is cheap and label-independent; a selected measurement cannot skip.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  perf-scope:
+    name: perf-scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      required: ${{ steps.select.outputs.required }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Test source admission and required-check wiring
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 scripts/perf/test_pr_hotpath_gate.py
+          python3 scripts/perf/test_pr_perf_admission.py
+      - name: Select mandatory PR measurement
+        id: select
+        env:
+          EVENT: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_REF: ${{ github.head_ref }}
+          TESTED: ${{ github.sha }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 scripts/perf/pr_hotpath_gate.py \
+            --event "$EVENT" --repository "$REPOSITORY" --head-ref "$HEAD_REF" \
+            --tested "$TESTED" --base "$BASE" --head "$HEAD" --output "$GITHUB_OUTPUT"
+
+  pr-throughput:
+    name: pr-throughput
+    needs: perf-scope
+    if: ${{ needs.perf-scope.outputs.required == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      # Representative native dispatch paths, not a claim about every chip or
+      # the packaged browser host. Full fleet coverage remains in core-perf.
+      PERF_BOARDS: esp32c3,rp2040,atmega328p
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: thumbv6m-none-eabi,riscv32imc-unknown-none-elf
+      - name: Reuse the existing native perf cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-perf
+          workspaces: |
+            . -> target
+      - name: Install measurement tools
+        run: |
+          sudo apt-get update && sudo apt-get install -y valgrind gcc-avr binutils-avr avr-libc
+          python3 -m pip install --quiet pyyaml
+      - name: Build the native simulator with event scheduling
+        run: cargo build --release -p labwired-cli --features event-scheduler
+      - name: Measure representative absolute native throughput
+        run: |
+          set -o pipefail
+          python3 scripts/perf/board_rtx.py --boards "$PERF_BOARDS" \
+            --repeats 3 --seconds 1 --min-rtx 1.0 --no-workloads \
+            --status-json pr-rtx-status.json 2>&1 | tee pr-rtx-report.txt
+      - name: Measure representative instruction cost in all existing modes
+        run: |
+          set -o pipefail
+          python3 scripts/perf/board_perf.py --boards "$PERF_BOARDS" --require-all \
+            --status-json pr-perf-status.json 2>&1 | tee pr-perf-report.txt
+      - name: Upload measured receipts
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: pr-performance-receipts
+          retention-days: 2
+          if-no-files-found: error
+          path: |
+            pr-rtx-status.json
+            pr-rtx-report.txt
+            pr-perf-status.json
+            pr-perf-report.txt
+
+  perf-verdict:
+    name: ${{ (github.event_name == 'pull_request' && github.event.pull_request.draft) && 'pr-perf-verdict (draft-skipped)' || 'pr-perf-verdict' }}
+    needs: [perf-scope, pr-throughput]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Require successful measurement or an explicit scoped skip
+        env:
+          SCOPE_RESULT: ${{ needs.perf-scope.result }}
+          REQUIRED: ${{ needs.perf-scope.outputs.required }}
+          MEASUREMENT_RESULT: ${{ needs.pr-throughput.result }}
+          DRAFT: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft }}
+        run: python3 scripts/perf/pr_perf_verdict.py

@@ -642,6 +642,8 @@ jobs:
             scripts/perf/test_board_perf.py \
             scripts/perf/test_board_rtx.py \
             scripts/perf/test_workload_perf.py \
+            scripts/perf/test_pr_hotpath_gate.py \
+            scripts/perf/test_pr_perf_admission.py \
             scripts/ci/test_artifact_retention_policy.py \
             scripts/ci/test_board_matrix.py \
             scripts/ci/test_chip_coverage.py \
@@ -1101,14 +1103,22 @@ jobs:
       - name: BLE Pong fixture provenance (committed .ino ↔ .bin)
         run: 'cargo test -p labwired-core --test esp -- fixture_ble_pong_provenance::'
 
+  # Native measurements run alongside the library jobs. The protected
+  # aggregate below admits the PR only after this workflow's explicit verdict.
+  pr-performance:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/core-perf-pr.yml
+
   # Preserve the existing protected context. always() prevents a failed,
   # cancelled, or skipped prerequisite from turning this gate into a skip.
-  # Both exact feature configurations must actually finish successfully.
+  # Both library feature configurations and scoped performance admission must succeed.
   pr-core-feature-off:
     # Skipped on drafts (both test jobs it aggregates are skipped there); the
     # name differs so no draft run ever reports the required context.
     name: ${{ (github.event_name == 'pull_request' && github.event.pull_request.draft) && 'pr-core-feature-off (draft-light)' || 'pr-core-feature-off' }}
-    needs: [pr-default-members-lib, pr-core-feature-off-tests]
+    needs: [pr-default-members-lib, pr-core-feature-off-tests, pr-performance]
     if: >
       always() &&
       !(github.event_name == 'pull_request' && github.event.pull_request.draft) &&
@@ -1116,13 +1126,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Both library feature graphs and firmware checks must pass
+      - name: Both library feature graphs and performance admission must pass
         env:
           DEFAULT_MEMBERS_RESULT: ${{ needs.pr-default-members-lib.result }}
           FEATURE_OFF_RESULT: ${{ needs.pr-core-feature-off-tests.result }}
+          PERF_RESULT: ${{ needs.pr-performance.result }}
         run: |
-          if [ "$DEFAULT_MEMBERS_RESULT" != success ] || [ "$FEATURE_OFF_RESULT" != success ]; then
-            echo "::error::Required test jobs did not both pass: default-members=$DEFAULT_MEMBERS_RESULT feature-off=$FEATURE_OFF_RESULT"
+          if [ "$DEFAULT_MEMBERS_RESULT" != success ] || [ "$FEATURE_OFF_RESULT" != success ] || [ "$PERF_RESULT" != success ]; then
+            echo "::error::Required library/performance jobs did not all pass: default-members=$DEFAULT_MEMBERS_RESULT feature-off=$FEATURE_OFF_RESULT perf=$PERF_RESULT"
             exit 1
           fi
 
