@@ -787,6 +787,29 @@ const DIFFERENTIALS: &[Differential] = &[
         minimum_swing: 0.5,
         nonlinear: true,
     },
+    Differential {
+        name: "hysteretic voltage switch",
+        // The control swings through both edges of the `VT ± VH` band, and
+        // its negative half must keep the switch open: a magnitude-sensing
+        // switch would close there and fail. The in-core engine switches at
+        // a substep boundary and ngspice cuts its step at the crossing, so
+        // they may disagree by one substep. The 10 ms charging time constant
+        // keeps that offset well under the tolerance; at 1 ms it was 0.14 %.
+        deck: "* voltage switch: S(SW) + R + C + VDC + VSIN\n\
+               Vdd vdd 0 dc 5\n\
+               Vc c 0 SIN(0 2 1k)\n\
+               S1 vdd out c 0 SMOD\n\
+               Rl out 0 10k\n\
+               C1 out 0 10u\n\
+               .model SMOD SW(VT=0.5 VH=0.3 RON=1k ROFF=1e9)\n",
+        node: "out",
+        sample: 20e-6,
+        substeps: 20,
+        samples: 500,
+        full_scale: 5.0,
+        minimum_swing: 0.5,
+        nonlinear: false,
+    },
 ];
 
 /// Solve `deck` with the in-core engine, sampling `node` at every boundary.
