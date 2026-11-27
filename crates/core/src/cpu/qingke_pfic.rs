@@ -2,13 +2,19 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! WCH QingKe V2 Programmable Fast Interrupt Controller (PFIC) at 0xE000E000,
-//! as on the CH32V002/V003/V004/V005/V006/V007.
+//! WCH QingKe Programmable Fast Interrupt Controller (PFIC) at 0xE000E000,
+//! as on the CH32V002/V003/V004/V005/V006/V007 (QingKe V2) and the
+//! CH32V20x/V30x (QingKe V4). The two share this register map; they differ
+//! in the registers the hardware prologue saves ([`HPE_REGS`],
+//! [`HPE_REGS_V4`]).
 //!
 //! Sources: WCH noneos-sdk `Core/ch32v00x/core_riscv.h` (`PFIC_Type`,
 //! `NVIC_EnableIRQ`/`NVIC_SetPriority`), `Startup/startup_ch32v00x.S` (mtvec
 //! `_start | 3`, INTSYSCR = 3) and the CH32V003 Reference Manual, chapter
-//! "PFIC". The window is decoded by the core, as the PLIC and CLINT are.
+//! "PFIC". QingKe V4: WCH "QingKe V4 Microprocessor Manual" chapter 3 (PFIC
+//! and HPE: 16 caller-saved registers in one cycle) and ch32fun
+//! `ch32v20xhw.h` (`PFIC_Type`, same offsets). The window is decoded by the
+//! core, as the PLIC and CLINT are.
 //!
 //! Modelled:
 //! - `ISR[8]` (+0x000, enabled status), `IPR[8]` (+0x020, pending status);
@@ -52,6 +58,10 @@ const SCTLR: u32 = 0xD10;
 /// set x1, x5..x7, x10..x15.
 pub const HPE_REGS: [usize; 10] = [1, 5, 6, 7, 10, 11, 12, 13, 14, 15];
 
+/// Registers the QingKe V4 hardware prologue saves: the RV32I caller-saved
+/// set x1, x5..x7, x10..x17, x28..x31.
+pub const HPE_REGS_V4: [usize; 16] = [1, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 28, 29, 30, 31];
+
 /// INTSYSCR (CSR 0x804) `HWSTKEN`: hardware prologue/epilogue enable.
 pub const INTSYSCR_HWSTKEN: u32 = 1 << 0;
 /// INTSYSCR `INESTEN`: interrupt nesting enable (stored, see module docs).
@@ -59,11 +69,12 @@ pub const INTSYSCR_INESTEN: u32 = 1 << 1;
 
 /// One trap the core entered while the PFIC was attached: the interrupt it
 /// marked active (`None` for an exception) and the registers the hardware
-/// prologue saved (`None` when HWSTKEN was clear).
+/// prologue saved (`None` when HWSTKEN was clear), in the order of the
+/// core's HPE register set; a V2 core fills the first ten slots.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PficFrame {
     pub irq: Option<u32>,
-    pub saved: Option<[u32; 10]>,
+    pub saved: Option<[u32; 16]>,
 }
 
 /// QingKe V2 PFIC state (see the module docs).
@@ -105,9 +116,13 @@ impl QingKePfic {
     }
 
     /// The PFIC a chip descriptor's core complex carries: every CH32V00x
-    /// part (QingKe V2A/V2C). Keyed by chip name, as the PLIC is.
+    /// part (QingKe V2A/V2C), keyed by chip name as the PLIC is, and every
+    /// chip that declares a QingKe V4 core (`core: qingke-v4b`, the
+    /// ch32-rs/ch32-data name).
     pub fn for_chip(chip: &labwired_config::ChipDescriptor) -> bool {
         chip.name.to_ascii_lowercase().starts_with("ch32v00")
+            || crate::cpu::RiscVCoreProfile::for_chip(chip)
+                == crate::cpu::RiscVCoreProfile::QingkeV4
     }
 
     /// Offset of `addr` in the PFIC window, if it falls inside.

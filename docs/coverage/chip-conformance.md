@@ -44,7 +44,7 @@ This page covers the public models. For every chip we model — public and priva
 | atsamd21j18a | **L0** | ✓ | 15 | — | — | — |
 | nrf54lm20a | **L1** | ✓ | 31 | — | — | nrf54lm20a_peripheral_estate::the_estate_answers_at_its_own_addresses |
 | esp32 | **L1** | ✓ | 32 | — | — | firmware_survival::test_esp32_tier1_survival |
-| esp32s3 | **L1** | ✓ | 14 | — | — | firmware_survival::test_esp32s3_tier1_survival |
+| esp32s3 | **L1** | ✓ | 15 | — | — | firmware_survival::test_esp32s3_tier1_survival |
 | esp32s3-zero | **L1** | ✓ | 17 | — | — | firmware_survival::test_esp32s3_zero_tier1_survival |
 | esp32s3-devkitc-1-n16r8-adc | **L0** | ✓ | 3 | — | — | — |
 | esp32-devkitc-32e-gpio-smoke | **L1** | ✓ | 3 | — | — | firmware_survival::test_esp32_devkitc_32e_gpio_smoke_tier1_survival |
@@ -144,7 +144,7 @@ This page covers the public models. For every chip we model — public and priva
 | ch32v005f6p6 | **L1** | ✓ | 6 | — | — | ch32_compiled_firmware::every_ch32_compiled_blink_toggles_its_pin_and_only_its_pin |
 | ch32x035c8t6 | **L1** | ✓ | 5 | — | — | ch32_compiled_firmware::every_ch32_compiled_blink_toggles_its_pin_and_only_its_pin |
 | ch32v006k8u6 | **L1** | ✓ | 6 | — | — | ch32_compiled_firmware::every_ch32_compiled_blink_toggles_its_pin_and_only_its_pin |
-| ch32v203c8t6 | **L1** | ✓ | 7 | — | — | ch32_compiled_firmware::every_ch32_compiled_blink_toggles_its_pin_and_only_its_pin |
+| ch32v203c8t6 | **L1** | ✓ | 10 | — | — | ch32_compiled_firmware::every_ch32_compiled_blink_toggles_its_pin_and_only_its_pin |
 | ch32v003f4u6 | **L1** | ✓ | 15 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
 | ch32v003a4m6 | **L1** | ✓ | 15 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
 | at32f421g8u7 | **L1** | ✓ | 22 | — | — | at32f421_contract::vendor_sdk_smoke_runs_flash_dma_and_timer_irq_paths |

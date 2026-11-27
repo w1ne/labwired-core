@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="8" failures="0" errors="0" time="82.731885">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="79546227876cfddc765bf4295d0b9d52bb3d9329ab59fea6ce046bfbeb5541bd"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="82.731885">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: peripheral_log: debug_printf.terminal contains &quot;systick_irq example&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: peripheral_log: debug_printf.terminal contains &quot;initializing systick...done.&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: peripheral_log: debug_printf.terminal contains &quot;Beginning Loop...&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: peripheral_log: debug_printf.terminal contains &quot;Milliseconds taken:\t499&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: peripheral_log: debug_printf.terminal contains &quot;Milliseconds taken:\t500&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: peripheral_log: debug_printf.terminal contains &quot;Current Milliseconds:\t500&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: peripheral_log: debug_printf.terminal contains &quot;Current Milliseconds:\t1000&quot;" time="0.000000">
+  </testcase>
+</testsuite>

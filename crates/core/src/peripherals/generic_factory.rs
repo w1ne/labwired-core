@@ -561,7 +561,10 @@ pub const MODEL_TYPES: &[&str] = &[
     "mpfs_i2c",
     // PolarFire SoC MSS SPI0/1 (CoreSPI-family master).
     "mpfs_spi",
-    // WCH QingKe V2 system timer (CH32V003/V005/V006 STK at 0xE000F000).
+    // WCH-LinkE debug printf channel (ch32fun's default console).
+    "wch_debug_printf",
+    // WCH QingKe system timer (STK at 0xE000F000): V2 on the CH32V00x,
+    // `profile: v4` on the CH32V20x/V30x.
     "qingke_stk",
     // SAM4S (the older PIO/PMC blocks; not the SAM D21 PORT/PM pair).
     "sam4s_pio",
@@ -3371,7 +3374,17 @@ pub fn try_build(
         // PolarFire SoC MSS SPI0/1: master mode; devices attach through
         // `external_devices:` and follow SLAVE_SELECT.
         "mpfs_spi" => Box::new(crate::peripherals::mpfs_spi::MpfsSpi::new()),
-        "qingke_stk" => Box::new(crate::peripherals::qingke_stk::QingKeStk::new()),
+        // WCH-LinkE debug printf channel (DMDATA0/1 + attach sentinel).
+        "wch_debug_printf" => Box::new(crate::peripherals::wch_debug_printf::WchDebugPrintf::new()),
+        // QingKe system timer: the V2 32-bit layout by default; `profile: v4`
+        // selects the CH32V20x/V30x 64-bit layout with MODE and INIT.
+        "qingke_stk" => match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+            None | Some("v2") => Box::new(crate::peripherals::qingke_stk::QingKeStk::new()),
+            Some("v4") => Box::new(crate::peripherals::qingke_stk::QingKeStk::new_v4()),
+            Some(other) => {
+                anyhow::bail!("unsupported qingke_stk profile '{other}'; supported: v2, v4")
+            }
+        },
         "sam4s_pio" => Box::new(crate::peripherals::sam4s::Sam4sPio::new()),
         "sam4s_pmc" => Box::new(crate::peripherals::sam4s::Sam4sPmc::new()),
         "sam4s_wdt" => Box::new(crate::peripherals::sam::sysc4s::Sam4sWdt::new()),

@@ -172,7 +172,7 @@ _No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test r
 
 ### `ch32v203c8t6`
 
-_No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs a committed RV32IMAC ELF that blinks PC13 through GPIOC_CFGHR (negative control: PC0 stays idle), and a second ELF that checks MUL/DIVU/AMOADD.W results and then prints an exact string on USART1 (PA9); a negative control moves the USART1 clock gate and requires silence. A DS0 Table 2-1 test pins memory, clock and the 37 LQFP48 GPIOs. This local simulator evidence does not cover WCH-Link, PFIC, SysTick, timers, ADC, I2C, SPI, CAN or USB, and is not hosted model_verified or hardware confirmation._
+_No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs a committed RV32IMAC ELF that blinks PC13 through GPIOC_CFGHR (negative control: PC0 stays idle), and a second ELF that checks MUL/DIVU/AMOADD.W results and then prints an exact string on USART1 (PA9); a negative control moves the USART1 clock gate and requires silence. A DS0 Table 2-1 test pins memory, clock and the 37 LQFP48 GPIOs. A third PR-gated run executes unmodified ch32fun systick_irq on the QingKe V4B core: SysTick_Handler through PFIC interrupt 12 advances the 64-bit CMP once per counted millisecond, and the WCH-LinkE debug printf transcript is asserted. This local simulator evidence does not cover timers, ADC, I2C, SPI, CAN, USB, EXTI or PFIC nesting, and is not hosted model_verified or hardware confirmation._
 
 ### `ch32v003f4u6`
 
@@ -212,7 +212,7 @@ _Minimal nRF54L10 application-core smoke using real RRAM and SRAM geometry, UART
 
 ### `nrf54l15`
 
-_No tier1 fixture. Unmodified Zephyr v4.4 hello_world boots end-to-end (nRF54L CLOCK/LFCLK, GRTC kernel tick, TAMPC approtect gate, RRAM-mapped UARTE20 EasyDMA) and the PR-gated smart-ring probe reads four I2C sensor IDs. Beyond the rubric TEMP/EGU/GPIOTE are unit-tested models no firmware drives; TAMPC/RRAMC/regulators/FICR/UICR/DPPIC are zero-filled stub windows the boot path pokes but never polls._
+_No tier1 fixture. Unmodified Zephyr v4.4 hello_world boots end-to-end (nRF54L CLOCK/LFCLK, GRTC kernel tick, TAMPC approtect gate, RRAM-mapped UARTE20 EasyDMA) and the PR-gated smart-ring probe reads four I2C sensor IDs. Beyond the rubric TEMP/EGU/GPIOTE are unit-tested models no firmware drives; TAMPC/RRAMC/regulators/UICR/DPPIC are zero-filled stub windows the boot path pokes but never polls; FICR is an SVD register file._
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `TEMP`, `EGU10`, `EGU20`, `GPIOTE20`, `GPIOTE30`
 
@@ -220,7 +220,7 @@ _No tier1 fixture. Unmodified Zephyr v4.4 hello_world boots end-to-end (nRF54L C
 - `TAMPC` (configs/chips/nrf54l15.yaml:363 (nrf54l_tampc_stub)) — STRUCTURAL: SystemInit READS the protect-domain signal registers, and the MDK deliberately hangs the part on locked+high — zero is the only boot-safe answer. Read once, never polled.
 - `RRAMC` (configs/chips/nrf54l15.yaml:390 (nrf54l_rramc_stub)) — STRUCTURAL: firmware executes from RRAM and no boot path polls the controller for a settled value. Closable only by firmware that writes NVM at runtime — none does.
 - `REGULATORS` (configs/chips/nrf54l15.yaml:398 (nrf54l_regulators_stub)) — STRUCTURAL: DCDC/LDO selection is write-only on the boot path; nothing reads it back.
-- `FICR` (configs/chips/nrf54l15.yaml:423 (nrf54l_ficr_stub)) — STRUCTURAL: factory info read once at boot; zero is the honest answer for an unprovisioned part.
+- `FICR` (configs/chips/nrf54l15.yaml:476 (declarative peripherals/nrf54l15/ficr.yaml)) — STRUCTURAL: SVD register file, not zero-filled. INFO.PART/RAM/RRAM carry the SVD N54L15/K256/K1524 values; DEVICEID, trims and TRIMCNF read erased (0xFFFFFFFF). Zephyr reads the XOSC trims once at boot and never polls.
 - `UICR` (configs/chips/nrf54l15.yaml:429 (nrf54l_uicr_stub)) — STRUCTURAL: unprovisioned UICR reads zero, which the boot path accepts; APPROTECT provisioning is not modelled.
 - `DPPIC20/DPPIC30` (configs/chips/nrf54l15.yaml:407,413 (nrf54l_dppic_stub)) — CLOSABLE: event-routing fabric only — poked during peripheral init, never polled for a settled value, and no firmware routes events through DPPI.
 

@@ -1869,6 +1869,16 @@ fn riscv_profile_is_selected_from_the_chip_descriptor() {
         RiscVCoreProfile::Esp32C3,
         "an undeclared core keeps the historical default"
     );
+    let v203 = chip("ch32v203c8t6", Some("qingke-v4b"));
+    assert_eq!(
+        RiscVCoreProfile::for_chip(&v203),
+        RiscVCoreProfile::QingkeV4,
+        "the QingKe V4B core string selects the WCH V4 profile"
+    );
+    assert!(
+        crate::cpu::qingke_pfic::QingKePfic::for_chip(&v203),
+        "a QingKe V4 core carries the PFIC"
+    );
 }
 
 const FE310_CLINT: u32 = 0x0200_0000;
@@ -2187,6 +2197,59 @@ fn qingke_pfic_without_hwstken_leaves_handler_registers() {
         0x77,
         "no hardware prologue without HWSTKEN"
     );
+}
+
+/// QingKe V4 (CH32V20x): ch32fun's startup writes CORECFGR (0xBC0), and
+/// with HWSTKEN the hardware prologue saves the 16-register V4 set, so a
+/// `WCH-Interrupt-fast` handler may clobber x16/x17/x28..x31 too.
+#[test]
+fn qingke_v4_stores_corecfgr_and_hpe_restores_the_v4_register_set() {
+    // csrw 0xbc0, x5; csrrs x7, 0xbc0, x0
+    const CSRW_CORECFGR: u32 = 0xBC02_9073;
+    const CSRR_CORECFGR: u32 = 0xBC00_23F3;
+    let mut flash = vec![0u8; 0x210];
+    let mut put = |at: usize, word: u32| flash[at..at + 4].copy_from_slice(&word.to_le_bytes());
+    put(0x000, CSRW_CORECFGR);
+    put(0x004, CSRR_CORECFGR);
+    put(0x008, addi(0, 0, 0));
+    put(0x100 + 4 * 12, 0x200);
+    put(0x200, addi(16, 0, 0x77));
+    put(0x204, addi(28, 0, 0x78));
+    put(0x208, 0x3020_0073); // mret
+    let mut bus = SystemBus::new();
+    bus.flash.data = flash;
+    let mut cpu = RiscV::new_for(RiscVCoreProfile::QingkeV4);
+    cpu.attach_pfic();
+    cpu.mtvec = 0x100 | 3;
+    cpu.x[5] = 0x1237_0303;
+    cpu.x[16] = 0x11;
+    cpu.x[28] = 0x22;
+    assert!(cpu.write_csr(0x804, 0x3));
+    let mut m = Machine::new(cpu, bus);
+    m.step().unwrap();
+    m.step().unwrap();
+    assert_eq!(m.cpu.x[7], 0x1237_0303, "CORECFGR reads back");
+    assert_eq!(m.cpu.mcause, 0, "no instruction trapped");
+    m.cpu.mstatus = 1 << 3;
+    m.cpu.store(&mut m.bus, 0xE000_E100, 4, 1 << 12).unwrap();
+    m.cpu.set_exception_pending(12);
+    m.step().unwrap();
+    assert_eq!(m.cpu.pc, 0x200);
+    for _ in 0..3 {
+        m.step().unwrap();
+    }
+    assert_eq!(m.cpu.pc, 0xC);
+    assert_eq!(m.cpu.x[16], 0x11, "HPE restores x16 on V4");
+    assert_eq!(m.cpu.x[28], 0x22, "HPE restores x28 on V4");
+
+    // CORECFGR is a V4 CSR, not a generic RV32 one.
+    let mut bus = SystemBus::new();
+    bus.flash.data = CSRW_CORECFGR.to_le_bytes().to_vec();
+    let mut cpu = RiscV::new_for(RiscVCoreProfile::StandardRv32);
+    cpu.mtvec = 0x100;
+    let mut m = Machine::new(cpu, bus);
+    m.step().unwrap();
+    assert_eq!(m.cpu.mcause, 2, "a generic RV32 core traps on CORECFGR");
 }
 
 #[test]

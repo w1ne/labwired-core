@@ -67,6 +67,7 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
         packed!("atsamd21g18a/sysctrl.yaml"),
     ),
     ("atsamd21g18a/wdt.yaml", packed!("atsamd21g18a/wdt.yaml")),
+    ("ch32v20x/exten.yaml", packed!("ch32v20x/exten.yaml")),
     ("esp32/apb_ctrl.yaml", packed!("esp32/apb_ctrl.yaml")),
     ("esp32/dport.yaml", packed!("esp32/dport.yaml")),
     ("esp32/efuse.yaml", packed!("esp32/efuse.yaml")),
@@ -327,6 +328,7 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("nrf5340/timer2_s.yaml", packed!("nrf5340/timer2_s.yaml")),
     ("nrf5340/uarte0_s.yaml", packed!("nrf5340/uarte0_s.yaml")),
     ("nrf5340/uicr_s.yaml", packed!("nrf5340/uicr_s.yaml")),
+    ("nrf54l15/ficr.yaml", packed!("nrf54l15/ficr.yaml")),
     (
         "nrf54l15/global_clock_s.yaml",
         packed!("nrf54l15/global_clock_s.yaml"),
@@ -346,10 +348,6 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     (
         "nrf54l15/global_egu20_s.yaml",
         packed!("nrf54l15/global_egu20_s.yaml"),
-    ),
-    (
-        "nrf54l15/global_ficr_ns.yaml",
-        packed!("nrf54l15/global_ficr_ns.yaml"),
     ),
     (
         "nrf54l15/global_gpiote20_s.yaml",

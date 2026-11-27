@@ -1,0 +1,21 @@
+# ch32fun examples_v20x/blink, unmodified (build-ch32fun-examples.sh). Four
+# pins toggle together every Delay_Ms(250) at 144 MHz: DelaySysTick waits
+# 4,500,000 HCLK/8 counts of the 64-bit QingKe V4 SysTick, 36,000,000 cycles
+# per edge, so 200,000,000 cycles hold 5 edges on each pin.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/blink.elf"
+  system: "./system.yaml"
+limits:
+  max_cycles: 200000000
+  max_steps: 200000000
+  wall_time_ms: 600000
+assertions:
+  - gpio_edges: { pin: "gpioa:0", min_edges: 5 }
+  - gpio_edges: { pin: "gpioa:2", min_edges: 5 }
+  - gpio_edges: { pin: "gpioa:4", min_edges: 5 }
+  - gpio_edges: { pin: "gpioa:7", min_edges: 5 }
+  # SystemInit's PLL handshake: SW = PLL reported in SWS, PLLMUL 0b1111
+  # (x18 on the CH32V20x), and PLL_HSI_PRE stored in EXTEN_CTR.
+  - memory_value: { address: 0x40021004, size: 32, mask: 0x003C000F, expected_value: 0x003C000A }
+  - memory_value: { address: 0x40023800, size: 32, mask: 0x10, expected_value: 0x10 }

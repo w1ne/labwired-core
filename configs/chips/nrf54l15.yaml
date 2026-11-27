@@ -469,12 +469,16 @@ peripherals:
   # FICR / UICR — factory and user info. NOT inside the 0x5000_0000 window;
   # these are absolute (DT: ficr@ffc000, uicr@ffd000). Unprovisioned UICR reads
   # as zero, which the boot path accepts.
+  # FICR serves the SVD register file: INFO.PART/RAM/RRAM carry the N54L15,
+  # K256 and K1524 enum values; every other word reads erased (0xFFFFFFFF), so
+  # the nrfx TRIMCNF copy loop stops at entry 0. No device ID or trim is
+  # invented. See peripherals/nrf54l15/ficr.yaml.
   - id: "ficr"
-    type: "nrf54l_ficr_stub"
+    type: "declarative"
     base_address: 0x00FFC000
     size: "4KB"
     config:
-      debug_schema: "../peripherals/nrf54l15/global_ficr_ns.yaml"
+      path: "../peripherals/nrf54l15/ficr.yaml"
   - id: "uicr"
     type: "nrf54l_uicr_stub"
     base_address: 0x00FFD000

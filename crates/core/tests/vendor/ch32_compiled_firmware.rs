@@ -5,7 +5,7 @@
 // message. `ch32v003_compiled_firmware.rs` is a different shape and stays
 // separate.
 use labwired_config::{ChipDescriptor, SystemManifest};
-use labwired_core::{bus::SystemBus, system::riscv::configure_riscv, Machine};
+use labwired_core::{bus::SystemBus, system::riscv::configure_riscv, Bus, Machine};
 
 /// Which pin numbers of a port the datasheet bonds out.
 enum Bits {
@@ -123,8 +123,9 @@ const CHIPS: &[Row] = &[
         // firmware never sets.
         gate_reg: "apb2enr",
         // CH32V203DS0 V3.0 Table 2-1, C8x6 column, and Table 3-1-1 LQFP48
-        // GPIOs.
-        core: "rv32imac",
+        // GPIOs. The core string is the ch32-rs/ch32-data name of the
+        // QingKe V4B (RV32IMAC), which selects the PFIC and CORECFGR.
+        core: "qingke-v4b",
         cpu_hz: 144_000_000,
         flash_size: 64 * 1024,
         ram_size: 20 * 1024,
@@ -397,5 +398,69 @@ fn ch32x035_usart1_needs_the_x035_pad_map() {
     assert!(
         SystemBus::from_config(&chip, &SystemManifest::default()).is_err(),
         "unknown UART pad_map must fail the build"
+    );
+}
+
+/// Unmodified ch32fun `examples/systick_irq` built for the CH32V203
+/// (examples/ch32v203c8t6/build-ch32fun-examples.sh). It prints through the
+/// WCH-LinkE debug channel, busy-waits Delay_Ms(100) on the 64-bit SysTick,
+/// then enables SysTick_IRQn (12) in the PFIC; each handler entry adds
+/// 144,000 to the 64-bit CMP and increments `systick_millis`. 15.5 M
+/// instructions reach about 7 ms past the enable.
+#[test]
+fn ch32v203_ch32fun_systick_irq_counts_milliseconds_through_the_pfic() {
+    let row = CHIPS
+        .iter()
+        .find(|r| r.name == "CH32V203")
+        .expect("CH32V203 row");
+    let chip = descriptor(row);
+    let mut bus = SystemBus::from_config(&chip, &SystemManifest::default())
+        .expect("CH32V203 peripherals and clock gates");
+    let elf = root().join("examples/ch32v203c8t6/ch32fun/systick_irq.elf");
+    let image = labwired_loader::load_elf(&elf).expect("ch32fun systick_irq ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load systick_irq ELF");
+    for _ in 0..15_500_000 {
+        machine.step().expect("ch32fun systick_irq instruction");
+    }
+    assert_eq!(
+        machine.cpu.mcause & 0x7FFF_FFFF,
+        12,
+        "last trap was SysTick"
+    );
+
+    let logs = machine
+        .bus
+        .peripheral_logs("debug_printf")
+        .expect("debug_printf block registered");
+    let terminal = logs
+        .iter()
+        .find(|l| l.name == "terminal")
+        .expect("terminal log")
+        .lines()
+        .join("\n");
+    for line in [
+        "systick_irq example",
+        "initializing systick...done.",
+        "Beginning Loop...",
+    ] {
+        assert!(terminal.contains(line), "missing {line:?} in {terminal:?}");
+    }
+
+    // `systick_millis` is ch32fun's first .bss word (0x20000000). Every
+    // handler entry moved CMP on by one millisecond from its first value,
+    // DELAY_MS_TIME - 1, so CMP and the count must agree.
+    let millis = machine.bus.read_u32(0x2000_0000).expect("systick_millis");
+    let cmp = u64::from(machine.bus.read_u32(0xE000_F010).unwrap())
+        | (u64::from(machine.bus.read_u32(0xE000_F014).unwrap()) << 32);
+    assert!(
+        (5..=9).contains(&millis),
+        "about 7 ms of 1 ms interrupts, got {millis}"
+    );
+    assert_eq!(
+        cmp,
+        143_999 + 144_000 * u64::from(millis),
+        "one CMP step per counted interrupt"
     );
 }
