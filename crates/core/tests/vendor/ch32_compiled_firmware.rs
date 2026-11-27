@@ -315,6 +315,79 @@ fn every_ch32_compiled_uart_hello_prints_on_usart1() {
     }
 }
 
+/// Runs the CH32V203 USART1 RXNE fixture with bytes already waiting on USART1
+/// RX, returning the USART1 TX stream and the last QingKe trap cause.
+fn run_ch32v203_usart1_rx_irq(chip: &ChipDescriptor, bytes: &[u8]) -> (String, u32) {
+    let mut bus = SystemBus::from_config(chip, &SystemManifest::default())
+        .expect("CH32V203 peripherals and clock gates");
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+    bus.attach_uart_rx_source_named("usart1")
+        .expect("USART1 RX source")
+        .lock()
+        .unwrap()
+        .extend(bytes.iter().copied());
+
+    let image =
+        labwired_loader::load_elf(&root().join("examples/ch32v203c8t6/ch32fun/usart_rx_irq.elf"))
+            .expect("CH32V203 USART RX IRQ ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine
+        .load_firmware(&image)
+        .expect("load USART RX IRQ ELF");
+
+    for _ in 0..2_000_000 {
+        machine.step().expect("CH32V203 USART RX IRQ instruction");
+        let out = String::from_utf8_lossy(&sink.lock().unwrap()).into_owned();
+        if out.contains("USART1_IRQ_RX=wch!\r\n") || out.contains("USART1_IRQ_TIMEOUT\r\n") {
+            break;
+        }
+    }
+
+    let out = String::from_utf8_lossy(&sink.lock().unwrap()).into_owned();
+    (out, machine.cpu.mcause)
+}
+
+#[test]
+fn ch32v203_usart1_rxne_reaches_qingke_pfic_irq_53() {
+    let row = CHIPS
+        .iter()
+        .find(|r| r.name == "CH32V203")
+        .expect("CH32V203 row");
+    let chip = descriptor(row);
+    let (out, mcause) = run_ch32v203_usart1_rx_irq(&chip, b"wch!");
+    assert_eq!(out, "USART1_IRQ_RX=wch!\r\n");
+    assert_eq!(mcause, 0x8000_0035, "last trap was USART1_IRQn 53");
+}
+
+#[test]
+fn ch32v203_usart1_rxne_stays_unhandled_without_irq_53_wired() {
+    let row = CHIPS
+        .iter()
+        .find(|r| r.name == "CH32V203")
+        .expect("CH32V203 row");
+    let text = std::fs::read_to_string(descriptor_path(row)).expect("read CH32V203 descriptor");
+    let mut yaml: serde_yaml::Value = serde_yaml::from_str(&text).expect("parse chip descriptor");
+    let peripherals = yaml["peripherals"]
+        .as_sequence_mut()
+        .expect("peripherals list");
+    let usart1 = peripherals
+        .iter_mut()
+        .find(|p| p["id"].as_str() == Some("usart1"))
+        .expect("usart1 block");
+    assert_eq!(usart1["irq"].as_u64(), Some(53), "USART1_IRQn is wired");
+    usart1
+        .as_mapping_mut()
+        .unwrap()
+        .remove(serde_yaml::Value::String("irq".to_owned()));
+    let chip: ChipDescriptor = serde_yaml::from_value(yaml).expect("descriptor without USART1 IRQ");
+
+    let (out, mcause) = run_ch32v203_usart1_rx_irq(&chip, b"wch!");
+    assert_eq!(out, "USART1_IRQ_TIMEOUT\r\n");
+    assert_eq!(mcause, 0, "unwired USART1 must not enter the PFIC");
+}
+
 #[test]
 fn every_ch32_usart1_stays_silent_without_its_apb2_clock() {
     // Negative control: move the USART1 gate to a clock-enable bit the
