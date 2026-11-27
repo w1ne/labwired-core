@@ -13,6 +13,7 @@ models:
   # REGISTERS, previously invisible to its drift digest. nrf54l/{clock,
   # uarte,twim}.rs were all rewritten by the walk-deletion work without
   # moving the hash, which is what prompted the gate.
+  - crates/core/src/peripherals/declarative.rs
   - crates/core/src/peripherals/gpio.rs
   - crates/core/src/peripherals/nrf52/egu.rs
   - crates/core/src/peripherals/nrf52/gpiote.rs
@@ -25,3 +26,5 @@ models:
   - crates/core/src/peripherals/nrf54l/uarte.rs
   - crates/core/src/peripherals/stub.rs
   - crates/core/src/peripherals/systick.rs
+  # FICR register file (declarative): INFO.PART/RAM/RRAM from the SVD enums.
+  - configs/peripherals/nrf54l15/ficr.yaml
