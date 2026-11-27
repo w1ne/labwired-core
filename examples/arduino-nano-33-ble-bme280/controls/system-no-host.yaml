@@ -1,7 +1,7 @@
 # Control: the same board, sketch and sensor with no cable in the USB port
 # (the chip descriptor's default).
 name: arduino-nano-33-ble-bme280-no-host
-chip: ../../../configs/chips/nrf52840.yaml
+chip: ../../../configs/chips/boards/nrf52840-arduino-nano-33ble.yaml
 memory_overrides:
   reset_vector_offset: "0x10000"
 external_devices:

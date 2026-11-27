@@ -1,0 +1,5 @@
+# Arduino Nano 33 BLE board rail. The Nano 33 BLE schematic uses the +3V3
+# rail for the nRF52840 module; retain the shared silicon map through include.
+# https://docs.arduino.cc/resources/schematics/ABX00031-schematics.pdf
+include: ../nrf52840.yaml
+io_voltage_v: 3.3

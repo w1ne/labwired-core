@@ -1,0 +1,7 @@
+# Nordic nRF52840 DK default setup: SW9 selects VDD, and the User Guide says
+# the DK VDD is normally 3 V when powered over USB. Other switch/supply modes
+# can differ, so systems using those modes should use another board overlay.
+# https://docs.nordicsemi.com/r/bundle/ug_nrf52840_dk/page/ug/dk/power_source.html
+# https://infocenter.nordicsemi.com/pdf/nRF52840_DK_User_Guide_v1.4.1.pdf
+include: ../nrf52840.yaml
+io_voltage_v: 3.0

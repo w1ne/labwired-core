@@ -5,7 +5,7 @@
 # active-low. Product MCU profile nrf52840-dk onboard must match these pins
 # (board-config source-drift + playground product-board-io-alignment).
 name: "nrf52840-dk"
-chip: "../chips/nrf52840.yaml"
+chip: "../chips/boards/nrf52840-dk.yaml"
 external_devices: []
 board_io:
   # LEDs — active-low (DT: GPIO_ACTIVE_LOW).

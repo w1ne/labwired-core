@@ -1,0 +1,5 @@
+# Seeed XIAO nRF52840 Sense board rail. Its schematic's System 3.3V block
+# regulates VBAT/VBUS to 3V3, which supplies the nRF52840 VDD pins.
+# https://files.seeedstudio.com/wiki/XIAO-BLE/Seeed_Studio_XIAO_nRF52840_PDF.pdf
+include: ../nrf52840.yaml
+io_voltage_v: 3.3

@@ -19,7 +19,12 @@ fn chips_dir() -> PathBuf {
 }
 
 fn load(chip: &str) -> ChipDescriptor {
-    let path = chips_dir().join(format!("{chip}.yaml"));
+    let path = chips_dir().join("boards").join(format!("{chip}.yaml"));
+    let path = if path.is_file() {
+        path
+    } else {
+        chips_dir().join(format!("{chip}.yaml"))
+    };
     ChipDescriptor::from_file(&path).unwrap_or_else(|e| panic!("load {chip}: {e}"))
 }
 
@@ -68,7 +73,8 @@ fn datasheet_transcriptions() {
         ("stm32l476", 3.3, 0.3, 0.7),
         // DS13312 Rev 4 §6.3.17 Table 55, standard I/Os (including PA5).
         ("stm32h735", 3.3, 0.3, 0.7),
-        // nRF52840 Product Specification v1.11 §6.9.3.1; nominal VDD = 3.0 V.
+        // nRF52840 Product Specification v1.11 §6.9.3.1; Power §6 lists
+        // 3.0 V as typical in the 1.7–3.6 V normal-voltage operating range.
         ("nrf52840", 3.0, 0.3, 0.7),
     ] {
         let desc = load(chip);
@@ -82,6 +88,34 @@ fn datasheet_transcriptions() {
                 vih_offset_v: 0.0
             }),
             "{chip}"
+        );
+    }
+}
+
+/// Shared nRF52840 silicon data keeps board-specific simulation rails in
+/// small include-based descriptors. These defaults are sourced from each
+/// board's own schematic or user guide, not inferred from the chip's VDD range.
+#[test]
+fn nrf52840_board_supply_defaults_are_sourced_per_board() {
+    for (chip, volts) in [
+        // Arduino Nano 33 BLE, ABX00031 schematic +3V3 rail.
+        ("nrf52840-arduino-nano-33ble", 3.3),
+        // Seeed XIAO schematic's regulated System 3.3V output.
+        ("nrf52840-xiao", 3.3),
+        // Nordic DK default USB-powered setup, User Guide §8.3.4.
+        ("nrf52840-dk", 3.0),
+    ] {
+        let desc = load(chip);
+        assert_eq!(desc.io_voltage_v, Some(volts), "{chip}");
+        assert_eq!(
+            desc.gpio_input_thresholds,
+            Some(GpioInputThresholds {
+                vil: 0.3,
+                vih: 0.7,
+                vil_offset_v: 0.0,
+                vih_offset_v: 0.0,
+            }),
+            "{chip} inherits the nRF52840 Product Specification GPIO limits"
         );
     }
 }

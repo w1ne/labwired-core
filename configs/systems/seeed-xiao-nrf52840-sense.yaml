@@ -1,5 +1,5 @@
 name: "seeed-xiao-nrf52840-sense"
-chip: "../chips/nrf52840.yaml"
+chip: "../chips/boards/nrf52840-xiao.yaml"
 external_devices: []
 board_io:
   - id: "led_red"

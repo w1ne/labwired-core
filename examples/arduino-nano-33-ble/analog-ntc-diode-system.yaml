@@ -11,7 +11,7 @@
 # loads against the nRF52840-DK and the Seeed XIAO nRF52840 Sense, whose
 # descriptors share the chip map.
 name: "arduino-nano-33-ble-analog"
-chip: "../../configs/chips/nrf52840.yaml"
+chip: "../../configs/chips/boards/nrf52840-arduino-nano-33ble.yaml"
 external_devices: []
 board_io: []
 cosim_models:

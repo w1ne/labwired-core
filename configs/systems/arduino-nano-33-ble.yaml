@@ -13,7 +13,7 @@
 # not modelled. A stock Arduino sketch (`Serial` on USB CDC, image at 0x10000)
 # runs on `arduino-nano-33-ble-bme280.yaml`.
 name: "arduino-nano-33-ble"
-chip: "../chips/nrf52840.yaml"
+chip: "../chips/boards/nrf52840-arduino-nano-33ble.yaml"
 debug_uart: "uart0"
 external_devices: []
 board_io:

@@ -12,7 +12,7 @@
 # the pull-up voltage or the conversion time. The on-board BMI270, BMM150 and
 # the radio's BLE stack are not attached.
 name: arduino-nano-33-ble-bme280
-chip: ../chips/nrf52840.yaml
+chip: ../chips/boards/nrf52840-arduino-nano-33ble.yaml
 memory_overrides:
   reset_vector_offset: "0x10000"
 external_devices:

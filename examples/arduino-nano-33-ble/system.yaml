@@ -14,7 +14,7 @@
 # The onboard LSM9DS1 IMU and the USB CDC (`Serial`) are not modelled; the
 # modelled console is UARTE0 (the board's `Serial1` pins).
 name: "arduino-nano-33-ble"
-chip: "../../configs/chips/nrf52840.yaml"
+chip: "../../configs/chips/boards/nrf52840-arduino-nano-33ble.yaml"
 debug_uart: "uart0"
 external_devices: []
 board_io:

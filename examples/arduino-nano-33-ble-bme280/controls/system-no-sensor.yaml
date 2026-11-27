@@ -1,6 +1,6 @@
 # Control: the same board and sketch with nothing attached to TWI0.
 name: arduino-nano-33-ble-bme280-no-sensor
-chip: ../../../configs/chips/nrf52840.yaml
+chip: ../../../configs/chips/boards/nrf52840-arduino-nano-33ble.yaml
 memory_overrides:
   reset_vector_offset: "0x10000"
 external_devices: []
