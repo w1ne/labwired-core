@@ -1347,6 +1347,7 @@ impl GenericI2cDevice {
 struct I2cRuleCtx<'a> {
     registers: &'a [I2cRegister],
     reg_values: &'a mut HashMap<String, u32>,
+    input_specs: &'a [labwired_config::InputSpec],
     /// `&mut` because [`RuleCtx::set_input`] writes here — see that method.
     slots: &'a mut HashMap<String, f64>,
 }
@@ -1428,7 +1429,16 @@ impl RuleCtx for I2cRuleCtx<'_> {
                 }
                 i64::from(encoded)
             }
-            None => raw as i64,
+            None => {
+                let input = self.input_specs.iter().find(|input| input.key == key);
+                let scale = input.and_then(|input| input.expr_scale).unwrap_or(1.0);
+                match input.map(|input| input.expr_precision).unwrap_or_default() {
+                    labwired_config::InputPrecision::F64 => (raw * scale).round() as i64,
+                    labwired_config::InputPrecision::F32 => {
+                        ((raw as f32) * (scale as f32)).round() as i64
+                    }
+                }
+            }
         }
     }
 
@@ -1450,7 +1460,19 @@ impl RuleCtx for I2cRuleCtx<'_> {
                 reg.source_scale.unwrap_or(1.0),
                 reg.width,
             ),
-            None => value as f64,
+            None => {
+                let scale = self
+                    .input_specs
+                    .iter()
+                    .find(|input| input.key == key)
+                    .and_then(|input| input.expr_scale)
+                    .unwrap_or(1.0);
+                if scale == 0.0 {
+                    0.0
+                } else {
+                    value as f64 / scale
+                }
+            }
         };
         self.slots.insert(key.to_string(), engineering);
     }
@@ -1471,6 +1493,7 @@ impl GenericI2cDevice {
             let mut ctx = I2cRuleCtx {
                 registers: &self.registers,
                 reg_values: &mut self.reg_values,
+                input_specs: &self.seed_specs,
                 slots: &mut self.slots,
             };
             machine.fire(&event, written, &mut ctx);
@@ -1525,6 +1548,7 @@ impl GenericI2cDevice {
             let mut ctx = I2cRuleCtx {
                 registers: &self.registers,
                 reg_values: &mut self.reg_values,
+                input_specs: &self.seed_specs,
                 slots: &mut self.slots,
             };
             if machine.fill_on_timer(name, &mut ctx) {
@@ -1561,6 +1585,7 @@ impl GenericI2cDevice {
             let mut ctx = I2cRuleCtx {
                 registers: &self.registers,
                 reg_values: &mut self.reg_values,
+                input_specs: &self.seed_specs,
                 slots: &mut self.slots,
             };
             if machine.fifo_pop(&spec.name) {

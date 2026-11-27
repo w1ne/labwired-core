@@ -21,17 +21,16 @@
 //!
 //! Deliberately DIFFERENT (each with its own test below):
 //!   * BUS_VOLTAGE rounds to the nearest 4 mV LSB where the model TRUNCATED;
-//!   * POWER rounds once where the model truncated an intermediate to whole
-//!     milliwatts before halving it into the 2 mW register;
 //!   * CURRENT / SHUNT keep the 0.1 mA the register resolves, where the model
 //!     quantised the stimulus to whole milliamps first;
+//!   * CALIBRATION writes now affect CURRENT and POWER according to the
+//!     datasheet equations, where the old model only stored the write;
 //!   * a read that runs PAST the pointed 16-bit word answers 0xFF instead of
 //!     repeating the word forever.
 //!
-//! The POWER register is why this port waited for `behavior.derived`: §8.5.4
-//! makes it the PRODUCT of the two stimulus channels, and `source:` takes one
-//! key. `power_follows_both_channels` is the test that the product is live on
-//! both of them rather than a constant that happens to look right.
+//! CURRENT and POWER are stored from input and calibration events so their
+//! words follow the writable CALIBRATION register. The tests below exercise
+//! those updates over actual I²C register transactions.
 
 use crate::common;
 use common::transcript::{read_reg, run_i2c, script, write_reg, Step};
@@ -186,8 +185,9 @@ fn declarative() -> GenericI2cDevice {
     GenericI2cDevice::from_yaml(yaml, ADDR).expect("ina219.yaml does not build")
 }
 
-/// Both models, with both stimulus channels driven — the state every transcript
-/// asserted IDENTICAL starts from.
+/// Both models receive the legacy current-only input shape. The new descriptor
+/// must retain its 0.1 Ω shunt fallback without the test manufacturing a
+/// shunt_voltage value for it.
 fn both(bus_v: f64, current_a: f64, steps: &[Step<'_>]) -> (Vec<u8>, Vec<u8>) {
     let mut old = legacy::Ina219::new();
     old.set_input("bus_voltage", bus_v);
@@ -302,12 +302,12 @@ fn the_pointer_survives_the_repeated_start_of_a_read() {
     assert_eq!(word(&bytes) as i16, 15_000, "1.5 A at 0.1 mA/LSB");
 }
 
-// ─── the derived source, proved live ───────────────────────────────────────
+// ─── input-derived register values, proved live ────────────────────────────
 
 #[test]
 fn power_follows_both_channels() {
-    // The point of `behavior.derived`: POWER is not a constant and not a
-    // function of one channel. Move either input and it moves; zero either and
+    // POWER follows the encoded CURRENT and BUS_VOLTAGE words. Move either
+    // input and it moves; zero either and
     // it is zero; flip the current's SIGN and it does not move, because §8.5.4
     // makes the register the magnitude of the power and the CURRENT register
     // carries the direction.
@@ -328,6 +328,70 @@ fn power_follows_both_channels() {
     assert_eq!(p(24.0, 0.0), 0, "no current, no power");
     // …and the CURRENT register is where the direction went.
     assert_eq!(reg_words(12.0, -1.0, 0x04).1 as i16, -10_000);
+}
+
+#[test]
+fn shunt_voltage_register_uses_measured_voltage_for_a_10_milliohm_shunt() {
+    let mut sensor = declarative();
+    sensor.set_input("current", 1.0).expect("current");
+    // The external 10 mΩ shunt's measured drop at 1 A.
+    sensor
+        .set_input("shunt_voltage", 0.01)
+        .expect("shunt_voltage");
+    let bytes = run_i2c(&mut sensor, &script([read_reg(0x01, 2), read_reg(0x04, 2)])).bytes;
+    assert_eq!(word(&bytes[0..2]), 1000, "10 mV / 10 µV per LSB");
+    assert_eq!(word(&bytes[2..4]), 1000, "CURRENT uses SHUNT × CAL / 4096");
+}
+
+#[test]
+fn calibration_write_changes_current_and_power_through_the_i2c_registers() {
+    let mut sensor = declarative();
+    sensor.set_input("bus_voltage", 3.3).expect("bus_voltage");
+    sensor.set_input("current", 1.0).expect("current");
+    sensor
+        .set_input("shunt_voltage", 0.01)
+        .expect("shunt_voltage");
+
+    let bytes = run_i2c(
+        &mut sensor,
+        &script([
+            read_reg(0x04, 2),
+            write_reg(0x05, &[0x08, 0x00]), // CALIBRATION = 2048
+            read_reg(0x05, 2),
+            read_reg(0x04, 2),
+            read_reg(0x03, 2),
+        ]),
+    )
+    .bytes;
+    assert_eq!(word(&bytes[0..2]), 1000, "default CALIBRATION = 4096");
+    assert_eq!(word(&bytes[2..4]), 2048, "CALIBRATION write is stored");
+    assert_eq!(
+        word(&bytes[4..6]),
+        500,
+        "CURRENT follows the written calibration"
+    );
+    assert_eq!(
+        word(&bytes[6..8]),
+        82,
+        "POWER follows encoded current and bus counts"
+    );
+}
+
+#[test]
+fn current_only_stimulus_keeps_the_legacy_shunt_register_behavior() {
+    let (legacy, current_only) = both(3.3, 0.1, &script([read_reg(0x01, 2), read_reg(0x04, 2)]));
+    assert_eq!(word(&legacy[0..2]), 1000);
+    assert_eq!(
+        word(&current_only[0..2]),
+        1000,
+        "shunt is derived from current"
+    );
+    assert_eq!(word(&legacy[2..4]), 1000);
+    assert_eq!(
+        word(&current_only[2..4]),
+        1000,
+        "current-only input remains compatible"
+    );
 }
 
 #[test]
@@ -409,16 +473,12 @@ fn current_keeps_the_tenth_of_a_milliamp_the_register_resolves() {
 }
 
 #[test]
-fn power_rounds_once_instead_of_truncating_an_intermediate_milliwatt() {
-    // The hand model computed `bus_mV × |I_mA| / 1000` in INTEGER milliwatts
-    // and then halved that into the 2 mW register, so the intermediate was
-    // truncated before the only rounding happened. The descriptor evaluates
-    // §8.5.4's product once and rounds once. 0.175 V × 2.52 A is the first
-    // point on the grid where the two orders disagree.
-    let (old, new) = reg_words(0.175, 2.52, 0x03);
-    assert_eq!(old, 221, "441 mW truncated from 441.0 mW, then halved");
-    assert_eq!(new, 220, "441.0 mW halved once: 220.5 → 220 counts");
-    assert_eq!(old.abs_diff(new), 1, "one 2 mW LSB, no more");
+fn power_uses_the_encoded_current_and_bus_register_words() {
+    // TI Equation 5 is (CURRENT × BUS_VOLTAGE_COUNTS) / 5000. At 0.175 V the
+    // bus register rounds to 44 counts; 2.52 A at the default calibration is
+    // 25200 CURRENT counts, giving 25200 × 44 / 5000 = 221.
+    let (_, power) = reg_words(0.175, 2.52, 0x03);
+    assert_eq!(power, 221);
 }
 
 #[test]
