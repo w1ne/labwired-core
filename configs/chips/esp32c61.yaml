@@ -25,6 +25,18 @@ core: "rv32imac"
 registers_count: 31
 cpu_hz: 160_000_000
 
+# Pad -> ADC input map for co-simulation routes (`board.analog.<pad>_volts`).
+# The C61 has one SAR ADC with four ADC1 inputs, and the pad is NOT the
+# channel number: ADC1_CH0..CH3 are GPIO1, GPIO3, GPIO4 and GPIO5.
+# Source: ESP-IDF components/soc/esp32c61/include/soc/adc_channel.h
+# (ADC1_GPIO1_CHANNEL 0, ADC1_GPIO3_CHANNEL 1, ADC1_GPIO4_CHANNEL 2,
+# ADC1_GPIO5_CHANNEL 3); soc_caps.h SOC_ADC_PERIPH_NUM = 1.
+analog_pins:
+  GPIO1: { peripheral: "apb_saradc", channel: 0 }
+  GPIO3: { peripheral: "apb_saradc", channel: 1 }
+  GPIO4: { peripheral: "apb_saradc", channel: 2 }
+  GPIO5: { peripheral: "apb_saradc", channel: 3 }
+
 # ESP32-C61-WROOM-1 N8R2: 8 MiB SPI flash and 2 MiB PSRAM. Only the flash
 # window and 320 KiB on-chip HP SRAM are mapped; PSRAM is outside this profile.
 flash:
@@ -95,6 +107,21 @@ peripherals:
   - id: "pcr"
     type: "esp32c61_pcr"
     base_address: 0x60096000
+    size: "4KB"
+
+  # APB_SARADC — the C3 one-shot conversion engine (`esp32c3_apb_saradc`) at
+  # the C61 base. ESP-IDF register/soc/apb_saradc_reg.h for the C61 matches
+  # the model's head map: ONETIME_SAMPLE@0x20 (SARADC1_ONETIME_SAMPLE [31],
+  # ONETIME_START [29], ONETIME_CHANNEL [28:25]), SAR1DATA_STATUS@0x2C
+  # (DATA [16:0]), INT_RAW@0x44 (SARADC1_DONE [31]), INT_CLR@0x4C.
+  # reg_base.h DR_REG_SARADC_BASE = 0x6000E000; interrupts.h
+  # ETS_APB_ADC_INTR_SOURCE = 55. Register reset seeds are the C3 capture.
+  # No PCR clock gate: the C61 PCR subset above has no SARADC_CONF (+0x74)
+  # row yet, so the converter is always clocked here (documented gap).
+  - id: "apb_saradc"
+    type: "esp32c3_apb_saradc"
+    irq: 55
+    base_address: 0x6000E000
     size: "4KB"
 
   # Register-backed IO_MUX storage for GPIO6/GPIO22 function writes. This does
