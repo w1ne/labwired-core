@@ -55,6 +55,13 @@ pub struct AdvanceLimits {
     ///
     /// `None` disables the simulated-cycle budget.
     pub simulated_cycles: Option<u64>,
+    /// Maximum host work: one per primary scheduling quantum (including its
+    /// atomic secondary/peripheral commit), or one per idle-skip boundary.
+    /// Skipped simulated cycles do not each consume work. This bounds a
+    /// responsive caller without making its virtual-time skips unreachable.
+    ///
+    /// `None` preserves the existing unbounded-work behavior.
+    pub work: Option<u64>,
 }
 
 /// Private boundary-timing mode selected by the request constructor.
@@ -87,6 +94,7 @@ impl AdvanceRequest {
             limits: AdvanceLimits {
                 fuel: Some(1),
                 simulated_cycles: None,
+                work: None,
             },
             breakpoints: BreakpointPolicy::Ignore,
             idle: IdlePolicy::Disabled,
@@ -105,6 +113,7 @@ impl AdvanceRequest {
             limits: AdvanceLimits {
                 fuel,
                 simulated_cycles: None,
+                work: None,
             },
             breakpoints: BreakpointPolicy::Honor,
             idle: IdlePolicy::Configured,
@@ -116,6 +125,17 @@ impl AdvanceRequest {
     /// Sets the maximum number of simulated machine cycles that may elapse.
     pub fn with_cycle_limit(mut self, cycles: u64) -> Self {
         self.limits.simulated_cycles = Some(cycles);
+        self
+    }
+
+    /// Bounds execution work independently of fuel and simulated time.
+    ///
+    /// CPU scheduling quanta consume one unit each. An idle skip consumes one
+    /// unit regardless of its simulated duration, so repeated idle/peripheral
+    /// service still exhausts the budget. All hardware deadline clamps remain
+    /// in force. A zero limit performs no CPU or idle-time advance.
+    pub fn with_work_limit(mut self, work: u64) -> Self {
+        self.limits.work = Some(work);
         self
     }
 
@@ -138,7 +158,7 @@ impl AdvanceRequest {
         self
     }
 
-    /// Returns the request's fuel and simulated-cycle budgets.
+    /// Returns the request's fuel, simulated-cycle, and host-work budgets.
     pub fn limits(self) -> AdvanceLimits {
         self.limits
     }
@@ -172,6 +192,8 @@ pub enum AdvanceStop {
     FuelLimit,
     /// The request's simulated-cycle budget was exhausted.
     CycleLimit,
+    /// The request's host-work budget was exhausted.
+    WorkLimit,
     /// Execution reached a breakpoint at the given primary CPU program counter.
     Breakpoint(u32),
     /// A debug watch range matched a CPU load/store at this address; the

@@ -30,6 +30,7 @@ pub type WindowRunner<'a, C> = dyn FnMut(
 #[derive(Default)]
 struct AdvanceState {
     fuel_consumed: u64,
+    work_consumed: u64,
     primary_steps: u64,
     secondary_steps: u64,
     idle_cycles: u64,
@@ -110,6 +111,9 @@ impl<C: Cpu> Machine<C> {
         // that holds the core down must see its clock move to ever let it
         // up. The whole budget passes as idle time.
         let mut state = AdvanceState::default();
+        if request.limits().work == Some(0) {
+            return Ok(Some(state.report(AdvanceStop::WorkLimit, 0)));
+        }
         let fuel = request.limits().fuel;
         let cycles = request.limits().simulated_cycles;
         let (skip, stop) = match (fuel, cycles) {
@@ -123,6 +127,7 @@ impl<C: Cpu> Machine<C> {
         self.total_cycles += skip;
         self.bus.set_current_cycle(self.total_cycles);
         state.fuel_consumed = skip;
+        state.work_consumed = u64::from(skip > 0);
         state.idle_cycles = skip;
         Ok(Some(state.report(stop, skip)))
     }
@@ -142,7 +147,8 @@ impl<C: Cpu> Machine<C> {
     /// Advances the machine through its authoritative execution path.
     ///
     /// Normal stop conditions are checked before the next unit of work, in
-    /// this order: honored breakpoint, fuel limit, then simulated-cycle limit.
+    /// this order: honored breakpoint, fuel limit, simulated-cycle limit,
+    /// then the optional host-work limit.
     /// Fuel counts primary scheduling quanta plus cycles skipped by idle fast
     /// forward. A simulated-cycle limit is observed only at committed machine
     /// boundaries: CPU work is planned not to exceed the remaining budget, but
@@ -362,6 +368,14 @@ impl<C: Cpu> Machine<C> {
                 return Ok(state.report(AdvanceStop::CycleLimit, elapsed));
             }
 
+            if request
+                .limits()
+                .work
+                .is_some_and(|limit| state.work_consumed >= limit)
+            {
+                return Ok(state.report(AdvanceStop::WorkLimit, elapsed));
+            }
+
             self.check_secondary_defer();
             if request.idle_policy() == IdlePolicy::Configured {
                 let fuel_remaining = request
@@ -383,6 +397,7 @@ impl<C: Cpu> Machine<C> {
                 // to get past one `delay(1000)`.
                 if let Some(skipped) = self.try_idle_fast_forward(skip_limit, 0) {
                     state.fuel_consumed += skipped.cycles;
+                    state.work_consumed += 1;
                     state.idle_cycles += skipped.cycles;
                     state.primary_steps += skipped.primary_steps;
                     state.secondary_steps += skipped.secondary_steps;
@@ -405,7 +420,20 @@ impl<C: Cpu> Machine<C> {
             }
 
             self.bus.reset_mmio_activity_counters();
-            let window = self.plan_cpu_window(request, state.fuel_consumed, elapsed);
+            // Narrow CPU planning through its existing fuel clamp, which also
+            // bounds the timed-core tick-fill ceiling. The actual request is
+            // unchanged: idle planning above retains the full virtual budget.
+            let window_request = match request.limits().work {
+                Some(limit) => request.with_fuel_limit(Some(
+                    request.limits().fuel.unwrap_or(u64::MAX).min(
+                        state
+                            .fuel_consumed
+                            .saturating_add(limit - state.work_consumed),
+                    ),
+                )),
+                None => request,
+            };
+            let window = self.plan_cpu_window(window_request, state.fuel_consumed, elapsed);
             let count = window.steps;
             debug_assert!(count > 0);
             // Dual-core lockstep only while the secondary is active or still
@@ -472,6 +500,7 @@ impl<C: Cpu> Machine<C> {
                     };
                     if let Some(skipped) = self.try_idle_fast_forward(limit, 0) {
                         state.fuel_consumed += skipped.cycles;
+                        state.work_consumed += 1;
                         state.idle_cycles += skipped.cycles;
                         state.primary_steps += skipped.primary_steps;
                         state.secondary_steps += skipped.secondary_steps;
@@ -509,6 +538,7 @@ impl<C: Cpu> Machine<C> {
             let cpu_exit = self.cpu.take_firmware_exit();
             if let Some(code) = simctl_exit.or(cpu_exit) {
                 state.fuel_consumed += u64::from(progress.primary_steps);
+                state.work_consumed += u64::from(progress.primary_steps);
                 state.primary_steps += u64::from(progress.primary_steps);
                 state.secondary_steps += u64::from(progress.secondary_steps);
                 state.cpu_batches += 1;
@@ -520,6 +550,7 @@ impl<C: Cpu> Machine<C> {
             }
 
             state.fuel_consumed += u64::from(progress.primary_steps);
+            state.work_consumed += u64::from(progress.primary_steps);
             state.primary_steps += u64::from(progress.primary_steps);
             state.secondary_steps += u64::from(progress.secondary_steps);
             state.cpu_batches += 1;
