@@ -69,6 +69,30 @@ the same compiled Arduino ELF at `labwired_entry` to avoid depending on the
 full Arduino startup path. This is a deterministic simulator smoke, not a
 physical-board result.
 
+## Analog inputs
+
+`configs/chips/esp32c6.yaml` and `configs/chips/esp32c6fh4.yaml` publish the
+SAR ADC1 pad map: GPIO0..GPIO4 are ADC1_CH0..CH4 on `apb_saradc`. A
+co-simulation deck names a published pad only, as `board.analog.<pad>_volts`,
+and the router finds the channel. GPIO5/GPIO6 are ADC1_CH5/CH6 on silicon
+but are not published yet: the C6 `apb_saradc` is the C3 model, which accepts
+five channels, so a route to them would be refused at session build.
+
+[`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) is the generic
+deck: a Beta NTC divider on GPIO2 and a Shockley diode load line on GPIO3.
+`crates/core/tests/analog/cosim_esp32c6_boards_analog.rs` runs it on all five
+ESP32-C6 profiles (DevKitC-1, both BME280 DevKitC variants, ESP32-C6-Zero-M
+and XIAO ESP32-C6). It asserts the solved voltages and the `SAR1DATA_STATUS`
+codes of the one-shot conversion (25 C NTC = 2047 counts):
+
+```bash
+cargo test -p labwired-core --test analog esp32c6
+```
+
+The ADC model is the C3 behavioural one-shot engine: 12 bits on a fixed
+3.3 V reference. It does not model attenuation, eFuse calibration or the SAR
+input impedance.
+
 ## Purpose
 
 Deterministic L1 bring-up for the **ESP32-C6** HP core (RV32IMAC @ 160 MHz) on
