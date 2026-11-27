@@ -34,7 +34,7 @@
 #
 # With that calibration:
 #   CURRENT counts = I[mA] / 0.1        = I[A] × 10000
-#   SHUNT   counts = I[A] × 0.1 Ω / 10 µV = I[A] × 10000   (the same number)
+#   SHUNT   counts = shunt_voltage[V] / 10 µV
 #   BUS     counts = V[V] × 1000 / 4    = V[V] × 250, placed at bit 3
 #   POWER   counts = (V[V] × |I[A]|) / 0.002 W = V × |I| × 500
 #
@@ -61,8 +61,8 @@ behavior:
     registers:
       # POR 0x399F: 32 V range, PGA ÷8, 12-bit ADCs, continuous shunt+bus.
       - { name: CONFIGURATION, addr: 0x00, width: 2, endian: be, access: rw, reset: 0x399F }
-      # 10 µV/LSB over a 0.1 Ω shunt ⇒ 10000 counts per amp, two's-complement.
-      - { name: SHUNT_VOLTAGE, addr: 0x01, width: 2, endian: be, access: r, signed: true, source: current, encode: { scale: 10000.0 } }
+      # 10 µV/LSB, measured directly across the external shunt.
+      - { name: SHUNT_VOLTAGE, addr: 0x01, width: 2, endian: be, access: r, signed: true, source: shunt_voltage, encode: { scale: 100000.0 } }
       # 13-bit voltage count at bit 3; bit 1 CNVR reads set (a conversion is
       # always available — the part powers up in continuous mode), bit 0 OVF
       # clear. The field is placed with `shift: 3` / `width_bits: 13`, so the
@@ -96,3 +96,4 @@ metadata:
   inputs:
     - { key: bus_voltage, label: "Bus voltage", unit: "V", min: 0.0, max: 32.0, default: 3.3 }
     - { key: current, label: "Current", unit: "A", min: -3.2, max: 3.2, default: 0.0 }
+    - { key: shunt_voltage, label: "Shunt voltage", unit: "V", min: -0.32, max: 0.32, default: 0.0 }

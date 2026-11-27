@@ -195,6 +195,8 @@ fn both(bus_v: f64, current_a: f64, steps: &[Step<'_>]) -> (Vec<u8>, Vec<u8>) {
     let mut new = declarative();
     new.set_input("bus_voltage", bus_v).expect("bus_voltage");
     new.set_input("current", current_a).expect("current");
+    new.set_input("shunt_voltage", (current_a * 0.1).clamp(-0.32, 0.32))
+        .expect("shunt_voltage");
     (
         run_i2c(&mut old, steps).bytes,
         run_i2c(&mut new, steps).bytes,
@@ -328,6 +330,15 @@ fn power_follows_both_channels() {
     assert_eq!(p(24.0, 0.0), 0, "no current, no power");
     // …and the CURRENT register is where the direction went.
     assert_eq!(reg_words(12.0, -1.0, 0x04).1 as i16, -10_000);
+}
+
+#[test]
+fn shunt_voltage_register_uses_measured_voltage_for_a_10_milliohm_shunt() {
+    let mut sensor = declarative();
+    sensor
+        .set_input("shunt_voltage", 0.01)
+        .expect("shunt_voltage");
+    assert_eq!(word(&run_i2c(&mut sensor, &read_reg(0x01, 2)).bytes), 1000);
 }
 
 #[test]
