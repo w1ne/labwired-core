@@ -5249,6 +5249,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#wch-ch32v203c8t6-usart1-rx-interrupt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WCH CH32V203C8T6 — USART1 RX interrupt
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -6101,6 +6112,9 @@ Build and run it from the repository root:</p>
 <p>Expected output: <code>U5A5_SAES_AES128_ECB_OK</code>. This is simulator-model evidence,
 not physical-silicon or side-channel validation.</p>
 <h2 id="wch-tier-c-vendor-bet-not-a-measured-survey-rank">WCH — Tier C vendor bet (not a measured survey rank)</h2>
+<p>CH32V203 follow-up work is a Tier C WCH capability investment, not a measured
+survey pick. It is outside the MCU survey's ranked list; future demand picks
+should return to the Tier A/B targets.</p>
 <h3 id="wch-ch32v003evt">WCH CH32V003EVT</h3>
 <p>This exact evaluation board is currently listed in stock by two retailers. The
 profile uses its CH32V003F4P6 and the board's LED connector: LED1 on P4-1 is
@@ -6130,6 +6144,21 @@ does not claim WCH-Link, USB data, PFIC, ADC, I2C, SPI, or timers.</p>
 </span><span id="__span-21-16"><a id="__codelineno-21-16" name="__codelineno-21-16" href="#__codelineno-21-16"></a><span class="w">  </span><span class="p">}</span>
 </span><span id="__span-21-17"><a id="__codelineno-21-17" name="__codelineno-21-17" href="#__codelineno-21-17"></a><span class="p">}</span>
 </span></code></pre></div>
+<h3 id="wch-ch32v203c8t6-usart1-rx-interrupt">WCH CH32V203C8T6 — USART1 RX interrupt</h3>
+<p>The exact CH32V203C8T6 was listed by LCSC as in stock on 2026-11-27; WCH's live
+product page describes the CH32V203 family and links its datasheet. The current
+model boots a ch32fun-based fixture, receives injected <code>wch!</code> through USART1
+RXNE, vectors IRQ 53 through the QingKe PFIC, and transmits the received bytes
+back through USART1 TX. The no-IRQ negative control prints a timeout marker
+instead of echoing bytes. This is local simulator evidence; it is not hardware
+confirmation. USART2 IRQ
+54 is wired but has no firmware smoke yet. DMA, timers, ADC, I2C, SPI, CAN and
+USB remain outside the model.</p>
+<ul>
+<li><a href="../examples/ch32v203c8t6/README.md#usart-rx-irq">Copy-paste C example, smoke command, and stated model scope</a></li>
+<li><a href="../examples/ch32v203c8t6/evidence/vendor-status.md">Live WCH product and LCSC availability receipt</a></li>
+<li><a href="../examples/ch32v203c8t6/evidence/ch32fun-usart-rx-irq-smoke/">Committed USART1 RX IRQ smoke evidence</a></li>
+</ul>
 
 
 
