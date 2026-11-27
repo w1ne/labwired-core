@@ -82,7 +82,7 @@ The smoke asserts `Hello from CH32V203` on the UART stream.
 
 ## Unmodified ch32fun examples
 
-`build-ch32fun-examples.sh` builds three unmodified ch32fun (cnlohr/ch32fun,
+`build-ch32fun-examples.sh` builds four unmodified ch32fun (cnlohr/ch32fun,
 MIT) examples for `TARGET_MCU=CH32V203` into `ch32fun/`. ch32fun prints through
 the WCH-LinkE debug channel at 0xE0000380 by default, which the descriptor
 models as an attached, polling probe (`debug_printf`, log `terminal`).
@@ -92,9 +92,10 @@ models as an attached, polling probe (`debug_printf`, log `terminal`).
 | `ch32fun-blink-smoke.yaml` | `SystemInit` PLL handshake (x18, `EXTEN_CTR.PLL_HSI_PRE`); PA0/PA2/PA4/PA7 toggle every `Delay_Ms(250)` on the 64-bit SysTick, 36,000,014 cycles apart at 144 MHz |
 | `ch32fun-debugprintf-smoke.yaml` | `+N` / `-N[c]` lines on the debug channel; DMDATA0 bits 7:6 read 0, so no print timed out |
 | `ch32fun-systick-irq-smoke.yaml` | `SysTick_Handler` through PFIC interrupt 12, once per millisecond: the loops count 499 and 500 interrupts per 500 ms (see below) |
+| `ch32fun-exti-blink-smoke.yaml` | `EXTI1_IRQHandler` through PFIC interrupt 23 (`exti` `profile: wch_v20x`): a PA1 press, release, press toggles PA10 exactly twice (edges at cycles 92, 2,000,031, 6,000,031); `exti-system.yaml` adds the PA1 button and PA10 LED |
 
 ```sh
-for s in blink debugprintf systick-irq; do
+for s in blink debugprintf systick-irq exti-blink; do
   cargo run -q -p labwired-cli -- test \
     --script examples/ch32v203c8t6/ch32fun-$s-smoke.yaml \
     --output-dir out/boards/ch32v203c8t6/ch32fun-$s --no-uart-stdout
@@ -119,3 +120,10 @@ in the model; `cpu_hz` states the 144 MHz instead. No CH32V203 has been
 compared with the model over SDI, and CH32V203 is not a hosted LabWired
 verifier target. This is local model evidence, not a hosted `model_verified`
 result or hardware confirmation.
+
+In `exti_blink`, the F1 EXTI vectors (6..10, 23, 40) land on QingKe core
+slots and reserved PFIC slots, so the `stm32f1` profile is a negative
+control: `evidence/ch32fun-exti-blink-smoke/negative-control/` fails 5/7
+(no PA10 toggle, INTFR line 1 stays set). The PFIC is decoded inside the
+core, not on the bus, so the smoke cannot read its ISR/IPR words with
+`memory_value`.

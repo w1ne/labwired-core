@@ -23,8 +23,9 @@
 #     at 0xE000E000 with the 16-register hardware prologue. PFIC interrupt
 #     nesting and the V4 priority grouping are not modelled: a pending
 #     interrupt waits for `mret`.
-#   - SysTick is the 64-bit QingKe V4 STK (SysTick_IRQn 12). No timers,
-#     ADC, I2C, SPI, CAN, USB or EXTI. USART TX is polled only; no USART
+#   - SysTick is the 64-bit QingKe V4 STK (SysTick_IRQn 12). EXTI GPIO
+#     lines reach the PFIC; the event mask (EVENR) is stored only.
+#     No timers, ADC, I2C, SPI, CAN or USB. USART TX is polled only; no USART
 #     `irq` is wired because no interrupt-driven USART run proves it yet.
 #   - The debug printf block assumes a WCH-LinkE probe is attached and
 #     polling (its sentinel reads 0). Firmware that waits for a probe
@@ -161,6 +162,26 @@ peripherals:
     clock: { reg: "apb2enr", bit: 5 }
     config:
       profile: "stm32f1"
+
+  # AFIO (ch32v20xhw.h AFIO_TypeDef: ECR, PCFR1, EXTICR[4], PCFR2) is the
+  # STM32F1 AFIO layout; EXTICR1..4 at 0x08..0x14 pick each EXTI line's
+  # port. AFIOEN = APB2PCENR bit 0.
+  - id: "afio"
+    type: "afio"
+    base_address: 0x40010000
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 0 }
+
+  # EXTI_TypeDef (INTENR, EVENR, RTENR, FTENR, SWIEVR, INTFR) is the F1
+  # register file. Profile `wch_v20x` routes GPIO lines 0..4 to PFIC 22..26,
+  # 5..9 to 39 and 10..15 to 56 as level requests (ch32v20xhw.h IRQn).
+  # Lines 16..19 (PVD, RTC alarm, USB wakeup) stay register-level.
+  - id: "exti"
+    type: "exti"
+    base_address: 0x40010400
+    size: "1KB"
+    config:
+      profile: "wch_v20x"
 
   # USART_TypeDef (STATR, DATAR, BRR, CTLR1..3, GPR) is the STM32F1 USART
   # layout, so the default UART model serves it. USART1EN = APB2PCENR bit 14;

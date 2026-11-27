@@ -464,3 +464,67 @@ fn ch32v203_ch32fun_systick_irq_counts_milliseconds_through_the_pfic() {
         "one CMP step per counted interrupt"
     );
 }
+
+/// Runs unmodified ch32fun `examples_v20x/exti_blink` (PA1 rising edge on
+/// EXTI1 toggles PA10 in the handler) and returns PA10 after boot and after
+/// each of press, release, press on PA1, plus the final EXTI INTFR.
+fn run_ch32v203_exti_blink(chip: &ChipDescriptor) -> ([bool; 4], u32) {
+    let mut bus = SystemBus::from_config(chip, &SystemManifest::default())
+        .expect("CH32V203 peripherals and clock gates");
+    let gpioa = bus.find_peripheral_index_by_name("gpioa").expect("GPIOA");
+    let elf = root().join("examples/ch32v203c8t6/ch32fun/exti_blink.elf");
+    let image = labwired_loader::load_elf(&elf).expect("ch32fun exti_blink ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load exti_blink ELF");
+    let mut pa10 = [false; 4];
+    for (i, press) in [None, Some(true), Some(false), Some(true)]
+        .into_iter()
+        .enumerate()
+    {
+        if let Some(level) = press {
+            machine.bus.set_peripheral_gpio_input(gpioa, 1, level);
+        }
+        for _ in 0..200_000 {
+            machine.step().expect("ch32fun exti_blink instruction");
+        }
+        // GPIOA_OUTDR bit 10.
+        pa10[i] = machine.bus.read_u32(0x4001_080C).unwrap() & (1 << 10) != 0;
+    }
+    (pa10, machine.bus.read_u32(0x4001_0414).unwrap())
+}
+
+#[test]
+fn ch32v203_ch32fun_exti_blink_toggles_pa10_from_the_exti1_handler() {
+    // EXTI1_IRQn is PFIC interrupt 23 (ch32v20xhw.h): the F1 vector 7 plus
+    // the 16 QingKe core slots. Only rising edges toggle; INTFR is acked.
+    let row = CHIPS
+        .iter()
+        .find(|r| r.name == "CH32V203")
+        .expect("CH32V203 row");
+    let (pa10, intfr) = run_ch32v203_exti_blink(&descriptor(row));
+    assert_eq!(
+        pa10,
+        [true, false, false, true],
+        "PA10 after boot/press/release/press"
+    );
+    assert_eq!(intfr, 0, "handler cleared INTFR");
+}
+
+#[test]
+fn ch32v203_exti_blink_gets_no_interrupt_with_the_stm32f1_vectors() {
+    // Negative control: the F1 layout pends vector 7 for line 1, which is a
+    // QingKe core slot, so EXTI1_IRQHandler never runs and INTFR stays set.
+    let row = CHIPS
+        .iter()
+        .find(|r| r.name == "CH32V203")
+        .expect("CH32V203 row");
+    let text = std::fs::read_to_string(descriptor_path(row)).expect("read CH32V203 descriptor");
+    assert!(text.contains("profile: \"wch_v20x\""));
+    let chip: ChipDescriptor =
+        serde_yaml::from_str(&text.replace("profile: \"wch_v20x\"", "profile: \"stm32f1\""))
+            .expect("descriptor with F1 EXTI vectors");
+    let (pa10, intfr) = run_ch32v203_exti_blink(&chip);
+    assert_eq!(pa10, [true; 4], "PA10 never toggles");
+    assert_eq!(intfr, 1 << 1, "line 1 stays pending");
+}

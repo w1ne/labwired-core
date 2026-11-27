@@ -1,0 +1,12 @@
+# CH32V203C8T6 running ch32fun's exti_blink, unmodified: a push button from
+# PA1 to 3.3 V (the example leaves PA1 a floating input, so the button
+# stands for a contact with an external pull-down) and an LED on PA10, the
+# pad the EXTI handler toggles. Both are test connections, as in the
+# example's own comment.
+name: ch32v203c8t6-ch32fun-exti
+chip: ../../configs/chips/ch32v203c8t6.yaml
+cpu_hz: 144000000
+external_devices: []
+board_io:
+  - { id: button_pa1, kind: button, peripheral: gpioa, pin: 1, signal: input, active_high: true }
+  - { id: led_pa10, kind: led, peripheral: gpioa, pin: 10, signal: output, active_high: true }

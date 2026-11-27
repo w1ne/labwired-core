@@ -8,6 +8,8 @@
 #   debugprintfdemo.elf  examples_v20x/debugprintfdemo: "+N" / "-N[c]" lines
 #                        through the WCH-LinkE debug printf channel (DMDATA0/1
 #                        at 0xE0000380) every Delay_Ms(100).
+#   exti_blink.elf       examples_v20x/exti_blink: EXTI1 (PA1, rising edge,
+#                        PFIC interrupt 23) toggles PA10 in the handler.
 #   systick_irq.elf      examples/systick_irq (the generic example, built with
 #                        TARGET_MCU=CH32V203): SysTick_Handler through PFIC
 #                        interrupt 12 once per millisecond, advancing the
@@ -48,7 +50,8 @@ trap 'rm -f "${ld}"' EXIT
 "${prefix}gcc" -E -P -x c -DTARGET_MCU=CH32V203 -DMCU_PACKAGE=1 -DTARGET_MCU_LD=2 \
   -DTARGET_MCU_MEMORY_SPLIT= "${src}/ch32fun/ch32fun.ld" > "${ld}"
 
-for example in examples_v20x/blink examples_v20x/debugprintfdemo examples/systick_irq; do
+for example in examples_v20x/blink examples_v20x/debugprintfdemo examples_v20x/exti_blink \
+  examples/systick_irq; do
   example_dir="${src}/${example}"
   name="$(basename "${example}")"
   "${prefix}gcc" -o "${out_dir}/${name}.elf" \
