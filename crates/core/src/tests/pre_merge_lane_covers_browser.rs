@@ -148,9 +148,10 @@ const LIBRARY_WORKERS: &[(&str, &str)] = &[
     ("pr-default-members-lib", "DEFAULT_MEMBERS_RESULT"),
     ("pr-core-feature-off-tests", "FEATURE_OFF_RESULT"),
 ];
+const PERFORMANCE_WORKER: (&str, &str) = ("pr-performance", "PERF_RESULT");
 
-/// Admit only the two existing library workers, and only after proving that
-/// their required aggregate fails for every unsuccessful prerequisite result.
+/// Admit only the two existing library workers as crate coverage, after proving
+/// their required aggregate enforces both libraries and performance admission.
 /// Naming a worker in `needs` alone is not proof: a skipped/advisory aggregate
 /// or a guard that checks the wrong result would otherwise hide a coverage gap.
 fn required_library_worker_bodies(ci: &str) -> Result<Vec<String>, String> {
@@ -162,7 +163,7 @@ fn required_library_worker_bodies(ci: &str) -> Result<Vec<String>, String> {
     }
     let needs: Vec<_> = aggregate["needs"]
         .as_sequence()
-        .ok_or("library aggregate must declare both worker dependencies")?
+        .ok_or("library aggregate must declare both libraries and performance admission")?
         .iter()
         .map(|v| v.as_str())
         .collect();
@@ -170,6 +171,7 @@ fn required_library_worker_bodies(ci: &str) -> Result<Vec<String>, String> {
         != LIBRARY_WORKERS
             .iter()
             .map(|(job, _)| Some(*job))
+            .chain(std::iter::once(Some(PERFORMANCE_WORKER.0)))
             .collect::<Vec<_>>()
     {
         return Err("library aggregate dependencies differ from the proven workers".into());
@@ -179,7 +181,7 @@ fn required_library_worker_bodies(ci: &str) -> Result<Vec<String>, String> {
     if condition
         != "always()&&!(github.event_name=='pull_request'&&github.event.pull_request.draft)&&(github.event_name=='pull_request'||github.event_name=='workflow_dispatch')"
     {
-        return Err("library aggregate must always check both results on non-draft pull requests".into());
+        return Err("library aggregate must always check all three results on non-draft pull requests".into());
     }
     let advisory = |node: &serde_yaml::Value| {
         !node["continue-on-error"].is_null() && node["continue-on-error"].as_bool() != Some(false)
@@ -203,6 +205,25 @@ fn required_library_worker_bodies(ci: &str) -> Result<Vec<String>, String> {
     let script = guard["run"]
         .as_str()
         .ok_or("library result guard has no script")?;
+    let performance = &jobs[PERFORMANCE_WORKER.0];
+    if guard["env"][PERFORMANCE_WORKER.1].as_str()
+        != Some(format!("${{{{ needs.{}.result }}}}", PERFORMANCE_WORKER.0).as_str())
+    {
+        return Err(
+            "library result guard does not bind performance admission's actual result".into(),
+        );
+    }
+    if advisory(performance)
+        || normalize(performance["if"].as_str().unwrap_or_default())
+            != "github.event_name=='pull_request'||github.event_name=='workflow_dispatch'"
+        || performance["uses"].as_str() != Some("./.github/workflows/core-perf-pr.yml")
+    {
+        return Err(
+            "performance admission must call the required workflow on every pull request".into(),
+        );
+    }
+    // Performance admission is required, but its optional representative build
+    // is not new library-coverage evidence. Only these two worker bodies count.
     let mut bodies = Vec::new();
     for (job, variable) in LIBRARY_WORKERS {
         if guard["env"][*variable].as_str()
@@ -236,25 +257,30 @@ fn required_library_worker_bodies(ci: &str) -> Result<Vec<String>, String> {
     // failed, cancelled and skipped workers must all keep the merge gate red.
     for first in ["success", "failure", "cancelled", "skipped", ""] {
         for second in ["success", "failure", "cancelled", "skipped", ""] {
-            let result = std::process::Command::new("bash")
-                .args([
-                    "--noprofile",
-                    "--norc",
-                    "-e",
-                    "-o",
-                    "pipefail",
-                    "-c",
-                    script,
-                ])
-                .env_clear()
-                .env(LIBRARY_WORKERS[0].1, first)
-                .env(LIBRARY_WORKERS[1].1, second)
-                .output()
-                .map_err(|e| format!("execute actual library result guard: {e}"))?;
-            if result.status.success() != (first == "success" && second == "success") {
-                return Err(format!(
-                    "library guard admits the wrong result for {first:?}/{second:?}"
-                ));
+            for performance in ["success", "failure", "cancelled", "skipped", ""] {
+                let result = std::process::Command::new("bash")
+                    .args([
+                        "--noprofile",
+                        "--norc",
+                        "-e",
+                        "-o",
+                        "pipefail",
+                        "-c",
+                        script,
+                    ])
+                    .env_clear()
+                    .env(LIBRARY_WORKERS[0].1, first)
+                    .env(LIBRARY_WORKERS[1].1, second)
+                    .env(PERFORMANCE_WORKER.1, performance)
+                    .output()
+                    .map_err(|e| format!("execute actual library result guard: {e}"))?;
+                if result.status.success()
+                    != (first == "success" && second == "success" && performance == "success")
+                {
+                    return Err(format!(
+                        "library guard admits the wrong result for {first:?}/{second:?}/{performance:?}"
+                    ));
+                }
             }
         }
     }
@@ -316,11 +342,12 @@ fn library_worker_coverage_rejects_broken_dependency_proofs() {
         .expect("read core-ci.yml");
     let original: serde_yaml::Value = serde_yaml::from_str(&ci).unwrap();
     let bodies =
-        required_library_worker_bodies(&ci).expect("actual aggregate enforces both workers");
+        required_library_worker_bodies(&ci).expect("actual aggregate enforces all three workers");
+    assert_eq!(bodies.len(), LIBRARY_WORKERS.len());
     assert!(bodies[0].contains("cargo test --lib"));
     assert!(bodies[1].contains("cargo test -p nrf-softdevice-hle --features capi"));
 
-    for mutation in 0..7 {
+    for mutation in 0..14 {
         let mut changed = original.clone();
         let aggregate = &mut changed["jobs"][LIBRARY_AGGREGATE];
         match mutation {
@@ -336,6 +363,29 @@ fn library_worker_coverage_rejects_broken_dependency_proofs() {
             4 => aggregate["if"] = "github.event_name == 'pull_request'".into(),
             5 => changed["jobs"][LIBRARY_WORKERS[1].0]["continue-on-error"] = true.into(),
             6 => aggregate["steps"][0]["continue-on-error"] = true.into(),
+            7 => {
+                aggregate["needs"].as_sequence_mut().unwrap().remove(0);
+            }
+            8 => {
+                aggregate["needs"].as_sequence_mut().unwrap().remove(1);
+            }
+            9 => {
+                aggregate["steps"][0]["env"][PERFORMANCE_WORKER.1] =
+                    "${{ needs.pr-gate.result }}".into()
+            }
+            10 => changed["jobs"][PERFORMANCE_WORKER.0]["continue-on-error"] = true.into(),
+            11 => changed["jobs"][PERFORMANCE_WORKER.0]["if"] = "false".into(),
+            12 => {
+                changed["jobs"][PERFORMANCE_WORKER.0]["uses"] =
+                    "./.github/workflows/core-perf.yml".into()
+            }
+            13 => {
+                aggregate["steps"][0]["run"] = aggregate["steps"][0]["run"]
+                    .as_str()
+                    .unwrap()
+                    .replace(" || [ \"$PERF_RESULT\" != success ]", "")
+                    .into();
+            }
             _ => unreachable!(),
         }
         assert!(
