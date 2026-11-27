@@ -328,6 +328,7 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("nrf5340/timer2_s.yaml", packed!("nrf5340/timer2_s.yaml")),
     ("nrf5340/uarte0_s.yaml", packed!("nrf5340/uarte0_s.yaml")),
     ("nrf5340/uicr_s.yaml", packed!("nrf5340/uicr_s.yaml")),
+    ("nrf54l15/ficr.yaml", packed!("nrf54l15/ficr.yaml")),
     (
         "nrf54l15/global_clock_s.yaml",
         packed!("nrf54l15/global_clock_s.yaml"),
@@ -347,10 +348,6 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     (
         "nrf54l15/global_egu20_s.yaml",
         packed!("nrf54l15/global_egu20_s.yaml"),
-    ),
-    (
-        "nrf54l15/global_ficr_ns.yaml",
-        packed!("nrf54l15/global_ficr_ns.yaml"),
     ),
     (
         "nrf54l15/global_gpiote20_s.yaml",
