@@ -3189,7 +3189,7 @@ impl<C: Cpu> DebugControl for Machine<C> {
         Ok(match report.stop {
             AdvanceStop::Watchpoint(addr) => StopReason::Watchpoint(addr),
             AdvanceStop::Breakpoint(pc) => StopReason::Breakpoint(pc),
-            AdvanceStop::FuelLimit => StopReason::MaxStepsReached,
+            AdvanceStop::FuelLimit | AdvanceStop::WorkLimit => StopReason::MaxStepsReached,
             AdvanceStop::CycleLimit | AdvanceStop::NoProgress | AdvanceStop::NetDriveChange => {
                 StopReason::StepDone
             }

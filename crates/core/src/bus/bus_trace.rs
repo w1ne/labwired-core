@@ -343,6 +343,32 @@ impl TracingI2cDevice {
 }
 
 impl I2cDevice for TracingI2cDevice {
+    fn runtime_snapshot(&self) -> Option<Vec<u8>> {
+        let state = (
+            0x4c57_4954u32,
+            self.expect_address,
+            self.selected,
+            self.inner.runtime_snapshot()?,
+        );
+        Some(bincode::serialize(&state).expect("serialize I2C trace wrapper"))
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> crate::SimResult<()> {
+        let (tag, expect_address, selected, inner): (u32, bool, Option<u8>, Vec<u8>) =
+            bincode::deserialize(bytes).map_err(|e| {
+                crate::SimulationError::NotImplemented(format!("I2C trace snapshot decode: {e}"))
+            })?;
+        if tag != 0x4c57_4954 {
+            return Err(crate::SimulationError::NotImplemented(
+                "I2C trace snapshot tag mismatch".into(),
+            ));
+        }
+        self.inner.restore_runtime_snapshot(&inner)?;
+        self.expect_address = expect_address;
+        self.selected = selected;
+        Ok(())
+    }
+
     fn is_i2c_mux(&self) -> bool {
         self.inner.is_i2c_mux()
     }

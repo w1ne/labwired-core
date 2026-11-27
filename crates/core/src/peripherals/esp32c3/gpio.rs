@@ -1174,6 +1174,14 @@ impl PinPort for Esp32c3Gpio {
 }
 
 impl Peripheral for Esp32c3Gpio {
+    fn runtime_snapshot(&self) -> Vec<u8> {
+        self.capture_runtime_state()
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> SimResult<()> {
+        self.restore_runtime_state(bytes)
+    }
+
     fn register_esp_gpio_observer(
         &mut self,
         observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
@@ -2106,3 +2114,6 @@ chip: "../chips/esp32c3.yaml"
         assert!(!gpio.irq_line());
     }
 }
+
+#[path = "gpio_snapshot.rs"]
+mod runtime_snapshot;

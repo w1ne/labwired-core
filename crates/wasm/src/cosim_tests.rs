@@ -77,6 +77,18 @@ fn step_until(sim: &mut WasmSimulator, total_cycles: u64, batch: u32) {
     }
 }
 
+#[test]
+fn work_limited_cosim_call_bounds_total_fuel_across_model_boundaries() {
+    let mut sim = build(RC_SYSTEM);
+    let report = sim
+        .step_batch_with_work_limit_recorded(50_000, 10_000)
+        .unwrap_or_else(|_| panic!("bounded co-simulation step failed"));
+    assert!(report.work_limit_reached);
+    assert_eq!(report.executed_cycles, 10_000);
+    assert_eq!(sim.machine.as_ref().unwrap().total_cycles, 10_000);
+    assert!(sim.analog_trace_batch(0).samples.len() >= 2);
+}
+
 /// The RC demo, end to end through the browser entry points: the constructor
 /// builds the session, `step_batch` steps it, and `analog_trace_snapshot`
 /// reads a charge curve driven by the pin the firmware set.

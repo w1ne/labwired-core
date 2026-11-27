@@ -339,7 +339,7 @@ impl I2cLineLevels {
 /// down-counter semantics; `num`/`den` express one module tick in engine
 /// cycles as an exact fraction (`CPU_CLK_HZ · divider / source_hz`), so the
 /// engine accumulates time without rounding drift.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 struct EngineTiming {
     /// Engine cycles per module tick = `num / den`.
     num: u64,
@@ -363,7 +363,7 @@ struct EngineTiming {
 
 /// Where the bit engine is inside the current wire segment. Every variant maps
 /// to one fixed (SCL, SDA) pair held for a counted number of module ticks.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 enum EngineState {
     /// No transaction on the wire.
     Idle,
@@ -399,7 +399,7 @@ enum EngineState {
 
 /// Cycle-driven bit engine state. Owned by [`Esp32c3I2c`]; ticked from the
 /// machine's peripheral walk via `tick_elapsed`.
-#[derive(Debug)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct BitEngine {
     state: EngineState,
     /// Module ticks left in the current segment (≥ 1 while active).
@@ -508,6 +508,9 @@ pub struct Esp32c3I2c {
     /// advance the engine by `now - last_synced` and bump this, so the two
     /// paths compose without double-counting elapsed cycles.
     last_synced: u64,
+    /// Lazy source-clock debt captured by a runtime snapshot. Settle it on
+    /// normal execution, after every peripheral's routing state is restored.
+    resume_pending_cycles: u64,
     /// `true` while exactly one module-tick event is in flight for this engine
     /// (walk-free plan). Guards against re-bootstrapping a second event on a
     /// later MMIO write while a transaction is already clocking: only
@@ -591,6 +594,7 @@ impl Esp32c3I2c {
             lines: None,
             clock: None,
             last_synced: 0,
+            resume_pending_cycles: 0,
             scheduled: false,
             arm_seq: I2C_FIRST_ARM_SEQ,
 
@@ -912,6 +916,14 @@ impl std::fmt::Debug for Esp32c3I2c {
 }
 
 impl Peripheral for Esp32c3I2c {
+    fn runtime_snapshot(&self) -> Vec<u8> {
+        self.capture_runtime_state()
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> SimResult<()> {
+        self.restore_runtime_state(bytes)
+    }
+
     fn line_names(&self) -> &'static [&'static str] {
         I2C_LINES
     }
@@ -1087,6 +1099,7 @@ impl Peripheral for Esp32c3I2c {
     /// a stray direct call from advancing the engine twice.
     fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
         if !self.uses_scheduler() {
+            self.settle_runtime_pending_cycles();
             self.advance_engine(cycles);
             let now = self.net_now();
             self.net_step(now);
@@ -1146,6 +1159,7 @@ impl Peripheral for Esp32c3I2c {
     /// engine) and it composes with `on_event` through the shared `last_synced`
     /// anchor without double-counting.
     fn sync_to(&mut self, now: u64) {
+        self.settle_runtime_pending_cycles();
         if now > self.last_synced {
             self.advance_engine(now - self.last_synced);
             self.last_synced = now;
@@ -1251,6 +1265,7 @@ impl Peripheral for Esp32c3I2c {
             return crate::sched::EventResult::default();
         }
         self.scheduled = false;
+        self.settle_runtime_pending_cycles();
         let now = sched.now();
         if now > self.last_synced {
             self.advance_engine(now - self.last_synced);
@@ -1812,3 +1827,6 @@ impl Esp32c3I2c {
 #[cfg(test)]
 #[path = "i2c_tests.rs"]
 mod tests;
+
+#[path = "i2c_snapshot.rs"]
+mod runtime_snapshot;

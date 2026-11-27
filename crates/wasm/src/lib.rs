@@ -51,7 +51,7 @@ use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
 use labwired_core::Arch as CoreArch;
 use labwired_core::Bus;
-use labwired_core::{AdvanceRequest, Cpu, Machine};
+use labwired_core::{AdvanceRequest, AdvanceStop, Cpu, Machine};
 use labwired_loader::load_elf_bytes;
 use wasm_bindgen::prelude::*;
 
@@ -61,6 +61,14 @@ use wasm_bindgen::prelude::*;
 // Restore once a dyn-aware Target wrapper exists.
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
+
+/// A bounded host call may yield useful progress without reaching its virtual
+/// budget. Keep that normal yield distinct from a breakpoint or partial error.
+#[derive(Debug, PartialEq, serde::Serialize)]
+struct WorkLimitedStep {
+    executed_cycles: u32,
+    work_limit_reached: bool,
+}
 
 /// Per-instance state for the ESP32-classic cross-core IPI bridge that lets
 /// dual-core ESP-IDF firmware run on our single-CPU sim. Real silicon routes
@@ -1876,6 +1884,52 @@ impl WasmSimulator {
     pub fn step_batch(&mut self, max_cycles: u32) -> Result<u32, JsValue> {
         self.record(lab_tools::Op::StepBatch(max_cycles));
         self.step_batch_unrecorded(max_cycles)
+    }
+
+    /// Advance under separate virtual-time and host-work limits. CPU quanta
+    /// consume work; an idle skip consumes one work unit, not one per skipped
+    /// cycle. Returns `{ executed_cycles, work_limit_reached }` so a caller
+    /// can continue a budget yield without continuing past a debugger stop.
+    #[wasm_bindgen]
+    pub fn step_batch_with_work_limit(
+        &mut self,
+        max_cycles: u32,
+        max_work: u32,
+    ) -> Result<JsValue, JsValue> {
+        let result = self
+            .step_batch_with_work_limit_recorded(max_cycles, max_work)
+            .map_err(AdvanceFailure::into_js)?;
+        serde_wasm_bindgen::to_value(&result)
+            .map_err(|error| JsValue::from_str(&format!("Step report: {error}")))
+    }
+
+    fn step_batch_with_work_limit_recorded(
+        &mut self,
+        max_cycles: u32,
+        max_work: u32,
+    ) -> Result<WorkLimitedStep, AdvanceFailure> {
+        self.record(lab_tools::Op::StepBatchWithWorkLimit(max_cycles, max_work));
+        self.ensure_uncoupled_stepping()?;
+        let before = self.machine().total_cycles;
+        // Use the authoritative interpreter also when browser JIT is enabled;
+        // that optional runner has not yet adopted this bounded-call API.
+        // Co-simulation conservatively bounds total fuel in advance_budget.
+        let result = self.advance_machine(
+            AdvanceRequest::run(Some(u64::from(max_cycles))).with_work_limit(u64::from(max_work)),
+        );
+        let elapsed = self.machine().total_cycles.saturating_sub(before);
+        let executed_cycles = elapsed.min(u64::from(u32::MAX)) as u32;
+        match result {
+            Ok(report) => Ok(WorkLimitedStep {
+                executed_cycles,
+                work_limit_reached: report.stop == AdvanceStop::WorkLimit,
+            }),
+            Err(AdvanceFailure::Machine(_)) if executed_cycles > 0 => Ok(WorkLimitedStep {
+                executed_cycles,
+                work_limit_reached: false,
+            }),
+            Err(error) => Err(error),
+        }
     }
 
     /// [`Self::step_batch`] without a journal entry, for callers that already

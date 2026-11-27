@@ -2410,6 +2410,18 @@ impl CosimSession {
         machine: &mut Machine<C>,
         request: AdvanceRequest,
     ) -> Result<CosimAdvance, CosimAdvanceError> {
+        // Co-simulation adapters may perform work for every elapsed cycle.
+        // Until they expose their own work accounting, conservatively spend
+        // at most the work allowance as ordinary fuel across ALL chunks.
+        let work_is_binding = request
+            .limits()
+            .work
+            .is_some_and(|work| request.limits().fuel.is_none_or(|fuel| work < fuel));
+        let request = if work_is_binding {
+            request.with_fuel_limit(request.limits().work)
+        } else {
+            request
+        };
         let limits = request.limits();
         let mut total: Option<CosimAdvance> = None;
         loop {
@@ -2450,7 +2462,7 @@ impl CosimSession {
 
             let budget_spent = match chunk_report.stop {
                 // The chunk's fuel was everything that was left.
-                AdvanceStop::FuelLimit => true,
+                AdvanceStop::FuelLimit | AdvanceStop::WorkLimit => true,
                 // Either the request's own cycle budget, or just a boundary.
                 AdvanceStop::CycleLimit => {
                     cycles_left.is_some_and(|left| chunk_report.elapsed_cycles >= left)
@@ -2463,7 +2475,11 @@ impl CosimSession {
             };
             let made_no_progress = chunk_report.primary_steps == 0 && chunk_report.idle_cycles == 0;
             if budget_spent || made_no_progress {
-                return Ok(total.expect("at least one chunk ran"));
+                let mut total = total.expect("at least one chunk ran");
+                if work_is_binding && total.report.stop == AdvanceStop::FuelLimit {
+                    total.report.stop = AdvanceStop::WorkLimit;
+                }
+                return Ok(total);
             }
         }
     }

@@ -23,6 +23,7 @@ pub(crate) struct CountingCpu {
     steps: u32,
     pending: Vec<u64>,
     first_pending_at_step: Option<u32>,
+    first_pending_at_cycle: Option<u64>,
     halted: bool,
     // Non-architectural test injection; intentionally omitted from snapshots.
     fail_step: bool,
@@ -45,6 +46,7 @@ pub(crate) struct CountingCpu {
     idle_skipped: u64,
     gpio_write_at_step: Option<(u32, u64, u32)>,
     step_cycles: u32,
+    max_step_cycles_hint: u32,
 }
 
 impl Cpu for CountingCpu {
@@ -65,6 +67,7 @@ impl Cpu for CountingCpu {
     ) -> SimResult<()> {
         if self.first_pending_at_step.is_none() && self.pending.iter().any(|word| *word != 0) {
             self.first_pending_at_step = Some(self.steps);
+            self.first_pending_at_cycle = Some(bus.current_cycle());
         }
         if self.fail_step {
             return Err(SimulationError::Other(
@@ -149,7 +152,7 @@ impl Cpu for CountingCpu {
         u64::from(self.steps) * u64::from(self.step_cycles)
     }
     fn max_step_cycles(&self) -> u32 {
-        self.step_cycles.max(1)
+        self.step_cycles.max(self.max_step_cycles_hint).max(1)
     }
 
     fn is_parked_idle(&self) -> bool {
@@ -525,11 +528,13 @@ fn request_builders_override_only_their_policy() {
     let cap = NonZeroU32::new(7).unwrap();
     let request = AdvanceRequest::single()
         .with_cycle_limit(9)
+        .with_work_limit(11)
         .with_batch_cap(cap)
         .with_breakpoints(BreakpointPolicy::Honor);
 
     assert_eq!(request.limits().fuel, Some(1));
     assert_eq!(request.limits().simulated_cycles, Some(9));
+    assert_eq!(request.limits().work, Some(11));
     assert_eq!(request.batch_policy(), BatchPolicy::AtMost(cap));
     assert_eq!(request.breakpoint_policy(), BreakpointPolicy::Honor);
     assert_eq!(request.idle_policy(), IdlePolicy::Disabled);
@@ -1358,13 +1363,7 @@ fn active_cpu_keeps_idle_preflight_for_due_or_buffered_events() {
     );
 }
 
-#[test]
-fn active_cpu_keeps_idle_preflight_for_timer_poll_activity() {
-    let expected_scheduler_calls = if crate::cycle_clock::event_scheduler_enabled() {
-        1
-    } else {
-        0
-    };
+fn timer_poll_machine() -> Machine<CountingCpu> {
     let mut bus = SystemBus::new();
     bus.peripherals.clear();
     bus.add_peripheral(
@@ -1376,9 +1375,32 @@ fn active_cpu_keeps_idle_preflight_for_timer_poll_activity() {
             160_000_000,
         )),
     );
-    let systimer = bus.find_peripheral_index_by_name("systimer").unwrap();
     let mut machine = Machine::new(CountingCpu::default(), bus);
     machine.config.idle_fast_forward_enabled = true;
+    machine
+}
+
+/// Model the MMIO evidence left by a completed CPU window that only sampled
+/// the free-running counter. Use actual peripheral accesses so the shared
+/// access classification, rather than a board-specific hint, permits the skip.
+fn sample_timer_poll(machine: &mut Machine<CountingCpu>) {
+    machine.bus.reset_mmio_activity_counters();
+    machine.bus.write_u32(0x6002_3004, 1 << 30).unwrap();
+    machine.bus.read_u32(0x6002_3044).unwrap();
+}
+
+#[test]
+fn active_cpu_keeps_idle_preflight_for_timer_poll_activity() {
+    let expected_scheduler_calls = if crate::cycle_clock::event_scheduler_enabled() {
+        1
+    } else {
+        0
+    };
+    let mut machine = timer_poll_machine();
+    let systimer = machine
+        .bus
+        .find_peripheral_index_by_name("systimer")
+        .unwrap();
 
     machine.advance(AdvanceRequest::run(Some(1))).unwrap();
     machine.bus.note_mmio_activity(systimer, 0x04);
@@ -1393,6 +1415,175 @@ fn active_cpu_keeps_idle_preflight_for_timer_poll_activity() {
         expected_scheduler_calls,
         "timer-poll evidence must be consumed by idle preflight before it is reset"
     );
+}
+
+/// A responsive call must leave room to skip virtual time while bounding
+/// actual execution, instead of exhausting fuel on one CPU window.
+#[test]
+fn timer_poll_work_limit_preserves_fast_forward_and_consumes_evidence() {
+    for work in [250, 1000] {
+        let mut machine = timer_poll_machine();
+        for _ in 0..4 {
+            sample_timer_poll(&mut machine);
+            let report = machine
+                .advance(AdvanceRequest::run(Some(50_000)).with_work_limit(work))
+                .unwrap();
+
+            assert_eq!(report.stop, AdvanceStop::WorkLimit);
+            if crate::cycle_clock::event_scheduler_enabled() {
+                assert!(report.idle_cycles > work);
+                assert_eq!(report.primary_steps, work - 1);
+            } else {
+                assert_eq!(report.idle_cycles, 0);
+                assert_eq!(report.primary_steps, work);
+            }
+            assert_eq!(report.elapsed_cycles, report.fuel_consumed);
+        }
+
+        // A skip consumes the evidence. A later call with no fresh timer
+        // accesses must resume the CPU instead of starving it.
+        let report = machine
+            .advance(AdvanceRequest::run(Some(50_000)).with_work_limit(work))
+            .unwrap();
+        assert_eq!(report.stop, AdvanceStop::WorkLimit);
+        assert_eq!(report.idle_cycles, 0);
+        assert_eq!(report.primary_steps, work);
+        assert_eq!(report.elapsed_cycles, work);
+    }
+}
+
+/// A one-unit work budget permits one idle boundary, even when it advances
+/// 1500 virtual cycles. The scheduled IRQ still lands at its exact deadline.
+#[test]
+fn timer_poll_work_limit_preserves_scheduled_irq_deadline() {
+    let mut machine = timer_poll_machine();
+    // SYSTIMER runs at 16 MHz, so 150 ticks are 1500 cycles at 160 MHz.
+    machine.bus.write_u32(0x6002_3064, 1).unwrap();
+    machine.bus.write_u32(0x6002_301c, 0).unwrap();
+    machine.bus.write_u32(0x6002_3020, 150).unwrap();
+    machine.bus.write_u32(0x6002_3050, 1).unwrap();
+    let conf = machine.bus.read_u32(0x6002_3000).unwrap();
+    machine
+        .bus
+        .write_u32(0x6002_3000, conf | (1 << 24))
+        .unwrap();
+
+    sample_timer_poll(&mut machine);
+    let first = machine
+        .advance(AdvanceRequest::run(Some(50_000)).with_work_limit(1))
+        .unwrap();
+    assert_eq!(first.stop, AdvanceStop::WorkLimit);
+    let scheduler = crate::cycle_clock::event_scheduler_enabled();
+    assert_eq!(first.idle_cycles, if scheduler { 1500 } else { 0 });
+    assert_eq!(first.elapsed_cycles, if scheduler { 1500 } else { 1 });
+    assert_eq!(machine.cpu.first_pending_at_cycle, None);
+    assert_eq!(
+        machine.bus.read_u32(0x6002_3070).unwrap(),
+        u32::from(scheduler)
+    );
+
+    machine
+        .advance(AdvanceRequest::run(Some(50_000)).with_work_limit(2000))
+        .unwrap();
+    assert_eq!(machine.bus.read_u32(0x6002_3070).unwrap(), 1);
+    assert_eq!(machine.cpu.first_pending_at_cycle, Some(1500));
+}
+
+#[test]
+fn work_limit_bounds_cpu_quanta_and_custom_window_runners() {
+    for work in [250, 1000] {
+        for custom_runner in [false, true] {
+            let mut machine = Machine::new(CountingCpu::default(), SystemBus::empty());
+            machine.config.peripheral_tick_interval = 1024;
+            let request = AdvanceRequest::run(Some(50_000)).with_work_limit(work);
+            let report = if custom_runner {
+                machine.advance_with_window_runner(request, |cpu, bus, observers, config, count| {
+                    cpu.step_batch(bus, observers, config, count)
+                })
+            } else {
+                machine.advance(request)
+            }
+            .unwrap();
+            assert_eq!(report.stop, AdvanceStop::WorkLimit);
+            assert_eq!(report.primary_steps, work);
+            assert_eq!(report.fuel_consumed, work);
+            assert_eq!(report.elapsed_cycles, work);
+        }
+    }
+}
+
+#[test]
+fn work_limit_bounds_timed_core_tick_fill() {
+    let mut machine = Machine::new(
+        CountingCpu {
+            step_cycles: 1,
+            max_step_cycles_hint: 4,
+            ..Default::default()
+        },
+        SystemBus::empty(),
+    );
+    machine.config.peripheral_tick_interval = 64;
+    // The initial conservative window is 64 / 4 = 16. Tick filling may
+    // execute five more cheap instructions, but must not fill all 64 cycles.
+    let report = machine
+        .advance(AdvanceRequest::run(Some(50_000)).with_work_limit(21))
+        .unwrap();
+    assert_eq!(report.stop, AdvanceStop::WorkLimit);
+    assert_eq!(report.primary_steps, 21);
+    assert_eq!(report.elapsed_cycles, 21);
+}
+
+#[test]
+fn work_limit_charges_each_idle_boundary_including_zero_retirement_waits() {
+    for enters_wait in [false, true] {
+        let cpu = CountingCpu {
+            zero_batch: enters_wait,
+            idle_budget_after_zero: enters_wait.then_some(5),
+            idle_budget: (!enters_wait).then_some(5),
+            ..Default::default()
+        };
+        let mut machine = Machine::new(cpu, SystemBus::empty());
+        machine.config.idle_fast_forward_enabled = true;
+        let report = machine
+            .advance(AdvanceRequest::run(Some(50_000)).with_work_limit(3))
+            .unwrap();
+        if crate::cycle_clock::event_scheduler_enabled() {
+            assert_eq!(report.stop, AdvanceStop::WorkLimit);
+            assert_eq!(report.idle_cycles, 15);
+            assert_eq!(report.primary_steps, 0);
+        } else if enters_wait {
+            assert_eq!(report.stop, AdvanceStop::NoProgress);
+            assert_eq!(report.elapsed_cycles, 0);
+        } else {
+            assert_eq!(report.stop, AdvanceStop::WorkLimit);
+            assert_eq!(report.primary_steps, 3);
+        }
+    }
+}
+
+#[test]
+fn zero_work_limit_cannot_advance_a_core_held_in_reset() {
+    let mut bus = SystemBus::empty();
+    bus.supply = crate::power::SupplySupervisor::new(Some(labwired_config::SupplyMonitor {
+        por_rising_v: 1.72,
+        pdr_falling_v: 1.68,
+        bor_levels: Default::default(),
+        bor_level: None,
+    }));
+    let mut machine = Machine::new(CountingCpu::default(), bus);
+    machine.attach_supply();
+    assert!(machine.bus.supply.is_held());
+    let report = machine
+        .advance(AdvanceRequest::run(Some(50_000)).with_work_limit(0))
+        .unwrap();
+    assert_eq!(report.stop, AdvanceStop::WorkLimit);
+    assert_eq!(report.elapsed_cycles, 0);
+    assert_eq!(machine.total_cycles, 0);
+    let report = machine
+        .advance(AdvanceRequest::run(Some(50_000)).with_work_limit(1))
+        .unwrap();
+    assert_eq!(report.stop, AdvanceStop::FuelLimit);
+    assert_eq!(report.idle_cycles, 50_000);
 }
 
 /// The skip moves machine time without stepping either core. With the

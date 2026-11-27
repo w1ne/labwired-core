@@ -60,6 +60,7 @@ pub(crate) enum Op {
     Step(u32),
     StepSingle,
     StepBatch(u32),
+    StepBatchWithWorkLimit(u32, u32),
     StepEsp32Aids(u32),
     StepExternalMechanical(u64, u32),
     ObserveExternalMechanical,
@@ -108,6 +109,7 @@ impl Op {
             Op::Step(_)
                 | Op::StepSingle
                 | Op::StepBatch(_)
+                | Op::StepBatchWithWorkLimit(_, _)
                 | Op::StepEsp32Aids(_)
                 | Op::StepExternalMechanical(_, _)
         )
@@ -235,6 +237,10 @@ impl WasmSimulator {
             Op::Step(n) => self.step(*n),
             Op::StepSingle => self.step_single(),
             Op::StepBatch(n) => self.step_batch(*n).map(|_| ()),
+            Op::StepBatchWithWorkLimit(cycles, work) => self
+                .step_batch_with_work_limit_recorded(*cycles, *work)
+                .map(|_| ())
+                .map_err(crate::cosim::AdvanceFailure::into_js),
             Op::StepEsp32Aids(n) => self.step_with_esp32_aids(*n),
             Op::StepExternalMechanical(target, fuel) => self
                 .step_external_mechanical_to(*target as f64, *fuel)
@@ -902,6 +908,48 @@ mod tests {
         sim.snapshot_restore_s(saved["id"].as_u64().unwrap() as u32)
             .unwrap();
         assert_eq!(sim.machine_s().unwrap().total_cycles, 5_000);
+    }
+
+    #[test]
+    fn work_limited_steps_preserve_limits_and_replay_without_js_serialization() {
+        let mut sim = ring();
+        for (cycles, work) in [(50_000, 250), (90_000, 1000), (90_000, 1000)] {
+            let report = sim
+                .step_batch_with_work_limit_recorded(cycles, work)
+                .unwrap_or_else(|_| panic!("bounded step failed"));
+            assert!(report.executed_cycles > 0);
+            assert!(report.work_limit_reached);
+        }
+        let expected_journal = vec![
+            (Op::StepBatchWithWorkLimit(50_000, 250), 1),
+            (Op::StepBatchWithWorkLimit(90_000, 1000), 2),
+        ];
+        assert_eq!(sim.tools.borrow().journal, expected_journal);
+        let expected_digest = sim.digest_s().unwrap();
+        let saved: serde_json::Value =
+            serde_json::from_str(&sim.snapshot_save_s(None).unwrap()).unwrap();
+        sim.step_batch(1000).unwrap();
+        sim.snapshot_restore_s(saved["id"].as_u64().unwrap() as u32)
+            .unwrap();
+        assert_eq!(sim.digest_s().unwrap(), expected_digest);
+        assert_eq!(sim.tools.borrow().journal, expected_journal);
+    }
+
+    #[test]
+    fn work_limited_step_keeps_breakpoint_stops_distinct_from_budget_yields() {
+        let mut probe = ring();
+        let initial_pc = probe.machine_s().unwrap().cpu.get_pc();
+        probe.step_single().unwrap();
+        let breakpoint = probe.machine_s().unwrap().cpu.get_pc();
+        assert_ne!(breakpoint, initial_pc);
+        let mut sim = ring();
+        sim.machine.as_mut().unwrap().add_breakpoint(breakpoint);
+        let report = sim
+            .step_batch_with_work_limit_recorded(50_000, 1000)
+            .unwrap_or_else(|_| panic!("bounded step failed"));
+        assert!(report.executed_cycles > 0);
+        assert!(!report.work_limit_reached);
+        assert_eq!(sim.machine_s().unwrap().cpu.get_pc(), breakpoint);
     }
 
     /// A later snapshot still restores after an earlier one rolled the run
