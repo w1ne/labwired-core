@@ -488,7 +488,19 @@ impl Solver {
         let branches = circuit.branch_count();
         let voltage_source_values = circuit.voltage_sources.iter().map(|s| s.dc).collect();
         let current_source_values = circuit.current_sources.iter().map(|s| s.dc).collect();
-        let switch_closed = vec![false; circuit.switches.len()];
+        // A voltage switch's `ON` keyword seeds the operating point; the
+        // first OP pass then keeps it only while the control sits inside the
+        // hysteresis band, as ngspice does.
+        let switch_closed = circuit
+            .switches
+            .iter()
+            .map(|switch| {
+                switch
+                    .voltage
+                    .as_ref()
+                    .is_some_and(|control| control.initially_closed)
+            })
+            .collect();
         let capacitors = circuit.capacitors.len();
         let inductors = circuit.inductors.len();
         let nonlinear = circuit.is_nonlinear();

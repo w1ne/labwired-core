@@ -810,6 +810,27 @@ const DIFFERENTIALS: &[Differential] = &[
         minimum_swing: 0.5,
         nonlinear: false,
     },
+    Differential {
+        name: "voltage switch initial state ON",
+        // The control starts inside the `VT ± VH` band, so only the `ON`
+        // keyword closes the switch at the operating point; without it the
+        // output stays near 0 V. At 2 ms the control leaves the band below
+        // and the switch opens; its return to the band at 5 ms keeps it open.
+        deck: "* voltage switch ON: S(SW) ON + R + C + VDC + VPULSE\n\
+               Vdd vdd 0 dc 5\n\
+               Vc c 0 PULSE(0.5 -1 2m 10u 10u 3m 8m)\n\
+               S1 vdd out c 0 SMOD ON\n\
+               Rl out 0 10k\n\
+               C1 out 0 1u\n\
+               .model SMOD SW(VT=0.5 VH=0.3 RON=1k ROFF=1e9)\n",
+        node: "out",
+        sample: 20e-6,
+        substeps: 20,
+        samples: 400,
+        full_scale: 5.0,
+        minimum_swing: 0.5,
+        nonlinear: false,
+    },
 ];
 
 /// Solve `deck` with the in-core engine, sampling `node` at every boundary.
