@@ -2940,6 +2940,12 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     Some(_) => None,
                 };
                 let positional = rest.iter().all(|token| !token.contains('='));
+                if rest.len() == 6 && positional && initial_state.is_none() {
+                    return Err(ctx.parse_err(format!(
+                        "switch initial state `{}` must be ON or OFF",
+                        rest[5]
+                    )));
+                }
                 if let (5 | 6, true, Some(switch_on)) = (rest.len(), positional, initial_state) {
                     let nodes = rest[..4].iter().map(|name| circuit.intern(name)).collect();
                     pending.push(PendingDevice {

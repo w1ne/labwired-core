@@ -435,4 +435,36 @@ fn ngspice_sw_rejects_an_unknown_trailing_keyword() {
     let err = parse_netlist("* keyword\nS1 a 0 c 0 SMOD MAYBE\n.model SMOD SW(VT=1)\n.end\n")
         .unwrap_err();
     assert!(!matches!(&err, AnalogError::Unsupported { .. }), "{err}");
+    assert!(err.to_string().contains("must be ON or OFF"), "{err}");
+}
+
+#[test]
+fn ngspice_sw_on_that_opens_at_the_operating_point_stays_open_in_the_band() {
+    // The switch pulls its own control down: closed, the control is 0.1 V,
+    // below the band, so the OP opens it; open, the control is 1 V, inside
+    // [0.5, 1.5], so it stays open. ngspice-42 `op` agrees (open).
+    let circuit = parse_netlist(
+        "* ON with feedback\n\
+         Vdd vdd 0 dc 2\n\
+         Rtop vdd out 1k\n\
+         S1 out 0 ctrl 0 SMOD ON\n\
+         Rbot ctrl 0 1meg\n\
+         E1 ctrl 0 out 0 0.5\n\
+         .model SMOD SW(VT=1 VH=0.5 RON=100 ROFF=1g)\n\
+         .end\n",
+    )
+    .expect("netlist parses");
+    let mut solver = Solver::new(circuit, Integration::BackwardEuler).expect("solver");
+    let out = solver.circuit().node("out").expect("out");
+    assert!(
+        solver.node_voltage(out) > 1.99,
+        "{} V",
+        solver.node_voltage(out)
+    );
+    run_to(&mut solver, 1e-6, 20);
+    assert!(
+        solver.node_voltage(out) > 1.99,
+        "{} V",
+        solver.node_voltage(out)
+    );
 }
