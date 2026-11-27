@@ -1,0 +1,1971 @@
+peripheral: FICR
+version: 0.1.0
+# nRF54L15 FICR (factory information), base 0x00FFC000.
+# Register list, offsets, access and reset values are copied from
+# peripherals/nrf54l15/global_ficr_ns.yaml (generated from Nordic's
+# nrf54l15.svd). The SVD gives every INFO word the reset value 0xFFFFFFFF
+# ("Unspecified"). Three INFO words carry the value that the same SVD
+# enumerates for this part:
+#   INFO.PART (0x31C) = 0x00054B15 (N54L15)
+#   INFO.RAM  (0x328) = 0x00000100 (K256, 256 KiB)
+#   INFO.RRAM (0x32C) = 0x000005F4 (K1524, 1524 KiB)
+# All other words keep the SVD value: DEVICEID, DEVICEADDR, ER/IR, VARIANT,
+# PACKAGE and the TRIMCNF table read as erased (0xFFFFFFFF). No per-device
+# identity or factory trim is invented.
+registers:
+- id: INFO_CONFIGID
+  address_offset: 768
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: HWID
+    bit_range:
+    - 15
+    - 0
+    description: Identification number for the HW
+  side_effects: null
+- id: INFO_DEVICEID0
+  address_offset: 772
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: DEVICEID
+    bit_range:
+    - 31
+    - 0
+    description: 64 bit unique device identifier
+  side_effects: null
+- id: INFO_DEVICEID1
+  address_offset: 776
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: DEVICEID
+    bit_range:
+    - 31
+    - 0
+    description: 64 bit unique device identifier
+  side_effects: null
+- id: INFO_UUID0
+  address_offset: 780
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: UUID
+    bit_range:
+    - 31
+    - 0
+    description: Device UUID [n].
+  side_effects: null
+- id: INFO_UUID1
+  address_offset: 784
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: UUID
+    bit_range:
+    - 31
+    - 0
+    description: Device UUID [n].
+  side_effects: null
+- id: INFO_UUID2
+  address_offset: 788
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: UUID
+    bit_range:
+    - 31
+    - 0
+    description: Device UUID [n].
+  side_effects: null
+- id: INFO_UUID3
+  address_offset: 792
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: UUID
+    bit_range:
+    - 31
+    - 0
+    description: Device UUID [n].
+  side_effects: null
+- id: INFO_PART
+  address_offset: 796
+  size: 32
+  access: READ_ONLY
+  reset_value: 346901
+  fields:
+  - name: PART
+    bit_range:
+    - 31
+    - 0
+    description: Part code
+  side_effects: null
+- id: INFO_VARIANT
+  address_offset: 800
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: VARIANT
+    bit_range:
+    - 31
+    - 0
+    description: Part Variant, Hardware version and Production configuration, encoded as ASCII
+  side_effects: null
+- id: INFO_PACKAGE
+  address_offset: 804
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: PACKAGE
+    bit_range:
+    - 31
+    - 0
+    description: Package option
+  side_effects: null
+- id: INFO_RAM
+  address_offset: 808
+  size: 32
+  access: READ_ONLY
+  reset_value: 256
+  fields:
+  - name: RAM
+    bit_range:
+    - 31
+    - 0
+    description: RAM size (KB)
+  side_effects: null
+- id: INFO_RRAM
+  address_offset: 812
+  size: 32
+  access: READ_ONLY
+  reset_value: 1524
+  fields:
+  - name: RRAM
+    bit_range:
+    - 31
+    - 0
+    description: RRAM size (KB)
+  side_effects: null
+- id: ER0
+  address_offset: 896
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: ER
+    bit_range:
+    - 31
+    - 0
+    description: Encryption Root, word n
+  side_effects: null
+- id: ER1
+  address_offset: 900
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: ER
+    bit_range:
+    - 31
+    - 0
+    description: Encryption Root, word n
+  side_effects: null
+- id: ER2
+  address_offset: 904
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: ER
+    bit_range:
+    - 31
+    - 0
+    description: Encryption Root, word n
+  side_effects: null
+- id: ER3
+  address_offset: 908
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: ER
+    bit_range:
+    - 31
+    - 0
+    description: Encryption Root, word n
+  side_effects: null
+- id: IR0
+  address_offset: 912
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: IR
+    bit_range:
+    - 31
+    - 0
+    description: Identity Root, word n
+  side_effects: null
+- id: IR1
+  address_offset: 916
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: IR
+    bit_range:
+    - 31
+    - 0
+    description: Identity Root, word n
+  side_effects: null
+- id: IR2
+  address_offset: 920
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: IR
+    bit_range:
+    - 31
+    - 0
+    description: Identity Root, word n
+  side_effects: null
+- id: IR3
+  address_offset: 924
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: IR
+    bit_range:
+    - 31
+    - 0
+    description: Identity Root, word n
+  side_effects: null
+- id: DEVICEADDRTYPE
+  address_offset: 928
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: DEVICEADDRTYPE
+    bit_range:
+    - 0
+    - 0
+    description: Device address type
+  side_effects: null
+- id: DEVICEADDR0
+  address_offset: 932
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: DEVICEADDR
+    bit_range:
+    - 31
+    - 0
+    description: 48 bit device address
+  side_effects: null
+- id: DEVICEADDR1
+  address_offset: 936
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: DEVICEADDR
+    bit_range:
+    - 31
+    - 0
+    description: 48 bit device address
+  side_effects: null
+- id: TRIMCNF0_ADDR
+  address_offset: 1024
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF0_DATA
+  address_offset: 1028
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF1_ADDR
+  address_offset: 1032
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF1_DATA
+  address_offset: 1036
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF2_ADDR
+  address_offset: 1040
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF2_DATA
+  address_offset: 1044
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF3_ADDR
+  address_offset: 1048
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF3_DATA
+  address_offset: 1052
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF4_ADDR
+  address_offset: 1056
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF4_DATA
+  address_offset: 1060
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF5_ADDR
+  address_offset: 1064
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF5_DATA
+  address_offset: 1068
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF6_ADDR
+  address_offset: 1072
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF6_DATA
+  address_offset: 1076
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF7_ADDR
+  address_offset: 1080
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF7_DATA
+  address_offset: 1084
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF8_ADDR
+  address_offset: 1088
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF8_DATA
+  address_offset: 1092
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF9_ADDR
+  address_offset: 1096
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF9_DATA
+  address_offset: 1100
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF10_ADDR
+  address_offset: 1104
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF10_DATA
+  address_offset: 1108
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF11_ADDR
+  address_offset: 1112
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF11_DATA
+  address_offset: 1116
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF12_ADDR
+  address_offset: 1120
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF12_DATA
+  address_offset: 1124
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF13_ADDR
+  address_offset: 1128
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF13_DATA
+  address_offset: 1132
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF14_ADDR
+  address_offset: 1136
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF14_DATA
+  address_offset: 1140
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF15_ADDR
+  address_offset: 1144
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF15_DATA
+  address_offset: 1148
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF16_ADDR
+  address_offset: 1152
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF16_DATA
+  address_offset: 1156
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF17_ADDR
+  address_offset: 1160
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF17_DATA
+  address_offset: 1164
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF18_ADDR
+  address_offset: 1168
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF18_DATA
+  address_offset: 1172
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF19_ADDR
+  address_offset: 1176
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF19_DATA
+  address_offset: 1180
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF20_ADDR
+  address_offset: 1184
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF20_DATA
+  address_offset: 1188
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF21_ADDR
+  address_offset: 1192
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF21_DATA
+  address_offset: 1196
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF22_ADDR
+  address_offset: 1200
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF22_DATA
+  address_offset: 1204
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF23_ADDR
+  address_offset: 1208
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF23_DATA
+  address_offset: 1212
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF24_ADDR
+  address_offset: 1216
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF24_DATA
+  address_offset: 1220
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF25_ADDR
+  address_offset: 1224
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF25_DATA
+  address_offset: 1228
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF26_ADDR
+  address_offset: 1232
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF26_DATA
+  address_offset: 1236
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF27_ADDR
+  address_offset: 1240
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF27_DATA
+  address_offset: 1244
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF28_ADDR
+  address_offset: 1248
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF28_DATA
+  address_offset: 1252
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF29_ADDR
+  address_offset: 1256
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF29_DATA
+  address_offset: 1260
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF30_ADDR
+  address_offset: 1264
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF30_DATA
+  address_offset: 1268
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF31_ADDR
+  address_offset: 1272
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF31_DATA
+  address_offset: 1276
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF32_ADDR
+  address_offset: 1280
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF32_DATA
+  address_offset: 1284
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF33_ADDR
+  address_offset: 1288
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF33_DATA
+  address_offset: 1292
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF34_ADDR
+  address_offset: 1296
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF34_DATA
+  address_offset: 1300
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF35_ADDR
+  address_offset: 1304
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF35_DATA
+  address_offset: 1308
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF36_ADDR
+  address_offset: 1312
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF36_DATA
+  address_offset: 1316
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF37_ADDR
+  address_offset: 1320
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF37_DATA
+  address_offset: 1324
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF38_ADDR
+  address_offset: 1328
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF38_DATA
+  address_offset: 1332
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF39_ADDR
+  address_offset: 1336
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF39_DATA
+  address_offset: 1340
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF40_ADDR
+  address_offset: 1344
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF40_DATA
+  address_offset: 1348
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF41_ADDR
+  address_offset: 1352
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF41_DATA
+  address_offset: 1356
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF42_ADDR
+  address_offset: 1360
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF42_DATA
+  address_offset: 1364
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF43_ADDR
+  address_offset: 1368
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF43_DATA
+  address_offset: 1372
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF44_ADDR
+  address_offset: 1376
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF44_DATA
+  address_offset: 1380
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF45_ADDR
+  address_offset: 1384
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF45_DATA
+  address_offset: 1388
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF46_ADDR
+  address_offset: 1392
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF46_DATA
+  address_offset: 1396
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF47_ADDR
+  address_offset: 1400
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF47_DATA
+  address_offset: 1404
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF48_ADDR
+  address_offset: 1408
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF48_DATA
+  address_offset: 1412
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF49_ADDR
+  address_offset: 1416
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF49_DATA
+  address_offset: 1420
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF50_ADDR
+  address_offset: 1424
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF50_DATA
+  address_offset: 1428
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF51_ADDR
+  address_offset: 1432
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF51_DATA
+  address_offset: 1436
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF52_ADDR
+  address_offset: 1440
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF52_DATA
+  address_offset: 1444
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF53_ADDR
+  address_offset: 1448
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF53_DATA
+  address_offset: 1452
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF54_ADDR
+  address_offset: 1456
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF54_DATA
+  address_offset: 1460
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF55_ADDR
+  address_offset: 1464
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF55_DATA
+  address_offset: 1468
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF56_ADDR
+  address_offset: 1472
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF56_DATA
+  address_offset: 1476
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF57_ADDR
+  address_offset: 1480
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF57_DATA
+  address_offset: 1484
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF58_ADDR
+  address_offset: 1488
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF58_DATA
+  address_offset: 1492
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF59_ADDR
+  address_offset: 1496
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF59_DATA
+  address_offset: 1500
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF60_ADDR
+  address_offset: 1504
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF60_DATA
+  address_offset: 1508
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF61_ADDR
+  address_offset: 1512
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF61_DATA
+  address_offset: 1516
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF62_ADDR
+  address_offset: 1520
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF62_DATA
+  address_offset: 1524
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: TRIMCNF63_ADDR
+  address_offset: 1528
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Address
+    bit_range:
+    - 31
+    - 0
+    description: Address
+  side_effects: null
+- id: TRIMCNF63_DATA
+  address_offset: 1532
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: Data
+    bit_range:
+    - 31
+    - 0
+    description: Data
+  side_effects: null
+- id: NFC_TAGHEADER0
+  address_offset: 1536
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967135
+  fields:
+  - name: MFGID
+    bit_range:
+    - 7
+    - 0
+    description: 'Default Manufacturer ID: Nordic Semiconductor ASA has ICM 0x5F'
+  - name: UD1
+    bit_range:
+    - 15
+    - 8
+    description: Unique identifier byte 1
+  - name: UD2
+    bit_range:
+    - 23
+    - 16
+    description: Unique identifier byte 2
+  - name: UD3
+    bit_range:
+    - 31
+    - 24
+    description: Unique identifier byte 3
+  side_effects: null
+- id: NFC_TAGHEADER1
+  address_offset: 1540
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: UD4
+    bit_range:
+    - 7
+    - 0
+    description: Unique identifier byte 4
+  - name: UD5
+    bit_range:
+    - 15
+    - 8
+    description: Unique identifier byte 5
+  - name: UD6
+    bit_range:
+    - 23
+    - 16
+    description: Unique identifier byte 6
+  - name: UD7
+    bit_range:
+    - 31
+    - 24
+    description: Unique identifier byte 7
+  side_effects: null
+- id: NFC_TAGHEADER2
+  address_offset: 1544
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: UD8
+    bit_range:
+    - 7
+    - 0
+    description: Unique identifier byte 8
+  - name: UD9
+    bit_range:
+    - 15
+    - 8
+    description: Unique identifier byte 9
+  - name: UD10
+    bit_range:
+    - 23
+    - 16
+    description: Unique identifier byte 10
+  - name: UD11
+    bit_range:
+    - 31
+    - 24
+    description: Unique identifier byte 11
+  side_effects: null
+- id: NFC_TAGHEADER3
+  address_offset: 1548
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: UD12
+    bit_range:
+    - 7
+    - 0
+    description: Unique identifier byte 12
+  - name: UD13
+    bit_range:
+    - 15
+    - 8
+    description: Unique identifier byte 13
+  - name: UD14
+    bit_range:
+    - 23
+    - 16
+    description: Unique identifier byte 14
+  - name: UD15
+    bit_range:
+    - 31
+    - 24
+    description: Unique identifier byte 15
+  side_effects: null
+- id: XOSC32MTRIM
+  address_offset: 1568
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: SLOPE
+    bit_range:
+    - 8
+    - 0
+    description: Slope trim factor on twos complement form
+  - name: OFFSET
+    bit_range:
+    - 25
+    - 16
+    description: Offset trim factor on integer form
+  side_effects: null
+- id: XOSC32KTRIM
+  address_offset: 1572
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: SLOPE
+    bit_range:
+    - 8
+    - 0
+    description: Slope trim factor on twos complement form
+  - name: OFFSET
+    bit_range:
+    - 25
+    - 16
+    description: Offset trim factor on integer form
+  side_effects: null
+interrupts: null
+timing: null
