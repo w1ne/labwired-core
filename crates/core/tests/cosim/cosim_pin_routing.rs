@@ -38,6 +38,15 @@ fn chip_bus(chip: &str) -> SystemBus {
     SystemBus::from_config(&descriptor, &manifest).expect("build bus")
 }
 
+/// A shipped board system and the chip descriptor it names.
+fn system_parts(rel_system_path: &str) -> (SystemManifest, ChipDescriptor) {
+    let system_path = root(rel_system_path);
+    let manifest = SystemManifest::from_file(&system_path).expect("load board system");
+    let chip_path = system_path.parent().unwrap().join(&manifest.chip);
+    let descriptor = ChipDescriptor::from_file(&chip_path).expect("load board chip descriptor");
+    (manifest, descriptor)
+}
+
 /// A bare NUCLEO-F401RE: the chip the `cosim-spice-rc` example targets.
 fn f401_bus() -> SystemBus {
     chip_bus("stm32f401")
@@ -222,9 +231,9 @@ fn write_odr_bit(bus: &mut SystemBus, pad: &str, level: bool) {
     bus.write_u32(addr, next).expect("write ODR");
 }
 
-/// Set one pad's two-bit MODER field the way firmware does: read-modify-write
-/// of the port's mode register. 00 input, 01 output, 10 alternate function,
-/// 11 analog (RM0368 §8.4.1).
+/// Set one STM32 pad's two-bit MODER field the way firmware does:
+/// read-modify-write of the port's mode register. 00 input, 01 output,
+/// 10 alternate function, 11 analog.
 fn write_moder(bus: &mut SystemBus, port: &str, pin: u8, mode: u32) {
     let idx = bus
         .find_peripheral_index_by_name(port)
@@ -580,29 +589,167 @@ fn volts_on_a_pin_path_read_through_the_datasheet_thresholds() {
     );
 }
 
-/// Regression for issue #4288: these shipped chip descriptors must provide
-/// both the GPIO rail and threshold ratios so a voltage output can bind to the
-/// exact featured-lab GPIO input paths without failing at simulation startup.
-#[test]
-fn h735_and_nrf52840_voltage_driven_gpio_routes_bind() {
-    for (chip, path) in [
-        ("stm32h735", "board.gpio_in.pa5"),
-        ("nrf52840", "board.gpio_in.p0.06"),
-    ] {
-        let bus = chip_bus(chip);
-        let model = mock_model(
+/// Exercise a real chip's firmware-visible GPIO input while an analog source
+/// crosses its documented VIH and VIL boundaries. Intermediate samples stay
+/// at the last Schmitt state.
+fn assert_board_gpio_threshold_transitions(
+    system: &str,
+    gpio_path: &str,
+    pad: &str,
+    supply_v: f64,
+    stm32_input: Option<(&str, u8)>,
+) {
+    let (manifest, descriptor) = system_parts(system);
+    let mut bus = SystemBus::from_config(&descriptor, &manifest).expect("build board bus");
+    if let Some((port, pin)) = stm32_input {
+        // H735 resets PA5 in analog mode, which disables its digital IDR.
+        write_moder(&mut bus, port, pin, 0);
+    }
+    assert_eq!(
+        descriptor.io_voltage_v,
+        Some(supply_v),
+        "{system} supply default"
+    );
+    let ratios = descriptor
+        .gpio_input_thresholds
+        .expect("board chip descriptor declares GPIO thresholds");
+    let vil = ratios.vil * supply_v + ratios.vil_offset_v;
+    let vih = ratios.vih * supply_v + ratios.vih_offset_v;
+    let mut session = CosimSession::new(
+        &[analog_model(
             1_000,
-            &[],
-            &[("v_pin", path)],
-            &[("v_pin", serde_yaml::Value::from(1.5))],
+            &[("level", "ui.bench.volts")],
+            &[("v_pin", gpio_path)],
+            "Vbench in 0 dc 0\nR1 in pin 1\nR2 pin 0 1e12\n",
+            &[("v_pin", "v(pin)")],
+            &[("level", "Vbench")],
+            supply_v,
+        )],
+        Path::new("."),
+        &bus,
+    )
+    .expect("create board GPIO threshold session")
+    .expect("analog model was declared");
+    assert!(
+        session.binding_errors().is_empty(),
+        "{system}: {:?}",
+        session.binding_errors()
+    );
+
+    let samples = [
+        (0.0, false),
+        (vih - 0.05, false),
+        (vih + 0.05, true),
+        ((vil + vih) / 2.0, true),
+        (vil + 0.05, true),
+        (vil - 0.05, false),
+        ((vil + vih) / 2.0, false),
+        (vih + 0.05, true),
+    ];
+    let mut cycles = 0;
+    for (volts, expected) in samples {
+        session
+            .set_signal_number("ui.bench.volts", volts)
+            .expect("set voltage source input");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("step analog source");
+        assert!(errors.is_empty(), "{system}: {errors:?}");
+        assert_eq!(steps.len(), 1, "{system}: model stepped at the boundary");
+        assert_eq!(
+            read_idr_bit(&mut bus, pad),
+            expected,
+            "{system} {volts:.3} V (VIL {vil:.3} V, VIH {vih:.3} V)"
         );
-        let session = CosimSession::new(&[model], Path::new("."), &bus)
-            .unwrap_or_else(|e| panic!("{chip}: create voltage GPIO route: {e}"))
-            .unwrap_or_else(|| panic!("{chip}: expected a co-simulation session"));
-        assert!(
-            session.binding_errors().is_empty(),
-            "{chip} {path}: {:?}",
-            session.binding_errors()
+    }
+}
+
+/// Regression for issue #4288: H735 and nRF52840 voltage routes must reach
+/// the GPIO input state and switch at the chip's sourced logic boundaries.
+#[test]
+fn h735_and_nrf52840_voltage_routes_cross_gpio_thresholds() {
+    // DS13312 Rev 4 Table 55: STM32H735 normal GPIO thresholds at 3.3 V.
+    assert_board_gpio_threshold_transitions(
+        "configs/systems/stm32h735-smoke.yaml",
+        "board.gpio_in.pa5",
+        "PA5",
+        3.3,
+        Some(("gpioa", 5)),
+    );
+    // nRF52840 product thresholds at the XIAO's board-sourced 3.3 V rail.
+    assert_board_gpio_threshold_transitions(
+        "configs/systems/seeed-xiao-nrf52840-sense.yaml",
+        "board.gpio_in.p0.06",
+        "P0.06",
+        3.3,
+        None,
+    );
+}
+
+#[test]
+fn nrf52840_board_systems_resolve_their_supply_overlays() {
+    for (system, supply_v) in [
+        ("configs/systems/arduino-nano-33-ble.yaml", 3.3),
+        ("configs/systems/seeed-xiao-nrf52840-sense.yaml", 3.3),
+        ("configs/systems/nrf52840-dk.yaml", 3.0),
+    ] {
+        let (manifest, descriptor) = system_parts(system);
+        assert_eq!(descriptor.io_voltage_v, Some(supply_v), "{system}");
+        assert!(descriptor.gpio_input_thresholds.is_some(), "{system}");
+        SystemBus::from_config(&descriptor, &manifest)
+            .unwrap_or_else(|error| panic!("{system}: {error}"));
+    }
+}
+
+/// A routed board VDD replaces the F401 descriptor's 3.3 V fallback when
+/// calculating GPIO thresholds. 1.97 V is below VIH at 3.3 V, but above VIH
+/// at the routed 2.8 V rail; the input must transition only after that rail
+/// reaches the GPIO router.
+#[test]
+fn routed_supply_changes_voltage_gpio_transition_thresholds() {
+    let mut bus = f401_bus();
+    let mut session = build_session(
+        &bus,
+        &[analog_model(
+            1_000,
+            &[
+                ("pin", "ui.bench.pin_volts"),
+                ("rail", "ui.bench.vdd_volts"),
+            ],
+            &[
+                ("v_pin", "board.gpio_in.pc13"),
+                ("vdd", "board.power.vdd_volts"),
+            ],
+            "Vpin pin 0 dc 0\nVrail rail 0 dc 3.3\nRpin pin 0 1e12\n",
+            &[("v_pin", "v(pin)"), ("vdd", "v(rail)")],
+            &[("pin", "Vpin"), ("rail", "Vrail")],
+            3.3,
+        )],
+    );
+
+    let mut cycles = 0;
+    for (rail_v, pin_v, expected) in [
+        (3.3, 1.97, false), // VIH = 2.31 V: low.
+        (2.8, 1.97, true),  // VIH = 1.96 V: high at routed VDD.
+        (2.8, 0.85, true),  // VIL = 0.84 V: retain the high state.
+        (2.8, 0.83, false), // At or below the routed VIL: low.
+    ] {
+        session
+            .set_signal_number("ui.bench.vdd_volts", rail_v)
+            .expect("set routed VDD source");
+        session
+            .set_signal_number("ui.bench.pin_volts", pin_v)
+            .expect("set routed GPIO source");
+        cycles += session.cycles_until_boundary(cycles);
+        let (_, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("step routed rails");
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(
+            read_idr_bit(&mut bus, "PC13"),
+            expected,
+            "routed VDD {rail_v:.1} V, GPIO input {pin_v:.2} V"
         );
     }
 }
