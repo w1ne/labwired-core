@@ -106,6 +106,12 @@ release_runner_contract_block=$(awk '
 ' "$core_ci_workflow")
 require_block_literal "$release_runner_contract_block" 'actions/checkout@v4' 'release runner contract job checks out the source'
 require_block_literal "$release_runner_contract_block" 'fetch-depth: 0' 'release runner contract job fetches immutable action-source pins'
+documented_cli_version="$(grep -oE 'LABWIRED_VERSION=v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -n1 | cut -d= -f2 || true)"
+if [[ -z "$documented_cli_version" ]]; then
+  fail 'public README pins the currently released CLI version'
+else
+  require_block_literal "$release_runner_contract_block" "LABWIRED_VERSION: $documented_cli_version" 'release runner contract installs the README-pinned version without resolving latest'
+fi
 
 core_integrity_block=$(awk '
   $0 == "  integrity:" { inside = 1; next }
