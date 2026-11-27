@@ -1,0 +1,47 @@
+# Generic Beta NTC divider (GPIO2 = ADC1_CH2) and Shockley diode load line
+# (GPIO3 = ADC1_CH3) for every ESP32-C6 board.
+#
+# esp32c6.yaml and esp32c6fh4.yaml publish the ADC1 inputs in an
+# `analog_pins:` table, so neither netlist names the board, the ADC or a
+# channel: each solves its own circuit and publishes a probe voltage to
+# `board.analog.<pad>_volts`. GPIO2/GPIO3 are not strapping pins (GPIO4, GPIO5,
+# GPIO8, GPIO9 and GPIO15 are), not the 32 kHz crystal pads (GPIO0/GPIO1) and
+# not the BME280 profiles' I2C pads (GPIO6/GPIO7). Every profile that loads a
+# C6 descriptor can run this deck unchanged.
+name: "esp32c6-analog-ntc-diode"
+chip: "../../configs/chips/esp32c6.yaml"
+cpu_hz: 160000000
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.gpio2_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 3.3
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.gpio3_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF
+        .model DREF D(IS=2.52n N=1.752 RS=0.568)
+      probes:
+        v_diode: "v(sense)"
+      vdd: 3.3

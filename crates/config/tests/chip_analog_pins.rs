@@ -885,6 +885,42 @@ fn esp32_validation_rejects_bad_pads_channels_and_types() {
 }
 
 #[test]
+fn esp32c6_validation_rejects_bad_pads_channels_and_types() {
+    // The C6 `apb_saradc` is the C3 model, so the C3 rule (channel == GPIO,
+    // five inputs) applies until the model's channel count is per chip.
+    for chip in ["esp32c6", "esp32c6fh4"] {
+        let original = load(chip);
+        assert!(analog_pin_problems(chip, &original).is_empty());
+        let expected: BTreeMap<String, AdcPinFn> = (0..5u8)
+            .map(|channel| {
+                (
+                    format!("GPIO{channel}"),
+                    AdcPinFn {
+                        peripheral: "apb_saradc".into(),
+                        channel,
+                    },
+                )
+            })
+            .collect();
+        assert_eq!(original.analog_pins, expected, "{chip}");
+        let mut desc = original.clone();
+        desc.analog_pins.get_mut("GPIO2").unwrap().channel = 3;
+        desc.analog_pins.get_mut("GPIO3").unwrap().channel = 2;
+        assert!(!analog_pin_problems("bad", &desc).is_empty());
+        // GPIO5 is ADC1_CH5 on silicon, but the model refuses channel 5.
+        let mut desc = original.clone();
+        desc.analog_pins.insert(
+            "GPIO5".into(),
+            AdcPinFn {
+                peripheral: "apb_saradc".into(),
+                channel: 5,
+            },
+        );
+        assert!(!analog_pin_problems("bad", &desc).is_empty());
+    }
+}
+
+#[test]
 fn esp32c3_validation_rejects_bad_pads_channels_and_types() {
     let original = load("esp32c3");
     assert!(analog_pin_problems("esp32c3", &original).is_empty());
