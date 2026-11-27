@@ -25,9 +25,10 @@
 #
 # CURRENT follows the datasheet equation: SHUNT_VOLTAGE × CALIBRATION / 4096.
 # The calibration register is live state, and input or calibration writes
-# refresh CURRENT. The default 4096 value preserves the former current-only
-# 0.1 Ω operating point. An explicit shunt_voltage takes precedence, allowing
-# a bare IC to use its actual external shunt (including 10 mΩ).
+# refresh CURRENT. Firmware programs 4096 to select the former current-only
+# 0.1 Ω operating point; the datasheet power-on value is zero. An explicit
+# shunt_voltage takes precedence, allowing a bare IC to use its actual external
+# shunt (including 10 mΩ).
 #
 # POWER is calculated from the encoded registers: abs(CURRENT) × bus-voltage
 # counts / 5000. BUS_VOLTAGE counts are 4 mV/LSB.
@@ -62,9 +63,9 @@ behavior:
       - { name: POWER, addr: 0x03, width: 2, endian: be, access: r }
       # Stored measurement: CALIBRATION affects it through the TI formula.
       - { name: CURRENT, addr: 0x04, width: 2, endian: be, access: r, signed: true }
-      # POR is 0x0000; seeded to the 0.1 Ω / 32 V / 2 A calibration the
-      # legacy current-only path used, exactly as the hand model did.
-      - { name: CALIBRATION, addr: 0x05, width: 2, endian: be, access: rw, reset: 4096 }
+      # TI specifies 0x0000 at power-on. Current and Power remain zero until
+      # firmware writes its chosen calibration value.
+      - { name: CALIBRATION, addr: 0x05, width: 2, endian: be, access: rw, reset: 0 }
   vars: { shunt_voltage_explicit: 0 }
   rules:
     # Preserve the current-only input shape by deriving the former 0.1 Ω

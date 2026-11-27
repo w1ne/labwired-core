@@ -208,16 +208,41 @@ fn ina219_read_u16(reg: u8) -> u16 {
     ((hi as u16) << 8) | (lo as u16)
 }
 
+/// Write one INA219 register over the real I²C transaction: pointer, then the
+/// 16-bit value MSB first. Firmware must program CALIBRATION after power-on.
+fn ina219_write_u16(reg: u8, value: u16) {
+    i2c_start();
+    i2c_address_write(ADDR_W);
+    i2c_write(reg);
+    i2c_write((value >> 8) as u8);
+    i2c_write(value as u8);
+    i2c_cr1(CR1_PE | CR1_STOP);
+    i2c_cr1(CR1_PE);
+}
+
 #[entry]
 fn main() -> ! {
     enable_peripheral_clocks();
     usart1_init();
     uart_str("INA219 Power Lab\n");
-    // Config default should be non-zero after reset model
     let cfg = ina219_read_u16(0x00);
     uart_str("CFG=");
     // print hex nibble-ish via decimal of full word for simplicity
     uart_u32(cfg as u32);
+    uart_byte(b'\n');
+
+    // TI specifies CALIBRATION=0 at power-on; CURRENT remains zero until
+    // firmware writes a calibration. Program the example's chosen 4096 value
+    // as a genuine 16-bit I²C register write before entering the poll loop.
+    let cal_por = ina219_read_u16(0x05);
+    let current_por = ina219_read_u16(0x04) as i16;
+    uart_str("CAL_POR=");
+    uart_u32(cal_por as u32);
+    uart_str(" CURRENT_POR=");
+    uart_i32(current_por as i32);
+    ina219_write_u16(0x05, 4096);
+    uart_str(" CAL=");
+    uart_u32(ina219_read_u16(0x05) as u32);
     uart_byte(b'\n');
 
     loop {
@@ -225,7 +250,7 @@ fn main() -> ! {
         // Bus register: bits 15:3 are 4 mV counts
         let bus_mv = ((bus >> 3) as u32) * 4;
         let current = ina219_read_u16(0x04) as i16;
-        // Model: ~0.1 mA per count with default cal
+        // This example programs CALIBRATION=4096, so one count is 0.1 mA.
         let current_ma = (current as i32) / 10;
 
         uart_str("Vbus_mV=");
