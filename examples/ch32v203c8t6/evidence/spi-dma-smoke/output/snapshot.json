@@ -1,0 +1,101 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1060,
+      536891360,
+      536871932,
+      0,
+      0,
+      0,
+      0,
+      6,
+      536870932,
+      0,
+      16384,
+      9,
+      10,
+      1073821696,
+      64,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1078,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 1080,
+    "mcause": 2147483679,
+    "mtval": 0,
+    "mtime": 19993,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 20000,
+  "cycles": 20000,
+  "instructions": 20000,
+  "stop_reason": "assertions_passed",
+  "stop_reason_details": {
+    "triggered_stop_condition": "assertions_passed",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 2000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 120000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": true,
+    "stop_when_assertions_pass_settle_steps": 500,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "81b16d08fdd7afd1af6e3e3b006f33bf53876b80a1244cc382113999f54753cc",
+  "config": {
+    "firmware": "ch32fun/spi_dma_tx.elf",
+    "system": "./system.yaml",
+    "script": "spi-dma-smoke.yaml"
+  }
+}
