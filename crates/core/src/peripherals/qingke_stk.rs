@@ -29,32 +29,51 @@
 //! the PFIC once. The interrupt is a pulse per match, not a level: a handler
 //! that leaves `CNTIF` set is not re-entered until the next match.
 //!
-//! NOT modelled: `SWIE` (software interrupt 14) and the QingKe V4 64-bit
-//! layout (CNTH/CMPH).
+//! QingKe V4 layout (CH32V20x/V30x, `config: { profile: v4 }`; ch32fun
+//! `ch32v20xhw.h` `SysTick_Type`: CTLR, SR, 64-bit CNT, 64-bit CMP; WCH
+//! CH32FV2x_V3xRM chapter "SysTick"):
+//! - `CNT` and `CMP` are 64 bits wide: `CNTL`/`CNTH` at +0x08/+0x0C and
+//!   `CMPL`/`CMPH` at +0x10/+0x14;
+//! - `CTLR.MODE` bit 4 counts down. `CNTIF` sets when a down count reaches
+//!   0, and with `STRE` the count restarts from `CMP`;
+//! - `CTLR.INIT` bit 5 loads the count when written as 1: 0 for an up count,
+//!   `CMP` for a down count. WCH's SDK `Delay_Ms` sets it with `STE`. It is
+//!   an action, not stored state, so it reads as 0.
+//!
+//! NOT modelled: `SWIE` (software interrupt 14).
 
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 const CTLR: u64 = 0x00;
 const SR: u64 = 0x04;
 const CNT: u64 = 0x08;
+const CNTH: u64 = 0x0C;
 const CMP: u64 = 0x10;
+const CMPH: u64 = 0x14;
 
 pub const CTLR_STE: u32 = 1 << 0;
 pub const CTLR_STIE: u32 = 1 << 1;
 pub const CTLR_STCLK: u32 = 1 << 2;
 pub const CTLR_STRE: u32 = 1 << 3;
+pub const CTLR_MODE: u32 = 1 << 4;
+pub const CTLR_INIT: u32 = 1 << 5;
 pub const CTLR_SWIE: u32 = 1 << 31;
 const CTLR_MASK: u32 = CTLR_STE | CTLR_STIE | CTLR_STCLK | CTLR_STRE | CTLR_SWIE;
 
 pub const SR_CNTIF: u32 = 1 << 0;
 
-/// QingKe V2 SysTick (see the module docs).
+const LOW_WORD: u64 = 0xFFFF_FFFF;
+
+/// QingKe SysTick (see the module docs).
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct QingKeStk {
+    /// QingKe V4 layout: 64-bit `CNT`/`CMP`, `MODE` and `INIT`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    v4: bool,
     ctlr: u32,
-    cmp: u32,
+    cmp: u64,
     /// `CNT` at the last anchor.
-    cnt_base: u32,
+    cnt_base: u64,
     /// `CNTIF` latched at the last anchor.
     cntif: bool,
     /// Cycle of the last anchor.
@@ -76,6 +95,51 @@ pub struct QingKeStk {
 impl QingKeStk {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The QingKe V4 SysTick of the CH32V20x/V30x.
+    pub fn new_v4() -> Self {
+        Self {
+            v4: true,
+            ..Self::default()
+        }
+    }
+
+    /// Mask of the counter width: 32 bits on V2, 64 on V4.
+    fn width_mask(&self) -> u64 {
+        if self.v4 {
+            u64::MAX
+        } else {
+            u64::from(u32::MAX)
+        }
+    }
+
+    fn ctlr_mask(&self) -> u32 {
+        if self.v4 {
+            CTLR_MASK | CTLR_MODE
+        } else {
+            CTLR_MASK
+        }
+    }
+
+    fn counts_down(&self) -> bool {
+        self.ctlr & CTLR_MODE != 0
+    }
+
+    /// Ticks from a match to the next one with `STRE` (`CMP + 1`); `None`
+    /// when that exceeds the 64-bit range.
+    fn reload_period(&self) -> Option<u64> {
+        self.cmp.checked_add(1)
+    }
+
+    /// Ticks from a match to the next one: the reload period with `STRE`,
+    /// otherwise one full wrap of the counter (`None` past 64 bits).
+    fn match_period(&self) -> Option<u64> {
+        if self.ctlr & CTLR_STRE != 0 {
+            self.reload_period()
+        } else {
+            self.width_mask().checked_add(1)
+        }
     }
 
     crate::cycle_clock::scheduler_mode!();
@@ -103,24 +167,36 @@ impl QingKeStk {
         }
     }
 
-    /// Ticks from the anchor until the count reaches `CMP` (0 = at once).
+    /// Ticks from the anchor until the count reaches `CMP` (up) or 0
+    /// (down); 0 = at once.
     fn ticks_to_match(&self) -> u64 {
-        u64::from(self.cmp.wrapping_sub(self.cnt_base))
+        if self.counts_down() {
+            self.cnt_base
+        } else {
+            self.cmp.wrapping_sub(self.cnt_base) & self.width_mask()
+        }
     }
 
     fn matched(&self, elapsed: u64) -> bool {
         self.running() && elapsed >= self.ticks_to_match()
     }
 
-    fn cnt(&self) -> u32 {
+    fn cnt(&self) -> u64 {
         let elapsed = self.elapsed();
         if self.ctlr & CTLR_STRE != 0 && self.matched(elapsed) {
-            // 0..=CMP, then 0 again: a period of CMP + 1 ticks.
+            // Up: 0..=CMP, then 0 again; down: CMP..=0, then CMP again. A
+            // period of CMP + 1 ticks either way.
             let after = elapsed - self.ticks_to_match();
-            let period = u64::from(self.cmp) + 1;
-            (after % period) as u32
+            let phase = self.reload_period().map_or(after, |p| after % p);
+            if self.counts_down() {
+                self.cmp - phase
+            } else {
+                phase
+            }
+        } else if self.counts_down() {
+            self.cnt_base.wrapping_sub(elapsed) & self.width_mask()
         } else {
-            self.cnt_base.wrapping_add(elapsed as u32)
+            self.cnt_base.wrapping_add(elapsed) & self.width_mask()
         }
     }
 
@@ -139,12 +215,7 @@ impl QingKeStk {
             return 0;
         }
         let after = elapsed - self.ticks_to_match();
-        let period = if self.ctlr & CTLR_STRE != 0 {
-            u64::from(self.cmp) + 1
-        } else {
-            1 << 32
-        };
-        1 + after / period
+        1 + self.match_period().map_or(0, |period| after / period)
     }
 
     /// CPU cycles from now to the next compare match, `None` when the counter
@@ -157,8 +228,7 @@ impl QingKeStk {
         let ttm = self.ticks_to_match();
         let target = if elapsed < ttm {
             ttm
-        } else if self.ctlr & CTLR_STRE != 0 {
-            let period = u64::from(self.cmp) + 1;
+        } else if let Some(period) = self.reload_period().filter(|_| self.ctlr & CTLR_STRE != 0) {
             elapsed + period - (elapsed - ttm) % period
         } else {
             return None;
@@ -168,15 +238,18 @@ impl QingKeStk {
     }
 
     /// Cancel any scheduled interrupt and, while `STIE` is set, arm one for
-    /// the next match (or at once when `CNTIF` is already set).
-    fn reschedule(&mut self) {
+    /// the next match. `pend_now` (a write that just set `STIE` while
+    /// `CNTIF` was already set) arms one at once instead. Any other write
+    /// leaves an already-latched `CNTIF` alone: a handler that moves `CMP`
+    /// before it clears `SR` must not pend itself a second time.
+    fn reschedule(&mut self, pend_now: bool) {
         self.generation = self.generation.wrapping_add(1);
         self.pending_events.clear();
         if !self.scheduler_mode() || self.ctlr & CTLR_STIE == 0 {
             return;
         }
         // The bus adds one cycle to every write-scheduled delay.
-        let delay = if self.cntif_now() {
+        let delay = if pend_now && self.cntif_now() {
             0
         } else if let Some(cycles) = self.cycles_to_next_match() {
             cycles - 1
@@ -201,8 +274,10 @@ impl QingKeStk {
         match offset {
             CTLR => self.ctlr,
             SR => u32::from(self.cntif_now()),
-            CNT => self.cnt(),
-            CMP => self.cmp,
+            CNT => self.cnt() as u32,
+            CMP => self.cmp as u32,
+            CNTH if self.v4 => (self.cnt() >> 32) as u32,
+            CMPH if self.v4 => (self.cmp >> 32) as u32,
             _ => {
                 crate::census_reg!("qingke_stk", offset, "read");
                 0
@@ -211,10 +286,14 @@ impl QingKeStk {
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
+        let stie_before = self.ctlr & CTLR_STIE != 0;
         match offset {
             CTLR => {
                 self.anchor();
-                self.ctlr = value & CTLR_MASK;
+                self.ctlr = value & self.ctlr_mask();
+                if self.v4 && value & CTLR_INIT != 0 {
+                    self.cnt_base = if self.counts_down() { self.cmp } else { 0 };
+                }
             }
             SR => {
                 self.anchor();
@@ -225,18 +304,26 @@ impl QingKeStk {
             }
             CNT => {
                 self.anchor();
-                self.cnt_base = value;
+                self.cnt_base = (self.cnt_base & !LOW_WORD) | u64::from(value);
             }
             CMP => {
                 self.anchor();
-                self.cmp = value;
+                self.cmp = (self.cmp & !LOW_WORD) | u64::from(value);
+            }
+            CNTH if self.v4 => {
+                self.anchor();
+                self.cnt_base = (self.cnt_base & LOW_WORD) | (u64::from(value) << 32);
+            }
+            CMPH if self.v4 => {
+                self.anchor();
+                self.cmp = (self.cmp & LOW_WORD) | (u64::from(value) << 32);
             }
             _ => {
                 crate::census_reg!("qingke_stk", offset, "write");
                 return;
             }
         }
-        self.reschedule();
+        self.reschedule(!stie_before && self.ctlr & CTLR_STIE != 0);
     }
 }
 
@@ -328,7 +415,10 @@ impl Peripheral for QingKeStk {
         let clock = self.clock.take();
         let walk = self.walk_cycles;
         let generation = self.generation;
-        *self = Self::default();
+        *self = Self {
+            v4: self.v4,
+            ..Self::default()
+        };
         self.walk_cycles = walk;
         self.generation = generation;
         if let Some(clock) = clock {
@@ -337,7 +427,7 @@ impl Peripheral for QingKeStk {
             self.anchor_cycle = walk;
         }
         // Drop any interrupt armed before the reset.
-        self.reschedule();
+        self.reschedule(false);
     }
 
     fn snapshot(&self) -> serde_json::Value {
@@ -448,5 +538,125 @@ mod tests {
         assert_eq!(t.read_u32(SR).unwrap(), 0);
         assert_eq!(t.read_u32(CNT).unwrap(), 0);
         assert_eq!(t.read_u32(CMP).unwrap(), 0);
+    }
+
+    #[test]
+    fn v4_counts_64_bits_across_the_low_word() {
+        let mut t = QingKeStk::new_v4();
+        t.write_u32(CNT, 0xFFFF_FFF0).unwrap();
+        t.write_u32(CMPH, 1).unwrap();
+        t.write_u32(CTLR, CTLR_STE | CTLR_STCLK).unwrap();
+        t.tick_elapsed(0x20);
+        assert_eq!(t.read_u32(CNT).unwrap(), 0x10);
+        assert_eq!(t.read_u32(CNTH).unwrap(), 1, "carry into CNTH");
+        assert_eq!(t.read_u32(SR).unwrap(), SR_CNTIF, "CMP = 1 << 32 passed");
+    }
+
+    #[test]
+    fn v4_cmp_high_word_gates_the_match_and_v2_has_none() {
+        let mut t = QingKeStk::new_v4();
+        t.write_u32(CMP, 5).unwrap();
+        t.write_u32(CMPH, 1).unwrap();
+        t.write_u32(CTLR, CTLR_STE | CTLR_STCLK).unwrap();
+        t.tick_elapsed(5);
+        assert_eq!(t.read_u32(SR).unwrap(), 0, "only the low word matched");
+        assert_eq!(t.read_u32(CMPH).unwrap(), 1);
+
+        let mut v2 = QingKeStk::new();
+        v2.write_u32(CMPH, 1).unwrap();
+        v2.write_u32(CNTH, 1).unwrap();
+        assert_eq!(v2.read_u32(CMPH).unwrap(), 0, "reserved on V2");
+        assert_eq!(v2.read_u32(CNTH).unwrap(), 0, "reserved on V2");
+    }
+
+    /// WCH SDK `Delay_Ms` on the CH32V20x: clear SR, CMP = n, MODE (count
+    /// down), then INIT | STE, and wait for CNTIF.
+    #[test]
+    fn v4_down_count_with_init_reloads_cmp_and_flags_at_zero() {
+        let mut t = QingKeStk::new_v4();
+        t.write_u32(SR, 0).unwrap();
+        t.write_u32(CMP, 100).unwrap();
+        t.write_u32(CTLR, CTLR_MODE).unwrap();
+        t.write_u32(CTLR, CTLR_MODE | CTLR_INIT | CTLR_STE | CTLR_STCLK)
+            .unwrap();
+        assert_eq!(t.read_u32(CNT).unwrap(), 100, "INIT loads CMP");
+        assert_eq!(
+            t.read_u32(CTLR).unwrap() & CTLR_INIT,
+            0,
+            "INIT is an action, not state"
+        );
+        t.tick_elapsed(99);
+        assert_eq!(t.read_u32(CNT).unwrap(), 1);
+        assert_eq!(t.read_u32(SR).unwrap(), 0);
+        t.tick_elapsed(1);
+        assert_eq!(t.read_u32(CNT).unwrap(), 0);
+        assert_eq!(t.read_u32(SR).unwrap(), SR_CNTIF);
+    }
+
+    #[test]
+    fn v4_down_count_with_stre_restarts_from_cmp() {
+        let mut t = QingKeStk::new_v4();
+        t.write_u32(CMP, 9).unwrap();
+        t.write_u32(
+            CTLR,
+            CTLR_MODE | CTLR_INIT | CTLR_STE | CTLR_STCLK | CTLR_STRE,
+        )
+        .unwrap();
+        t.tick_elapsed(9);
+        assert_eq!(t.read_u32(CNT).unwrap(), 9, "reached 0, reloaded CMP");
+        assert_eq!(t.read_u32(SR).unwrap(), SR_CNTIF);
+        t.tick_elapsed(4);
+        assert_eq!(t.read_u32(CNT).unwrap(), 5);
+        t.tick_elapsed(6);
+        assert_eq!(t.read_u32(CNT).unwrap(), 9, "period is CMP + 1");
+    }
+
+    #[test]
+    fn v4_init_on_an_up_count_loads_zero_and_v2_ignores_mode_and_init() {
+        let mut t = QingKeStk::new_v4();
+        t.write_u32(CNT, 77).unwrap();
+        t.write_u32(CTLR, CTLR_INIT).unwrap();
+        assert_eq!(t.read_u32(CNT).unwrap(), 0);
+
+        let mut v2 = QingKeStk::new();
+        v2.write_u32(CNT, 77).unwrap();
+        v2.write_u32(CTLR, CTLR_MODE | CTLR_INIT).unwrap();
+        assert_eq!(v2.read_u32(CTLR).unwrap(), 0);
+        assert_eq!(v2.read_u32(CNT).unwrap(), 77);
+    }
+
+    /// ch32fun `systick_irq`: CNTIF is still latched from the boot-time
+    /// busy-wait when the handler is enabled. Setting STIE pends at once;
+    /// the handler then moves CMP before it clears SR, and that write must
+    /// arm the next match, not a second immediate interrupt.
+    #[test]
+    fn a_cmp_write_with_cntif_latched_arms_the_next_match_only() {
+        if !crate::cycle_clock::event_scheduler_enabled() {
+            return;
+        }
+        let clock = CycleClock::default();
+        let mut t = QingKeStk::new_v4();
+        t.attach_cycle_clock(clock.clone());
+        t.write_u32(CTLR, CTLR_STE | CTLR_STCLK).unwrap();
+        clock.publish(20);
+        assert_eq!(t.read_u32(SR).unwrap(), SR_CNTIF, "CMP 0 passed");
+        t.write_u32(CMP, 100).unwrap();
+        t.write_u32(CNT, 0).unwrap();
+        let _ = t.take_scheduled_events();
+        t.write_u32(CTLR, CTLR_STE | CTLR_STCLK | CTLR_STIE)
+            .unwrap();
+        let events = t.take_scheduled_events();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].0, 0, "enabling STIE over CNTIF pends at once");
+        // The handler: CMP += 100 (low word, then high word), SR = 0.
+        clock.publish(25);
+        t.write_u32(CMP, 200).unwrap();
+        let events = t.take_scheduled_events();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].0, 200 - 5 - 1, "armed for CNT = 200");
+        t.write_u32(CMPH, 0).unwrap();
+        t.write_u32(SR, 0).unwrap();
+        let events = t.take_scheduled_events();
+        assert_eq!(events[0].0, 200 - 5 - 1);
     }
 }

@@ -3450,6 +3450,12 @@ const CORES_COVERED_ELSEWHERE: &[(&str, &str)] = &[
         "RV32EmC (QingKe V2C) covered by the CH32V005/CH32V006 compiled-firmware \
          suites (`vendor` test binary) and riscv_rv32e_tests",
     ),
+    (
+        "qingke-v4b",
+        "QingKe V4B (CH32V203) covered by the `vendor` test binary: the \
+         CH32V203 compiled blink/uart rows and \
+         ch32v203_ch32fun_systick_irq_counts_milliseconds_through_the_pfic",
+    ),
 ];
 
 /// The expectation comes from the chip descriptors that actually ship, not

@@ -4,7 +4,8 @@ The CH32V203C8T6 is a WCH QingKe V4B (RV32IMAC) microcontroller: 144 MHz
 maximum, 64 KB zero-wait flash, 20 KB SRAM and 37 GPIOs in LQFP48
 (WCH CH32V203DS0 V3.0, Table 2-1). Its RCC, GPIO and USART registers use the
 STM32F1 layout (WCH CH32FV2x_V3xRM), so the descriptor runs the `stm32f1`
-RCC and GPIO profiles on the standard RV32 core.
+RCC and GPIO profiles. The core is `qingke-v4b`: RV32IMAC plus the QingKe
+PFIC, CORECFGR and the 64-bit SysTick.
 
 ## Copy-paste bare-metal C example
 
@@ -79,12 +80,42 @@ cargo run -q -p labwired-cli -- test \
 
 The smoke asserts `Hello from CH32V203` on the UART stream.
 
+## Unmodified ch32fun examples
+
+`build-ch32fun-examples.sh` builds three unmodified ch32fun (cnlohr/ch32fun,
+MIT) examples for `TARGET_MCU=CH32V203` into `ch32fun/`. ch32fun prints through
+the WCH-LinkE debug channel at 0xE0000380 by default, which the descriptor
+models as an attached, polling probe (`debug_printf`, log `terminal`).
+
+| Smoke | What it proves |
+| --- | --- |
+| `ch32fun-blink-smoke.yaml` | `SystemInit` PLL handshake (x18, `EXTEN_CTR.PLL_HSI_PRE`); PA0/PA2/PA4/PA7 toggle every `Delay_Ms(250)` on the 64-bit SysTick, 36,000,014 cycles apart at 144 MHz |
+| `ch32fun-debugprintf-smoke.yaml` | `+N` / `-N[c]` lines on the debug channel; DMDATA0 bits 7:6 read 0, so no print timed out |
+| `ch32fun-systick-irq-smoke.yaml` | `SysTick_Handler` through PFIC interrupt 12, once per millisecond: the loops count 499 and 500 interrupts per 500 ms (see below) |
+
+```sh
+for s in blink debugprintf systick-irq; do
+  cargo run -q -p labwired-cli -- test \
+    --script examples/ch32v203c8t6/ch32fun-$s-smoke.yaml \
+    --output-dir out/boards/ch32v203c8t6/ch32fun-$s --no-uart-stdout
+done
+```
+
+The committed runs are under `evidence/`. In `systick_irq`, `CNTIF` is still
+set from the boot-time `Delay_Ms` when `systick_init` sets `STIE`, so the model
+pends one interrupt at once. This moves CMP one millisecond ahead, so the first
+loop counts 499. That enable-time interrupt is a model assumption, not a
+silicon capture. The example's "Current Microseconds" and "SysTick->CNT" lines
+pass a 64-bit value to `%lu` (gcc warns), so their text is not asserted.
+
 ## Scope
 
-These smokes exercise the local simulator's RV32IMAC core, the F1-layout RCC,
-GPIO ports A to D and polled USART1/USART2 TX. The model has no PFIC,
-SysTick, timers, ADC, I2C, SPI, CAN or USB. The RCC decodes PLLMUL with the
-STM32F1 table, so a PLLMUL setting of x18 reads as x16 in the model. No
-CH32V203 has been compared with the model over SDI, and CH32V203 is not a
-hosted LabWired verifier target. This is local model evidence, not a hosted
-`model_verified` result or hardware confirmation.
+These smokes exercise the local simulator's QingKe V4B core, the PFIC, the
+64-bit SysTick, the debug printf channel, the F1-layout RCC, GPIO ports A to D
+and polled USART1/USART2 TX. The model has no timers, ADC, I2C, SPI, CAN, USB
+or EXTI, no PFIC interrupt nesting and no V4 priority grouping. The RCC
+decodes PLLMUL with the STM32F1 table, so a PLLMUL setting of x18 reads as x16
+in the model; `cpu_hz` states the 144 MHz instead. No CH32V203 has been
+compared with the model over SDI, and CH32V203 is not a hosted LabWired
+verifier target. This is local model evidence, not a hosted `model_verified`
+result or hardware confirmation.

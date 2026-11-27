@@ -4,7 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use super::qingke_pfic::{PficFrame, QingKePfic, HPE_REGS, INTSYSCR_HWSTKEN};
+use super::qingke_pfic::{PficFrame, QingKePfic, HPE_REGS, HPE_REGS_V4, INTSYSCR_HWSTKEN};
 use super::riscv64_plic::{Plic, PlicParams};
 use crate::decoder::riscv::{decode_qingke_xw, decode_rv32, Instruction};
 use crate::{Bus, Cpu, SimResult, SimulationObserver};
@@ -36,6 +36,12 @@ pub enum RiscVCoreProfile {
     StandardRv32,
     /// RV32E profile: the integer register file contains x0..x15 only.
     Rv32e,
+    /// WCH QingKe V4 (CH32V20x/V30x, `core: qingke-v4*`): the standard RV32
+    /// machine plus the vendor core configuration CSR CORECFGR (0xBC0) that
+    /// WCH's startup and ch32fun write before `main` (stored; it tunes the
+    /// pipeline and has no architectural effect here), and a PFIC whose
+    /// hardware prologue saves the 16-register V4 set.
+    QingkeV4,
 }
 
 impl RiscVCoreProfile {
@@ -59,6 +65,9 @@ impl RiscVCoreProfile {
         if matches!(core.as_str(), "rv32e" | "rv32ec" | "rv32emc" | "rv32em") {
             return Self::Rv32e;
         }
+        if core.starts_with("qingke-v4") {
+            return Self::QingkeV4;
+        }
         if chip.name.to_ascii_lowercase().contains("esp32") {
             return Self::Esp32C3;
         }
@@ -66,6 +75,17 @@ impl RiscVCoreProfile {
             Self::StandardRv32
         } else {
             Self::Esp32C3
+        }
+    }
+}
+
+impl RiscVCoreProfile {
+    /// The registers a QingKe PFIC's hardware prologue saves on this core.
+    fn hpe_regs(self) -> &'static [usize] {
+        if self == Self::QingkeV4 {
+            &HPE_REGS_V4
+        } else {
+            &HPE_REGS
         }
     }
 }
@@ -313,6 +333,8 @@ pub struct RiscV {
     /// QingKe INTSYSCR (CSR 0x804). Stored only while a PFIC is attached;
     /// `HWSTKEN` enables the hardware prologue/epilogue (HPE).
     pub intsyscr: u32,
+    /// QingKe V4 CORECFGR (CSR 0xBC0), stored only.
+    pub corecfgr: u32,
 
     /// Active LR/SC reservation address. `None` means no outstanding
     /// reservation; the next SC.W to any address will fail. On a single
@@ -408,6 +430,7 @@ impl RiscV {
             plic: None,
             pfic: None,
             intsyscr: 0,
+            corecfgr: 0,
             reservation: None,
             triggers: trigger::TriggerModule::default(),
             waiting_for_interrupt: false,
@@ -624,7 +647,8 @@ impl RiscV {
         self.refresh_meip();
     }
 
-    /// Map a QingKe V2 PFIC at 0xE000E000. Every line resets disabled.
+    /// Map a QingKe PFIC at 0xE000E000 (V2, or V4 on a `QingkeV4` core).
+    /// Every line resets disabled.
     pub fn attach_pfic(&mut self) {
         self.pfic = Some(QingKePfic::new());
     }
@@ -1222,6 +1246,8 @@ impl RiscV {
             // CSR_PMAADDR0=0xBD0 (riscv/csr.h). esp_cpu_configure_invalid_regions
             // on C6 writes these during early init; side effects are not modelled.
             0xBC0..=0xBDF if self.core_profile == RiscVCoreProfile::Esp32C3 => 0,
+            // QingKe V4 CORECFGR: see `RiscVCoreProfile::QingkeV4`.
+            0xBC0 if self.core_profile == RiscVCoreProfile::QingkeV4 => self.corecfgr,
             // Timer CSR stubs (Standard RISC-V shadow non-privileged? No, these are machine mode)
             0xB00 => (self.mtime & 0xFFFFFFFF) as u32,
             0xB80 => (self.mtime >> 32) as u32,
@@ -1242,7 +1268,9 @@ impl RiscV {
             0xC00
                 if matches!(
                     self.core_profile,
-                    RiscVCoreProfile::StandardRv32 | RiscVCoreProfile::Rv32e
+                    RiscVCoreProfile::StandardRv32
+                        | RiscVCoreProfile::Rv32e
+                        | RiscVCoreProfile::QingkeV4
                 ) =>
             {
                 (self.mtime & 0xFFFFFFFF) as u32
@@ -1250,7 +1278,9 @@ impl RiscV {
             0xC80
                 if matches!(
                     self.core_profile,
-                    RiscVCoreProfile::StandardRv32 | RiscVCoreProfile::Rv32e
+                    RiscVCoreProfile::StandardRv32
+                        | RiscVCoreProfile::Rv32e
+                        | RiscVCoreProfile::QingkeV4
                 ) =>
             {
                 (self.mtime >> 32) as u32
@@ -1289,6 +1319,7 @@ impl RiscV {
             0x3A0..=0x3A3 | 0x3B0..=0x3BF => {}
             // See read_csr: accept PMA cfg/addr writes as no-ops.
             0xBC0..=0xBDF if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
+            0xBC0 if self.core_profile == RiscVCoreProfile::QingkeV4 => self.corecfgr = val,
             0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             _ => return false,
         }
@@ -1329,8 +1360,13 @@ impl RiscV {
             // QingKe HPE: with HWSTKEN the hardware saves the caller-saved
             // registers on entry and `mret` restores them, so vendor
             // `WCH-Interrupt-fast` handlers save nothing themselves.
-            let saved =
-                (self.intsyscr & INTSYSCR_HWSTKEN != 0).then(|| HPE_REGS.map(|r| self.x[r]));
+            let saved = (self.intsyscr & INTSYSCR_HWSTKEN != 0).then(|| {
+                let mut saved = [0; 16];
+                for (slot, &r) in saved.iter_mut().zip(self.core_profile.hpe_regs()) {
+                    *slot = self.x[r];
+                }
+                saved
+            });
             let irq = (cause & 0x8000_0000 != 0).then_some(cause & 0x7FFF_FFFF);
             pfic.frames.push(PficFrame { irq, saved });
         }
@@ -2542,7 +2578,7 @@ impl Cpu for RiscV {
                 self.pc = self.mepc;
                 if let Some(frame) = self.pfic.as_mut().and_then(QingKePfic::complete) {
                     if let Some(saved) = frame.saved {
-                        for (r, v) in HPE_REGS.into_iter().zip(saved) {
+                        for (&r, v) in self.core_profile.hpe_regs().iter().zip(saved) {
                             self.x[r] = v;
                         }
                     }

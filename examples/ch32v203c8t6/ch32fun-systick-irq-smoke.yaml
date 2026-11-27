@@ -1,0 +1,28 @@
+# ch32fun examples/systick_irq, unmodified, built for TARGET_MCU=CH32V203
+# (build-ch32fun-examples.sh). SysTick runs on HCLK (FUNCONF_SYSTICK_USE_HCLK)
+# with STIE set; SysTick_Handler (PFIC interrupt 12, entered through the
+# mtvec | 3 absolute vector table) adds 144,000 to the 64-bit CMP and bumps
+# systick_millis once per millisecond. Each loop is two Delay_Ms(250) busy
+# waits on the 64-bit CNT. Two loops finish within 160,000,000 cycles
+# (1.11 s at 144 MHz). CNTIF is still set from the boot-time Delay_Ms when
+# systick_init sets STIE, so the model pends one interrupt at once (millis
+# = 1, CMP moves to 2 ms). The first loop therefore counts 499 and the
+# second exactly 500. That enable-time interrupt is a model assumption
+# (CNTIF & STIE pends), not a silicon capture. The example's "Current Microseconds" and "SysTick->CNT" lines
+# pass a 64-bit value to %lu (gcc warns), so their text is not asserted.
+schema_version: "1.0"
+inputs:
+  firmware: "ch32fun/systick_irq.elf"
+  system: "./system.yaml"
+limits:
+  max_cycles: 160000000
+  max_steps: 160000000
+  wall_time_ms: 600000
+assertions:
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "systick_irq example" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "initializing systick...done." }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "Beginning Loop..." }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "Milliseconds taken:\t499" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "Milliseconds taken:\t500" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "Current Milliseconds:\t500" }
+  - peripheral_log: { peripheral: debug_printf, log: terminal, contains: "Current Milliseconds:\t1000" }

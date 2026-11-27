@@ -18,8 +18,17 @@
 #   - The F1 RCC model decodes PLLMUL with the STM32F1 table. The V20x maps
 #     PLLMUL=0b1111 to x18, not x16; firmware that selects x18 sees a 128 MHz
 #     model clock instead of 144 MHz. Reset (HSI 8 MHz) is exact.
-#   - No PFIC, SysTick (64-bit), timers, ADC, I2C, SPI, CAN or USB. USART TX is
-#     polled only; no `irq` is wired because no interrupt controller exists.
+#   - Core: QingKe V4B (`core: qingke-v4b`, the ch32-rs/ch32-data name),
+#     RV32IMAC plus CORECFGR (CSR 0xBC0, stored) and the core-decoded PFIC
+#     at 0xE000E000 with the 16-register hardware prologue. PFIC interrupt
+#     nesting and the V4 priority grouping are not modelled: a pending
+#     interrupt waits for `mret`.
+#   - SysTick is the 64-bit QingKe V4 STK (SysTick_IRQn 12). No timers,
+#     ADC, I2C, SPI, CAN, USB or EXTI. USART TX is polled only; no USART
+#     `irq` is wired because no interrupt-driven USART run proves it yet.
+#   - The debug printf block assumes a WCH-LinkE probe is attached and
+#     polling (its sentinel reads 0). Firmware that waits for a probe
+#     therefore never times out here.
 #
 # Buyability screen (2026-11-15): LCSC C3001172 lists CH32V203C8T6 "In Stock". WCH's
 # product page has no lifecycle field; this descriptor is not a lifecycle
@@ -31,7 +40,7 @@
 
 name: "ch32v203c8t6"
 arch: "riscv"
-core: "rv32imac"
+core: "qingke-v4b"
 cpu_hz: 144_000_000
 
 # Code flash at 0x08000000 is aliased at address 0 for reset fetch (BOOT0=0).
@@ -92,6 +101,33 @@ peripherals:
     size: "1KB"
     config:
       profile: "stm32f1"
+
+  # EXTEND at 0x40023800 (EXTEN_CTR): storage only. ch32fun's SystemInit
+  # sets PLL_HSI_PRE before it selects the x18 PLL.
+  - id: "exten"
+    type: "declarative"
+    base_address: 0x40023800
+    size: "4B"
+    config:
+      path: "../peripherals/ch32v20x/exten.yaml"
+
+  # QingKe V4 system timer STK (ch32v20xhw.h SysTick_Type: CTLR, SR, 64-bit
+  # CNT, 64-bit CMP). A core block, no RCC gate. With CTLR.STIE set a compare
+  # match pends SysTick_IRQn (12) in the core-decoded PFIC at 0xE000E000.
+  - id: "stk"
+    type: "qingke_stk"
+    base_address: 0xE000F000
+    size: "32B"
+    irq: 12
+    config:
+      profile: "v4"
+
+  # WCH-LinkE debug printf channel (ch32v20xhw.h DMDATA0/DMDATA1 and the
+  # attach sentinel at 0xE0000380): ch32fun's default console.
+  - id: "debug_printf"
+    type: "wch_debug_printf"
+    base_address: 0xE0000380
+    size: "12B"
 
   # RCC_APB2PCENR IOPAEN..IOPDEN = bits 2..5 (RM Table 3-1 bit fields).
   - id: "gpioa"
