@@ -2922,6 +2922,17 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 let digital = "S<name> n1 n2 <ctrl> ron=<r> roff=<r>";
                 let voltage = "S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] [signed=0|1] ron=<r> roff=<r>";
                 let rest = &tokens[1..];
+                // ngspice's initial-state keyword is not modelled; say so
+                // instead of reporting the digital form's syntax.
+                if rest.len() == 6
+                    && rest.iter().all(|token| !token.contains('='))
+                    && matches!(rest[5].to_ascii_uppercase().as_str(), "ON" | "OFF")
+                {
+                    return Err(ctx.parse_err(format!(
+                        "switch initial state `{}` is not supported; remove it (the switch starts open)",
+                        rest[5]
+                    )));
+                }
                 // ngspice's own form, `S<name> n1 n2 nc+ nc- <model>`, carries
                 // its thresholds on a `.model SW` card that may come later.
                 if rest.len() == 5 && rest.iter().all(|token| !token.contains('=')) {
@@ -3683,7 +3694,9 @@ fn bind_models(
                     return Err(ctx.parse_err("a switch model needs RON > 0 and ROFF > 0"));
                 }
                 if !model.vt.is_finite() || !model.vh.is_finite() || model.vh < 0.0 {
-                    return Err(ctx.parse_err("a switch model needs finite VT and VH >= 0"));
+                    return Err(ctx.parse_err(
+                        "a switch model needs finite VT and VH >= 0 (negative VH is not supported)",
+                    ));
                 }
                 // ngspice's band `VT ± VH` on the signed voltage is this
                 // engine's signed switch closing at `VT + VH` with a dropout

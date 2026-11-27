@@ -382,3 +382,14 @@ fn ngspice_sw_model_rejects_an_unknown_parameter() {
         .unwrap_err();
     assert!(err.to_string().contains("`VTH` is not one of"), "{err}");
 }
+
+#[test]
+fn ngspice_sw_initial_state_keyword_is_reported_as_unsupported() {
+    let err =
+        parse_netlist("* keyword\nS1 a 0 c 0 SMOD OFF\n.model SMOD SW(VT=1)\n.end\n").unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("initial state `OFF` is not supported"),
+        "{err}"
+    );
+}
