@@ -90,7 +90,7 @@ jobs:
           path: STM32CubeL4
           sparse-checkout: |
             Drivers/CMSIS/Include
-            Drivers/CMSIS/Device/ST/STM32L4xx
+            Drivers/CMSIS/Device/ST
             Projects/NUCLEO-L476RG/Templates/STM32CubeIDE
 
       - name: Checkout pinned STM32L4 CMSIS device pack
