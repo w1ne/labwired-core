@@ -53,3 +53,31 @@ fn stm32g474re_resolves_general_purpose_outputs() {
         );
     }
 }
+
+/// Board compilers use the generic `GPIO<n>` spelling while the RP2040 chip
+/// descriptor follows the Pico pinout's `GP<n>` spelling. Both names must go
+/// through the descriptor's same authoritative pad map.
+#[test]
+fn rp2040_generic_gpio_labels_resolve_to_gp_pad_map_entries() {
+    let bus = chip_bus("rp2040");
+
+    for pin in [8, 9] {
+        let pico_label = format!("GP{pin}");
+        let generic_label = format!("GPIO{pin}");
+        assert_eq!(
+            SystemBus::resolve_pin_odr(&bus, &generic_label),
+            SystemBus::resolve_pin_odr(&bus, &pico_label),
+            "{generic_label} and {pico_label} must resolve to the same output pad"
+        );
+        assert_eq!(
+            SystemBus::resolve_pin_idr(&bus, &generic_label),
+            SystemBus::resolve_pin_idr(&bus, &pico_label),
+            "{generic_label} and {pico_label} must resolve to the same input pad"
+        );
+    }
+
+    assert!(
+        SystemBus::resolve_pin_odr(&bus, "GPIO30").is_none(),
+        "generic labels must not invent pads past the RP2040's GP29"
+    );
+}

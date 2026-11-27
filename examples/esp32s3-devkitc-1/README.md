@@ -48,6 +48,29 @@ python3 examples/esp32s3-devkitc-1/rgb-smoke/verify-rgb-evidence.py \
   examples/esp32s3-devkitc-1/evidence/rgb/hosted-verify.json
 ```
 
+## Analog inputs
+
+`configs/chips/esp32s3.yaml` publishes the SAR ADC1 pad map: GPIO1..GPIO10
+are ADC1_CH0..CH9 on the SENS controller `sens_s3` (channel = GPIO - 1).
+GPIO11..GPIO20 (ADC2) are not on the map, because the model's SAR2 one-shot
+returns a fixed placeholder. A co-simulation deck names a pad only, as
+`board.analog.<pad>_volts`, and the router finds the channel.
+
+[`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) is the generic
+deck: a Beta NTC divider on GPIO4 and a Shockley diode load line on GPIO5.
+`crates/core/tests/analog/cosim_esp32s3_boards_analog.rs` runs it on all ten
+profiles that load the ESP32-S3 descriptor. It asserts the solved voltages,
+the SENS `SAR_MEAS1_CTRL2` one-shot codes, and the same code on APB_SARADC,
+which shares the ADC1 pad bank:
+
+```bash
+cargo test -p labwired-core --test analog esp32s3
+```
+
+The ADC model is behavioural: 12 bits, with the ESP-IDF V1 curve-fit inverse
+at the reset 12 dB attenuation. It does not model per-chip eFuse
+calibration, ADC2 or the SAR input impedance.
+
 ## Limits
 
 The profiles do not cover PSRAM, USB-OTG, Wi-Fi/Bluetooth, or the BOOT and

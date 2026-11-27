@@ -14,8 +14,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **441**
-- Covered end to end: **121**
-- Not covered: **320**
+- Covered end to end: **136**
+- Not covered: **305**
 - Not covered but with an ADC pad map: **0** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` block or `adc` pin functions, an ADC model, or a digital
@@ -36,8 +36,6 @@ None.
 | Profile | Chip | Analog pad map |
 | --- | --- | ---: |
 | `apollo4p-evb` | `amap42kp` | 0 |
-| `arduino-nano-esp32-bme280` | `esp32s3` | 0 |
-| `arduino-nano-esp32` | `esp32s3` | 0 |
 | `arty-litex-vexriscv` | `arty-litex-vexriscv` | 0 |
 | `brd2709a` | `efr32mg26` | 0 |
 | `calliope-mini-v1` | `nrf51822` | 0 |
@@ -55,22 +53,11 @@ None.
 | `esp32-s3-devkitc-1-n16r8-adc` | `esp32s3-devkitc-1-n16r8-adc` | 0 |
 | `esp32c5-devkitc-1-n8r8-bme280` | `esp32c5` | 0 |
 | `esp32c5-devkitc-1-n8r8` | `esp32c5` | 0 |
-| `esp32c6-devkitc-1-n8-bme280` | `esp32c6` | 0 |
-| `esp32c6-devkitc-bme280` | `esp32c6` | 0 |
-| `esp32c6-devkitc` | `esp32c6` | 0 |
-| `esp32c6-zero-m-bme280` | `esp32c6fh4` | 0 |
 | `esp32c61-devkitc-1-n8r2-bme280` | `esp32c61` | 0 |
 | `esp32c61-devkitc-1-n8r2` | `esp32c61` | 0 |
 | `esp32h2-devkitm-1-n4s` | `esp32h2` | 0 |
 | `esp32p4x-c5-function-ev-board` | `esp32p4` | 0 |
 | `esp32s2-devkitc-1-n8r2` | `esp32s2` | 0 |
-| `esp32s3-devkitc-1-n16r8-bme280` | `esp32s3` | 0 |
-| `esp32s3-devkitc-1-v1.1-rgb` | `esp32s3` | 0 |
-| `esp32s3-devkitc-1-v1.1` | `esp32s3` | 0 |
-| `esp32s3-lcd-ev-board-v1-5-touch` | `esp32s3` | 0 |
-| `esp32s3-oled-demo` | `esp32s3` | 0 |
-| `esp32s3-zero` | `esp32s3` | 0 |
-| `esp32s3` | `esp32s3` | 0 |
 | `esp8684-devkitm-1-h4x` | `esp32c2` | 0 |
 | `frdm-k64f` | `mk64f12` | 0 |
 | `frdm-kw41z-lcd` | `mkw41z4` | 0 |
@@ -344,8 +331,6 @@ None.
 | `s32k388-evb` | `s32k388` | 0 |
 | `sam-e70-xplained` | `same70q21b` | 0 |
 | `sam4s-xplained` | `sam4s16c` | 0 |
-| `seeed-xiao-esp32c6` | `esp32c6fh4` | 0 |
-| `seeed-xiao-esp32s3` | `esp32s3` | 0 |
 | `simctl-selftest` | `ci-fixture-cortex-m3-uart1` | 0 |
 | `sk-am62` | `am6234` | 0 |
 | `smart-ring` | `nrf54l15` | 0 |
@@ -371,6 +356,8 @@ None.
 | `arduino-nano-33-ble-bme280` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
 | `arduino-nano-33-ble` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
 | `arduino-nano-33-iot-bme280` | `atsamd21g18a` | `crates/core/tests/analog/cosim_samd21_family_analog.rs` |
+| `arduino-nano-esp32-bme280` | `esp32s3` | `crates/core/tests/analog/cosim_esp32s3_boards_analog.rs` |
+| `arduino-nano-esp32` | `esp32s3` | `crates/core/tests/analog/cosim_esp32s3_boards_analog.rs` |
 | `arduino-nano-every-bme280` | `atmega4809` | `crates/core/tests/analog/cosim_avr_atmega4809_analog.rs` |
 | `arduino-nano-every-max31855` | `atmega4809` | `crates/core/tests/analog/cosim_avr_atmega4809_analog.rs` |
 | `arduino-nano-every` | `atmega4809` | `crates/core/tests/analog/cosim_avr_atmega4809_analog.rs` |
@@ -399,6 +386,17 @@ None.
 | `esp32c3-oled-128x32-workshop` | `esp32c3` | `crates/core/tests/analog/cosim_esp32c3_boards_analog.rs` |
 | `esp32c3-oled-demo` | `esp32c3` | `crates/core/tests/analog/cosim_esp32c3_boards_analog.rs` |
 | `esp32c3-tm1637-clock-workshop` | `esp32c3` | `crates/core/tests/analog/cosim_esp32c3_boards_analog.rs` |
+| `esp32c6-devkitc-1-n8-bme280` | `esp32c6` | `crates/core/tests/analog/cosim_esp32c6_boards_analog.rs` |
+| `esp32c6-devkitc-bme280` | `esp32c6` | `crates/core/tests/analog/cosim_esp32c6_boards_analog.rs` |
+| `esp32c6-devkitc` | `esp32c6` | `crates/core/tests/analog/cosim_esp32c6_boards_analog.rs` |
+| `esp32c6-zero-m-bme280` | `esp32c6fh4` | `crates/core/tests/analog/cosim_esp32c6_boards_analog.rs` |
+| `esp32s3-devkitc-1-n16r8-bme280` | `esp32s3` | `crates/core/tests/analog/cosim_esp32s3_boards_analog.rs` |
+| `esp32s3-devkitc-1-v1.1-rgb` | `esp32s3` | `crates/core/tests/analog/cosim_esp32s3_boards_analog.rs` |
+| `esp32s3-devkitc-1-v1.1` | `esp32s3` | `crates/core/tests/analog/cosim_esp32s3_boards_analog.rs` |
+| `esp32s3-lcd-ev-board-v1-5-touch` | `esp32s3` | `crates/core/tests/analog/cosim_esp32s3_boards_analog.rs` |
+| `esp32s3-oled-demo` | `esp32s3` | `crates/core/tests/analog/cosim_esp32s3_boards_analog.rs` |
+| `esp32s3-zero` | `esp32s3` | `crates/core/tests/analog/cosim_esp32s3_boards_analog.rs` |
+| `esp32s3` | `esp32s3` | `crates/core/tests/analog/cosim_esp32s3_boards_analog.rs` |
 | `feather-f405` | `stm32f405` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `iolink-multiport-demo` | `stm32l476` | `crates/core/tests/analog/cosim_stm32l476_analog.rs` |
 | `iolinki-g0-startup` | `stm32g0b1re` | `crates/core/tests/analog/cosim_stm32g0b1_analog.rs` |
@@ -443,6 +441,8 @@ None.
 | `rpi-pico-2-w-bme280` | `rp2350` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
 | `rpi-pico-2-w` | `rp2350` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
 | `seeed-xiao-esp32c3-bme280` | `esp32c3` | `crates/core/tests/analog/cosim_esp32c3_boards_analog.rs` |
+| `seeed-xiao-esp32c6` | `esp32c6fh4` | `crates/core/tests/analog/cosim_esp32c6_boards_analog.rs` |
+| `seeed-xiao-esp32s3` | `esp32s3` | `crates/core/tests/analog/cosim_esp32s3_boards_analog.rs` |
 | `seeed-xiao-nrf52840-sense` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
 | `stm32f103c4-smoke` | `stm32f103c4` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `stm32f103c6-smoke` | `stm32f103c6` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |

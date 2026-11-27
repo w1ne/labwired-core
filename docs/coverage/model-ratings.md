@@ -45,7 +45,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | atsamd21j18a | open | L0 | 15 | 893.0 | 1.4 | ≥1× (CI) | — |
 | nrf54lm20a | open | L1 | 31 | 1057.2 | 1.5 | ≥1× (CI) | — |
 | esp32 | open | L1 | 32 | 955.5 | 1.4 | ≥1× (CI) | [doc](docs/boards/esp32.md) |
-| esp32s3 | open | L1 | 14 | 991.9 | 2.4 | ≥1× (CI) | [doc](docs/boards/esp32s3.md) |
+| esp32s3 | open | L1 | 15 | 991.9 | 2.4 | ≥1× (CI) | [doc](docs/boards/esp32s3.md) |
 | esp32s3-zero | open | L1 | 17 | 991.9 | 2.4 | ≥1× (CI) | — |
 | esp32s3-devkitc-1-n16r8-adc | open | L0 | 3 | 991.9 | 2.4 | ≥1× (CI) | — |
 | esp32-devkitc-32e-gpio-smoke | open | L1 | 3 | 977.8 | 1.4 | ≥1× (CI) | — |

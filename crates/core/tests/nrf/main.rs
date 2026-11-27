@@ -34,6 +34,7 @@ mod nrf52_pwm_pad;
 mod nrf52_spim_easydma_executing;
 mod nrf5340_clock_boot;
 mod nrf54l15_boot;
+mod nrf54l15_ficr;
 mod nrf54l15_smart_ring_probe;
 mod nrf54l_gpio_offsets;
 mod nrf54l_wdt;
