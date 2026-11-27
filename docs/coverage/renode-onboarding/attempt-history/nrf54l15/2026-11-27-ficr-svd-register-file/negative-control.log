@@ -1,0 +1,13 @@
+# Negative control, 2026-11-27, branch lane/renode-round772-20261127 from origin/main a7911b76ae.
+# configs/chips/nrf54l15.yaml FICR path pointed at peripherals/nrf54l15/global_ficr_ns.yaml
+# (the raw SVD dump: every INFO word 0xFFFFFFFF). Command:
+#   cargo test -p labwired-core --test nrf nrf54l15_ficr
+test nrf54l15_ficr::ficr_unspecified_words_read_erased_and_stop_the_trim_copy ... ok
+test nrf54l15_ficr::ficr_info_words_match_the_svd_and_the_memory_map ... FAILED
+test nrf54l15_ficr::ficr_info_part_is_read_only ... ok
+thread 'nrf54l15_ficr::ficr_info_words_match_the_svd_and_the_memory_map' (3635292) panicked at crates/core/tests/nrf/nrf54l15_ficr.rs:84:5:
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 82 filtered out; finished in 0.03s
+#
+# NOT RUN (expectation only): the previous nrf54l_ficr_stub answered every
+# read with 0, so by construction INFO.PART would read 0 (not 0x00054B15) and
+# DEVICEID/VARIANT/TRIMCNF[0].ADDR would read 0 (not 0xFFFFFFFF).
