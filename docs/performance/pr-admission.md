@@ -49,7 +49,7 @@ python3 scripts/perf/board_perf.py \
   --boards esp32c3,rp2040,atmega328p --require-all
 ```
 
-The first command requires median native spin throughput of at least one CPU
+The RTx command requires median native spin throughput of at least one CPU
 second per wall second over three samples. The instruction-cost check uses
 all existing modes for each selected fixture, the existing three-repetition
 Callgrind slopes, the existing 3% regression rule and its 0.5 host-instruction
@@ -57,6 +57,8 @@ absolute noise floor for batch mode. No baseline is raised or rewritten.
 Missing fixtures, unavailable selected modes and failed measurements fail.
 The job has a 30-minute limit including builds and cache work; it reuses the
 existing native performance cache and does not install an Xtensa toolchain.
+Both source admission and measurement pin Python 3.12 before installing Python
+dependencies, matching the full matrix environment.
 
 This is representative native regression coverage. It does not establish
 performance on every board, the WASM boundary or the browser host. The app's

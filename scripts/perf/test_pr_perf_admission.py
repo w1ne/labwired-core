@@ -79,6 +79,20 @@ class WorkflowControls(unittest.TestCase):
         self.assertEqual(step["env"]["MEASUREMENT_RESULT"], "${{ needs.pr-throughput.result }}")
         self.assertEqual(jobs["pr-throughput"]["if"], "${{ needs.perf-scope.outputs.required == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}")
 
+    def test_python_is_pinned_before_dependency_installation(self):
+        jobs = workflow("core-perf-pr.yml")["jobs"]
+        for name in ["perf-scope", "pr-throughput"]:
+            with self.subTest(job=name):
+                steps = jobs[name]["steps"]
+                setup = [i for i, step in enumerate(steps)
+                         if step.get("uses") == "actions/setup-python@v6"]
+                self.assertEqual(len(setup), 1)
+                self.assertEqual(steps[setup[0]]["with"]["python-version"], "3.12")
+                pip = [i for i, step in enumerate(steps)
+                       if "pip install" in step.get("run", "")]
+                self.assertTrue(pip)
+                self.assertTrue(all(setup[0] < i for i in pip))
+
     def test_short_measurement_keeps_existing_thresholds_and_all_modes(self):
         job = workflow("core-perf-pr.yml")["jobs"]["pr-throughput"]
         commands = "\n".join(step.get("run", "") for step in job["steps"])

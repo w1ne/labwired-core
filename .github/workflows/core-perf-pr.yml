@@ -22,6 +22,10 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
       - name: Test source admission and required-check wiring
         run: |
           python3 -m pip install --quiet pyyaml
@@ -56,6 +60,10 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
