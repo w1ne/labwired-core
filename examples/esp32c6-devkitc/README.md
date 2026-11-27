@@ -72,9 +72,11 @@ physical-board result.
 ## Analog inputs
 
 `configs/chips/esp32c6.yaml` and `configs/chips/esp32c6fh4.yaml` publish the
-SAR ADC1 pad map: GPIO0..GPIO6 are ADC1_CH0..CH6 on `apb_saradc`. The C6 has
-one SAR ADC, so there is no ADC2 pad. A co-simulation deck names a pad only,
-as `board.analog.<pad>_volts`, and the router finds the channel.
+SAR ADC1 pad map: GPIO0..GPIO4 are ADC1_CH0..CH4 on `apb_saradc`. A
+co-simulation deck names a published pad only, as `board.analog.<pad>_volts`,
+and the router finds the channel. GPIO5/GPIO6 are ADC1_CH5/CH6 on silicon
+but are not published yet: the C6 `apb_saradc` is the C3 model, which accepts
+five channels, so a route to them would be refused at session build.
 
 [`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) is the generic
 deck: a Beta NTC divider on GPIO2 and a Shockley diode load line on GPIO3.

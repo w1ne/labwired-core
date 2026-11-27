@@ -6,8 +6,9 @@
 //! Shockley diode load line through its descriptor's ADC1 pad map. The deck
 //! names only `board.analog.gpio2_volts` / `board.analog.gpio3_volts`; the
 //! five profiles below load `chips/esp32c6.yaml` or `chips/esp32c6fh4.yaml`,
-//! whose `analog_pins:` tables assign GPIO0..GPIO6 to APB_SARADC ADC1 channels
-//! 0..6. Nothing in the solver, router or converter is C6-specific: the decks
+//! whose `analog_pins:` tables assign GPIO0..GPIO4 to APB_SARADC ADC1 channels
+//! 0..4 (GPIO5/GPIO6 wait for a per-chip model channel count; see the chip
+//! yaml). Nothing in the solver, router or converter is C6-specific: the decks
 //! are the ones the ESP32-C3, classic ESP32, STM32, AVR and RP2040 boards
 //! already run.
 //!
@@ -132,7 +133,7 @@ fn load(system: &str) -> (SystemManifest, ChipDescriptor) {
 /// Load one profile, overlay the generic decks, and build the analog session.
 fn bench(system: &str) -> (SystemBus, CosimSession) {
     let (profile, chip) = load(system);
-    for channel in 0..7u8 {
+    for channel in 0..5u8 {
         let pad = format!("GPIO{channel}");
         assert_eq!(
             chip.analog_pins[&pad].peripheral, "apb_saradc",
@@ -145,8 +146,8 @@ fn bench(system: &str) -> (SystemBus, CosimSession) {
     }
     assert_eq!(
         chip.analog_pins.len(),
-        7,
-        "{system}: the board map publishes exactly the seven ADC1 pads"
+        5,
+        "{system}: the board map publishes exactly the five model-accepted ADC1 pads"
     );
 
     let bus = SystemBus::from_config(&chip, &profile)
@@ -229,47 +230,38 @@ fn every_esp32c6_profile_solves_generic_netlists_on_adc1_pads() {
         );
         // An unrouted ADC1 channel keeps the model's fixed placeholder ramp
         // (0x100 + n * 0x111), so a route that landed on the wrong channel
-        // would show up here as well as in the codes above. Channels 4 and 6
-        // flank the deck and include the top C6 input, which the C3 lacks.
+        // would show up here as well as in the codes above. Channels 1 and 4
+        // flank the deck.
+        assert_eq!(
+            sample_sar1(&mut bus, 1),
+            0x211,
+            "{system}: GPIO1 is not routed by the deck"
+        );
         assert_eq!(
             sample_sar1(&mut bus, 4),
             0x544,
             "{system}: GPIO4 is not routed by the deck"
-        );
-        assert_eq!(
-            sample_sar1(&mut bus, 6),
-            0x766,
-            "{system}: GPIO6 is not routed by the deck"
         );
     }
 }
 
 /// A pad outside the ADC1 table is refused rather than silently seeded on
 /// another channel. GPIO7 is the BME280 profiles' SCL pad and GPIO8 the
-/// DevKitC-1 RGB LED data pin; neither has an ADC function on the C6.
+/// DevKitC-1 RGB LED data pin; neither has an ADC function on the C6. GPIO6
+/// is ADC1_CH6 on silicon but is not published yet.
 #[test]
 fn esp32c6_pad_map_refuses_pads_it_does_not_publish() {
     let (mut bus, session) = bench("configs/systems/esp32c6-devkitc.yaml");
-    assert!(
-        !bus.set_analog_pad_mv("GPIO7", 1_650),
-        "GPIO7 is digital only"
-    );
-    assert!(
-        !bus.set_analog_pad_mv("GPIO8", 1_650),
-        "GPIO8 is digital only"
-    );
+    for pad in ["GPIO6", "GPIO7", "GPIO8"] {
+        assert!(
+            !bus.set_analog_pad_mv(pad, 1_650),
+            "{pad} is not on the C6 board pad map"
+        );
+    }
     assert_eq!(
         sample_sar1(&mut bus, 0),
         0x100,
         "a refused level must not alias onto ADC1 channel 0 (GPIO0)"
-    );
-    // The top published pad does accept a level: the C6 map reaches past the
-    // C3's five inputs.
-    assert!(bus.set_analog_pad_mv("GPIO6", 1_650), "GPIO6 is ADC1_CH6");
-    assert_eq!(
-        sample_sar1(&mut bus, 6),
-        1_650 * 4095 / 3300,
-        "GPIO6 converts on ADC1 channel 6"
     );
     assert_eq!(
         session.binding_errors(),
@@ -278,15 +270,18 @@ fn esp32c6_pad_map_refuses_pads_it_does_not_publish() {
     );
 }
 
-/// The refusal also happens on the deck route: a model that writes
-/// `board.analog.gpio7_volts` gets a binding error at session build time
+/// The top published pad binds through the router, not only through the seed
+/// seam, and an unpublished pad gets a binding error at session build time
 /// instead of a silently dropped netlist output. The XIAO profile loads the
 /// FH4 descriptor, so this also checks the second file.
 #[test]
-fn esp32c6_router_refuses_a_deck_route_to_a_digital_pad() {
+fn esp32c6_router_binds_the_top_pad_and_refuses_unpublished_ones() {
     let (mut profile, chip) = load("configs/systems/seeed-xiao-esp32c6.yaml");
-    profile.cosim_models[0].outputs.insert(
-        "v_digital_probe".to_string(),
+    let outputs = &mut profile.cosim_models[0].outputs;
+    outputs.insert("v_top".to_string(), "board.analog.gpio4_volts".to_string());
+    outputs.insert("v_ch6".to_string(), "board.analog.gpio6_volts".to_string());
+    outputs.insert(
+        "v_digital".to_string(),
         "board.analog.gpio7_volts".to_string(),
     );
     let bus = SystemBus::from_config(&chip, &profile).expect("build the XIAO ESP32-C6 bus");
@@ -295,10 +290,16 @@ fn esp32c6_router_refuses_a_deck_route_to_a_digital_pad() {
         .expect("fixture carries the selected analog devices");
     assert_eq!(
         session.binding_errors(),
-        &[RoutingError::NoAdcChannel {
-            path: "board.analog.gpio7_volts".to_string(),
-            pad: "gpio7".to_string(),
-        }],
-        "GPIO7 has no ADC function on the ESP32-C6"
+        &[
+            RoutingError::NoAdcChannel {
+                path: "board.analog.gpio6_volts".to_string(),
+                pad: "gpio6".to_string(),
+            },
+            RoutingError::NoAdcChannel {
+                path: "board.analog.gpio7_volts".to_string(),
+                pad: "gpio7".to_string(),
+            },
+        ],
+        "GPIO4 (ADC1_CH4) binds; GPIO6 is unpublished and GPIO7 has no ADC"
     );
 }

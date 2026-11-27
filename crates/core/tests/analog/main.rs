@@ -32,6 +32,7 @@ mod analog_mux_e2e;
 mod analog_netlist;
 mod analog_ngspice_macros;
 mod analog_photoresistor;
+mod analog_pin_channel_counts;
 mod analog_pin_load;
 mod analog_plant_migration_parity;
 mod analog_solver;
