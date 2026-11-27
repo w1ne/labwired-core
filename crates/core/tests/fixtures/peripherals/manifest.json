@@ -3088,7 +3088,7 @@
       "device_type": "ina219",
       "label": "INA219 Power Monitor",
       "summary": "High-side current and bus voltage sensor over I²C.",
-      "detail": "Texas Instruments INA219 (default 7-bit address 0x40). Host stimulus sets bus voltage and load current; firmware reads config/shunt/bus/current/power/cal registers on the simulated I²C bus.",
+      "detail": "Texas Instruments INA219 (default 7-bit address 0x40). Host stimulus sets bus voltage, current, or shunt voltage; firmware reads config/shunt/bus/current/power/cal registers on the simulated I²C bus.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -3114,6 +3114,14 @@
           "unit": "A",
           "min": -3.2,
           "max": 3.2,
+          "default": 0.0
+        },
+        {
+          "key": "shunt_voltage",
+          "label": "Shunt voltage",
+          "unit": "V",
+          "min": -0.32,
+          "max": 0.32,
           "default": 0.0
         }
       ]

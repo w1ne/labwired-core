@@ -21,41 +21,23 @@
 #   0x04 CURRENT        r   int16, current_LSB
 #   0x05 CALIBRATION    rw  POR 0 — seeded here to the value the model fixes
 #
-# ── The fixed calibration this model is written at ───────────────────────
+# ── Measurement encoding ──────────────────────────────────────────────────
 #
-# §8.5.1: current_LSB and power_LSB are not constants — they follow from the
-# CALIBRATION word and the shunt resistance the board carries. Both the hand
-# model and this descriptor pin ONE operating point, the Adafruit
-# `setCalibration_32V_2A()` one: a 0.1 Ω shunt with CALIBRATION = 4096, giving
-# current_LSB = 100 µA (0.1 mA) and power_LSB = 20 × that = 2 mW. CALIBRATION is
-# read/write storage and a driver may write anything to it, but the encodings
-# below do not follow it — stated here rather than left to be discovered, and
-# carried over from the model rather than introduced.
+# CURRENT follows the datasheet equation: SHUNT_VOLTAGE × CALIBRATION / 4096.
+# The calibration register is live state, and input or calibration writes
+# refresh CURRENT. The default 4096 value preserves the former current-only
+# 0.1 Ω operating point. An explicit shunt_voltage takes precedence, allowing
+# a bare IC to use its actual external shunt (including 10 mΩ).
 #
-# With that calibration:
-#   CURRENT counts = I[mA] / 0.1        = I[A] × 10000
-#   SHUNT   counts = shunt_voltage[V] / 10 µV
-#   BUS     counts = V[V] × 1000 / 4    = V[V] × 250, placed at bit 3
-#   POWER   counts = (V[V] × |I[A]|) / 0.002 W = V × |I| × 500
+# POWER is calculated from the encoded registers: abs(CURRENT) × bus-voltage
+# counts / 5000. BUS_VOLTAGE counts are 4 mV/LSB.
 #
-# ── POWER: why this descriptor needs a derived channel ───────────────────
-#
-# §8.5.4: the part MULTIPLIES — POWER is the bus voltage times the current it
-# measured, in 2 mW units. `source:` names one channel and `scale_from` scales
-# by a *register* field, so before `behavior.derived` the only options were a
-# POWER register left at reset-0 (a power monitor handing `getPower_mW()` a
-# zero) or a third `power` stimulus channel the host would have to keep
-# consistent with the other two by hand. `power_w` is the datasheet's own
-# product, written once, evaluated on every read.
+# For older hosts that supply only current, the model retains the former 0.1 Ω
+# shunt assumption until a shunt_voltage stimulus is explicitly supplied.
 type: ina219
 
 behavior:
   primitive: i2c_device
-  # Bus power in watts — the quantity §8.5.4 says the POWER register reports.
-  # |I| because the register is unsigned: the part reports the MAGNITUDE of the
-  # power flowing, and the direction is the CURRENT register's sign.
-  derived:
-    - { name: power_w, expr: "bus_voltage * abs(current)" }
   i2c:
     default_address: 0x40
     registers:
@@ -76,24 +58,51 @@ behavior:
         reset: 0x0002
         fields:
           - { source: bus_voltage, shift: 3, width_bits: 13, encode: { scale: 250.0 } }
-      # power_LSB = 2 mW ⇒ 500 counts per watt.
-      - { name: POWER, addr: 0x03, width: 2, endian: be, access: r, source: power_w, encode: { scale: 500.0 } }
-      # current_LSB = 0.1 mA ⇒ 10000 counts per amp, two's-complement.
-      - { name: CURRENT, addr: 0x04, width: 2, endian: be, access: r, signed: true, source: current, encode: { scale: 10000.0 } }
+      # Updated from CURRENT and the encoded 4 mV bus count by Tier-2 rules.
+      - { name: POWER, addr: 0x03, width: 2, endian: be, access: r }
+      # Stored measurement: CALIBRATION affects it through the TI formula.
+      - { name: CURRENT, addr: 0x04, width: 2, endian: be, access: r, signed: true }
       # POR is 0x0000; seeded to the 0.1 Ω / 32 V / 2 A calibration the
-      # encodings above are written at, exactly as the hand model did.
+      # legacy current-only path used, exactly as the hand model did.
       - { name: CALIBRATION, addr: 0x05, width: 2, endian: be, access: rw, reset: 4096 }
+  vars: { shunt_voltage_explicit: 0 }
+  rules:
+    # Preserve the current-only input shape by deriving the former 0.1 Ω
+    # shunt voltage until an explicit shunt stimulus arrives.
+    - on: { input: current }
+      when: "var(shunt_voltage_explicit) == 0"
+      do:
+        - { set_input: shunt_voltage, value: "input(current)" }
+        - { write: { register: CURRENT, value: "input(shunt_voltage) * reg(CALIBRATION) / 4096" } }
+        - { write: { register: POWER, value: "abs(reported(CURRENT)) * input(bus_voltage) / 5000" } }
+    - on: { input: current }
+      when: "var(shunt_voltage_explicit) != 0"
+      do:
+        - { write: { register: CURRENT, value: "input(shunt_voltage) * reg(CALIBRATION) / 4096" } }
+        - { write: { register: POWER, value: "abs(reported(CURRENT)) * input(bus_voltage) / 5000" } }
+    - on: { input: shunt_voltage }
+      do:
+        - { var: shunt_voltage_explicit, value: 1 }
+        - { write: { register: CURRENT, value: "input(shunt_voltage) * reg(CALIBRATION) / 4096" } }
+        - { write: { register: POWER, value: "abs(reported(CURRENT)) * input(bus_voltage) / 5000" } }
+    - on: { input: bus_voltage }
+      do:
+        - { write: { register: POWER, value: "abs(reported(CURRENT)) * input(bus_voltage) / 5000" } }
+    - on: { write: CALIBRATION }
+      do:
+        - { write: { register: CURRENT, value: "input(shunt_voltage) * reg(CALIBRATION) / 4096" } }
+        - { write: { register: POWER, value: "abs(reported(CURRENT)) * input(bus_voltage) / 5000" } }
 
 metadata:
   label: "INA219 Power Monitor"
   summary: "High-side current and bus voltage sensor over I²C."
-  detail: "Texas Instruments INA219 (default 7-bit address 0x40). Host stimulus sets bus voltage and load current; firmware reads config/shunt/bus/current/power/cal registers on the simulated I²C bus."
+  detail: "Texas Instruments INA219 (default 7-bit address 0x40). Host stimulus sets bus voltage, current, or shunt voltage; firmware reads config/shunt/bus/current/power/cal registers on the simulated I²C bus."
   category: i2c
   config_keys:
     - name: i2c_address
       ty: int
       doc: "7-bit slave address. Defaults to 0x40 (A0/A1 ground)."
   inputs:
-    - { key: bus_voltage, label: "Bus voltage", unit: "V", min: 0.0, max: 32.0, default: 3.3 }
-    - { key: current, label: "Current", unit: "A", min: -3.2, max: 3.2, default: 0.0 }
+    - { key: bus_voltage, label: "Bus voltage", unit: "V", min: 0.0, max: 32.0, default: 3.3, expr_scale: 250.0 }
+    - { key: current, label: "Current", unit: "A", min: -3.2, max: 3.2, default: 0.0, expr_scale: 10000.0 }
     - { key: shunt_voltage, label: "Shunt voltage", unit: "V", min: -0.32, max: 0.32, default: 0.0 }
