@@ -142,7 +142,14 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
             // table (see `esp32c3_family_adc1_gpio`). ADC2 pads are excluded:
             // the model's SAR2 one-shot shares the SAR1 channel slots, so an
             // ADC2 entry would alias an ADC1 pad.
-            let pads = esp32c3_family_adc1_gpio(&desc.name);
+            let Some(pads) = esp32c3_family_adc1_gpio(&desc.name) else {
+                problems.push(format!(
+                    "{chip}: {} runs esp32c3_apb_saradc but has no ADC1 pad table \
+                     in esp32c3_family_adc1_gpio",
+                    desc.name
+                ));
+                continue;
+            };
             match esp_gpio_number(pad) {
                 Some(gpio) => match pads.get(usize::from(*channel)) {
                     Some(&expected) if expected != gpio => problems.push(format!(
@@ -372,12 +379,14 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
 /// GPIO5 (ESP-IDF components/soc/esp32c61/include/soc/adc_channel.h).
 /// ESP32-C5: ADC1_CH0..CH5 are GPIO1..GPIO6 (ESP-IDF
 /// components/soc/esp32c5/include/soc/adc_channel.h); CH5 waits for the same
-/// per-chip model channel count as the C6.
-fn esp32c3_family_adc1_gpio(chip_name: &str) -> &'static [u8] {
+/// per-chip model channel count as the C6. An unlisted chip returns `None`,
+/// so a new chip on this model must add its own table.
+fn esp32c3_family_adc1_gpio(chip_name: &str) -> Option<&'static [u8]> {
     match chip_name {
-        "esp32c5" => &[1, 2, 3, 4, 5],
-        "esp32c61" => &[1, 3, 4, 5],
-        _ => &[0, 1, 2, 3, 4],
+        "esp32c3" | "esp32c6" | "esp32c6fh4" => Some(&[0, 1, 2, 3, 4]),
+        "esp32c5" => Some(&[1, 2, 3, 4, 5]),
+        "esp32c61" => Some(&[1, 3, 4, 5]),
+        _ => None,
     }
 }
 
@@ -1101,4 +1110,15 @@ fn esp32s3_validation_rejects_bad_pads_channels_and_types() {
         .unwrap()
         .r#type = "uart".into();
     assert!(!analog_pin_problems("bad", &desc).is_empty());
+}
+
+#[test]
+fn esp32c3_family_pad_table_rejects_an_unlisted_chip() {
+    // A new chip on the C3 APB_SARADC model must add its own pad table; a
+    // silent channel == GPIO fallback would accept a wrong map.
+    assert_eq!(esp32c3_family_adc1_gpio("esp32h2"), None);
+    assert_eq!(
+        esp32c3_family_adc1_gpio("esp32c6fh4"),
+        Some(&[0u8, 1, 2, 3, 4][..])
+    );
 }
