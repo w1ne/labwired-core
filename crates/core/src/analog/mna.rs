@@ -844,6 +844,14 @@ impl Solver {
                 } else {
                     v <= off
                 }
+            } else if control.strict {
+                // ngspice `SW`: hold the last state anywhere in the closed
+                // band `[vt − vh, vt]`, including exactly on its edges.
+                if closed_now {
+                    v >= off
+                } else {
+                    v > on
+                }
             } else if closed_now {
                 // NO: stay closed until |V| falls through dropout.
                 v > off

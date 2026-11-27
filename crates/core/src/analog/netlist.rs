@@ -2077,6 +2077,11 @@ pub struct VoltageSwitchControl {
     pub invert: bool,
     /// Sense V(pos)-V(neg) instead of its magnitude (logic/UVLO). Default false.
     pub signed: bool,
+    /// ngspice `SW` comparisons: close only above `vt`, open only below
+    /// `vt − vh`, and hold the last state on either edge. The inline form
+    /// closes at `vt` itself and opens at the dropout itself. Only the
+    /// normally-open rule reads it; an `SW` card never sets `invert`.
+    pub strict: bool,
 }
 
 /// `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` — an ideal switch whose control is a
@@ -3015,6 +3020,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                             vh,
                             invert,
                             signed,
+                            strict: false,
                         }),
                     });
                 } else {
@@ -3696,6 +3702,7 @@ fn bind_models(
                         vh: 2.0 * model.vh,
                         invert: false,
                         signed: true,
+                        strict: false,
                     }),
                 });
             }
@@ -3892,6 +3899,13 @@ fn parse_model(
             (ModelCard::Switch(model), "VH") => model.vh = value,
             (ModelCard::Switch(model), "RON") => model.ron = value,
             (ModelCard::Switch(model), "ROFF") => model.roff = value,
+            // ngspice rejects an unknown `SW` parameter, and a misspelt
+            // threshold silently left at 0 V would close the switch at 0 V.
+            (ModelCard::Switch(_), other) => {
+                return Err(ctx.parse_err(format!(
+                    "switch model parameter `{other}` is not one of `VT`, `VH`, `RON`, `ROFF`"
+                )))
+            }
             (ModelCard::Diode(model), "IS") => model.is = value,
             (ModelCard::Diode(model), "N") => model.n = value,
             (ModelCard::Diode(model), "IK" | "IKF") => model.ik = value,
