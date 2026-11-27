@@ -23,6 +23,21 @@ registers_count: 31
 # pacing is scaled against (peripherals/esp32c6/uart.rs CPU_CLOCK_HZ).
 cpu_hz: 160_000_000
 
+# SAR ADC1 inputs, as the ESP32-C6 Series Datasheet pin tables ("Analog
+# Functions": ADC1_CH0..ADC1_CH6) and ESP-IDF soc/esp32c6/include/soc/
+# adc_channel.h list them: ADC1_CH0..CH6 are GPIO0..GPIO6, one channel per
+# pad. The C6 has one SAR ADC (SOC_ADC_PERIPH_NUM = 1), so there is no ADC2
+# pad to exclude. The analog router reads this table, so a deck that names
+# only `board.analog.gpio2_volts` reaches APB_SARADC without naming a channel.
+analog_pins:
+  GPIO0: { peripheral: "apb_saradc", channel: 0 }
+  GPIO1: { peripheral: "apb_saradc", channel: 1 }
+  GPIO2: { peripheral: "apb_saradc", channel: 2 }
+  GPIO3: { peripheral: "apb_saradc", channel: 3 }
+  GPIO4: { peripheral: "apb_saradc", channel: 4 }
+  GPIO5: { peripheral: "apb_saradc", channel: 5 }
+  GPIO6: { peripheral: "apb_saradc", channel: 6 }
+
 flash:
   # Unified external-memory cache window: C6 maps BOTH instructions and
   # constant data through 0x4200_0000..0x42FF_FFFF (16 MB window), unlike the

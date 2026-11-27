@@ -14,8 +14,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **441**
-- Covered end to end: **131**
-- Not covered: **310**
+- Covered end to end: **136**
+- Not covered: **305**
 - Not covered but with an ADC pad map: **0** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` block or `adc` pin functions, an ADC model, or a digital
@@ -53,10 +53,6 @@ None.
 | `esp32-s3-devkitc-1-n16r8-adc` | `esp32s3-devkitc-1-n16r8-adc` | 0 |
 | `esp32c5-devkitc-1-n8r8-bme280` | `esp32c5` | 0 |
 | `esp32c5-devkitc-1-n8r8` | `esp32c5` | 0 |
-| `esp32c6-devkitc-1-n8-bme280` | `esp32c6` | 0 |
-| `esp32c6-devkitc-bme280` | `esp32c6` | 0 |
-| `esp32c6-devkitc` | `esp32c6` | 0 |
-| `esp32c6-zero-m-bme280` | `esp32c6fh4` | 0 |
 | `esp32c61-devkitc-1-n8r2-bme280` | `esp32c61` | 0 |
 | `esp32c61-devkitc-1-n8r2` | `esp32c61` | 0 |
 | `esp32h2-devkitm-1-n4s` | `esp32h2` | 0 |
@@ -335,7 +331,6 @@ None.
 | `s32k388-evb` | `s32k388` | 0 |
 | `sam-e70-xplained` | `same70q21b` | 0 |
 | `sam4s-xplained` | `sam4s16c` | 0 |
-| `seeed-xiao-esp32c6` | `esp32c6fh4` | 0 |
 | `simctl-selftest` | `ci-fixture-cortex-m3-uart1` | 0 |
 | `sk-am62` | `am6234` | 0 |
 | `smart-ring` | `nrf54l15` | 0 |
@@ -391,6 +386,10 @@ None.
 | `esp32c3-oled-128x32-workshop` | `esp32c3` | `crates/core/tests/analog/cosim_esp32c3_boards_analog.rs` |
 | `esp32c3-oled-demo` | `esp32c3` | `crates/core/tests/analog/cosim_esp32c3_boards_analog.rs` |
 | `esp32c3-tm1637-clock-workshop` | `esp32c3` | `crates/core/tests/analog/cosim_esp32c3_boards_analog.rs` |
+| `esp32c6-devkitc-1-n8-bme280` | `esp32c6` | `crates/core/tests/analog/cosim_esp32c6_boards_analog.rs` |
+| `esp32c6-devkitc-bme280` | `esp32c6` | `crates/core/tests/analog/cosim_esp32c6_boards_analog.rs` |
+| `esp32c6-devkitc` | `esp32c6` | `crates/core/tests/analog/cosim_esp32c6_boards_analog.rs` |
+| `esp32c6-zero-m-bme280` | `esp32c6fh4` | `crates/core/tests/analog/cosim_esp32c6_boards_analog.rs` |
 | `esp32s3-devkitc-1-n16r8-bme280` | `esp32s3` | `crates/core/tests/analog/cosim_esp32s3_boards_analog.rs` |
 | `esp32s3-devkitc-1-v1.1-rgb` | `esp32s3` | `crates/core/tests/analog/cosim_esp32s3_boards_analog.rs` |
 | `esp32s3-devkitc-1-v1.1` | `esp32s3` | `crates/core/tests/analog/cosim_esp32s3_boards_analog.rs` |
@@ -442,6 +441,7 @@ None.
 | `rpi-pico-2-w-bme280` | `rp2350` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
 | `rpi-pico-2-w` | `rp2350` | `crates/core/tests/analog/cosim_rp2040_family_analog.rs` |
 | `seeed-xiao-esp32c3-bme280` | `esp32c3` | `crates/core/tests/analog/cosim_esp32c3_boards_analog.rs` |
+| `seeed-xiao-esp32c6` | `esp32c6fh4` | `crates/core/tests/analog/cosim_esp32c6_boards_analog.rs` |
 | `seeed-xiao-esp32s3` | `esp32s3` | `crates/core/tests/analog/cosim_esp32s3_boards_analog.rs` |
 | `seeed-xiao-nrf52840-sense` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
 | `stm32f103c4-smoke` | `stm32f103c4` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
