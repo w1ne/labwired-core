@@ -51,8 +51,9 @@ python3 scripts/perf/board_perf.py \
 
 The RTx command requires median native spin throughput of at least one CPU
 second per wall second over three samples. The instruction-cost check uses
-all existing modes for each selected fixture, the existing three-repetition
-Callgrind slopes, the existing 3% regression rule and its 0.5 host-instruction
+all existing modes for each selected fixture, one Callgrind slope in step mode
+and three repeated slopes in batch mode, the existing 3% regression rule and
+its 0.5 host-instruction
 absolute noise floor for batch mode. No baseline is raised or rewritten.
 Missing fixtures, unavailable selected modes and failed measurements fail.
 The job has a 30-minute limit including builds and cache work; it reuses the
