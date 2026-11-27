@@ -16,6 +16,7 @@ on:
       - "crates/core/src/peripherals/components/iolink_station.rs"
       - "crates/core/src/world.rs"
       - "crates/core/tests/iolink_native_master.rs"
+      - "crates/core/tests/gpio_logic/e2e_iolink_dido.rs"
       - "crates/core/tests/world_multichip.rs"
       - "crates/core/tests/world_station_services.rs"
       - "crates/core/src/network/mod.rs"
@@ -39,6 +40,7 @@ on:
       - "crates/core/src/peripherals/components/iolink_native.rs"
       - "crates/core/src/peripherals/components/iolink_station.rs"
       - "crates/core/tests/iolink_native_master.rs"
+      - "crates/core/tests/gpio_logic/e2e_iolink_dido.rs"
       - "examples/iolink-dido/**"
       - "examples/iolink-station/**"
       - "examples/esp32c3-mlx90640-thermal/**"
@@ -79,6 +81,32 @@ jobs:
         run: |
           cc --version
           arm-none-eabi-gcc --version
+
+      - name: Checkout pinned STM32CubeL4 CMSIS and linker files
+        uses: actions/checkout@v4
+        with:
+          repository: STMicroelectronics/STM32CubeL4
+          ref: ca7e0b3732d4d8dedecaf0d369623bc00b27cab5
+          path: STM32CubeL4
+          sparse-checkout: |
+            Drivers/CMSIS/Include
+            Drivers/CMSIS/Device/ST
+            Projects/NUCLEO-L476RG/Templates/STM32CubeIDE
+
+      - name: Checkout pinned STM32L4 CMSIS device pack
+        run: git -C STM32CubeL4 submodule update --init --depth 1 Drivers/CMSIS/Device/ST/STM32L4xx
+
+      # Keep the simulation test tied to current firmware sources. The public
+      # demo ELF with the same filename regressed to STARTUP and emitted no
+      # device reply; rebuilding here and checking CKS plus PD catches stale
+      # release assets instead of accepting their boot banner as success.
+      - name: Build the real IO-Link device firmware from the pinned sources
+        run: make -C examples/iolink-dido/firmware STM32CUBE_L4_DIR="$GITHUB_WORKSPACE/STM32CubeL4"
+
+      - name: Verify IO-Link startup, CRC and process data with real firmware
+        env:
+          LABWIRED_REQUIRE_IOLINK_ELFS: "1"
+        run: cargo test -p labwired-core --test gpio_logic native_master_reaches_operate_with_green_ck_and_real_pd -- --nocapture
 
       # LABWIRED_STRICT_FIDELITY makes the first undecoded instruction or
       # unmapped MMIO access this real firmware hits a hard failure, instead of
