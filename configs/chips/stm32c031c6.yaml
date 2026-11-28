@@ -27,6 +27,32 @@ flash:
 ram:
   base: 0x20000000
   size: "12KB"
+# ADC1 regular inputs on the LQFP48 package, from ST STM32_open_pin_data
+# `mcu/STM32C031C(4-6)Tx.xml` (Signal ADC1_INx per pin): PA0..PA8 =
+# IN0..IN8, PA11..PA14 = IN11..IN14, PB0 = IN17, PB1 = IN18. The C0 numbering
+# is NOT the G0 one: PB0 is IN17 here, IN8 on a G071. The part also has PB2 =
+# IN19, PB10 = IN20, PB11 = IN21 and PB12 = IN22; they are not listed because
+# the shared `stm32g0` ADC model converts CHSEL0..18 only (adc.rs
+# `channel_count`), and a pad past that count would bind with
+# `NoSuchAdcChannel`. Widening the model is a change to adc.rs, which every
+# silicon-validated STM32 board watches. Consumed by co-simulation
+# `board.analog.<pad>_volts`; pads not listed are refused.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }
+  PA2: { peripheral: "adc1", channel: 2 }
+  PA3: { peripheral: "adc1", channel: 3 }
+  PA4: { peripheral: "adc1", channel: 4 }
+  PA5: { peripheral: "adc1", channel: 5 }
+  PA6: { peripheral: "adc1", channel: 6 }
+  PA7: { peripheral: "adc1", channel: 7 }
+  PA8: { peripheral: "adc1", channel: 8 }
+  PA11: { peripheral: "adc1", channel: 11 }
+  PA12: { peripheral: "adc1", channel: 12 }
+  PA13: { peripheral: "adc1", channel: 13 }
+  PA14: { peripheral: "adc1", channel: 14 }
+  PB0: { peripheral: "adc1", channel: 17 }
+  PB1: { peripheral: "adc1", channel: 18 }
 peripherals:
   - id: "rcc"
     type: "rcc"

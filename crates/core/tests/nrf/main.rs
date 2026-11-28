@@ -35,6 +35,7 @@ mod nrf52_spim_easydma_executing;
 mod nrf5340_clock_boot;
 mod nrf5340_ficr;
 mod nrf5340_gpiote;
+mod nrf5340_uicr;
 mod nrf54l15_boot;
 mod nrf54l15_ficr;
 mod nrf54l15_smart_ring_probe;

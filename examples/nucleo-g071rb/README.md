@@ -74,3 +74,19 @@ cargo run -q -p labwired-cli -- test \
 6. `VALIDATION.md` — reproducible validation/audit commands and evidence.
 7. `KNOWN_LIMITATIONS.md` — L2-required Not modelled / Partially modelled /
    Proven at L3 boundary.
+
+## Analog inputs
+
+`analog-ntc-diode-pa0-pa1-system.yaml` drives a generic Beta-parameter NTC
+divider into `board.analog.pa0_volts` (ADC1_IN0) and a Shockley diode load
+line into `board.analog.pa1_volts` (ADC1_IN1). The descriptor's
+`analog_pins:` map is the full LQFP64 ADC1 set from ST STM32_open_pin_data
+(PA0-PA7 = IN0-IN7, PB0-PB2 = IN8-IN10, PB10 = IN11, PB11/PB12 = IN15/IN16,
+PC4/PC5 = IN17/IN18), so a deck can route to any of these pads. The test is
+`crates/core/tests/analog/cosim_stm32g0b1_analog.rs`
+(`cargo test -p labwired-core --test analog cosim_stm32g0b1`).
+
+On this board PA2/PA3 carry the ST-LINK VCP, PA5 drives LD4 and PA13/PA14
+carry SWD. The map lists them because the silicon can
+convert them; a deck on those pads routes without a warning, so keep analog
+loads on free header pads.

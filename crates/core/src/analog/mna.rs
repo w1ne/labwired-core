@@ -833,10 +833,15 @@ impl Solver {
     fn update_voltage_switches(&mut self) -> bool {
         let mut changed = false;
         for index in 0..self.circuit.switches.len() {
-            let Some(control) = self.circuit.switches[index].voltage.clone() else {
+            let Some(control) = self.circuit.switches[index].voltage.as_ref() else {
                 continue;
             };
-            let sensed = node_diff(&self.node_v, control.pos, control.neg);
+            // ngspice `W` senses its control source's branch current.
+            let sensed = if control.control.is_some() {
+                self.branch_i[control.control_branch]
+            } else {
+                node_diff(&self.node_v, control.pos, control.neg)
+            };
             let v = if control.signed { sensed } else { sensed.abs() };
             let on = control.vt;
             // A magnitude cannot fall below 0, so its dropout is clamped

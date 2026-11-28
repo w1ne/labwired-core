@@ -260,14 +260,22 @@ peripherals:
     size: "4KB"
     config:
       path: "../peripherals/nrf5340/ficr_s.yaml"
-  # UICR — user info config at 0x00FF8000. Read during soc-init (e.g. approtect /
-  # reg-out config); unprovisioned reads as 0 here, which the boot path accepts.
+  # UICR — user info config at 0x00FF8000. Serve the vendor SVD register file
+  # in the unprogrammed (erased) state: every SVD register reads 0xFFFFFFFF. The SVD
+  # gives APPROTECT, SECUREAPPROTECT and ERASEPROTECT a reset value of 0, which
+  # its own enums decode as "Protected"; erased NVM reads 0xFFFFFFFF, so those
+  # three are overridden. Writes store directly: NVMC write-enable gating and
+  # 1 -> 0 flash semantics are not modelled.
   - id: "uicr"
-    type: "nrf5340_uicr_stub"
+    type: "declarative"
     base_address: 0x00FF8000
     size: "4KB"
     config:
-      debug_schema: "../peripherals/nrf5340/uicr_s.yaml"
+      path: "../peripherals/nrf5340/uicr_s.yaml"
+      reset_overrides:
+        APPROTECT: 0xFFFFFFFF
+        SECUREAPPROTECT: 0xFFFFFFFF
+        ERASEPROTECT: 0xFFFFFFFF
   # Analog trim target block (0x5002A000): soc-init writes FICR-sourced
   # oscillator/analog trim values here. Write-only on the boot path (never read
   # back) and irrelevant to the digital UART console, so a stub is faithful.
