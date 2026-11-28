@@ -1,0 +1,3 @@
+name: ch32v203c8t6-usart-rx-irq
+chip: ../../configs/chips/ch32v203c8t6.yaml
+cpu_hz: 144000000

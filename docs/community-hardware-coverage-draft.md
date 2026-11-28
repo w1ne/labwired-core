@@ -910,6 +910,10 @@ not physical-silicon or side-channel validation.
 
 ## WCH — Tier C vendor bet (not a measured survey rank)
 
+CH32V203 follow-up work is a Tier C WCH capability investment, not a measured
+survey pick. It is outside the MCU survey's ranked list; future demand picks
+should return to the Tier A/B targets.
+
 ### WCH CH32V003EVT
 
 This exact evaluation board is currently listed in stock by two retailers. The
@@ -941,3 +945,19 @@ void main(void) {
   }
 }
 ```
+
+### WCH CH32V203C8T6 — USART1 RX interrupt
+
+The exact CH32V203C8T6 was listed by LCSC as in stock on 2026-11-27; WCH's live
+product page describes the CH32V203 family and links its datasheet. The current
+model boots a ch32fun-based fixture, receives injected `wch!` through USART1
+RXNE, vectors IRQ 53 through the QingKe PFIC, and transmits the received bytes
+back through USART1 TX. The no-IRQ negative control prints a timeout marker
+instead of echoing bytes. This is local simulator evidence; it is not hardware
+confirmation. USART2 IRQ
+54 is wired but has no firmware smoke yet. DMA, timers, ADC, I2C, SPI, CAN and
+USB remain outside the model.
+
+- [Copy-paste C example, smoke command, and stated model scope](../examples/ch32v203c8t6/README.md#usart-rx-irq)
+- [Live WCH product and LCSC availability receipt](../examples/ch32v203c8t6/evidence/vendor-status.md)
+- [Committed USART1 RX IRQ smoke evidence](../examples/ch32v203c8t6/evidence/ch32fun-usart-rx-irq-smoke/)

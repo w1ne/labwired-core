@@ -16,7 +16,9 @@ class PolicyControls(unittest.TestCase):
         paths = ["crates/core/src/bus/samd51_storage.rs", "crates/core/src/cpu/avr.rs",
                  "crates/core/src/machine/boundary.rs", "crates/core/src/lib.rs",
                  "crates/core/src/peripherals/sam/spi.rs", "crates/cli/src/main.rs",
-                 "crates/config/src/lib.rs", "configs/chips/atmega328p.yaml",
+                 "crates/config/src/lib.rs", "crates/wasm/src/stepping.rs",
+                 "crates/wasm/Cargo.toml", "crates/wasm/build.rs", "crates/wasm/.cargo/config.toml",
+                 "configs/chips/atmega328p.yaml",
                  "configs/systems/pybadge.yaml",
                  "Cargo.lock", "Cargo.toml", "rust-toolchain.toml", ".cargo/config.toml",
                  "crates/core/Cargo.toml", "crates/cli/build.rs",
@@ -44,8 +46,17 @@ class PolicyControls(unittest.TestCase):
 
     def test_docs_and_separately_compiled_tests_skip(self):
         paths = ["README.md", "docs/engineering/target-next-lanes.md", "crates/core/tests/example.rs",
-                 "crates/core/src/tests/scb_reset.rs", "scripts/unrelated.py"]
+                 "crates/core/src/tests/scb_reset.rs", "crates/wasm/tests/resume.rs",
+                 "scripts/perf/test_pr_hotpath_gate.py"]
         self.assertFalse(gate.select("pull_request", gate.OWNED_REPOSITORY, "docs/x", paths)[0])
+
+    def test_unclassified_source_and_build_inputs_require_measurement(self):
+        for path in ["crates/new-engine/src/lib.rs", "scripts/build-browser.sh",
+                     "unknown/input", "crates/wasm/assets/rom.bin", "CMakeLists.txt",
+                     "docs/coverage/lab-perf-budget.json",
+                     "tests/fixtures/rtf/c3_i2c_uart/c3_i2c_uart.ino"]:
+            with self.subTest(path=path):
+                self.assertTrue(gate.hotpath(path))
 
     def test_existing_event_and_upstream_sync_admission(self):
         for event in ["push", "schedule", "workflow_dispatch"]:
