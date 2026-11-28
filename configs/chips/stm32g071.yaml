@@ -52,6 +52,31 @@ ram:
   base: 0x20000000
   size: "36KB"
 
+# ADC1 regular inputs on the LQFP64 package, from ST STM32_open_pin_data
+# `mcu/STM32G071R(6-8-B)Tx.xml` (Signal ADC1_INx per pin): PA0..PA7 =
+# IN0..IN7, PB0..PB2 = IN8..IN10, PB10 = IN11, PB11 = IN15, PB12 = IN16,
+# PC4 = IN17, PC5 = IN18. The same assignment as the G0B1RE descriptor. Every
+# channel is inside the `stm32g0` CHSELR bitmap (CHSEL0..18). Consumed by
+# co-simulation `board.analog.<pad>_volts`; pads not listed are refused
+# instead of guessing a channel.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }
+  PA2: { peripheral: "adc1", channel: 2 }
+  PA3: { peripheral: "adc1", channel: 3 }
+  PA4: { peripheral: "adc1", channel: 4 }
+  PA5: { peripheral: "adc1", channel: 5 }
+  PA6: { peripheral: "adc1", channel: 6 }
+  PA7: { peripheral: "adc1", channel: 7 }
+  PB0: { peripheral: "adc1", channel: 8 }
+  PB1: { peripheral: "adc1", channel: 9 }
+  PB2: { peripheral: "adc1", channel: 10 }
+  PB10: { peripheral: "adc1", channel: 11 }
+  PB11: { peripheral: "adc1", channel: 15 }
+  PB12: { peripheral: "adc1", channel: 16 }
+  PC4: { peripheral: "adc1", channel: 17 }
+  PC5: { peripheral: "adc1", channel: 18 }
+
 peripherals:
   # --- Clock / power / system ---------------------------------------------
   # RCC @ 0x40021000 (stm32g071xx.h RCC_BASE = AHB 0x40020000 + 0x1000).

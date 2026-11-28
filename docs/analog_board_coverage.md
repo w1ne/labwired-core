@@ -14,8 +14,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **441**
-- Covered end to end: **141**
-- Not covered: **300**
+- Covered end to end: **143**
+- Not covered: **298**
 - Not covered but with an ADC pad map: **0** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` block or `adc` pin functions, an ADC model, or a digital
@@ -74,9 +74,7 @@ None.
 | `nrf54l10-sim` | `nrf54l10` | 0 |
 | `nrf54l15dk` | `nrf54l15` | 0 |
 | `nrf54lm20dk` | `nrf54lm20a` | 0 |
-| `nucleo-c031c6` | `stm32c031c6` | 0 |
 | `nucleo-f103rb-bme280` | `stm32f103rb-nucleo-bme280-smoke` | 0 |
-| `nucleo-g071rb` | `stm32g071` | 0 |
 | `nucleo-g431rb` | `stm32g431rb` | 0 |
 | `nucleo-h533re-bme280` | `stm32h533re` | 0 |
 | `nucleo-h533re` | `stm32h533re` | 0 |
@@ -403,6 +401,7 @@ None.
 | `microbit-v2` | `nrf52833` | `crates/core/tests/analog/cosim_microbit_v2_analog.rs` |
 | `nrf52-dk` | `nrf52832` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
 | `nrf52840-dk` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
+| `nucleo-c031c6` | `stm32c031c6` | `crates/core/tests/analog/cosim_stm32g0b1_analog.rs` |
 | `nucleo-f103rb-epaper` | `stm32f103rb` | `crates/core/tests/analog/cosim_nucleo_f103rb_analog.rs` |
 | `nucleo-f103rb` | `stm32f103rb` | `crates/core/tests/analog/cosim_nucleo_f103rb_analog.rs` |
 | `nucleo-f401re` | `stm32f401` | `crates/core/tests/analog/cosim_nucleo_f401re_analog.rs` |
@@ -410,6 +409,7 @@ None.
 | `nucleo-f411re` | `stm32f411re` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `nucleo-f446re` | `stm32f446re` | `crates/core/tests/analog/cosim_stm32f4_family_analog.rs` |
 | `nucleo-f767zi` | `stm32f767` | `crates/core/tests/analog/cosim_nucleo_f767zi_analog.rs` |
+| `nucleo-g071rb` | `stm32g071` | `crates/core/tests/analog/cosim_stm32g0b1_analog.rs` |
 | `nucleo-g0b1re` | `stm32g0b1re` | `crates/core/tests/analog/cosim_stm32g0b1_analog.rs` |
 | `nucleo-l432kc` | `stm32l432kc` | `crates/core/tests/analog/cosim_stm32l4u5_pin_functions_analog.rs` |
 | `nucleo-l476rg` | `stm32l476` | `crates/core/tests/analog/cosim_stm32l476_analog.rs` |
