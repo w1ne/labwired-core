@@ -1,8 +1,8 @@
-# CH32V203C8T6 (LQFP48) GPIO blink and USART1
+# CH32V203C8T6 (LQFP48) GPIO blink, USART1 and SPI2 DMA
 
 Demand position: WCH is the Tier C vendor bet in the onboarding target list;
-CH32V203 has no measured JetBrains survey rank. This round adds IRQ coverage
-to the existing part, so it is capability follow-up work, not a top-ranked
+CH32V203 has no measured JetBrains survey rank. This round adds SPI2 and DMA1
+coverage to the existing part, so it is capability follow-up work, not a top-ranked
 demand pick.
 
 The CH32V203C8T6 is a WCH QingKe V4B (RV32IMAC) microcontroller: 144 MHz
@@ -88,7 +88,7 @@ The smoke asserts `Hello from CH32V203` on the UART stream.
 ## ch32fun examples and local USART fixture
 
 `build-ch32fun-examples.sh` builds four unmodified ch32fun (cnlohr/ch32fun,
-MIT) examples for `TARGET_MCU=CH32V203` and a local USART1 RX IRQ fixture into
+MIT) examples for `TARGET_MCU=CH32V203` and local USART1 RX IRQ and SPI2 DMA fixtures into
 `ch32fun/`. ch32fun prints through
 the WCH-LinkE debug channel at 0xE0000380 by default, which the descriptor
 models as an attached, polling probe (`debug_printf`, log `terminal`).
@@ -100,6 +100,7 @@ models as an attached, polling probe (`debug_printf`, log `terminal`).
 | `ch32fun-systick-irq-smoke.yaml` | `SysTick_Handler` through PFIC interrupt 12, once per millisecond: the loops count 499 and 500 interrupts per 500 ms (see below) |
 | `ch32fun-exti-blink-smoke.yaml` | `EXTI1_IRQHandler` through PFIC interrupt 23 (`exti` `profile: wch_v20x`): a PA1 press, release, press toggles PA10 exactly twice (edges at cycles 92, 2,000,031, 6,000,031); `exti-system.yaml` adds the PA1 button and PA10 LED |
 | `usart-rx-irq-smoke.yaml` | Injected `wch!` reaches USART1 RXNE; PFIC interrupt 53 runs the handler, which reads DATAR before USART1 TX prints `USART1_IRQ_RX=wch!` |
+| `spi-dma-smoke.yaml` | SPI2 TX requests pace DMA1 channel 5 (circular, 8 half-words); PFIC interrupt 31 logs HT then TC for three laps; USART1 prints `SPI2_DMA events=HTHTHT laps=3 cntr=8` |
 
 ```sh
 for s in blink debugprintf systick-irq exti-blink; do
@@ -107,9 +108,11 @@ for s in blink debugprintf systick-irq exti-blink; do
     --script examples/ch32v203c8t6/ch32fun-$s-smoke.yaml \
     --output-dir out/boards/ch32v203c8t6/ch32fun-$s --no-uart-stdout
 done
-cargo run -q -p labwired-cli -- test \
-  --script examples/ch32v203c8t6/usart-rx-irq-smoke.yaml \
-  --output-dir out/boards/ch32v203c8t6/usart-rx-irq --no-uart-stdout
+for s in usart-rx-irq spi-dma; do
+  cargo run -q -p labwired-cli -- test \
+    --script examples/ch32v203c8t6/$s-smoke.yaml \
+    --output-dir out/boards/ch32v203c8t6/$s --no-uart-stdout
+done
 ```
 
 The committed runs are under `evidence/`. In `systick_irq`, `CNTIF` is still
@@ -135,13 +138,29 @@ cargo run -q -p labwired-cli -- test \
   --output-dir out/boards/ch32v203c8t6/usart-rx-irq --no-uart-stdout
 ```
 
+## SPI2 TX DMA
+
+The [complete `ch32fun` source](./spi_dma_tx.c) runs SPI2 as a 16-bit master
+on PB13/PB15 and feeds it from DMA1 channel 5, the RM's hard-wired SPI2_TX
+channel, in circular half-word mode. As in ch32fun's `spidmatest`, it sets
+CTLR2.TXDMAEN before CFGR.EN, so the SPI request is already pending when the
+channel starts. `DMA1_Channel5_IRQHandler` logs `H` on half transfer and `T`
+on transfer complete, and disables the channel after the third lap.
+
+ch32fun's own `spidmatest` is not used as the smoke: it loads CNTR while the
+channel is enabled, which the RM states is read-only once EN is set, so its
+behaviour on silicon is not defined by the documentation.
+
 ## Scope
 
 These smokes exercise the local simulator's QingKe V4B core, the PFIC, the
 64-bit SysTick, the debug printf channel, the F1-layout RCC, GPIO ports A to D
 and USART1/USART2 TX. USART1 RXNE is exercised through PFIC IRQ 53; USART2
-IRQ 54 is wired in the descriptor but not firmware-tested. The model has no
-timers, ADC, I2C, SPI, CAN or USB, no PFIC interrupt nesting and no V4
+IRQ 54 is wired in the descriptor but not firmware-tested. SPI2 TX on DMA1
+channel 5 with its PFIC IRQ 31 is exercised; SPI1, SPI RX, the other DMA
+channels and memory-to-memory DMA run the same F1 models but have no V203
+smoke. The SPI high-speed bit (HSCR) has no timing effect. The model has no
+timers, ADC, I2C, CAN or USB, no PFIC interrupt nesting and no V4
 priority grouping. The RCC
 decodes PLLMUL with the STM32F1 table, so a PLLMUL setting of x18 reads as x16
 in the model; `cpu_hz` states the 144 MHz instead. No CH32V203 has been

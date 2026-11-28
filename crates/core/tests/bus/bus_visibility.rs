@@ -258,6 +258,15 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no UART bring-up for the WCH V20x family in this harness yet; USART1 \
          bytes are proven by ch32_compiled_firmware",
     ),
+    // CH32V203C8T6 SPI1/SPI2: F1-layout SPI with no WCH V20x drive in this
+    // harness. SPI2 TX frames paced by DMA1 channel 5 are proven by
+    // ch32_compiled_firmware::ch32v203_spi2_tx_dma_reaches_qingke_pfic_irq_31.
+    (
+        "ch32v203c8t6",
+        BusKind::Spi,
+        "no SPI bring-up for the WCH V20x family in this harness yet; SPI2 TX \
+         DMA is proven by ch32_compiled_firmware",
+    ),
     // F4U6 (QFN20), A4M6 (SOP16) and J4M6 (SOP8) are package variants of the
     // F4P6 die with the same pad-gated USART1 on PD5. Bytes are proven by
     // ch32v003_compiled_firmware::ch32v003_package_variants_print_on_usart1_pd5.

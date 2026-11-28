@@ -388,6 +388,75 @@ fn ch32v203_usart1_rxne_stays_unhandled_without_irq_53_wired() {
     assert_eq!(mcause, 0, "unwired USART1 must not enter the PFIC");
 }
 
+/// Runs the CH32V203 SPI2 TX DMA fixture, returning the USART1 TX stream and
+/// the last QingKe trap cause.
+fn run_ch32v203_spi2_dma(chip: &ChipDescriptor) -> (String, u32) {
+    let mut bus = SystemBus::from_config(chip, &SystemManifest::default())
+        .expect("CH32V203 peripherals and clock gates");
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+
+    let image =
+        labwired_loader::load_elf(&root().join("examples/ch32v203c8t6/ch32fun/spi_dma_tx.elf"))
+            .expect("CH32V203 SPI DMA ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load SPI DMA ELF");
+
+    for _ in 0..4_000_000 {
+        machine.step().expect("CH32V203 SPI DMA instruction");
+        if sink.lock().unwrap().ends_with(b"\r\n") {
+            break;
+        }
+    }
+
+    let out = String::from_utf8_lossy(&sink.lock().unwrap()).into_owned();
+    (out, machine.cpu.mcause)
+}
+
+#[test]
+fn ch32v203_spi2_tx_dma_reaches_qingke_pfic_irq_31() {
+    let row = CHIPS
+        .iter()
+        .find(|r| r.name == "CH32V203")
+        .expect("CH32V203 row");
+    let chip = descriptor(row);
+    let (out, mcause) = run_ch32v203_spi2_dma(&chip);
+    assert_eq!(out, "SPI2_DMA events=HTHTHT laps=3 cntr=8\r\n");
+    assert_eq!(mcause, 0x8000_001F, "last trap was DMA1_Channel5_IRQn 31");
+}
+
+#[test]
+fn ch32v203_spi2_tx_dma_stays_unhandled_without_channel_irqs() {
+    let row = CHIPS
+        .iter()
+        .find(|r| r.name == "CH32V203")
+        .expect("CH32V203 row");
+    let text = std::fs::read_to_string(descriptor_path(row)).expect("read CH32V203 descriptor");
+    let mut yaml: serde_yaml::Value = serde_yaml::from_str(&text).expect("parse chip descriptor");
+    let dma1 = yaml["peripherals"]
+        .as_sequence_mut()
+        .expect("peripherals list")
+        .iter_mut()
+        .find(|p| p["id"].as_str() == Some("dma1"))
+        .expect("dma1 block");
+    let config = dma1["config"].as_mapping_mut().expect("dma1 config");
+    assert!(
+        config
+            .remove(serde_yaml::Value::String("channel_irqs".to_owned()))
+            .is_some(),
+        "DMA1 channel lines are wired"
+    );
+    let chip: ChipDescriptor = serde_yaml::from_value(yaml).expect("descriptor without DMA IRQs");
+
+    let (out, mcause) = run_ch32v203_spi2_dma(&chip);
+    assert!(
+        out.starts_with("SPI2_DMA events= laps=0 cntr="),
+        "no handler ran: {out:?}"
+    );
+    assert_eq!(mcause, 0, "unwired DMA1 must not enter the PFIC");
+}
+
 #[test]
 fn every_ch32_usart1_stays_silent_without_its_apb2_clock() {
     // Negative control: move the USART1 gate to a clock-enable bit the

@@ -971,7 +971,8 @@ fn every_shipped_descriptor_is_ratcheted() {
         "ch32v006k8u6",
         // CH32V203C8T6: RV32IMAC descriptor with F1-layout RCC, GPIO A..D,
         // polled USART1/USART2 TX, USART1/2 RXNE vectors to PFIC IRQs 53/54,
-        // and EXTI vectors to the PFIC. No timers, ADC, I2C, SPI, CAN or USB.
+        // EXTI vectors to the PFIC, and SPI1/SPI2 with F1-layout DMA1
+        // (per-channel PFIC IRQs 27..33). No timers, ADC, I2C, CAN or USB.
         // Booted by committed ELFs. No catalog board, no silicon oracle, no
         // differential.
         "ch32v203c8t6",

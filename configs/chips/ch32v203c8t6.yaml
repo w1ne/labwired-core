@@ -26,7 +26,10 @@
 #   - SysTick is the 64-bit QingKe V4 STK (SysTick_IRQn 12). EXTI GPIO
 #     lines reach the PFIC; the event mask (EVENR) is stored only. USART1/2
 #     RXNE interrupts are wired to PFIC IRQs 53/54; only USART1 is smoke-tested.
-#     No timers, ADC, I2C, SPI, CAN or USB.
+#     DMA1 (7 channels, per-channel PFIC lines 27..33) and SPI1/SPI2 run the
+#     STM32F1 models; only SPI2 TX on DMA1 channel 5 is smoke-tested. The
+#     SPI high-speed bit (HSCR) has no timing effect.
+#     No timers, ADC, I2C, CAN or USB.
 #   - The debug printf block assumes a WCH-LinkE probe is attached and
 #     polling (its sentinel reads 0). Firmware that waits for a probe
 #     therefore never times out here.
@@ -199,3 +202,40 @@ peripherals:
     size: "1KB"
     irq: 54 # USART2_IRQn (WCH ch32v20xhw.h; F1 vector 38 + 16 QingKe core slots)
     clock: { reg: "apb1enr", bit: 17 }
+
+  # SPI_TypeDef (CTLR1, CTLR2, STATR, DATAR, CRCR, RCRCR, TCRCR, I2SCFGR,
+  # I2SPR, HSCR) is the STM32F1 SPI file plus the WCH high-speed control
+  # word HSCR at 0x24, which the model accepts and ignores. SPI1EN =
+  # APB2PCENR bit 12; SPI2EN = APB1PCENR bit 14.
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 51 # SPI1_IRQn (WCH ch32v20xhw.h; F1 vector 35 + 16)
+    clock: { reg: "apb2enr", bit: 12 }
+
+  - id: "spi2"
+    type: "spi"
+    base_address: 0x40003800
+    size: "1KB"
+    irq: 52 # SPI2_IRQn (WCH ch32v20xhw.h; F1 vector 36 + 16)
+    clock: { reg: "apb1enr", bit: 14 }
+
+  # DMA1 (ch32v20xhw.h DMA_TypeDef INTFR/INTFCR + DMA_Channel_TypeDef CFGR,
+  # CNTR, PADDR, MADDR) is the STM32F1 7-channel controller. DMA1EN =
+  # AHBPCENR bit 0. Each channel has its own PFIC line, DMA1_Channel1..7_IRQn
+  # = 27..33 (F1 vectors 11..17 + 16). Hard-wired requests follow the RM
+  # DMA1 request table, which matches the F1: SPI1_RX ch2, SPI1_TX ch3,
+  # SPI2_RX ch4, SPI2_TX ch5.
+  - id: "dma1"
+    type: "dma"
+    base_address: 0x40020000
+    size: "1KB"
+    clock: { reg: "ahbenr", bit: 0 }
+    config:
+      channel_irqs: [27, 28, 29, 30, 31, 32, 33]
+      requests:
+        spi1_rx: 2
+        spi1_tx: 3
+        spi2_rx: 4
+        spi2_tx: 5

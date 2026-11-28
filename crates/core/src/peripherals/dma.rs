@@ -492,7 +492,8 @@ impl Dma1 {
                                 // peripheral's request (RM0008 §13.3.1:
                                 // "the DMA controller performs a transfer on
                                 // a request from a peripheral").
-                                chan.active = (value >> 14) & 1 != 0;
+                                chan.active =
+                                    (value >> 14) & 1 != 0 || (chan.requests > 0 && chan.cndtr > 0);
                                 chan.cpar_ptr = chan.cpar;
                                 chan.cmar_ptr = chan.cmar;
                                 chan.cndtr_initial = chan.cndtr;
@@ -718,6 +719,14 @@ impl Peripheral for Dma1 {
                     chan.requests.saturating_add(1)
                 };
                 chan.active = true;
+            } else if self.g0_channel_irqs.is_none() && chan.ccr & 1 == 0 {
+                // Channel disabled. The peripheral holds its request until
+                // the DMA acknowledges it (RM0008 §13.3.1: "the peripheral
+                // releases its request as soon as it gets the Acknowledge"),
+                // so keep ONE pending request; enabling the channel with a
+                // count serves it. An enabled channel at CNDTR = 0 (normal
+                // mode after TC) still ignores the request.
+                chan.requests = chan.requests.max(1);
             }
         }
     }
@@ -957,6 +966,31 @@ mod tests {
         dma.dma_request(1);
         let r = dma.tick().dma_requests.unwrap()[0];
         assert_eq!((r.src_addr, r.addr), (0x4001_300E, 0x2000_0001));
+    }
+
+    /// A peripheral that raises its request before software enables the
+    /// channel (SPI CR2.TXDMAEN set while TXE is already high, then CCR.EN)
+    /// holds it until acknowledged, so the enabled channel serves it. The
+    /// held request counts once, however often the line was raised.
+    #[test]
+    fn a_request_raised_before_enable_is_served_once_enabled() {
+        let mut dma = Dma1::new();
+        dma.dma_request(5);
+        dma.dma_request(5);
+        assert!(dma.tick().dma_requests.is_none(), "EN = 0: nothing moves");
+        let ch5 = 0x08 + 4 * 20;
+        dma.write_reg(ch5 + 4, 4); // CNDTR5
+        dma.write_reg(ch5 + 8, 0x4000_380C); // CPAR5 = SPI2 DATAR
+        dma.write_reg(ch5 + 12, 0x2000_0000); // CMAR5
+                                              // EN | DIR (memory -> peripheral) | MINC | PSIZE = MSIZE = 16 bit.
+        dma.write_reg(ch5, 1 | (1 << 4) | (1 << 7) | (1 << 8) | (1 << 10));
+        let r = dma.tick().dma_requests.unwrap()[0];
+        assert_eq!((r.src_addr, r.addr), (0x2000_0000, 0x4000_380C));
+        assert_eq!(dma.read_reg(ch5 + 4), 3);
+        assert!(
+            dma.tick().dma_requests.is_none(),
+            "one held request, one item"
+        );
     }
 
     /// Memory-to-memory keeps DIR: DIR=0 reads CPAR and writes CMAR (the
