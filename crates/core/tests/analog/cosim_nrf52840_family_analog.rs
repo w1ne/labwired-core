@@ -2,11 +2,11 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! One generic deck pair drives four unrelated nRF52840 board profiles into
-//! SAADC AIN2/AIN3. The Beta NTC divider and the Shockley diode load line name
-//! only `board.analog.<pad>_volts`; the nRF52840 descriptor's `analog_pins:`
-//! map selects P0.04 -> AIN2 and P0.05 -> AIN3, and the shared Nordic SAADC
-//! model performs the conversion.
+//! One generic deck pair drives four unrelated nRF52840 board profiles and the
+//! nRF52832 nRF52-DK into SAADC AIN2/AIN3. The Beta NTC divider and the
+//! Shockley diode load line name only `board.analog.<pad>_volts`; each
+//! descriptor's `analog_pins:` map selects P0.04 -> AIN2 and P0.05 -> AIN3,
+//! and the shared Nordic SAADC model performs the conversion.
 //!
 //! The profiles are an Arduino Nano 33 BLE, the same board with a BME280 on
 //! I2C, an nRF52840-DK and a Seeed XIAO nRF52840 Sense. They differ in board
@@ -18,6 +18,11 @@
 //! variant proves an attached sensor does not disturb the analog front end:
 //! the sensor owns A4/A5 (P0.31/P0.02) while the decks drive A0/A1
 //! (P0.04/P0.05).
+//!
+//! The nRF52-DK (PCA10040) is a different die: the nRF52832 has 64 KB of RAM
+//! and its own descriptor, but the same SAADC block at 0x40007000 and the same
+//! AIN pads (nRF52832 PS v1.4). It passes the same assertions through its own
+//! `analog_pins:` map, so the deck pair is not tied to one part number.
 //!
 //! The pads are deliberately AIN2/AIN3 rather than the AIN0/AIN1 pair the
 //! micro:bit v2 test already covers: this proves the SAADC PSELP selector and
@@ -56,7 +61,7 @@ const PSELP_AIN3: u32 = 4;
 /// RESOLUTION code 2 is 12 bit (PS v1.11 §6.21.7).
 const RESOLUTION_12BIT: u32 = 2;
 
-/// EasyDMA destination in nRF52840 RAM.
+/// EasyDMA destination, inside the 64 KB nRF52832 RAM as well.
 const RESULT_BUFFER: u64 = 0x2000_1000;
 /// Parked guest: `b .` at a real flash word, so cycles still advance.
 const SPIN_PC: u64 = 0x0000_0040;
@@ -82,6 +87,10 @@ const BOARDS: &[Board] = &[
     Board {
         profile: "seeed-xiao-nrf52840-sense",
         system: "configs/systems/seeed-xiao-nrf52840-sense.yaml",
+    },
+    Board {
+        profile: "nrf52-dk",
+        system: "configs/systems/nrf52-dk.yaml",
     },
 ];
 
@@ -144,7 +153,8 @@ fn board_machine(mut bus: SystemBus) -> Machine<CortexM> {
     bus.write_u16(SPIN_PC, 0xe7fe).expect("write b ."); // b .
     let (mut cpu, _) = configure_cortex_m(&mut bus);
     cpu.pc = SPIN_PC as u32;
-    cpu.sp = 0x2002_0000;
+    // Top of the smallest RAM in BOARDS (nRF52832, 64 KB).
+    cpu.sp = 0x2001_0000;
     let mut machine = Machine::new(cpu, bus);
     machine.config.peripheral_tick_interval = 1;
     machine.bus.config.peripheral_tick_interval = 1;
