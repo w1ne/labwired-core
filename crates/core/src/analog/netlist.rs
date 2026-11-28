@@ -2082,6 +2082,15 @@ pub struct VoltageSwitchControl {
     /// closes at `vt` itself and opens at the dropout itself. Only the
     /// normally-open rule reads it; an `SW` card never sets `invert`.
     pub strict: bool,
+    /// Contact state the operating point starts from: ngspice's `ON`
+    /// keyword. Inside the hysteresis band the switch keeps it; outside the
+    /// band the control decides, as in ngspice. Default false (open).
+    pub initially_closed: bool,
+    /// Opening threshold taken straight from an `SW` card as `VT − VH`.
+    /// `vt − vh` rebuilt from the stored `VT + VH` and `2·VH` can miss that
+    /// value by an ulp, which moves ngspice's inclusive lower edge. `None`
+    /// for the inline form, which derives its dropout from `vt − vh`.
+    pub dropout: Option<f64>,
 }
 
 /// `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` — an ideal switch whose control is a
@@ -2413,6 +2422,8 @@ struct PendingDevice {
     as_: Option<f64>,
     pd: Option<f64>,
     ps: Option<f64>,
+    /// ngspice `S ... ON`: the switch starts closed.
+    switch_on: bool,
 }
 
 /// A K line held until all its L elements have been parsed.
@@ -2811,6 +2822,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     as_,
                     pd,
                     ps,
+                    switch_on: false,
                 });
             }
             'E' | 'G' => {
@@ -2916,23 +2928,30 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     as_: None,
                     pd: None,
                     ps: None,
+                    switch_on: false,
                 });
             }
             'S' => {
                 let digital = "S<name> n1 n2 <ctrl> ron=<r> roff=<r>";
                 let voltage = "S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] [signed=0|1] ron=<r> roff=<r>";
                 let rest = &tokens[1..];
-                // ngspice's initial-state keyword is not modelled; say so
-                // instead of reporting the digital form's syntax.
-                if rest.len() == 6
-                    && rest.iter().all(|token| !token.contains('='))
-                    && matches!(rest[5].to_ascii_uppercase().as_str(), "ON" | "OFF")
-                {
-                    return Err(ctx.unsupported());
+                // ngspice's own form, `S<name> n1 n2 nc+ nc- <model> [ON|OFF]`,
+                // carries its thresholds on a `.model SW` card that may come
+                // later. `OFF` is ngspice's default initial state.
+                let initial_state = match rest.get(5).map(|token| token.to_ascii_uppercase()) {
+                    None => Some(false),
+                    Some(keyword) if keyword == "OFF" => Some(false),
+                    Some(keyword) if keyword == "ON" => Some(true),
+                    Some(_) => None,
+                };
+                let positional = rest.iter().all(|token| !token.contains('='));
+                if rest.len() == 6 && positional && initial_state.is_none() {
+                    return Err(ctx.parse_err(format!(
+                        "switch initial state `{}` must be ON or OFF",
+                        rest[5]
+                    )));
                 }
-                // ngspice's own form, `S<name> n1 n2 nc+ nc- <model>`, carries
-                // its thresholds on a `.model SW` card that may come later.
-                if rest.len() == 5 && rest.iter().all(|token| !token.contains('=')) {
+                if let (5 | 6, true, Some(switch_on)) = (rest.len(), positional, initial_state) {
                     let nodes = rest[..4].iter().map(|name| circuit.intern(name)).collect();
                     pending.push(PendingDevice {
                         line: ctx.number,
@@ -2949,6 +2968,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         as_: None,
                         pd: None,
                         ps: None,
+                        switch_on,
                     });
                     continue;
                 }
@@ -3029,6 +3049,8 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                             invert,
                             signed,
                             strict: false,
+                            initially_closed: false,
+                            dropout: None,
                         }),
                     });
                 } else {
@@ -3714,6 +3736,8 @@ fn bind_models(
                         invert: false,
                         signed: true,
                         strict: true,
+                        initially_closed: device.switch_on,
+                        dropout: Some(model.vt - model.vh),
                     }),
                 });
             }

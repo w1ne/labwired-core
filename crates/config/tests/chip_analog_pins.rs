@@ -137,19 +137,33 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
                 None => problems.push(format!("{chip}: {pad} is not a GPIO<n> ESP32-S3 pad label")),
             }
         } else if esp32c3_sar {
-            // ESP32-C3 datasheet analog-function table: ADC1_CH0..CH4 are
-            // GPIO0..GPIO4, so the channel number IS the GPIO number. ADC2_CH0
-            // (GPIO5) is excluded: the model's SAR2 one-shot shares the SAR1
-            // channel slots, so a GPIO5 entry on channel 0 would alias GPIO0.
+            // The C3 APB_SARADC one-shot engine also serves the C5, C6 and C61.
+            // Each chip's ADC1 pads come from its datasheet analog-function
+            // table (see `esp32c3_family_adc1_gpio`). ADC2 pads are excluded:
+            // the model's SAR2 one-shot shares the SAR1 channel slots, so an
+            // ADC2 entry would alias an ADC1 pad.
+            let Some(pads) = esp32c3_family_adc1_gpio(&desc.name) else {
+                problems.push(format!(
+                    "{chip}: {} runs esp32c3_apb_saradc but has no ADC1 pad table \
+                     in esp32c3_family_adc1_gpio",
+                    desc.name
+                ));
+                continue;
+            };
             match esp_gpio_number(pad) {
-                Some(_) if *channel >= 5 => problems.push(format!(
-                    "{chip}: {pad} names channel {channel}; C3 SAR ADC1 has 5 inputs"
-                )),
-                Some(gpio) if gpio != *channel => problems.push(format!(
-                    "{chip}: {pad} must be GPIO{channel} for C3 SAR ADC1 channel {channel}"
-                )),
-                Some(_) => {}
-                None => problems.push(format!("{chip}: {pad} is not a GPIO<n> ESP32-C3 pad label")),
+                Some(gpio) => match pads.get(usize::from(*channel)) {
+                    Some(&expected) if expected != gpio => problems.push(format!(
+                        "{chip}: {pad} must be GPIO{expected} for {} SAR ADC1 channel {channel}",
+                        desc.name
+                    )),
+                    Some(_) => {}
+                    None => problems.push(format!(
+                        "{chip}: {pad} names channel {channel}; {} SAR ADC1 has {} model inputs",
+                        desc.name,
+                        pads.len()
+                    )),
+                },
+                None => problems.push(format!("{chip}: {pad} is not a GPIO<n> ESP32 pad label")),
             }
         } else if esp32_sar {
             // Classic ESP32 datasheet Table 2-2 (ESP32 Series Datasheet,
@@ -356,6 +370,24 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
         }
     }
     problems
+}
+
+/// ADC1 pads, in channel order, for the chips that run the C3 APB_SARADC
+/// model. ESP32-C3/C6: ADC1_CH0..CH4 are GPIO0..GPIO4 (C3/C6 datasheets,
+/// analog functions; the C6's CH5/CH6 on GPIO5/GPIO6 wait for a per-chip
+/// model channel count). ESP32-C61: ADC1_CH0..CH3 are GPIO1, GPIO3, GPIO4 and
+/// GPIO5 (ESP-IDF components/soc/esp32c61/include/soc/adc_channel.h).
+/// ESP32-C5: ADC1_CH0..CH5 are GPIO1..GPIO6 (ESP-IDF
+/// components/soc/esp32c5/include/soc/adc_channel.h); CH5 waits for the same
+/// per-chip model channel count as the C6. An unlisted chip returns `None`,
+/// so a new chip on this model must add its own table.
+fn esp32c3_family_adc1_gpio(chip_name: &str) -> Option<&'static [u8]> {
+    match chip_name {
+        "esp32c3" | "esp32c6" | "esp32c6fh4" => Some(&[0, 1, 2, 3, 4]),
+        "esp32c5" => Some(&[1, 2, 3, 4, 5]),
+        "esp32c61" => Some(&[1, 3, 4, 5]),
+        _ => None,
+    }
 }
 
 /// Classic ESP32 SAR ADC1 CH0..CH7 pads, in channel order.
@@ -921,6 +953,86 @@ fn esp32c6_validation_rejects_bad_pads_channels_and_types() {
 }
 
 #[test]
+fn esp32c5_validation_rejects_bad_pads_channels_and_types() {
+    // ESP-IDF esp32c5 adc_channel.h: ADC1_CH0..CH5 are GPIO1..GPIO6. The
+    // model publishes CH0..CH4.
+    let original = load("esp32c5");
+    assert!(analog_pin_problems("esp32c5", &original).is_empty());
+    let expected: BTreeMap<String, AdcPinFn> = (0u8..5)
+        .map(|channel| {
+            (
+                format!("GPIO{}", channel + 1),
+                AdcPinFn {
+                    peripheral: "apb_saradc".into(),
+                    channel,
+                },
+            )
+        })
+        .collect();
+    assert_eq!(original.analog_pins, expected);
+    // The C3/C6 rule (channel == GPIO) is wrong for the C5.
+    let mut desc = original.clone();
+    desc.analog_pins.get_mut("GPIO3").unwrap().channel = 3;
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+    // GPIO0 has no ADC input on the C5, whatever channel it claims.
+    let mut desc = original.clone();
+    let mapping = desc.analog_pins.remove("GPIO1").unwrap();
+    desc.analog_pins.insert("GPIO0".into(), mapping);
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+    // The model has five C5 ADC1 inputs; GPIO7 has none at all.
+    let mut desc = original.clone();
+    desc.analog_pins.insert(
+        "GPIO7".into(),
+        AdcPinFn {
+            peripheral: "apb_saradc".into(),
+            channel: 5,
+        },
+    );
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+}
+
+#[test]
+fn esp32c61_validation_rejects_bad_pads_channels_and_types() {
+    // ESP-IDF esp32c61 adc_channel.h: ADC1_CH0..CH3 are GPIO1, 3, 4, 5.
+    let original = load("esp32c61");
+    assert!(analog_pin_problems("esp32c61", &original).is_empty());
+    let expected: BTreeMap<String, AdcPinFn> = [1u8, 3, 4, 5]
+        .into_iter()
+        .enumerate()
+        .map(|(channel, gpio)| {
+            (
+                format!("GPIO{gpio}"),
+                AdcPinFn {
+                    peripheral: "apb_saradc".into(),
+                    channel: channel as u8,
+                },
+            )
+        })
+        .collect();
+    assert_eq!(original.analog_pins, expected);
+    // The C3/C6 rule (channel == GPIO) is wrong for the C61.
+    let mut desc = original.clone();
+    desc.analog_pins.get_mut("GPIO3").unwrap().channel = 3;
+    desc.analog_pins.get_mut("GPIO5").unwrap().channel = 1;
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+    // GPIO2 has no ADC input on the C61, whatever channel it claims.
+    let mut desc = original.clone();
+    let mapping = desc.analog_pins.remove("GPIO1").unwrap();
+    desc.analog_pins.insert("GPIO2".into(), mapping);
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+    // The C61 SAR ADC1 has four inputs.
+    let mut desc = original.clone();
+    desc.analog_pins.insert(
+        "GPIO6".into(),
+        AdcPinFn {
+            peripheral: "apb_saradc".into(),
+            channel: 4,
+        },
+    );
+    assert!(!analog_pin_problems("bad", &desc).is_empty());
+}
+
+#[test]
 fn esp32c3_validation_rejects_bad_pads_channels_and_types() {
     let original = load("esp32c3");
     assert!(analog_pin_problems("esp32c3", &original).is_empty());
@@ -998,4 +1110,15 @@ fn esp32s3_validation_rejects_bad_pads_channels_and_types() {
         .unwrap()
         .r#type = "uart".into();
     assert!(!analog_pin_problems("bad", &desc).is_empty());
+}
+
+#[test]
+fn esp32c3_family_pad_table_rejects_an_unlisted_chip() {
+    // A new chip on the C3 APB_SARADC model must add its own pad table; a
+    // silent channel == GPIO fallback would accept a wrong map.
+    assert_eq!(esp32c3_family_adc1_gpio("esp32h2"), None);
+    assert_eq!(
+        esp32c3_family_adc1_gpio("esp32c6fh4"),
+        Some(&[0u8, 1, 2, 3, 4][..])
+    );
 }

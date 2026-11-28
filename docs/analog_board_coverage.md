@@ -14,8 +14,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **441**
-- Covered end to end: **136**
-- Not covered: **305**
+- Covered end to end: **140**
+- Not covered: **301**
 - Not covered but with an ADC pad map: **0** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` block or `adc` pin functions, an ADC model, or a digital
@@ -51,10 +51,6 @@ None.
 | `esp32-devkitc-32e-gpio-smoke` | `esp32-devkitc-32e-gpio-smoke` | 0 |
 | `esp32-devkitc-32e-uart1` | `esp32-devkitc-32e-uart1` | 0 |
 | `esp32-s3-devkitc-1-n16r8-adc` | `esp32s3-devkitc-1-n16r8-adc` | 0 |
-| `esp32c5-devkitc-1-n8r8-bme280` | `esp32c5` | 0 |
-| `esp32c5-devkitc-1-n8r8` | `esp32c5` | 0 |
-| `esp32c61-devkitc-1-n8r2-bme280` | `esp32c61` | 0 |
-| `esp32c61-devkitc-1-n8r2` | `esp32c61` | 0 |
 | `esp32h2-devkitm-1-n4s` | `esp32h2` | 0 |
 | `esp32p4x-c5-function-ev-board` | `esp32p4` | 0 |
 | `esp32s2-devkitc-1-n8r2` | `esp32s2` | 0 |
@@ -386,10 +382,14 @@ None.
 | `esp32c3-oled-128x32-workshop` | `esp32c3` | `crates/core/tests/analog/cosim_esp32c3_boards_analog.rs` |
 | `esp32c3-oled-demo` | `esp32c3` | `crates/core/tests/analog/cosim_esp32c3_boards_analog.rs` |
 | `esp32c3-tm1637-clock-workshop` | `esp32c3` | `crates/core/tests/analog/cosim_esp32c3_boards_analog.rs` |
+| `esp32c5-devkitc-1-n8r8-bme280` | `esp32c5` | `crates/core/tests/analog/cosim_esp32c5_boards_analog.rs` |
+| `esp32c5-devkitc-1-n8r8` | `esp32c5` | `crates/core/tests/analog/cosim_esp32c5_boards_analog.rs` |
 | `esp32c6-devkitc-1-n8-bme280` | `esp32c6` | `crates/core/tests/analog/cosim_esp32c6_boards_analog.rs` |
 | `esp32c6-devkitc-bme280` | `esp32c6` | `crates/core/tests/analog/cosim_esp32c6_boards_analog.rs` |
 | `esp32c6-devkitc` | `esp32c6` | `crates/core/tests/analog/cosim_esp32c6_boards_analog.rs` |
 | `esp32c6-zero-m-bme280` | `esp32c6fh4` | `crates/core/tests/analog/cosim_esp32c6_boards_analog.rs` |
+| `esp32c61-devkitc-1-n8r2-bme280` | `esp32c61` | `crates/core/tests/analog/cosim_esp32c61_boards_analog.rs` |
+| `esp32c61-devkitc-1-n8r2` | `esp32c61` | `crates/core/tests/analog/cosim_esp32c61_boards_analog.rs` |
 | `esp32s3-devkitc-1-n16r8-bme280` | `esp32s3` | `crates/core/tests/analog/cosim_esp32s3_boards_analog.rs` |
 | `esp32s3-devkitc-1-v1.1-rgb` | `esp32s3` | `crates/core/tests/analog/cosim_esp32s3_boards_analog.rs` |
 | `esp32s3-devkitc-1-v1.1` | `esp32s3` | `crates/core/tests/analog/cosim_esp32s3_boards_analog.rs` |

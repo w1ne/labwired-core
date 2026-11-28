@@ -385,9 +385,173 @@ fn ngspice_sw_model_rejects_an_unknown_parameter() {
 }
 
 #[test]
-fn ngspice_sw_initial_state_keyword_is_reported_as_unsupported() {
-    let err =
-        parse_netlist("* keyword\nS1 a 0 c 0 SMOD OFF\n.model SMOD SW(VT=1)\n.end\n").unwrap_err();
-    assert!(matches!(&err, AnalogError::Unsupported { .. }), "{err}");
-    assert!(err.to_string().contains("needs ngspice"), "{err}");
+fn ngspice_sw_initial_state_keyword_seeds_the_operating_point() {
+    // ngspice `ON` starts the operating point closed; inside the `VT ± VH`
+    // band the switch keeps that state, outside it the control decides.
+    // `OFF` is the default. The control 1 V sits inside [0.5, 1.5].
+    let deck = |state: &str, control: f64| {
+        format!(
+            "* initial state\n\
+             Vctrl ctrl 0 dc {control}\n\
+             Vdd vdd 0 dc 5\n\
+             Rload vdd out 1k\n\
+             S1 out 0 ctrl 0 SMOD {state}\n\
+             .model SMOD SW(VT=1 VH=0.5 RON=1 ROFF=1meg)\n\
+             .end\n"
+        )
+    };
+    let out_after = |state: &str, control: f64| {
+        let circuit = parse_netlist(&deck(state, control)).expect("netlist parses");
+        let mut solver = Solver::new(circuit, Integration::BackwardEuler).expect("solver");
+        let out = solver.circuit().node("out").expect("out");
+        let at_op = solver.node_voltage(out);
+        run_to(&mut solver, 1e-6, 20);
+        assert_eq!(at_op, solver.node_voltage(out), "{state} at {control} V");
+        at_op
+    };
+    assert!(
+        out_after("ON", 1.0) < 0.05,
+        "ON holds closed inside the band"
+    );
+    assert!(
+        out_after("on", 1.0) < 0.05,
+        "the keyword is case-insensitive"
+    );
+    assert!(
+        out_after("OFF", 1.0) > 4.9,
+        "OFF holds open inside the band"
+    );
+    assert!(out_after("", 1.0) > 4.9, "the default is OFF");
+    assert!(out_after("ON", 0.2) > 4.9, "ON opens below VT − VH");
+    assert!(out_after("OFF", 1.8) < 0.05, "OFF closes above VT + VH");
+
+    let circuit = parse_netlist(&deck("ON", 1.0)).expect("netlist parses");
+    let control = circuit.switches[0].voltage.as_ref().expect("voltage");
+    assert!(control.initially_closed);
+}
+
+#[test]
+fn ngspice_sw_on_at_lower_edge_stays_closed_in_op_and_transient() {
+    let circuit = parse_netlist(
+        "* ON at lower hysteresis edge\n\
+         Vctrl ctrl 0 dc 0.5\n\
+         Vdd vdd 0 dc 5\n\
+         Rload vdd out 1k\n\
+         S1 out 0 ctrl 0 SMOD ON\n\
+         .model SMOD SW(VT=1 VH=0.5 RON=1 ROFF=1meg)\n\
+         .end\n",
+    )
+    .expect("netlist parses");
+    let mut solver = Solver::new(circuit, Integration::BackwardEuler).expect("solver");
+    let out = solver.circuit().node("out").expect("out");
+    assert!(
+        solver.node_voltage(out) < 0.05,
+        "ON remains closed at exactly VT − VH in the operating point: {} V",
+        solver.node_voltage(out)
+    );
+
+    run_to(&mut solver, 1e-6, 10);
+    assert!(
+        solver.node_voltage(out) < 0.05,
+        "ON remains closed at exactly VT − VH in transient: {} V",
+        solver.node_voltage(out)
+    );
+
+    solver.set_voltage_source(0, 1.6);
+    run_to(&mut solver, 1e-6, 10);
+    assert!(
+        solver.node_voltage(out) < 0.05,
+        "control above VT + VH closes the switch: {} V",
+        solver.node_voltage(out)
+    );
+
+    solver.set_voltage_source(0, 0.5);
+    run_to(&mut solver, 1e-6, 10);
+    assert!(
+        solver.node_voltage(out) < 0.05,
+        "transient hysteresis holds closed at exactly VT − VH: {} V",
+        solver.node_voltage(out)
+    );
+}
+
+#[test]
+fn ngspice_sw_lower_edge_is_exactly_vt_minus_vh() {
+    // 0.5 + 0.3 − 2·0.3 is 0.20000000000000007, not 0.2. The lower edge
+    // must be ngspice's own VT − VH, or an ON switch held at exactly 0.2 V
+    // opens where ngspice keeps it closed.
+    let circuit = parse_netlist(
+        "* inexact band arithmetic\n\
+         Vctrl ctrl 0 dc 0.2\n\
+         Vdd vdd 0 dc 5\n\
+         Rload vdd out 1k\n\
+         S1 out 0 ctrl 0 SMOD ON\n\
+         .model SMOD SW(VT=0.5 VH=0.3 RON=1 ROFF=1meg)\n\
+         .end\n",
+    )
+    .expect("netlist parses");
+    let mut solver = Solver::new(circuit, Integration::BackwardEuler).expect("solver");
+    let ctrl = solver.circuit().node("ctrl").expect("ctrl");
+    let out = solver.circuit().node("out").expect("out");
+    assert_eq!(
+        solver.node_voltage(ctrl),
+        0.2,
+        "the control sits on the edge"
+    );
+    assert!(
+        solver.node_voltage(out) < 0.05,
+        "ON stays closed at exactly VT − VH = 0.2 V: {} V",
+        solver.node_voltage(out)
+    );
+    run_to(&mut solver, 1e-6, 10);
+    assert!(
+        solver.node_voltage(out) < 0.05,
+        "the transient keeps it closed at 0.2 V: {} V",
+        solver.node_voltage(out)
+    );
+    solver.set_voltage_source(0, 0.19);
+    run_to(&mut solver, 1e-6, 10);
+    assert!(
+        solver.node_voltage(out) > 4.9,
+        "below VT − VH the switch opens: {} V",
+        solver.node_voltage(out)
+    );
+}
+
+#[test]
+fn ngspice_sw_rejects_an_unknown_trailing_keyword() {
+    let err = parse_netlist("* keyword\nS1 a 0 c 0 SMOD MAYBE\n.model SMOD SW(VT=1)\n.end\n")
+        .unwrap_err();
+    assert!(!matches!(&err, AnalogError::Unsupported { .. }), "{err}");
+    assert!(err.to_string().contains("must be ON or OFF"), "{err}");
+}
+
+#[test]
+fn ngspice_sw_on_that_opens_at_the_operating_point_stays_open_in_the_band() {
+    // The switch pulls its own control down: closed, the control is 0.1 V,
+    // below the band, so the OP opens it; open, the control is 1 V, inside
+    // [0.5, 1.5], so it stays open. ngspice-42 `op` agrees (open).
+    let circuit = parse_netlist(
+        "* ON with feedback\n\
+         Vdd vdd 0 dc 2\n\
+         Rtop vdd out 1k\n\
+         S1 out 0 ctrl 0 SMOD ON\n\
+         Rbot ctrl 0 1meg\n\
+         E1 ctrl 0 out 0 0.5\n\
+         .model SMOD SW(VT=1 VH=0.5 RON=100 ROFF=1g)\n\
+         .end\n",
+    )
+    .expect("netlist parses");
+    let mut solver = Solver::new(circuit, Integration::BackwardEuler).expect("solver");
+    let out = solver.circuit().node("out").expect("out");
+    assert!(
+        solver.node_voltage(out) > 1.99,
+        "{} V",
+        solver.node_voltage(out)
+    );
+    run_to(&mut solver, 1e-6, 20);
+    assert!(
+        solver.node_voltage(out) > 1.99,
+        "{} V",
+        solver.node_voltage(out)
+    );
 }
