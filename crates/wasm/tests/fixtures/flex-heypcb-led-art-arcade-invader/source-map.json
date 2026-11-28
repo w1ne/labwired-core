@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "source": {
+    "repository": "HeyPCB/led-art",
+    "revision": "b0830dcfa3f71c409e9784fa784b9c6864a6ff12",
+    "asset": "boards/arcade-invader",
+    "title": "INVADER",
+    "license_spdx": "CERN-OHL-S-2.0",
+    "source_url": "https://github.com/HeyPCB/led-art/tree/b0830dcfa3f71c409e9784fa784b9c6864a6ff12/boards/arcade-invader",
+    "license_url": "https://github.com/HeyPCB/led-art/blob/b0830dcfa3f71c409e9784fa784b9c6864a6ff12/LICENSE",
+    "files": {
+      "readme_git_blob": "e904d6eee1e6053f263cb76ee361d636f4056617",
+      "board_json_git_blob": "60a5f2cdcad4b5657c0b440a68b26f16a70e09a4",
+      "schematic_git_blob": "7eb54cb053d8de263c67f29452bb7108e09dfc0f",
+      "pcb_git_blob": "fd0052c8b9af2036b1a31476a9a90b149a72a87d"
+    }
+  },
+  "import_handoff": {
+    "asset_id": "pcb:github-heypcb-led-art--boards-arcade-invader",
+    "imported_target": "ch32v003f4p6",
+    "controller_ref": "U1",
+    "strip_ref": "D1",
+    "strip_part": "XL-2020RGBC-2812B",
+    "strip_lcsc": "C5349955",
+    "pixels": 21,
+    "data_endpoint": "U1.PC6",
+    "data_pin": "PC6"
+  },
+  "flex_binding": {
+    "port": "led_data",
+    "port_signal": "source.U1.PC6",
+    "sink_id": "strip_d1",
+    "sink_type": "neopixel",
+    "sink_pin": "DIN",
+    "sink_signal": "source.U1.PC6"
+  }
+}

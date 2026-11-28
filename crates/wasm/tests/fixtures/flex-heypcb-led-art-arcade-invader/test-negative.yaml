@@ -1,0 +1,20 @@
+# An all-dark frame on the imported PC6 net must decode as 21 dark pixels.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+entry:
+  export: run
+  args:
+    - { port: led_data }
+    - { number: 0 }
+limits:
+  max_steps: 100000
+  max_time_ns: 700000
+assertions:
+  - entry_result: { equals: 0 }
+  - final_time_ns: { equals: 690000 }
+  - digital_edges: { port: led_data, count: 1008, from_ns: 0, to_ns: 630000 }
+  - device_state: { device: strip_d1, key: pixels_decoded, equals: 21 }
+  - device_state: { device: strip_d1, key: lit_pixels, equals: 0 }
+  - device_state: { device: strip_d1, key: frame_history_dropped, equals: 0 }

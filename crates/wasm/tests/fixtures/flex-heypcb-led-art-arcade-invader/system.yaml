@@ -1,0 +1,22 @@
+# Flex-owned runtime handoff for the imported HeyPCB INVADER project.
+# The Library importer owns KiCad discovery and source mapping; this manifest
+# binds its U1.PC6 -> D1.DIN connection to the generic Flex WS2812 sink.
+schema_version: 1
+name: heypcb-led-art-arcade-invader
+assumptions:
+  - The pinned board source ships no firmware; firmware.rs is a newly authored portable WebAssembly test workload.
+  - The imported CH32V003F4P6 U1.PC6 net drives D1 DIN, the board's 21-pixel XL-2020RGBC-2812B WS2812 strip.
+  - Each port write is an ideal digital level change at its exact virtual nanosecond timestamp.
+  - The generic neopixel decoder uses its catalog WS2812 GRB format and timing thresholds.
+unsupported_checks:
+  - Original project firmware execution; the source repository contains no firmware.
+  - CH32V003 instruction, GPIO register, peripheral, clock or reset fidelity; no target CPU is emulated.
+  - LED supply current, power rail behavior, thermal behavior, optical brightness, data-out propagation or production tolerance.
+  - USB-C input and connector behavior, SWIO programming, and MODE button behavior.
+  - Complete board integration, chip parity, fabrication, assembly, and physical hardware behavior.
+  - Analog voltage or current behavior; this workload exercises the digital strip data net only.
+ports:
+  - { name: led_data, signal: source.U1.PC6, access: write, kind: bool, initial: 0 }
+cosim_models: []
+sinks:
+  - { id: strip_d1, type: neopixel, config: { num_pixels: 21 }, pins: { DIN: source.U1.PC6 } }
