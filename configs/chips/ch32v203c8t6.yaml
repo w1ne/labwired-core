@@ -33,7 +33,10 @@
 #     (44..46) run the STM32F1 timer model for counting and interrupts only:
 #     channel outputs and capture inputs reach no GPIO pad. Only the TIM2
 #     update and TIM1 CH1 compare interrupts are smoke-tested.
-#     No ADC, I2C, CAN or USB.
+#     ADC1/ADC2 run the STM32F1 ADC model (12-bit, shared PFIC line 34);
+#     software-started single conversions, calibration and the ADC1 EOC
+#     interrupt are smoke-tested. No PGA gain, TKey or dual-ADC modes.
+#     No I2C, CAN or USB.
 #   - The debug printf block assumes a WCH-LinkE probe is attached and
 #     polling (its sentinel reads 0). Firmware that waits for a probe
 #     therefore never times out here.
@@ -284,3 +287,28 @@ peripherals:
     size: "1KB"
     irq: 46
     clock: { reg: "apb1enr", bit: 2 }
+
+  # ADC1/ADC2 (ch32v20xhw.h): ADC1_BASE = APB2PERIPH_BASE + 0x2400, ADC2_BASE
+  # = + 0x2800, RCC_ADC1EN/ADC2EN = APB2PCENR bits 9/10. ADC_TypeDef is the
+  # STM32F1 register file (STATR..RDATAR at the F1 offsets, CTLR2.SWSTART bit
+  # 22, RSTCAL/CAL) with a 12-bit SAR, IN16 temperature sensor and IN17
+  # VREFINT, so the `stm32f1` profile applies unchanged. Both ADCs share
+  # ADC_IRQn 34. Not modelled: the V20x CTLR1 PGA/BUFEN bits (stored, no gain
+  # applied), the TKey touch-key mode and dual-ADC modes.
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012400
+    size: "1KB"
+    irq: 34
+    clock: { reg: "apb2enr", bit: 9 }
+    config:
+      profile: "stm32f1"
+
+  - id: "adc2"
+    type: "adc"
+    base_address: 0x40012800
+    size: "1KB"
+    irq: 34
+    clock: { reg: "apb2enr", bit: 10 }
+    config:
+      profile: "stm32f1"
