@@ -4,7 +4,8 @@
 # point; it does not execute the C5 mask ROM or the Espressif bootloader.
 # Models UART0's FIFO/status register head, the official GPIO data/enable/input
 # registers through IN1, and the I2C0 command-list engine with the GPIO8/9
-# matrix route. A system may attach a GPIO-observed WS2812 model to GPIO27; RMT
+# matrix route, and the APB_SARADC one-shot converter on ADC1_CH0..CH4.
+# A system may attach a GPIO-observed WS2812 model to GPIO27; RMT
 # is not modelled. IO_MUX is register storage only. PCR clock control, UART1,
 # USB, PSRAM, Wi-Fi, Bluetooth, 802.15.4 and LP core are outside this profile.
 #
@@ -32,6 +33,21 @@ flash:
 ram:
   base: 0x40800000
   size: "384KB"
+
+# Pad -> ADC input map for co-simulation routes (`board.analog.<pad>_volts`).
+# The C5 has one SAR ADC with six ADC1 inputs, and the pad is NOT the channel
+# number: ADC1_CH0..CH5 are GPIO1..GPIO6.
+# Source: ESP-IDF components/soc/esp32c5/include/soc/adc_channel.h
+# (ADC1_GPIO1_CHANNEL 0 .. ADC1_GPIO6_CHANNEL 5); soc_caps.h
+# SOC_ADC_PERIPH_NUM = 1. GPIO6 (ADC1_CH5) is not listed yet: the shared
+# `esp32c3_apb_saradc` model reports the C3's five inputs, the same limit
+# that holds back the C6's CH5/CH6.
+analog_pins:
+  GPIO1: { peripheral: "apb_saradc", channel: 0 }
+  GPIO2: { peripheral: "apb_saradc", channel: 1 }
+  GPIO3: { peripheral: "apb_saradc", channel: 2 }
+  GPIO4: { peripheral: "apb_saradc", channel: 3 }
+  GPIO5: { peripheral: "apb_saradc", channel: 4 }
 
 # Board pin map (Espressif C5-DevKitC-1 v1.2 guide): J3 TX is GPIO11/U0TXD;
 # J3 RX is GPIO12/U0RXD. The USB-UART bridge and IO_MUX routing stay outside
@@ -73,6 +89,21 @@ peripherals:
     type: "esp32c5_i2c"
     irq: 55
     base_address: 0x60004000
+    size: "4KB"
+
+  # APB_SARADC — the C3 one-shot conversion engine (`esp32c3_apb_saradc`) at
+  # the C5 base. ESP-IDF esp32c5 register/soc/apb_saradc_reg.h matches the
+  # model's head map: ONETIME_SAMPLE@0x20 (SARADC1_ONETIME_SAMPLE [31],
+  # ONETIME_START [29], ONETIME_CHANNEL [28:25]), SAR1DATA_STATUS@0x2C
+  # (DATA [16:0]), INT_RAW@0x44 (SARADC1_DONE [31]), INT_CLR@0x4C.
+  # reg_base.h DR_REG_APB_SARADC_BASE = 0x6000E000; interrupts.h
+  # ETS_APB_ADC_INTR_SOURCE = 64. Register reset seeds are the C3 capture.
+  # PCR clock control is outside this profile, so the converter is always
+  # clocked here (documented gap).
+  - id: "apb_saradc"
+    type: "esp32c3_apb_saradc"
+    irq: 64
+    base_address: 0x6000E000
     size: "4KB"
 
   # Register-backed pad words permit the firmware's GPIO5/8/9 function writes;

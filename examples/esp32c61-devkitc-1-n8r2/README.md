@@ -81,3 +81,28 @@ The 2 MiB PSRAM, USB, Wi-Fi, and Bluetooth LE remain outside this profile.
 
 UART/GPIO evidence logs are in [`evidence/`](evidence/); BME280 evidence and
 the live availability receipt are in the linked sensor example.
+
+## Analog inputs
+
+`chips/esp32c61.yaml` publishes the four ADC1 pads in `analog_pins:`:
+GPIO1, GPIO3, GPIO4 and GPIO5 are ADC1_CH0..CH3 (ESP-IDF
+`components/soc/esp32c61/include/soc/adc_channel.h`). The pad number is not
+the channel number on this chip. The `apb_saradc` instance is the
+ESP32-C3 one-shot SAR engine at `0x6000E000`, because the C61 register head
+matches it.
+
+[`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) is the generic
+Beta NTC divider on GPIO3 and Shockley diode load line on GPIO5. Both C61
+profiles run it unchanged:
+
+```bash
+cargo test -p labwired-core --test analog -- esp32c61
+```
+
+The test solves both netlists at -20, 25 and 85 C, converts ADC1 channels 1
+and 3 through the `adc_oneshot_read` register sequence, and checks that the
+router refuses GPIO0, GPIO2 and GPIO6.
+
+Gaps: the converter has no PCR clock gate yet (the C61 PCR subset has no
+`SARADC_CONF` row), the register reset seeds are the C3 capture, and
+attenuation is not modelled.

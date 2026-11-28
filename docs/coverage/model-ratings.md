@@ -151,8 +151,8 @@ same fields but never their source, chip YAML, binary or build paths.
 | at32f421g8u7 | open | L1 | 22 | 863.5 | 1.5 | ≥1× (CI) | [doc](docs/boards/at32f421g8u7.md) |
 | ch32v003j4m6 | open | L1 | 15 | — | — | ≥1× (CI) | — |
 | esp32h2 | open | L0 | 3 | — | 2.4 | ≥1× (CI) | — |
-| esp32c5 | open | L0 | 4 | — | 2.2 | ≥1× (CI) | — |
-| esp32c61 | open | L0 | 5 | — | 2.2 | ≥1× (CI) | — |
+| esp32c5 | open | L0 | 5 | — | 2.2 | ≥1× (CI) | — |
+| esp32c61 | open | L0 | 6 | — | 2.2 | ≥1× (CI) | — |
 | nrf54l05 | open | L0 | 6 | 808.5 | 1.2 | ≥1× (CI) | [doc](docs/boards/nrf54l05.md) |
 | nrf54l10 | open | L0 | 6 | 808.5 | 1.2 | ≥1× (CI) | [doc](docs/boards/nrf54l10.md) |
 | esp32p4 | open | L0 | 4 | — | — | ≥1× (CI) | — |
