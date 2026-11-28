@@ -820,6 +820,42 @@ jobs:
       - name: Unit tests (default-members lib)
         run: cargo test --lib
 
+  # The in-core analog solver is being checked against the independent
+  # ngspice reference before its eventual retirement. Keep this suite in its
+  # own job so its CLI build does not consume the already time-sensitive pr-gate.
+  pr-ngspice-differential:
+    name: pr-ngspice-differential
+    if: >
+      !(github.event_name == 'pull_request' && github.event.pull_request.draft) &&
+      (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-pr-gate
+          workspaces: |
+            . -> target
+          save-if: false
+
+      - name: Install ngspice reference engine
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ngspice libngspice0
+
+      - name: Compare in-core analog traces against ngspice
+        env:
+          LABWIRED_REQUIRE_NGSPICE: "1"
+        run: >
+          scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-cli
+          --test analog_vs_ngspice_differential -- --nocapture
+
   # Manual only: a cold `cargo build -p labwired-core --timings` on CI hardware,
   # so build-time work (crate splits, test-binary consolidation) has a measured
   # baseline. Dispatch with `build_timings: true`. Never runs on pull_request
@@ -1113,12 +1149,13 @@ jobs:
 
   # Preserve the existing protected context. always() prevents a failed,
   # cancelled, or skipped prerequisite from turning this gate into a skip.
-  # Both library feature configurations and scoped performance admission must succeed.
+  # Both library feature configurations, ngspice differential coverage and
+  # scoped performance admission must succeed.
   pr-core-feature-off:
     # Skipped on drafts (both test jobs it aggregates are skipped there); the
     # name differs so no draft run ever reports the required context.
     name: ${{ (github.event_name == 'pull_request' && github.event.pull_request.draft) && 'pr-core-feature-off (draft-light)' || 'pr-core-feature-off' }}
-    needs: [pr-default-members-lib, pr-core-feature-off-tests, pr-performance]
+    needs: [pr-default-members-lib, pr-core-feature-off-tests, pr-ngspice-differential, pr-performance]
     if: >
       always() &&
       !(github.event_name == 'pull_request' && github.event.pull_request.draft) &&
@@ -1130,10 +1167,11 @@ jobs:
         env:
           DEFAULT_MEMBERS_RESULT: ${{ needs.pr-default-members-lib.result }}
           FEATURE_OFF_RESULT: ${{ needs.pr-core-feature-off-tests.result }}
+          NGSPICE_RESULT: ${{ needs.pr-ngspice-differential.result }}
           PERF_RESULT: ${{ needs.pr-performance.result }}
         run: |
-          if [ "$DEFAULT_MEMBERS_RESULT" != success ] || [ "$FEATURE_OFF_RESULT" != success ] || [ "$PERF_RESULT" != success ]; then
-            echo "::error::Required library/performance jobs did not all pass: default-members=$DEFAULT_MEMBERS_RESULT feature-off=$FEATURE_OFF_RESULT perf=$PERF_RESULT"
+          if [ "$DEFAULT_MEMBERS_RESULT" != success ] || [ "$FEATURE_OFF_RESULT" != success ] || [ "$NGSPICE_RESULT" != success ] || [ "$PERF_RESULT" != success ]; then
+            echo "::error::Required library/ngspice/performance jobs did not all pass: default-members=$DEFAULT_MEMBERS_RESULT feature-off=$FEATURE_OFF_RESULT ngspice=$NGSPICE_RESULT perf=$PERF_RESULT"
             exit 1
           fi
 

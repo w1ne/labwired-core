@@ -148,10 +148,12 @@ const LIBRARY_WORKERS: &[(&str, &str)] = &[
     ("pr-default-members-lib", "DEFAULT_MEMBERS_RESULT"),
     ("pr-core-feature-off-tests", "FEATURE_OFF_RESULT"),
 ];
+const NGSPICE_WORKER: (&str, &str) = ("pr-ngspice-differential", "NGSPICE_RESULT");
 const PERFORMANCE_WORKER: (&str, &str) = ("pr-performance", "PERF_RESULT");
 
-/// Admit only the two existing library workers as crate coverage, after proving
-/// their required aggregate enforces both libraries and performance admission.
+/// Admit only the two library workers as crate coverage, after proving their
+/// required aggregate enforces both libraries, ngspice comparison and
+/// performance admission.
 /// Naming a worker in `needs` alone is not proof: a skipped/advisory aggregate
 /// or a guard that checks the wrong result would otherwise hide a coverage gap.
 fn required_library_worker_bodies(ci: &str) -> Result<Vec<String>, String> {
@@ -163,7 +165,7 @@ fn required_library_worker_bodies(ci: &str) -> Result<Vec<String>, String> {
     }
     let needs: Vec<_> = aggregate["needs"]
         .as_sequence()
-        .ok_or("library aggregate must declare both libraries and performance admission")?
+        .ok_or("library aggregate must declare all required workers")?
         .iter()
         .map(|v| v.as_str())
         .collect();
@@ -171,6 +173,7 @@ fn required_library_worker_bodies(ci: &str) -> Result<Vec<String>, String> {
         != LIBRARY_WORKERS
             .iter()
             .map(|(job, _)| Some(*job))
+            .chain(std::iter::once(Some(NGSPICE_WORKER.0)))
             .chain(std::iter::once(Some(PERFORMANCE_WORKER.0)))
             .collect::<Vec<_>>()
     {
@@ -181,7 +184,7 @@ fn required_library_worker_bodies(ci: &str) -> Result<Vec<String>, String> {
     if condition
         != "always()&&!(github.event_name=='pull_request'&&github.event.pull_request.draft)&&(github.event_name=='pull_request'||github.event_name=='workflow_dispatch')"
     {
-        return Err("library aggregate must always check all three results on non-draft pull requests".into());
+        return Err("library aggregate must always check all required results on non-draft pull requests".into());
     }
     let advisory = |node: &serde_yaml::Value| {
         !node["continue-on-error"].is_null() && node["continue-on-error"].as_bool() != Some(false)
@@ -205,6 +208,37 @@ fn required_library_worker_bodies(ci: &str) -> Result<Vec<String>, String> {
     let script = guard["run"]
         .as_str()
         .ok_or("library result guard has no script")?;
+    let ngspice = &jobs[NGSPICE_WORKER.0];
+    if guard["env"][NGSPICE_WORKER.1].as_str()
+        != Some(format!("${{{{ needs.{}.result }}}}", NGSPICE_WORKER.0).as_str())
+    {
+        return Err(
+            "library result guard does not bind ngspice differential's actual result".into(),
+        );
+    }
+    if advisory(ngspice)
+        || normalize(ngspice["if"].as_str().unwrap_or_default())
+            != "!(github.event_name=='pull_request'&&github.event.pull_request.draft)&&(github.event_name=='pull_request'||github.event_name=='workflow_dispatch')"
+    {
+        return Err("ngspice differential must run on every pull request without allowing failure".into());
+    }
+    let ngspice_steps = ngspice["steps"]
+        .as_sequence()
+        .ok_or("ngspice differential has no steps")?;
+    if !ngspice_steps.iter().any(|step| {
+        step["run"].as_str().is_some_and(|run| {
+            run.contains("apt-get install -y --no-install-recommends ngspice libngspice0")
+        })
+    }) || !ngspice_steps.iter().any(|step| {
+        step["env"]["LABWIRED_REQUIRE_NGSPICE"].as_str() == Some("1")
+            && step["run"]
+                .as_str()
+                .is_some_and(|run| run.contains("--test analog_vs_ngspice_differential"))
+    }) {
+        return Err(
+            "ngspice differential must install both backends and run in strict mode".into(),
+        );
+    }
     let performance = &jobs[PERFORMANCE_WORKER.0];
     if guard["env"][PERFORMANCE_WORKER.1].as_str()
         != Some(format!("${{{{ needs.{}.result }}}}", PERFORMANCE_WORKER.0).as_str())
@@ -257,29 +291,35 @@ fn required_library_worker_bodies(ci: &str) -> Result<Vec<String>, String> {
     // failed, cancelled and skipped workers must all keep the merge gate red.
     for first in ["success", "failure", "cancelled", "skipped", ""] {
         for second in ["success", "failure", "cancelled", "skipped", ""] {
-            for performance in ["success", "failure", "cancelled", "skipped", ""] {
-                let result = std::process::Command::new("bash")
-                    .args([
-                        "--noprofile",
-                        "--norc",
-                        "-e",
-                        "-o",
-                        "pipefail",
-                        "-c",
-                        script,
-                    ])
-                    .env_clear()
-                    .env(LIBRARY_WORKERS[0].1, first)
-                    .env(LIBRARY_WORKERS[1].1, second)
-                    .env(PERFORMANCE_WORKER.1, performance)
-                    .output()
-                    .map_err(|e| format!("execute actual library result guard: {e}"))?;
-                if result.status.success()
-                    != (first == "success" && second == "success" && performance == "success")
-                {
-                    return Err(format!(
-                        "library guard admits the wrong result for {first:?}/{second:?}/{performance:?}"
+            for ngspice in ["success", "failure", "cancelled", "skipped", ""] {
+                for performance in ["success", "failure", "cancelled", "skipped", ""] {
+                    let result = std::process::Command::new("bash")
+                        .args([
+                            "--noprofile",
+                            "--norc",
+                            "-e",
+                            "-o",
+                            "pipefail",
+                            "-c",
+                            script,
+                        ])
+                        .env_clear()
+                        .env(LIBRARY_WORKERS[0].1, first)
+                        .env(LIBRARY_WORKERS[1].1, second)
+                        .env(NGSPICE_WORKER.1, ngspice)
+                        .env(PERFORMANCE_WORKER.1, performance)
+                        .output()
+                        .map_err(|e| format!("execute actual library result guard: {e}"))?;
+                    if result.status.success()
+                        != (first == "success"
+                            && second == "success"
+                            && ngspice == "success"
+                            && performance == "success")
+                    {
+                        return Err(format!(
+                        "library guard admits the wrong result for {first:?}/{second:?}/{ngspice:?}/{performance:?}"
                     ));
+                    }
                 }
             }
         }
@@ -341,13 +381,13 @@ fn library_worker_coverage_rejects_broken_dependency_proofs() {
     let ci = std::fs::read_to_string(workspace_root().join(".github/workflows/core-ci.yml"))
         .expect("read core-ci.yml");
     let original: serde_yaml::Value = serde_yaml::from_str(&ci).unwrap();
-    let bodies =
-        required_library_worker_bodies(&ci).expect("actual aggregate enforces all three workers");
+    let bodies = required_library_worker_bodies(&ci)
+        .expect("actual aggregate enforces all required workers");
     assert_eq!(bodies.len(), LIBRARY_WORKERS.len());
     assert!(bodies[0].contains("cargo test --lib"));
     assert!(bodies[1].contains("cargo test -p nrf-softdevice-hle --features capi"));
 
-    for mutation in 0..14 {
+    for mutation in 0..17 {
         let mut changed = original.clone();
         let aggregate = &mut changed["jobs"][LIBRARY_AGGREGATE];
         match mutation {
@@ -384,6 +424,20 @@ fn library_worker_coverage_rejects_broken_dependency_proofs() {
                     .as_str()
                     .unwrap()
                     .replace(" || [ \"$PERF_RESULT\" != success ]", "")
+                    .into();
+            }
+            14 => {
+                aggregate["needs"].as_sequence_mut().unwrap().remove(2);
+            }
+            15 => {
+                aggregate["steps"][0]["env"][NGSPICE_WORKER.1] =
+                    "${{ needs.pr-gate.result }}".into()
+            }
+            16 => {
+                aggregate["steps"][0]["run"] = aggregate["steps"][0]["run"]
+                    .as_str()
+                    .unwrap()
+                    .replace(" || [ \"$NGSPICE_RESULT\" != success ]", "")
                     .into();
             }
             _ => unreachable!(),

@@ -18,8 +18,9 @@
 //! integration, so agreement is evidence about the physics, not about shared
 //! code. There is none — the in-core parser and solver share nothing with it.
 //!
-//! Requires `libngspice0`. Without it the ngspice half cannot run and the test
-//! skips with a message naming what is missing, rather than passing quietly.
+//! Requires `libngspice0` and the `ngspice` executable for the reference runs.
+//! Local runs skip the missing half with an explicit message; set
+//! `LABWIRED_REQUIRE_NGSPICE=1` to make either missing backend fail the test.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -39,6 +40,34 @@ fn cli_binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_labwired"))
 }
 
+/// Make optional local coverage mandatory in the CI job that provisions
+/// ngspice. A missing reference engine must not look like a differential pass.
+fn backend_availability(available: bool, backend: &str, required: bool) -> Result<bool, String> {
+    if available || !required {
+        Ok(available)
+    } else {
+        Err(format!(
+            "LABWIRED_REQUIRE_NGSPICE is set, but {backend} is unavailable"
+        ))
+    }
+}
+
+fn require_backend_if_configured(available: bool, backend: &str) -> bool {
+    backend_availability(
+        available,
+        backend,
+        std::env::var_os("LABWIRED_REQUIRE_NGSPICE").is_some(),
+    )
+    .unwrap_or_else(|message| panic!("{message}"))
+}
+
+fn assert_finite_samples(label: &str, samples: &[f64]) {
+    assert!(
+        samples.iter().all(|sample| sample.is_finite()),
+        "{label} contains a non-finite sample: {samples:?}"
+    );
+}
+
 /// True when libngspice can actually be loaded by the wrapper.
 fn ngspice_available() -> bool {
     let probe = Command::new("python3")
@@ -49,7 +78,10 @@ fn ngspice_available() -> bool {
              ctypes.CDLL(name)",
         )
         .output();
-    matches!(probe, Ok(output) if output.status.success())
+    require_backend_if_configured(
+        matches!(probe, Ok(output) if output.status.success()),
+        "libngspice",
+    )
 }
 
 /// Run `labwired cosim-step <manifest> --steps N --set board.gpio.pa5=true
@@ -74,7 +106,7 @@ fn v_out_series(manifest: &Path, steps: u64) -> Vec<f64> {
     );
     let parsed: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("cosim-step --json emits JSON");
-    parsed
+    let series = parsed
         .as_array()
         .expect("a JSON array of steps")
         .iter()
@@ -83,7 +115,12 @@ fn v_out_series(manifest: &Path, steps: u64) -> Vec<f64> {
                 .as_f64()
                 .expect("v_out is routed to board.analog.pa0_volts")
         })
-        .collect()
+        .collect::<Vec<_>>();
+    assert_finite_samples(
+        &format!("{} board.analog.pa0_volts", manifest.display()),
+        &series,
+    );
+    series
 }
 
 #[test]
@@ -158,7 +195,7 @@ fn cosim_series(manifest: &Path, steps: u64, sets: &[&str], model: &str, signal:
     );
     let parsed: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("cosim-step --json emits JSON");
-    parsed
+    let series = parsed
         .as_array()
         .expect("a JSON array of steps")
         .iter()
@@ -168,7 +205,9 @@ fn cosim_series(manifest: &Path, steps: u64, sets: &[&str], model: &str, signal:
                 .as_f64()
                 .unwrap_or_else(|| panic!("{model} does not publish {signal}"))
         })
-        .collect()
+        .collect::<Vec<_>>();
+    assert_finite_samples(&format!("{} {model}.{signal}", manifest.display()), &series);
+    series
 }
 
 /// The generic Beta NTC divider and Shockley diode load line that 16 board
@@ -907,6 +946,7 @@ fn in_core_series(case: &Differential) -> Vec<f64> {
         }
         series.push(solver.node_voltage(node));
     }
+    assert_finite_samples(case.name, &series);
     series
 }
 
@@ -967,23 +1007,36 @@ fn ngspice_series(case: &Differential) -> Vec<f64> {
     // `wrdata` writes one `<time> <value>` pair per line. The first row is the
     // operating point at t = 0, which the in-core series does not include
     // because it reports the END of each step.
-    text.lines()
+    let series = text
+        .lines()
         .filter_map(|line| {
             let mut fields = line.split_whitespace();
             let _time = fields.next()?;
             fields.next()?.parse::<f64>().ok()
         })
         .skip(1)
-        .collect()
+        .collect::<Vec<_>>();
+    assert_finite_samples(&format!("{} ngspice", case.name), &series);
+    series
 }
 
 /// True when the `ngspice` binary is on PATH.
 fn ngspice_binary_available() -> bool {
-    Command::new("ngspice")
-        .arg("-v")
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
+    require_backend_if_configured(
+        Command::new("ngspice")
+            .arg("-v")
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false),
+        "the ngspice executable",
+    )
+}
+
+#[test]
+fn required_ngspice_reference_cannot_be_skipped() {
+    assert_eq!(backend_availability(false, "libngspice", false), Ok(false));
+    assert_eq!(backend_availability(true, "libngspice", true), Ok(true));
+    assert!(backend_availability(false, "libngspice", true).is_err());
 }
 
 #[test]
