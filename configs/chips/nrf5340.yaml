@@ -261,7 +261,7 @@ peripherals:
     config:
       path: "../peripherals/nrf5340/ficr_s.yaml"
   # UICR — user info config at 0x00FF8000. Serve the vendor SVD register file
-  # in the unprogrammed (erased) state: every word reads 0xFFFFFFFF. The SVD
+  # in the unprogrammed (erased) state: every SVD register reads 0xFFFFFFFF. The SVD
   # gives APPROTECT, SECUREAPPROTECT and ERASEPROTECT a reset value of 0, which
   # its own enums decode as "Protected"; erased NVM reads 0xFFFFFFFF, so those
   # three are overridden. Writes store directly: NVMC write-enable gating and
