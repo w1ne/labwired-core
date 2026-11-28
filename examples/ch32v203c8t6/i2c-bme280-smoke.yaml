@@ -1,0 +1,16 @@
+# Local fixture i2c_bme280.c on ch32fun startup (build-ch32fun-examples.sh).
+# I2C1 reads the BME280 chip id (0x60) and three calibration bytes at 0x88
+# (dig_T1 = 28528, dig_T2 low byte) polled; I2C2 reads the second BME280's
+# chip id through I2C2_EV_IRQn 49.
+schema_version: "1.2"
+inputs:
+  firmware: "ch32fun/i2c_bme280.elf"
+  system: "./i2c-system.yaml"
+limits:
+  max_steps: 4000000
+  wall_time_ms: 120000
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 500
+assertions:
+  - uart_contains: "I2C1 id=60 dig_T1=28528"
+  - uart_contains: "I2C2 id=60"

@@ -1,0 +1,23 @@
+# CH32V203C8T6 with one BME280 on I2C1 (PB6 SCL, PB7 SDA, SDO low: 0x76)
+# and one on I2C2 (PB10 SCL, PB11 SDA, SDO high: 0x77), for
+# i2c-bme280-smoke.yaml.
+name: ch32v203c8t6-i2c
+chip: ../../configs/chips/ch32v203c8t6.yaml
+cpu_hz: 144000000
+external_devices:
+  - id: "bme280_i2c1"
+    type: "bme280"
+    connection: "i2c1"
+    route:
+      sda: "PB7"
+      scl: "PB6"
+    config:
+      i2c_address: 0x76
+  - id: "bme280_i2c2"
+    type: "bme280"
+    connection: "i2c2"
+    route:
+      sda: "PB11"
+      scl: "PB10"
+    config:
+      i2c_address: 0x77

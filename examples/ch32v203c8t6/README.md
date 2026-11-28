@@ -1,7 +1,7 @@
-# CH32V203C8T6 (LQFP48) GPIO blink, USART1, SPI2 DMA and timer interrupts
+# CH32V203C8T6 (LQFP48) GPIO blink, USART1, SPI2 DMA, timers, ADC and I2C
 
 Demand position: WCH is the Tier C vendor bet in the onboarding target list;
-CH32V203 has no measured JetBrains survey rank. This round adds TIM1..TIM4
+CH32V203 has no measured JetBrains survey rank. This round adds I2C1/I2C2
 coverage to the existing part, so it is capability follow-up work, not a top-ranked
 demand pick.
 
@@ -200,6 +200,31 @@ is the negative control: with the ADC1 `irq` removed from the descriptor, no
 handler runs and the firmware prints
 `ADC_TIMEOUT in0=0 VREF=0 ADC2_IN1=1023 irqs=0`.
 
+## I2C
+
+The [complete `ch32fun` source](./i2c_bme280.c) runs I2C1 and I2C2 as 100 kHz
+masters on their default pads (I2C1: PB6 SCL, PB7 SDA; I2C2: PB10 SCL, PB11
+SDA). [`i2c-system.yaml`](./i2c-system.yaml) puts a BME280 at 0x76 on I2C1
+and a second BME280 at 0x77 on I2C2. I2C1 is polled: a one-byte read of the
+chip-id register 0xD0, then a three-byte read of the calibration words at
+0x88 that ends on BTF. I2C2 reads the chip id with the I2C2_EV_IRQn 49
+handler stepping SB, ADDR, BTF and RXNE. USART1 prints the bytes:
+
+```text
+I2C1 id=60 dig_T1=28528 T2l=43 I2C2 id=60 ev_irqs=8
+```
+
+```sh
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v203c8t6/i2c-bme280-smoke.yaml \
+  --output-dir out/boards/ch32v203c8t6/i2c-bme280-smoke --no-uart-stdout
+```
+
+`ch32_compiled_firmware::ch32v203_i2c2_read_times_out_without_irq_49_wired`
+is the negative control: with the I2C2 `irq` removed from the descriptor, no
+handler runs and the firmware prints
+`I2C1 id=60 dig_T1=28528 T2l=43 I2C2_TIMEOUT id=00 ev_irqs=0`.
+
 ## Scope
 
 These smokes exercise the local simulator's QingKe V4B core, the PFIC, the
@@ -216,7 +241,10 @@ pin and input capture do not work on this part in the model. The model has
 ADC1/ADC2 single software-started
 conversions, calibration and the EOC interrupt (IRQ 34). The model has no
 V20x ADC PGA gain, TKey touch-key mode, dual-ADC modes, external-trigger
-conversions or ADC DMA smoke on this part, and no I2C, CAN or USB, no PFIC interrupt nesting and no V4 priority
+conversions or ADC DMA smoke on this part. I2C1 polled and I2C2 event-interrupt
+master reads are exercised; the I2C error lines (IRQ 48/50), I2C1_EV (47),
+slave mode and the AFIO I2C1 remap to PB8/PB9 have no V203 smoke. The model
+has no CAN or USB, no PFIC interrupt nesting and no V4 priority
 grouping. The RCC
 decodes PLLMUL with the STM32F1 table, so a PLLMUL setting of x18 reads as x16
 in the model; `cpu_hz` states the 144 MHz instead. No CH32V203 has been

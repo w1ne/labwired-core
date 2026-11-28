@@ -1000,3 +1000,17 @@ TKey and dual-ADC modes are not modelled.
 
 - [Copy-paste C example, smoke command, and stated model scope](../examples/ch32v203c8t6/README.md#adc)
 - [Committed ADC smoke evidence](../examples/ch32v203c8t6/evidence/adc-irq-smoke/)
+
+### WCH CH32V203C8T6 — I2C1 polled and I2C2 interrupt-driven BME280 reads
+
+A ch32fun-based fixture runs I2C1 (PB6/PB7) and I2C2 (PB10/PB11) as masters,
+each with a BME280 model. USART1 prints
+`I2C1 id=60 dig_T1=28528 T2l=43 I2C2 id=60 ev_irqs=8`: I2C1 reads the chip id
+and three calibration bytes polled, and I2C2 reads the chip id through the
+event interrupt (PFIC IRQ 49). With the I2C2 IRQ line removed from the
+descriptor, the I2C2 read times out. This is local simulator evidence; it is
+not hardware confirmation. Slave mode, the error interrupts and the I2C1
+remap to PB8/PB9 are not smoke-tested.
+
+- [Copy-paste C example, smoke command, and stated model scope](../examples/ch32v203c8t6/README.md#i2c)
+- [Committed I2C smoke evidence](../examples/ch32v203c8t6/evidence/i2c-bme280-smoke/)

@@ -1,0 +1,101 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1328,
+      536891360,
+      536871932,
+      0,
+      0,
+      0,
+      0,
+      1073763328,
+      111,
+      0,
+      536870912,
+      9,
+      8,
+      128,
+      1073821696,
+      0,
+      0,
+      67,
+      96,
+      112,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1328,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 1234,
+    "mcause": 2147483697,
+    "mtval": 0,
+    "mtime": 49991,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 50000,
+  "cycles": 50000,
+  "instructions": 50000,
+  "stop_reason": "assertions_passed",
+  "stop_reason_details": {
+    "triggered_stop_condition": "assertions_passed",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 120000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": true,
+    "stop_when_assertions_pass_settle_steps": 500,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "98ff05380966b110d92005967407becdded07a92f391f2fb7232c1839828ad4b",
+  "config": {
+    "firmware": "ch32fun/i2c_bme280.elf",
+    "system": "./i2c-system.yaml",
+    "script": "i2c-bme280-smoke.yaml"
+  }
+}

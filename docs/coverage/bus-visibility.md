@@ -72,6 +72,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 * **ch32v203c8t6**
   * UART: no UART bring-up for the WCH V20x family in this harness yet; USART1 bytes are proven by ch32_compiled_firmware
   * SPI: no SPI bring-up for the WCH V20x family in this harness yet; SPI2 TX DMA is proven by ch32_compiled_firmware
+  * I2C: no I2C bring-up for the WCH V20x family in this harness yet; I2C1 and I2C2 master reads are proven by ch32_compiled_firmware
 * **ch32x035c8t6**
   * UART: no UART bring-up for the WCH X035 family in this harness yet; USART1 bytes are proven by ch32_compiled_firmware
 * **efr32mg26**

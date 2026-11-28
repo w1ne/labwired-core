@@ -22,6 +22,10 @@
 #                        IN0 and IN17 (VREFINT) through the end-of-conversion
 #                        interrupt (PFIC interrupt 34), ADC2 IN1 polled;
 #                        USART1 prints the three 12-bit codes.
+#   i2c_bme280.elf       local smoke fixture using ch32fun startup: I2C1
+#                        polled 1-byte and 3-byte reads of a BME280, and an
+#                        I2C2 read stepped by the event interrupt (PFIC
+#                        interrupt 49); USART1 prints the bytes.
 #   tim_irq.elf          local smoke fixture using ch32fun startup: TIM2
 #                        1 kHz update on PFIC interrupt 44 and TIM1 CH1
 #                        compare on PFIC interrupt 43; USART1 prints the
@@ -83,7 +87,7 @@ for example in examples_v20x/blink examples_v20x/debugprintfdemo examples_v20x/e
   "${prefix}size" "${out_dir}/${name}.elf"
 done
 
-for name in usart_rx_irq spi_dma_tx tim_irq adc_irq; do
+for name in usart_rx_irq spi_dma_tx tim_irq adc_irq i2c_bme280; do
   "${prefix}gcc" -o "${out_dir}/${name}.elf" \
     "${src}/ch32fun/ch32fun.c" "${repo_root}/examples/ch32v203c8t6/${name}.c" \
     -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \

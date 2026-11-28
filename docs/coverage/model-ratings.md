@@ -145,7 +145,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | ch32v005f6p6 | open | L1 | 6 | — | — | ≥1× (CI) | — |
 | ch32x035c8t6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
 | ch32v006k8u6 | open | L1 | 6 | — | — | ≥1× (CI) | — |
-| ch32v203c8t6 | open | L1 | 21 | — | — | ≥1× (CI) | — |
+| ch32v203c8t6 | open | L1 | 23 | — | — | ≥1× (CI) | — |
 | ch32v003f4u6 | open | L1 | 15 | — | — | ≥1× (CI) | — |
 | ch32v003a4m6 | open | L1 | 15 | — | — | ≥1× (CI) | — |
 | at32f421g8u7 | open | L1 | 22 | 863.5 | 1.5 | ≥1× (CI) | [doc](docs/boards/at32f421g8u7.md) |
