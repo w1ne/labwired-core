@@ -98,6 +98,9 @@ pub struct Nrf54lClock {
     pending_pllstarted: bool,
     pending_lfclkstarted: bool,
     pending_done: bool,
+    /// INTEN/INTENSET enabled a source whose event is already latched. The
+    /// line is a level (INTEN & EVENTS), so it must rise without a new event.
+    pending_irq_eval: bool,
 
     // Status / config
     xo_run: u32,
@@ -131,6 +134,8 @@ const EV_XOSTARTED: u32 = 0;
 const EV_PLLSTARTED: u32 = 1;
 const EV_LFCLKSTARTED: u32 = 2;
 const EV_DONE: u32 = 3;
+/// No event latch: re-evaluate the IRQ line after an INTEN/INTENSET write.
+const EV_IRQ_EVAL: u32 = 4;
 
 /// Relative delay handed to the bus. `collect_scheduled_events` stores
 /// `current_cycle + 1 + delay`, and the walk settles on the next `tick()`,
@@ -177,6 +182,7 @@ impl Nrf54lClock {
             EV_PLLSTARTED => self.pending_pllstarted = false,
             EV_LFCLKSTARTED => self.pending_lfclkstarted = false,
             EV_DONE => self.pending_done = false,
+            EV_IRQ_EVAL => self.pending_irq_eval = false,
             _ => {}
         }
     }
@@ -191,6 +197,7 @@ impl Nrf54lClock {
             EV_PLLSTARTED => self.events_pllstarted = 1,
             EV_LFCLKSTARTED => self.events_lfclkstarted = 1,
             EV_DONE => self.events_done = 1,
+            EV_IRQ_EVAL => {}
             _ => return false,
         }
         self.inten & self.event_bitmap() != 0
@@ -309,8 +316,20 @@ impl crate::Peripheral for Nrf54lClock {
             | OFF_EVENTS_LFCLKSTARTED
             | OFF_EVENTS_DONE => {}
 
-            OFF_INTEN => self.inten = value,
-            OFF_INTENSET => self.inten |= value,
+            OFF_INTEN | OFF_INTENSET => {
+                let previous = self.inten;
+                self.inten = if offset == OFF_INTEN {
+                    value
+                } else {
+                    previous | value
+                };
+                // nrfx `nrfx_clock_lfclk_start` triggers LFCLKSTART and only
+                // then writes INTENSET. The event can already be latched, and
+                // the level line must still reach the NVIC.
+                if self.inten & !previous & self.event_bitmap() != 0 {
+                    self.arm(EV_IRQ_EVAL, |c| &mut c.pending_irq_eval);
+                }
+            }
             OFF_INTENCLR => self.inten &= !value,
 
             OFF_LFCLK_SRC => self.lfclk_src = value & LFCLK_SRC_MASK,
@@ -346,6 +365,7 @@ impl crate::Peripheral for Nrf54lClock {
             self.pending_done = false;
             self.events_done = 1;
         }
+        self.pending_irq_eval = false;
 
         res.irq = self.inten & self.event_bitmap() != 0;
         res
@@ -408,6 +428,7 @@ impl crate::Peripheral for Nrf54lClock {
             || self.pending_pllstarted
             || self.pending_lfclkstarted
             || self.pending_done
+            || self.pending_irq_eval
     }
 
     fn legacy_tick_dynamic(&self) -> bool {
@@ -507,6 +528,30 @@ mod tests {
         // Write 0: clears.
         c.write_u32(OFF_EVENTS_LFCLKSTARTED, 0).unwrap();
         assert_eq!(c.read_u32(OFF_EVENTS_LFCLKSTARTED).unwrap(), 0);
+    }
+
+    /// nrfx `nrfx_clock_lfclk_start` order: LFCLKSTART first, INTENSET after.
+    /// The event is latched before the source is enabled; the level line
+    /// must still rise.
+    #[test]
+    fn intenset_after_a_latched_event_raises_the_irq() {
+        let mut c = Nrf54lClock::new();
+        c.write_u32(OFF_TASKS_LFCLKSTART, 1).unwrap();
+        assert!(!c.tick().irq, "INTEN is clear");
+        assert_eq!(c.read_u32(OFF_EVENTS_LFCLKSTARTED).unwrap(), 1);
+        assert!(!c.legacy_tick_active(), "nothing left to settle");
+
+        c.write_u32(OFF_INTENSET, INTEN_LFCLKSTARTED).unwrap();
+        assert!(
+            c.legacy_tick_active(),
+            "the INTENSET write must schedule a line re-evaluation"
+        );
+        assert!(c.tick().irq, "INTEN & EVENTS is non-zero");
+        assert!(!c.legacy_tick_active());
+
+        // Enabling a source with no latched event schedules nothing.
+        c.write_u32(OFF_INTENSET, INTEN_XOSTARTED).unwrap();
+        assert!(!c.legacy_tick_active());
     }
 
     #[test]
@@ -663,6 +708,32 @@ mod scheduler_mode_tests {
             "INTEN enabled this source, so the bus must pend the line — \
              `raise_own_irq`, because this model does not know its NVIC number"
         );
+    }
+
+    /// nrfx `nrfx_clock_lfclk_start` order on the scheduler path: the event
+    /// is delivered first, INTENSET arrives after it.
+    #[test]
+    fn intenset_after_a_delivered_event_schedules_a_line_evaluation() {
+        let mut c = armed();
+        c.write_u32(OFF_TASKS_LFCLKSTART, 1).unwrap();
+        let token = c.take_scheduled_events()[0].1;
+        let mut sched = crate::sched::EventScheduler::new();
+        let mut bus = crate::bus::SystemBus::new();
+        assert!(!c.on_event(token, &mut sched, &mut bus).raise_own_irq);
+
+        c.write_u32(OFF_INTENSET, INTEN_LFCLKSTARTED).unwrap();
+        assert_eq!(
+            c.take_scheduled_events(),
+            vec![(SETTLE_DELAY, EV_IRQ_EVAL)],
+            "the INTENSET write must queue one line evaluation"
+        );
+        let res = c.on_event(EV_IRQ_EVAL, &mut sched, &mut bus);
+        assert!(res.raise_own_irq, "INTEN & EVENTS is non-zero");
+        assert!(!c.legacy_tick_active());
+
+        // Writing the same enable again queues nothing.
+        c.write_u32(OFF_INTENSET, INTEN_LFCLKSTARTED).unwrap();
+        assert!(c.take_scheduled_events().is_empty());
     }
 
     #[test]

@@ -189,7 +189,7 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
     ),
     (
         "nrf54l_rramc_stub",
-        "nRF54L RRAMC window, authored placeholder. Used by: nrf54l15.",
+        "nRF54L RRAMC window, authored placeholder. Used by: nrf54lm20a.",
     ),
     (
         "nrf54l_tampc_stub",

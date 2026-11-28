@@ -20,9 +20,12 @@
 //!   * CLOCK — oscillator control. Also *not* nRF52-compatible despite the
 //!     shared `nordic,nrf-clock` devicetree binding: the HFCLK/LFCLK task
 //!     pair became an XO/PLL/LFCLK trio and every status register moved.
+//!   * RRAMC — the resistive RAM controller. It replaces the nRF52 NVMC:
+//!     CONFIG.WEN gates stores into the RRAM array, and there is no erase.
 
 pub mod clock;
 pub mod factory;
 pub mod grtc;
+pub mod rramc;
 pub mod twim;
 pub mod uarte;
