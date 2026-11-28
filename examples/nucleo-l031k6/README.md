@@ -29,3 +29,13 @@ The ELF in `tests/fixtures/board-smoke/stm32l031k6.elf` is committed so the
 PR-gated lane can run it without an ARM compiler. Its source is
 `firmware/main.c` and `firmware/linker.ld`.
 See `VALIDATION.md` for the recorded evidence.
+
+## Analog inputs
+
+`analog-ntc-diode-pa0-pa1-system.yaml` drives a generic Beta-parameter NTC
+divider into `board.analog.pa0_volts` (ADC_IN0) and a Shockley diode load
+line into `board.analog.pa1_volts` (ADC_IN1). The descriptor's
+`analog_pins:` map is the LQFP32 ADC set from ST STM32_open_pin_data
+(PA0-PA7 = IN0-IN7, PB0 = IN8, PB1 = IN9), so a deck can route to any of these pads. The test is
+`crates/core/tests/analog/cosim_stm32wb_g4_l0_analog.rs`
+(`cargo test -p labwired-core --test analog cosim_stm32wb_g4_l0`).

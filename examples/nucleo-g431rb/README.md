@@ -38,3 +38,16 @@ Evidence is committed under `evidence/`. The ST-LINK USB bridge, full motor
 pack, X-NUCLEO-IHM16M1 shield, STSPIN830, and motor are outside this board
 profile. The smoke does not claim motor-control, ADC, analog, or physical-board
 behavior.
+
+## Analog inputs
+
+`analog-ntc-diode-pa0-pa1-system.yaml` drives a generic Beta-parameter NTC
+divider into `board.analog.pa0_volts` (ADC1_IN1) and a Shockley diode load
+line into `board.analog.pa1_volts` (ADC1_IN2). The descriptor's
+`analog_pins:` map is the LQFP64 ADC1 set from ST STM32_open_pin_data
+(PA0-PA3 = IN1-IN4, PB14 = IN5, PC0-PC3 = IN6-IN9, PB12 = IN11,
+PB1 = IN12, PB11 = IN14, PB0 = IN15), so a deck can route to any of these pads. PF0 (IN10)
+is not routed because the descriptor declares no GPIOF, and pads that reach
+only ADC2 are refused because only ADC1 is instantiated. The test is
+`crates/core/tests/analog/cosim_stm32wb_g4_l0_analog.rs`
+(`cargo test -p labwired-core --test analog cosim_stm32wb_g4_l0`).

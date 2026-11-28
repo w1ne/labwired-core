@@ -45,6 +45,23 @@ ram:
   base: 0x20000000
   size: "8KB"
 
+# ADC inputs of the LQFP32 package (NUCLEO-L031K6), from ST
+# STM32_open_pin_data `STM32L031K(4-6)Tx.xml`: PA0-PA7 = IN0-IN7, PB0 = IN8,
+# PB1 = IN9. Each channel is a `CHSELR` bit of the `stm32l0` converter.
+# Consumed by co-simulation `board.analog.<pad>_volts`; pads not listed are
+# refused instead of guessing a channel.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }
+  PA2: { peripheral: "adc1", channel: 2 }
+  PA3: { peripheral: "adc1", channel: 3 }
+  PA4: { peripheral: "adc1", channel: 4 }
+  PA5: { peripheral: "adc1", channel: 5 }
+  PA6: { peripheral: "adc1", channel: 6 }
+  PA7: { peripheral: "adc1", channel: 7 }
+  PB0: { peripheral: "adc1", channel: 8 }
+  PB1: { peripheral: "adc1", channel: 9 }
+
 peripherals:
   # RCC — STM32L0 RCC (CMSIS RCC_BASE 0x40021000, AHBPERIPH_BASE + 0x1000).
   # Uses the dedicated `stm32l0` layout already used by stm32l073.

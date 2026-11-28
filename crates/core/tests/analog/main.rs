@@ -68,6 +68,7 @@ mod cosim_stm32g0b1_analog;
 mod cosim_stm32h7_analog;
 mod cosim_stm32l476_analog;
 mod cosim_stm32l4u5_pin_functions_analog;
+mod cosim_stm32wb_g4_l0_analog;
 mod declarative_noise;
 mod declarative_spi_supply_por;
 mod device_supply_rails;

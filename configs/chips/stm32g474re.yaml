@@ -34,6 +34,29 @@ memory_regions:
     size: "1KB"
     alias_of: 0x40006C00
 
+# ADC1 regular inputs of the LQFP64 package, from ST STM32_open_pin_data
+# `STM32G474R(B-C-E)Tx.xml`: PA0-PA3 = IN1-IN4, PB14 = IN5, PC0-PC3 = IN6-IN9,
+# PB12 = IN11, PB1 = IN12, PB11 = IN14, PB0 = IN15. PA0 is IN1 here, not IN0
+# (F1/F4) and not IN5 (L4). PF0 (ADC1_IN10) is left out: this descriptor
+# declares no GPIOF. PA4-PA7, PC4, PC5 and PB2 reach ADC2 only, PB15 ADC2 and
+# ADC4, PB13 ADC3 only, PA8 and PA9 ADC5 only. This descriptor instantiates none of
+# those converters, so these pads are refused instead of being put on an
+# ADC1 channel. Consumed by co-simulation `board.analog.<pad>_volts`.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 1 }
+  PA1: { peripheral: "adc1", channel: 2 }
+  PA2: { peripheral: "adc1", channel: 3 }
+  PA3: { peripheral: "adc1", channel: 4 }
+  PB14: { peripheral: "adc1", channel: 5 }
+  PC0: { peripheral: "adc1", channel: 6 }
+  PC1: { peripheral: "adc1", channel: 7 }
+  PC2: { peripheral: "adc1", channel: 8 }
+  PC3: { peripheral: "adc1", channel: 9 }
+  PB12: { peripheral: "adc1", channel: 11 }
+  PB1: { peripheral: "adc1", channel: 12 }
+  PB11: { peripheral: "adc1", channel: 14 }
+  PB0: { peripheral: "adc1", channel: 15 }
+
 peripherals:
   - id: "rcc"
     type: "rcc"
@@ -200,9 +223,10 @@ peripherals:
       # G4 AF pinout (SPI1 AF5, NSS on PA4/PA15), not the L4 one.
       pad_map: "stm32g4"
     clock: { reg: "apb2enr", bit: 12 }
-  # ADC1 (AHB2). RCC_AHB2ENR.ADC12EN (bit 13). Model has no conversion engine
-  # (L4 layout) — the genuinely-modelled DEEPPWD→ADVREGEN→ADEN→ADRDY power-up
-  # path is exercised.
+  # ADC1 (AHB2). RCC_AHB2ENR.ADC12EN (bit 13). L4 register layout: the
+  # DEEPPWD→ADVREGEN→ADEN→ADRDY power-up path and software-started regular
+  # conversions of the `analog_pins:` inputs are modelled
+  # (tests/analog/cosim_stm32wb_g4_l0_analog.rs).
   - id: "adc1"
     type: "adc"
     base_address: 0x50000000
