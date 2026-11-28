@@ -248,17 +248,16 @@ peripherals:
     config:
       debug_schema: "../peripherals/nrf5340/dppic_s.yaml"
   # FICR — factory info / analog trims at 0x00FF0000 (NOT in the 0x5000_0000
-  # block). Zephyr's soc-init copies a trim block out of here; the values are
-  # oscillator/radio calibration that the UART console path does not depend on,
-  # so a zero-returning window is faithful to the boot path while keeping the bus
-  # violation-free. Promote to real FICR reset values if a future firmware needs
-  # the device ID or a specific trim.
+  # block). Serve the vendor SVD register file. INFO.PART, CODEPAGESIZE,
+  # CODESIZE, and DEVICETYPE use the SVD reset values; per-device identity and
+  # unspecified package/RAM/FLASH variants remain erased rather than invented.
+  # The TRIMCNF table also reads erased, so no oscillator/radio trim is claimed.
   - id: "ficr"
-    type: "nrf5340_ficr_stub"
+    type: "declarative"
     base_address: 0x00FF0000
     size: "4KB"
     config:
-      debug_schema: "../peripherals/nrf5340/ficr_s.yaml"
+      path: "../peripherals/nrf5340/ficr_s.yaml"
   # UICR — user info config at 0x00FF8000. Read during soc-init (e.g. approtect /
   # reg-out config); unprovisioned reads as 0 here, which the boot path accepts.
   - id: "uicr"
