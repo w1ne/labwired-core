@@ -5088,7 +5088,7 @@ authoritative, auto-generated view see the
 </tr>
 <tr>
 <td>Validation</td>
-<td>Zephyr survival + <code>nrf5340_clock_boot</code> + <code>nrf5340_ficr</code> + <code>nrf5340_gpiote</code></td>
+<td>Zephyr survival + <code>nrf5340_clock_boot</code> + <code>nrf5340_ficr</code> + <code>nrf5340_gpiote</code> + <code>nrf5340_uicr</code></td>
 </tr>
 <tr>
 <td>Tier</td>
@@ -5118,6 +5118,13 @@ specific production device.</p>
 <code>TASKS_SET0</code>, and observes the selected bit in the GPIO model's <code>GPIO0.IN</code>
 input latch. This checks task-to-port readback; external electrical pad routing
 is not asserted, and this is not a silicon capture.</p>
+<p>The UICR window serves the vendor SVD register file in the unprogrammed state:
+every SVD register reads <code>0xFFFFFFFF</code> (reserved gaps are not claimed). The SVD gives APPROTECT, SECUREAPPROTECT and
+ERASEPROTECT a reset value of 0, which its own enums decode as "Protected";
+erased NVM reads all ones, so the chip profile overrides those three. An erased
+part therefore decodes as debugger access protected (not <code>0x50FA50FA</code>) and
+ERASEALL unprotected. Writes store directly; NVMC write-enable gating and
+1 → 0 flash semantics are not modelled.</p>
 <h2 id="peripherals-from-chip-yaml">Peripherals (from chip yaml)</h2>
 <table>
 <thead>
@@ -5190,7 +5197,13 @@ is not asserted, and this is not a silicon capture.</p>
 <td>Task/event model; GPIO0.IN task readback is tested; external pad routing and full cross-peripheral DPPI are not claimed</td>
 </tr>
 <tr>
-<td>DCNF, FPU, CACHE, SPU, OSC/REG, CTRL-AP, UICR, trim target</td>
+<td>UICR</td>
+<td>0x00FF_8000</td>
+<td>✅ declarative</td>
+<td>SVD register file, erased state; NVMC write gating not modelled</td>
+</tr>
+<tr>
+<td>DCNF, FPU, CACHE, SPU, OSC/REG, CTRL-AP, trim target</td>
 <td>various</td>
 <td>⚪ benign stub</td>
 <td>Boot-path windows remain bounded zero-answering placeholders</td>
@@ -5203,7 +5216,7 @@ is not asserted, and this is not a silicon capture.</p>
 <li><strong>TrustZone / SPU</strong> access enforcement (the SPU window is a benign stub; the
   secure/non-secure split is not policed). A secure <code>cpuapp</code> ELF can run, but
   this is not evidence that an isolation policy or TF-M partition is correct.</li>
-<li><strong>Analog trims</strong> — the FICR trim table remains erased, and UICR,
+<li><strong>Analog trims</strong> — the FICR trim table and UICR remain erased, and
   OSCILLATORS/REGULATORS and the trim target remain stubs, so oscillator/radio
   calibration is absent. This is irrelevant to the digital console path but
   means RF/analog fidelity is not represented.</li>
