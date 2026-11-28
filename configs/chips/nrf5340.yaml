@@ -16,8 +16,8 @@
 #   aliases and is not this profile.
 # - Peripheral bases cross-checked against tests/fixtures/real_world/nrf5340.svd
 #   (NordicSemiconductor/nrfx v3.12.0, mdk/nrf5340_application.svd).
-# - IRQ numbers are the DT `interrupts` cell (UARTE0=8, CLOCK=5, TIMER0..2=15..17,
-#   RTC0=20, RTC1=21).
+# - IRQ numbers are the DT `interrupts` cell (UARTE0=8, CLOCK=5, GPIOTE0=13,
+#   TIMER0..2=15..17, RTC0=20, RTC1=21).
 #
 # Boot path this profile is built to satisfy (unmodified Zephyr v3.7 hello_world):
 #   reset -> SystemInit/soc trims -> clock_control (HFCLK/LFCLK start+poll) ->
@@ -27,8 +27,9 @@
 # nRF52 (crates/core/src/peripherals/nrf52/); their register offsets match the
 # nRF5340 application core, so they are reused verbatim — only the base address
 # differs. Pure trim/config blocks the boot ROM/soc-init poke but never poll for
-# a settled value (DCNF, SPU, OSCILLATORS/REGULATORS, CTRL-AP, GPIOTE) are mapped
-# as benign stub windows so a write/readback never faults the bus.
+# a settled value (DCNF, SPU, OSCILLATORS/REGULATORS, CTRL-AP) are mapped as
+# benign stub windows so a write/readback never faults the bus. GPIOTE0 uses the
+# shared Nordic task/event model and latches its selected task output in GPIOx.IN.
 name: "nrf5340"
 arch: "arm"
 core: "cortex-m33"
@@ -234,9 +235,10 @@ peripherals:
     config:
       debug_schema: "../peripherals/nrf5340/ctrlap_s.yaml"
   - id: "gpiote0"
-    type: "nrf5340_gpiote_stub"
+    type: "nrf52_gpiote"
     base_address: 0x5000d000
     size: "4KB"
+    irq: 13
     config:
       debug_schema: "../peripherals/nrf5340/gpiote0_s.yaml"
   # DPPIC channel-enable subset. UARTE implements its own configured

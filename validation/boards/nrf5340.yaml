@@ -7,6 +7,7 @@ offline_tests:
   - "firmware_survival::test_nrf5340_zephyr_survival (real Zephyr ELF boots + banner)"
   - "nrf5340_clock_boot (secure cpuapp mapping + HFCLK/LFCLK polls + TWIM1/BMI270 EasyDMA read)"
   - "nrf5340_ficr (vendor SVD register readback and read-only INFO.PART)"
+  - "nrf5340_gpiote (SVD-addressed task-mode set updates GPIO0.IN)"
 models:
   - crates/core/src/cpu/cortex_m.rs
   - crates/core/src/decoder/arm.rs
@@ -36,6 +37,11 @@ models:
   # was not on this watch list. No silicon capture is recorded for this
   # board, so no ack is implied.
   - crates/core/src/peripherals/nrf52/twim.rs
+  # 2026-11-28, nRF5340 GPIOTE0 uses the shared nRF52 task/event model.
+  # The integration gate checks task-to-GPIO0.IN input-latch readback at this
+  # chip's SVD address. External pad routing is not asserted; no silicon
+  # capture is recorded for this board.
+  - crates/core/src/peripherals/nrf52/gpiote.rs
   # 2026-11-28, nRF5340 FICR now uses the SVD register file through the
   # declarative peripheral model. No silicon capture is recorded for this
   # board, so no ack is implied.
