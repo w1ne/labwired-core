@@ -192,15 +192,15 @@ _SOP8 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verific
 
 ### `nrf5340`
 
-_No tier1 fixture. Unmodified Zephyr v3.7 hello_world boots end-to-end through CLOCK/UARTE0/RTC1. TWIM1 is a behavioural EasyDMA model; the PR-gated nrf5340_clock_boot test attaches the declarative BMI270 model and reads CHIP_ID 0x24 with a repeated-START transaction. Nine peripheral blocks remain benign boot stubs._
+_No tier1 fixture. Unmodified Zephyr v3.7 hello_world boots end-to-end through CLOCK/UARTE0/RTC1. TWIM1 is a behavioural EasyDMA model; nrf5340_clock_boot reads BMI270 CHIP_ID 0x24 over EasyDMA, and nrf5340_ficr checks the vendor SVD FICR register file. Nine other peripheral blocks remain benign boot stubs._
 
 **Functional device/protocol reads** (real driver, decoded value):
 - Unmodified Zephyr v3.7 hello_world boots + prints over UARTE0 EasyDMA — `nrf5340-zephyr` · firmware_survival::test_nrf5340_zephyr_survival (PR gate)
 
-**Advanced peripherals — unit-tested only** (no firmware drives them): `GPIO`, `TIMER0-2`, `RTC0`, `TWIM1 + BMI270 CHIP_ID EasyDMA transaction`
+**Advanced peripherals — unit-tested only** (no firmware drives them): `GPIO`, `TIMER0-2`, `RTC0`, `TWIM1 + BMI270 CHIP_ID EasyDMA transaction`, `FICR INFO.PART + flash geometry`
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
-- `DCNF/FPU/CACHE/SPU/OSC_REG/CTRLAP/GPIOTE0/DPPIC/FICR` (nrf5340_*_stub) — STRUCTURAL: SystemInit pokes them once at boot and never polls them again, so a register stub is byte-faithful for the hello_world boot path.
+- `DCNF/FPU/CACHE/SPU/OSC_REG/CTRLAP/GPIOTE0/UICR/trim target` (nrf5340_*_stub) — STRUCTURAL: these nine boot-path windows remain bounded zero-answering stubs; FICR is declarative from the vendor SVD, and DPPIC models its channel-enable subset.
 
 ### `nrf54l05`
 

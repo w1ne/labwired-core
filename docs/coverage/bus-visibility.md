@@ -71,6 +71,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32_compiled_firmware
 * **ch32v203c8t6**
   * UART: no UART bring-up for the WCH V20x family in this harness yet; USART1 bytes are proven by ch32_compiled_firmware
+  * SPI: no SPI bring-up for the WCH V20x family in this harness yet; SPI2 TX DMA is proven by ch32_compiled_firmware
 * **ch32x035c8t6**
   * UART: no UART bring-up for the WCH X035 family in this harness yet; USART1 bytes are proven by ch32_compiled_firmware
 * **efr32mg26**

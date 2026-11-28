@@ -164,10 +164,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "nRF5340 DCNF window, authored placeholder. Used by: nrf5340.",
     ),
     (
-        "nrf5340_ficr_stub",
-        "nRF5340 FICR window, authored placeholder. Used by: nrf5340.",
-    ),
-    (
         "nrf5340_fpu_stub",
         "nRF5340 FPU window, authored placeholder. Used by: nrf5340.",
     ),
