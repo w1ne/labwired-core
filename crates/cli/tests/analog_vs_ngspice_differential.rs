@@ -811,6 +811,29 @@ const DIFFERENTIALS: &[Differential] = &[
         nonlinear: false,
     },
     Differential {
+        name: "hysteretic current switch",
+        // The `W` twin of the row above: the switch senses the branch
+        // current of `Vsense`, 2 mA peak through `Rs`, against the
+        // `IT ± IH` band. Its negative half must keep the switch open, so a
+        // flipped branch-current sign or a magnitude rule fails this row.
+        deck: "* current switch: W(CSW) + R + C + VDC + VSIN\n\
+               Vdd vdd 0 dc 5\n\
+               Vc c 0 SIN(0 2 1k)\n\
+               Rs c s 1k\n\
+               Vsense s 0 dc 0\n\
+               W1 vdd out Vsense WMOD\n\
+               Rl out 0 10k\n\
+               C1 out 0 10u\n\
+               .model WMOD CSW(IT=0.5m IH=0.3m RON=1k ROFF=1e9)\n",
+        node: "out",
+        sample: 20e-6,
+        substeps: 20,
+        samples: 500,
+        full_scale: 5.0,
+        minimum_swing: 0.5,
+        nonlinear: false,
+    },
+    Differential {
         name: "voltage switch initial state ON",
         // The control starts inside the `VT ± VH` band, so only the `ON`
         // keyword closes the switch at the operating point; without it the
