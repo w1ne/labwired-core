@@ -1885,3 +1885,204 @@ fn a_seconds_long_run_of_a_microsecond_analog_model_keeps_its_whole_series() {
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn flex_heypcb_led_art_invader_runs_portable_lit_and_dark_frames() {
+    let fixture = fixtures_root().join("flex-heypcb-led-art-arcade-invader");
+    let source_map = json(&fixture.join("source-map.json"));
+    let native = json(&fixture.join("native.json"));
+    assert_eq!(source_map["source"]["repository"], "HeyPCB/led-art");
+    assert_eq!(
+        source_map["source"]["revision"],
+        "b0830dcfa3f71c409e9784fa784b9c6864a6ff12"
+    );
+    assert_eq!(source_map["source"]["asset"], "boards/arcade-invader");
+    assert_eq!(source_map["source"]["license_spdx"], "CERN-OHL-S-2.0");
+    for key in ["repository", "revision", "asset", "license_spdx"] {
+        assert_eq!(source_map["source"][key], native["source"][key]);
+    }
+    assert_eq!(source_map["import_handoff"]["data_endpoint"], "U1.PC6");
+    assert_eq!(source_map["flex_binding"]["port_signal"], "source.U1.PC6");
+    assert_eq!(source_map["flex_binding"]["sink_signal"], "source.U1.PC6");
+
+    for (case, script_name, expected_result, expected_pixels, expected_lit_pixels) in [
+        ("positive", "test-positive.yaml", 21, 21, 2),
+        ("negative", "test-negative.yaml", 0, 21, 0),
+    ] {
+        let dir = unique_dir(&format!("heypcb-invader-{case}"));
+        let vcd = dir.join("led-data.vcd");
+        let output = run(
+            &fixture.join(script_name),
+            &dir,
+            &["--vcd", vcd.to_str().unwrap()],
+        );
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{case}: {}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let result = read_result(&dir);
+        assert_eq!(result["status"], "pass");
+        assert_eq!(result["stop_reason"], "completed");
+        assert_eq!(result["entry_result"], expected_result);
+        assert_eq!(result["time_ns"], 690_000);
+        assert_eq!(result["entry_result"], native[case]["entry_result"]);
+        assert_eq!(result["time_ns"], native[case]["time_ns"]);
+
+        let report = &result["run_report"];
+        assert_eq!(report["execution_path"], "flex_portable_wasm");
+        assert_eq!(report["target_cpu_emulated"], false);
+        assert_eq!(report["time_unit"], "ns");
+        assert_eq!(
+            report["execution_scope"]["original_target_firmware_executed"],
+            false
+        );
+        assert_eq!(
+            report["execution_scope"]["detailed_target_execution_selected"],
+            false
+        );
+        assert_eq!(
+            report["execution_scope"]["full_board_coverage"],
+            "not_established"
+        );
+        assert_eq!(report["execution_scope"]["chip_parity"], "not_established");
+        assert_eq!(report["scope_notes_complete"], true);
+        let data_port = report["ports"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|port| port["name"] == "led_data")
+            .expect("named digital port");
+        assert_eq!(data_port["signal"], "source.U1.PC6");
+        assert_eq!(report["sinks"][0]["id"], "strip_d1");
+        assert_eq!(report["sinks"][0]["model_type"], "neopixel");
+        assert_eq!(report["sinks"][0]["pins"]["DIN"], "source.U1.PC6");
+        assert_eq!(
+            result["config"]["firmware_sha256"],
+            sha256(&fixture.join("firmware.wasm"))
+        );
+        assert_eq!(
+            result["config"]["firmware_sha256"],
+            native["source"]["firmware_sha256"]
+        );
+        assert_eq!(
+            report["manifest_sha256"],
+            sha256(&fixture.join("system.yaml"))
+        );
+        assert_eq!(
+            report["manifest_sha256"],
+            native["source"]["manifest_sha256"]
+        );
+
+        let traces = &result["traces"];
+        assert_eq!(traces["time_unit"], "ns");
+        assert_eq!(traces["digital_channels"], 1);
+        assert_eq!(traces["digital_edges"], 1008);
+        assert_eq!(traces["digital_edges"], native[case]["digital_edges"]);
+        assert_eq!(traces["digital_dropped"], 0);
+
+        let trace = json(&dir.join("flex-trace.json"));
+        assert_eq!(trace["digital"]["time_unit"], "ns");
+        assert_eq!(trace["digital"]["channels"][0]["port_names"][0], "led_data");
+        assert_eq!(trace["digital"]["edges"].as_array().unwrap().len(), 1008);
+        let edge_pairs: Vec<(u64, u64)> = trace["digital"]["edges"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|edge| {
+                (
+                    edge["time_ns"].as_u64().unwrap(),
+                    edge["value"].as_u64().unwrap(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            format!(
+                "{:x}",
+                Sha256::digest(serde_json::to_vec(&edge_pairs).unwrap())
+            ),
+            native[case]["edge_sha256"]
+        );
+        assert_eq!(trace["digital"]["edges"][0]["time_ns"], 0);
+        assert_eq!(trace["digital"]["edges"][0]["value"], 1);
+        assert_eq!(trace["digital"]["edges"][1]["time_ns"], 400);
+        assert_eq!(trace["digital"]["edges"][1]["value"], 0);
+        let first_edges: Vec<Value> = trace["digital"]["edges"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .take(8)
+            .map(|edge| serde_json::json!([edge["time_ns"], edge["value"]]))
+            .collect();
+        assert_eq!(
+            first_edges,
+            native[case]["first_edges"].as_array().unwrap().to_vec()
+        );
+        assert!(std::fs::read_to_string(&vcd)
+            .expect("digital VCD")
+            .contains("$timescale 1 ns $end"));
+
+        let device = result["devices"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|device| device["id"] == "strip_d1")
+            .expect("decoded strip state");
+        assert_eq!(device["state"]["pixels_decoded"], expected_pixels);
+        assert_eq!(
+            device["state"]["pixels_decoded"],
+            native[case]["pixels_decoded"]
+        );
+        assert_eq!(device["state"]["lit_pixels"], expected_lit_pixels);
+        assert_eq!(device["state"]["lit_pixels"], native[case]["lit_pixels"]);
+        assert_eq!(device["state"]["frame_history_dropped"], 0);
+        let frames = device["state"]["frame_history"].as_array().unwrap();
+        if case == "positive" {
+            assert_eq!(frames.len(), 1);
+            let bytes = frames[0]["bytes"]
+                .as_array()
+                .expect("decoded GRB bytes")
+                .iter()
+                .map(|byte| byte.as_u64().expect("byte") as u8)
+                .collect::<Vec<_>>();
+            assert_eq!(bytes.len(), 63);
+            assert_eq!(bytes.len(), native[case]["frame_bytes"]);
+            assert_eq!(&bytes[..6], &[0x20, 0x10, 0x08, 0x01, 0x02, 0x03]);
+            assert_eq!(
+                &bytes[..6],
+                native[case]["frame_prefix"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|value| value.as_u64().unwrap() as u8)
+                    .collect::<Vec<_>>()
+            );
+            assert!(bytes[6..].iter().all(|byte| *byte == 0));
+        } else {
+            assert_eq!(frames.len(), 1);
+            assert_eq!(
+                frames[0]["bytes"].as_array().unwrap().len(),
+                native[case]["frame_bytes"]
+            );
+            let prefix = frames[0]["bytes"].as_array().unwrap()[..6]
+                .iter()
+                .map(|value| value.as_u64().unwrap() as u8)
+                .collect::<Vec<_>>();
+            let expected_prefix = native[case]["frame_prefix"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|value| value.as_u64().unwrap() as u8)
+                .collect::<Vec<_>>();
+            assert_eq!(prefix, expected_prefix);
+            assert!(frames[0]["bytes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|byte| byte.as_u64() == Some(0)));
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

@@ -69,7 +69,7 @@ if (process.argv.includes('--browser')) {
     await page.goto(url);
     result = await page.evaluate(async ({ base, checkName }) => {
       const startedAt = performance.now();
-      const [{ default: init, WasmFlexRuntime }, checks, yaml, firmware, expected] = await Promise.all([
+      const [{ default: init, WasmFlexRuntime, WasmFlexTestRun }, checks, yaml, firmware, expected] = await Promise.all([
         import('/crates/wasm/pkg-flex-web/labwired_wasm.js'),
         import(base + 'checks.mjs'),
         fetch(base + 'system.yaml').then((r) => r.text()),
@@ -77,7 +77,7 @@ if (process.argv.includes('--browser')) {
         fetch(base + 'native.json').then((r) => r.json()),
       ]);
       await init();
-      const proof = await checks[checkName](WasmFlexRuntime, yaml, new Uint8Array(firmware), expected);
+      const proof = await checks[checkName](WasmFlexRuntime, yaml, new Uint8Array(firmware), expected, WasmFlexTestRun);
       return {
         ...proof,
         measured_browser_ms: Math.round((performance.now() - startedAt) * 10) / 10,
@@ -92,13 +92,14 @@ if (process.argv.includes('--browser')) {
 } else {
   const pkg = resolve(root, 'crates/wasm/pkg/labwired_wasm.js');
   assert(existsSync(pkg), `Missing ${pkg}; build the nodejs Wasm package first, or use --browser.`);
-  const { WasmFlexRuntime } = await import(pkg);
+  const { WasmFlexRuntime, WasmFlexTestRun } = await import(pkg);
   const read = (name) => readFileSync(resolve(fixture, name));
   result = await nodeChecks[checkName](
     WasmFlexRuntime,
     read('system.yaml').toString(),
     read('firmware.wasm'),
     JSON.parse(read('native.json').toString()),
+    WasmFlexTestRun,
   );
   result.host = 'Node';
 }
