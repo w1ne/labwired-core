@@ -458,9 +458,9 @@ impl Solver {
     /// The operating point uses the netlist's own DC values with capacitors
     /// open and inductors shorted, then applies `.ic` / `ic=` overrides —
     /// exactly what the ngspice wrapper gets from a transient that pauses just
-    /// after t = 0 before any routed input is applied. Switches start open
-    /// (`roff`), because their control is a routed input and no input has
-    /// arrived yet.
+    /// after t = 0 before any routed input is applied. Digitally routed
+    /// switches start open (`roff`) until their input arrives; ngspice `SW`
+    /// voltage switches seed from their `ON` / `OFF` initial-state keyword.
     pub fn new(circuit: Circuit, integration: Integration) -> Result<Self, AnalogError> {
         for resistor in &circuit.resistors {
             let resistance = resistor.resistance_ohms();
@@ -488,7 +488,18 @@ impl Solver {
         let branches = circuit.branch_count();
         let voltage_source_values = circuit.voltage_sources.iter().map(|s| s.dc).collect();
         let current_source_values = circuit.current_sources.iter().map(|s| s.dc).collect();
-        let switch_closed = vec![false; circuit.switches.len()];
+        // A voltage switch's `ON` keyword seeds the operating point, where
+        // ngspice's inclusive hysteresis hold rule rechecks that seed.
+        let switch_closed = circuit
+            .switches
+            .iter()
+            .map(|switch| {
+                switch
+                    .voltage
+                    .as_ref()
+                    .is_some_and(|control| control.initially_closed)
+            })
+            .collect();
         let capacitors = circuit.capacitors.len();
         let inductors = circuit.inductors.len();
         let nonlinear = circuit.is_nonlinear();
@@ -830,7 +841,9 @@ impl Solver {
             let on = control.vt;
             // A magnitude cannot fall below 0, so its dropout is clamped
             // there. A signed control (ngspice `SW`) may open below 0 V.
-            let off = if control.signed {
+            let off = if let Some(dropout) = control.dropout {
+                dropout
+            } else if control.signed {
                 control.vt - control.vh
             } else {
                 (control.vt - control.vh).max(0.0)
