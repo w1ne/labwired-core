@@ -22,6 +22,13 @@
 //! 12-bit `DR` at 0x40. A route that assumed the L4 sequencer would write
 //! `SQR1` and never select a channel, so the conversion count, not just the
 //! binding, is what proves the pad map.
+//!
+//! `nucleo-g071rb` (STM32G071RB) and `nucleo-c031c6` (STM32C031C6) load the
+//! same `stm32g0` converter and publish their pads in `analog_pins:` instead.
+//! The same generic deck circuits run on them unchanged. The C0 numbering is
+//! not the G0 one (PB0 is ADC1_IN17 on the C031 and ADC1_IN8 on the G071), so
+//! one test moves the diode to PB0 and converts the channel each descriptor
+//! names: a copied G0 map would convert an empty channel.
 
 use crate::common;
 use common::root;
@@ -66,6 +73,17 @@ struct Profile {
     deck: &'static str,
     /// Every pad the deck publishes and the channel the descriptor must give it.
     pads: &'static [(&'static str, u8)],
+    /// Where the descriptor publishes its ADC inputs.
+    source: PadSource,
+}
+
+/// The two descriptor tables the analog router reads as one union.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum PadSource {
+    /// `pins:` entries carrying `{ type: adc, peripheral, channel }`.
+    PinFunctions,
+    /// A top-level `analog_pins:` block.
+    AnalogPins,
 }
 
 const PROFILES: &[Profile] = &[
@@ -74,6 +92,7 @@ const PROFILES: &[Profile] = &[
         system: "configs/systems/nucleo-g0b1re.yaml",
         deck: "examples/nucleo-g0b1re/analog-ntc-diode-pa0-pa1-system.yaml",
         pads: &[("PA0", 0), ("PA1", 1)],
+        source: PadSource::PinFunctions,
     },
     // The startup fixture loads the same chip descriptor and needs no second
     // deck: the router resolves the pads from the chip, not the board name.
@@ -82,6 +101,21 @@ const PROFILES: &[Profile] = &[
         system: "configs/systems/iolinki-g0-startup.yaml",
         deck: "examples/nucleo-g0b1re/analog-ntc-diode-pa0-pa1-system.yaml",
         pads: &[("PA0", 0), ("PA1", 1)],
+        source: PadSource::PinFunctions,
+    },
+    Profile {
+        name: "nucleo-g071rb",
+        system: "configs/systems/nucleo-g071rb.yaml",
+        deck: "examples/nucleo-g071rb/analog-ntc-diode-pa0-pa1-system.yaml",
+        pads: &[("PA0", 0), ("PA1", 1)],
+        source: PadSource::AnalogPins,
+    },
+    Profile {
+        name: "nucleo-c031c6",
+        system: "configs/systems/nucleo-c031c6.yaml",
+        deck: "examples/nucleo-c031c6/analog-ntc-diode-pa0-pa1-system.yaml",
+        pads: &[("PA0", 0), ("PA1", 1)],
+        source: PadSource::AnalogPins,
     },
 ];
 
@@ -198,14 +232,20 @@ fn run_profile(profile: &Profile) {
     let chip = ChipDescriptor::from_file(&chip_path)
         .unwrap_or_else(|e| panic!("load {} descriptor: {e}", profile.name));
 
-    // This part names its ADC inputs in `pins:` only. If a later edit
-    // duplicates the map in `analog_pins:`, this test still proves the board
-    // and the duplicate must not disagree.
-    assert!(
-        chip.analog_pins.is_empty(),
-        "{}: this test covers descriptor pin functions; move it if `analog_pins:` returns",
-        profile.name
-    );
+    // Each profile names the table it publishes its pads in. If a later edit
+    // duplicates the map in the other table, the two must not disagree.
+    match profile.source {
+        PadSource::PinFunctions => assert!(
+            chip.analog_pins.is_empty(),
+            "{}: this profile covers descriptor pin functions; move it if `analog_pins:` returns",
+            profile.name
+        ),
+        PadSource::AnalogPins => assert!(
+            !chip.analog_pins.is_empty(),
+            "{}: this profile covers the `analog_pins:` block",
+            profile.name
+        ),
+    }
     assert_eq!(
         chip.analog_pin_conflicts(),
         Vec::new(),
@@ -318,7 +358,7 @@ fn run_profile(profile: &Profile) {
 }
 
 #[test]
-fn pin_table_adc_functions_reach_adc1_on_stm32g0b1_profiles_end_to_end() {
+fn adc_pad_maps_reach_adc1_on_stm32g0_and_c0_profiles_end_to_end() {
     for profile in PROFILES {
         run_profile(profile);
     }
@@ -360,5 +400,124 @@ fn a_g0_pad_without_an_adc_pin_function_is_still_refused() {
             pad: "pa8".to_string(),
         }],
         "PA8 is not an ADC input on this part: the router must say so"
+    );
+}
+
+/// Build a profile with the generic deck, the diode probe moved to `pad`.
+fn session_with_diode_on(
+    system: &str,
+    deck: &str,
+    pad: &str,
+) -> (ChipDescriptor, Machine<CortexM>, CosimSession) {
+    let system_path = root(system);
+    let mut manifest = SystemManifest::from_file(&system_path).expect("load the profile");
+    let mut models = SystemManifest::from_file(root(deck))
+        .expect("load the generic analog deck")
+        .cosim_models;
+    models[1].outputs.insert(
+        "v_diode".to_string(),
+        format!("board.analog.{}_volts", pad.to_ascii_lowercase()),
+    );
+    manifest.cosim_models = models;
+    let chip_path = system_path.parent().unwrap().join(&manifest.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load the descriptor");
+    let bus = SystemBus::from_config(&chip, &manifest).expect("build the bus");
+    let machine = board_machine(bus);
+    let session = CosimSession::new(&manifest.cosim_models, Path::new("."), &machine.bus)
+        .expect("build the co-simulation")
+        .expect("deck carries its analog devices");
+    (chip, machine, session)
+}
+
+/// PB0 is ADC1_IN8 on the STM32G071 (LQFP64) and ADC1_IN17 on the STM32C031
+/// (LQFP48), per ST STM32_open_pin_data. The same deck, with the diode on
+/// PB0, must convert on the channel each descriptor names. A C0 map copied
+/// from the G0 would put the solved voltage on IN8 and leave IN17 empty.
+#[test]
+fn pb0_converts_on_the_family_specific_channel() {
+    for (name, system, deck, channel) in [
+        (
+            "nucleo-g071rb",
+            "configs/systems/nucleo-g071rb.yaml",
+            "examples/nucleo-g071rb/analog-ntc-diode-pa0-pa1-system.yaml",
+            8u8,
+        ),
+        (
+            "nucleo-c031c6",
+            "configs/systems/nucleo-c031c6.yaml",
+            "examples/nucleo-c031c6/analog-ntc-diode-pa0-pa1-system.yaml",
+            17u8,
+        ),
+    ] {
+        let (chip, mut machine, mut session) = session_with_diode_on(system, deck, "PB0");
+        let pin = chip
+            .analog_pin_table()
+            .get("PB0")
+            .cloned()
+            .unwrap_or_else(|| panic!("{name} must publish PB0 as an ADC input"));
+        assert_eq!(
+            (pin.peripheral.as_str(), pin.channel),
+            ("adc1", channel),
+            "{name}: PB0 must be ADC1_IN{channel}"
+        );
+        assert_eq!(
+            session.binding_errors(),
+            &[] as &[RoutingError],
+            "{name}: PB0 must bind to an ADC channel the model accepts"
+        );
+        let cycles = session.cycles_until_boundary(0);
+        let (_, errors) = session
+            .advance_to(cycles, &mut machine.bus)
+            .unwrap_or_else(|e| panic!("solve {name} analog decks: {e}"));
+        assert!(
+            errors.is_empty(),
+            "{name}: unexpected route errors: {errors:?}"
+        );
+        let diode_v = signal_voltage(&session, "PB0");
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "{name}: Shockley load line on PB0 should be {} V, got {diode_v} V",
+            diode_load_line_voltage()
+        );
+        assert_eq!(
+            g0_convert(&mut machine, channel),
+            expected_adc_count(diode_v),
+            "{name}: ADC1_IN{channel} must report the diode voltage solved on PB0"
+        );
+    }
+}
+
+/// The C031 bonds PB2 to ADC1_IN19, past the CHSEL0..18 the shared `stm32g0`
+/// model converts. The descriptor leaves it out, so the router refuses the
+/// pad instead of binding a channel the model would drop.
+#[test]
+fn c031_pb2_past_the_model_channel_count_is_refused() {
+    let (chip, machine, session) = session_with_diode_on(
+        "configs/systems/nucleo-c031c6.yaml",
+        "examples/nucleo-c031c6/analog-ntc-diode-pa0-pa1-system.yaml",
+        "PB2",
+    );
+    // The exclusion rests on the model's channel count. If the G0/C0 model is
+    // widened, this fails and the C031 map must gain PB2 and PB10..PB12.
+    let adc = machine
+        .bus
+        .find_peripheral_index_by_name("adc1")
+        .expect("the C031 bus carries adc1");
+    assert_eq!(
+        machine.bus.peripherals[adc].dev.adc_channel_count(),
+        Some(19),
+        "the shared stm32g0 model converts CHSEL0..18; update the C031 map if this changes"
+    );
+    assert!(
+        !chip.analog_pin_table().contains_key("PB2"),
+        "PB2 (ADC1_IN19) needs a wider G0/C0 model before the C031 map may list it"
+    );
+    assert_eq!(
+        session.binding_errors(),
+        &[RoutingError::NoAdcChannel {
+            path: "board.analog.pb2_volts".to_string(),
+            pad: "pb2".to_string(),
+        }],
+        "PB2 is not a published ADC input on the C031: the router must say so"
     );
 }
