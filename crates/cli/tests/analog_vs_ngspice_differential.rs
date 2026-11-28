@@ -18,8 +18,9 @@
 //! integration, so agreement is evidence about the physics, not about shared
 //! code. There is none — the in-core parser and solver share nothing with it.
 //!
-//! Requires `libngspice0`. Without it the ngspice half cannot run and the test
-//! skips with a message naming what is missing, rather than passing quietly.
+//! Requires `libngspice0` and the `ngspice` executable for the reference runs.
+//! Local runs skip the missing half with an explicit message; set
+//! `LABWIRED_REQUIRE_NGSPICE=1` to make either missing backend fail the test.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -39,6 +40,27 @@ fn cli_binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_labwired"))
 }
 
+/// Make optional local coverage mandatory in the CI job that provisions
+/// ngspice. A missing reference engine must not look like a differential pass.
+fn backend_availability(available: bool, backend: &str, required: bool) -> Result<bool, String> {
+    if available || !required {
+        Ok(available)
+    } else {
+        Err(format!(
+            "LABWIRED_REQUIRE_NGSPICE is set, but {backend} is unavailable"
+        ))
+    }
+}
+
+fn require_backend_if_configured(available: bool, backend: &str) -> bool {
+    backend_availability(
+        available,
+        backend,
+        std::env::var_os("LABWIRED_REQUIRE_NGSPICE").is_some(),
+    )
+    .unwrap_or_else(|message| panic!("{message}"))
+}
+
 /// True when libngspice can actually be loaded by the wrapper.
 fn ngspice_available() -> bool {
     let probe = Command::new("python3")
@@ -49,7 +71,10 @@ fn ngspice_available() -> bool {
              ctypes.CDLL(name)",
         )
         .output();
-    matches!(probe, Ok(output) if output.status.success())
+    require_backend_if_configured(
+        matches!(probe, Ok(output) if output.status.success()),
+        "libngspice",
+    )
 }
 
 /// Run `labwired cosim-step <manifest> --steps N --set board.gpio.pa5=true
@@ -979,11 +1004,21 @@ fn ngspice_series(case: &Differential) -> Vec<f64> {
 
 /// True when the `ngspice` binary is on PATH.
 fn ngspice_binary_available() -> bool {
-    Command::new("ngspice")
-        .arg("-v")
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
+    require_backend_if_configured(
+        Command::new("ngspice")
+            .arg("-v")
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false),
+        "the ngspice executable",
+    )
+}
+
+#[test]
+fn required_ngspice_reference_cannot_be_skipped() {
+    assert_eq!(backend_availability(false, "libngspice", false), Ok(false));
+    assert_eq!(backend_availability(true, "libngspice", true), Ok(true));
+    assert!(backend_availability(false, "libngspice", true).is_err());
 }
 
 #[test]
