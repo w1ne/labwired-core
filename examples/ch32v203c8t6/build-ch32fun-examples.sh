@@ -18,6 +18,10 @@
 #                        16-bit master TX fed by DMA1 channel 5 (circular,
 #                        half-word); the channel 5 handler (PFIC interrupt
 #                        31) logs HT/TC for three laps, then USART1 prints it.
+#   tim_irq.elf          local smoke fixture using ch32fun startup: TIM2
+#                        1 kHz update on PFIC interrupt 44 and TIM1 CH1
+#                        compare on PFIC interrupt 43; USART1 prints the
+#                        counts and the SysTick-measured 10 update periods.
 #   usart_rx_irq.elf     local smoke fixture using ch32fun startup: USART1
 #                        RXNE interrupt 53 captures injected "wch!", then
 #                        USART1 TX prints the received bytes.
@@ -75,7 +79,7 @@ for example in examples_v20x/blink examples_v20x/debugprintfdemo examples_v20x/e
   "${prefix}size" "${out_dir}/${name}.elf"
 done
 
-for name in usart_rx_irq spi_dma_tx; do
+for name in usart_rx_irq spi_dma_tx tim_irq; do
   "${prefix}gcc" -o "${out_dir}/${name}.elf" \
     "${src}/ch32fun/ch32fun.c" "${repo_root}/examples/ch32v203c8t6/${name}.c" \
     -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \

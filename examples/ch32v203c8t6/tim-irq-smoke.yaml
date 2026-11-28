@@ -1,0 +1,15 @@
+# Local fixture tim_irq.c on ch32fun startup (build-ch32fun-examples.sh).
+# TIM2 updates at 1 kHz on PFIC interrupt 44; the handler stamps SysTick at
+# update 1 and update 11, so 10 periods must measure 10 ms. TIM1 CH1 compare
+# (CC1IE only) must reach TIM1_CC_IRQn 43.
+schema_version: "1.2"
+inputs:
+  firmware: "ch32fun/tim_irq.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+  wall_time_ms: 120000
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 500
+assertions:
+  - uart_contains: "TIM2_UP=11 ms=10 TIM1_CC1="
