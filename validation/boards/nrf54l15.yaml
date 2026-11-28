@@ -22,6 +22,7 @@ models:
   - crates/core/src/peripherals/nrf52/wdt.rs
   - crates/core/src/peripherals/nrf54l/clock.rs
   - crates/core/src/peripherals/nrf54l/grtc.rs
+  - crates/core/src/peripherals/nrf54l/rramc.rs
   - crates/core/src/peripherals/nrf54l/twim.rs
   - crates/core/src/peripherals/nrf54l/uarte.rs
   - crates/core/src/peripherals/stub.rs

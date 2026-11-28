@@ -133,6 +133,20 @@ peripherals:
     config:
       debug_schema: "../peripherals/nrf54l15/global_twim22_s.yaml"
 
+  # ── SPIM ───────────────────────────────────────────────────────────────
+  # SPIM00 is the high-speed serial instance (SVD GLOBAL_SPIM00_S at
+  # 0x5004A000, IRQ 74). On the nRF54L15-DK its pins go to the on-board
+  # MX25R64 SPI-NOR, so the stock devicetree enables it and any image built
+  # with CONFIG_FLASH applies its pinctrl at boot. No SPI-NOR device is
+  # attached to this chip profile: the JEDEC ID read returns no device.
+  - id: "spi00"
+    type: "nrf54l_spim"
+    base_address: 0x5004A000
+    size: "4KB"
+    irq: 74
+    config:
+      debug_schema: "../peripherals/nrf54l15/global_spim00_s.yaml"
+
   # ── SysTick ────────────────────────────────────────────────────────────
   # The 24-bit ARMv8-M architectural SysTick timer, part of the Cortex-M33
   # core (SCS block at 0xE000_E010), NOT an nRF peripheral. It raises system
@@ -433,11 +447,14 @@ peripherals:
     config:
       debug_schema: "../peripherals/nrf54l15/global_wdt31_s.yaml"
 
-  # RRAM controller — NVM write/erase control. Reads as zero; a firmware that
-  # only executes from RRAM never needs it, but the window must exist so a
-  # config readback does not fault.
+  # RRAM controller. CONFIG.WEN gates CPU stores into the RRAM array (a store
+  # with WEN clear is dropped; with WEN set it commits as written, 0 and 1
+  # alike). READY/READYNEXT read 1 and BUFSTATUS.WRITEBUFEMPTY tracks the
+  # write-buffer state. Not modelled: write latency, the commit on read and on
+  # READYNEXTTIMEOUT, ERASE.ERASEALL (the access fails), REGION protection,
+  # the IRQ line (SVD IRQ 75), and UICR/SICR programming.
   - id: "rramc"
-    type: "nrf54l_rramc_stub"
+    type: "nrf54l_rramc"
     base_address: 0x5004B000
     size: "4KB"
     config:

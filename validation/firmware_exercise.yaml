@@ -295,13 +295,16 @@ chips:
 
   - id: nrf54l15
     arch: cortex-m33
-    headline: "No tier1 fixture. Unmodified Zephyr v4.4 hello_world boots end-to-end (nRF54L CLOCK/LFCLK, GRTC kernel tick, TAMPC approtect gate, RRAM-mapped UARTE20 EasyDMA) and the PR-gated smart-ring probe reads four I2C sensor IDs. Beyond the rubric TEMP/EGU/GPIOTE are unit-tested models no firmware drives; TAMPC/RRAMC/regulators/UICR/DPPIC are zero-filled stub windows the boot path pokes but never polls; FICR is an SVD register file."
-    functional: []
+    headline: "No tier1 fixture. Unmodified Zephyr v4.4 hello_world boots end-to-end (nRF54L CLOCK/LFCLK, GRTC kernel tick, TAMPC approtect gate, RRAM-mapped UARTE20 EasyDMA), the PR-gated smart-ring probe reads four I2C sensor IDs, and unmodified Zephyr v4.4.0 soc_flash_nrf writes 128 bytes to RRAM through the RRAMC write-enable gate and reads them back. Beyond the rubric TEMP/EGU/GPIOTE are unit-tested models no firmware drives; TAMPC/regulators/UICR/DPPIC are zero-filled stub windows the boot path pokes but never polls; FICR is an SVD register file. RRAMC models write gating and write-buffer state only: no latency, ERASEALL, region protection or IRQ line."
+    functional:
+      - what: "Internal RRAM storage — Zephyr soc_flash_nrf_rram driver sets RRAMC CONFIG.WEN, writes 128 bytes in eight buffered 16-byte blocks, commits and reads them back"
+        fw: zephyr-soc-flash-nrf
+        ev: "crates/core/tests/nrf/nrf54l15_rramc.rs (zephyr_soc_flash_sample_writes_and_reads_back_rram)"
+        gate: pr
     advanced_unit_only: [TEMP, EGU10, EGU20, GPIOTE20, GPIOTE30]
     advanced_dead: []
     shim:
       - {p: TAMPC, ev: "configs/chips/nrf54l15.yaml:363 (nrf54l_tampc_stub)", note: "STRUCTURAL: SystemInit READS the protect-domain signal registers, and the MDK deliberately hangs the part on locked+high — zero is the only boot-safe answer. Read once, never polled."}
-      - {p: RRAMC, ev: "configs/chips/nrf54l15.yaml:390 (nrf54l_rramc_stub)", note: "STRUCTURAL: firmware executes from RRAM and no boot path polls the controller for a settled value. Closable only by firmware that writes NVM at runtime — none does."}
       - {p: REGULATORS, ev: "configs/chips/nrf54l15.yaml:398 (nrf54l_regulators_stub)", note: "STRUCTURAL: DCDC/LDO selection is write-only on the boot path; nothing reads it back."}
       - {p: FICR, ev: "configs/chips/nrf54l15.yaml:476 (declarative peripherals/nrf54l15/ficr.yaml)", note: "STRUCTURAL: SVD register file, not zero-filled. INFO.PART/RAM/RRAM carry the SVD N54L15/K256/K1524 values; DEVICEID, trims and TRIMCNF read erased (0xFFFFFFFF). Zephyr reads the XOSC trims once at boot and never polls."}
       - {p: UICR, ev: "configs/chips/nrf54l15.yaml:429 (nrf54l_uicr_stub)", note: "STRUCTURAL: unprovisioned UICR reads zero, which the boot path accepts; APPROTECT provisioning is not modelled."}

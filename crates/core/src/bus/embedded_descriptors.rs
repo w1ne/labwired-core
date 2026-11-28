@@ -370,6 +370,10 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
         packed!("nrf54l15/global_rramc_s.yaml"),
     ),
     (
+        "nrf54l15/global_spim00_s.yaml",
+        packed!("nrf54l15/global_spim00_s.yaml"),
+    ),
+    (
         "nrf54l15/global_tampc_s.yaml",
         packed!("nrf54l15/global_tampc_s.yaml"),
     ),

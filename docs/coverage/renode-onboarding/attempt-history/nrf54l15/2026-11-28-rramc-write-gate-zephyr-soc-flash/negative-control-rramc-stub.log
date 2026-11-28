@@ -1,0 +1,5 @@
+test nrf54l15_rramc::wen_gates_rram_stores_and_overwrite_needs_no_erase ... FAILED
+test nrf54l15_rramc::buffered_store_reports_uncommitted_data_until_committed ... FAILED
+test nrf54l15_rramc::idle_rramc_reads_ready_not_busy ... FAILED
+test nrf54l15_rramc::zephyr_soc_flash_sample_writes_and_reads_back_rram ... FAILED
+test result: FAILED. 0 passed; 4 failed; 0 ignored; 0 measured; 93 filtered out; finished in 0.37s
