@@ -388,6 +388,72 @@ fn ch32v203_usart1_rxne_stays_unhandled_without_irq_53_wired() {
     assert_eq!(mcause, 0, "unwired USART1 must not enter the PFIC");
 }
 
+/// Runs the CH32V203 TIM2 update / TIM1 CC1 interrupt fixture, returning the
+/// USART1 TX stream and the last QingKe trap cause.
+fn run_ch32v203_tim_irq(chip: &ChipDescriptor) -> (String, u32) {
+    let mut bus = SystemBus::from_config(chip, &SystemManifest::default())
+        .expect("CH32V203 peripherals and clock gates");
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+
+    let image =
+        labwired_loader::load_elf(&root().join("examples/ch32v203c8t6/ch32fun/tim_irq.elf"))
+            .expect("CH32V203 TIM IRQ ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load TIM IRQ ELF");
+
+    for _ in 0..8_000_000 {
+        machine.step().expect("CH32V203 TIM IRQ instruction");
+        if sink.lock().unwrap().ends_with(b"\r\n") {
+            break;
+        }
+    }
+
+    let out = String::from_utf8_lossy(&sink.lock().unwrap()).into_owned();
+    (out, machine.cpu.mcause)
+}
+
+#[test]
+fn ch32v203_tim2_update_and_tim1_cc1_reach_qingke_pfic_irqs_44_and_43() {
+    let row = CHIPS
+        .iter()
+        .find(|r| r.name == "CH32V203")
+        .expect("CH32V203 row");
+    let (out, mcause) = run_ch32v203_tim_irq(&descriptor(row));
+    // 10 TIM2 update periods at PSC 143 / ATRLR 999 measure 10 ms of
+    // SysTick; TIM1 CH1 compares at 0.25 ms past each TIM1 update.
+    assert_eq!(out, "TIM2_UP=11 ms=10 TIM1_CC1=11\r\n");
+    assert_eq!(mcause, 0x8000_002C, "last trap was TIM2_IRQn 44");
+}
+
+#[test]
+fn ch32v203_tim2_update_stays_unhandled_without_irq_44_wired() {
+    let row = CHIPS
+        .iter()
+        .find(|r| r.name == "CH32V203")
+        .expect("CH32V203 row");
+    let text = std::fs::read_to_string(descriptor_path(row)).expect("read CH32V203 descriptor");
+    let mut yaml: serde_yaml::Value = serde_yaml::from_str(&text).expect("parse chip descriptor");
+    let tim2 = yaml["peripherals"]
+        .as_sequence_mut()
+        .expect("peripherals list")
+        .iter_mut()
+        .find(|p| p["id"].as_str() == Some("tim2"))
+        .expect("tim2 block");
+    assert_eq!(tim2["irq"].as_u64(), Some(44), "TIM2_IRQn is wired");
+    tim2.as_mapping_mut()
+        .unwrap()
+        .remove(serde_yaml::Value::String("irq".to_owned()));
+    let chip: ChipDescriptor = serde_yaml::from_value(yaml).expect("descriptor without TIM2 IRQ");
+
+    let (out, _) = run_ch32v203_tim_irq(&chip);
+    assert!(
+        out.starts_with("TIM_TIMEOUT up=0 cc1="),
+        "no TIM2 handler ran: {out:?}"
+    );
+}
+
 /// Runs the CH32V203 SPI2 TX DMA fixture, returning the USART1 TX stream and
 /// the last QingKe trap cause.
 fn run_ch32v203_spi2_dma(chip: &ChipDescriptor) -> (String, u32) {
