@@ -7130,12 +7130,12 @@
 <h3 id="ch32v003j4m6"><code>ch32v003j4m6</code></h3>
 <p><em>SOP8 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1, openwch <code>analogWrite</code> and openwch <code>Wire</code> I2C1 fixtures unchanged and asserts the exact PD5 TX string, the TIM2_CH1 PWM on PD4, and the BME280 CHIP_ID read on PC1/PC2. SOP8 has no PC0 pad, so a separate committed fixture blinks PC4 (package pin 7); the test requires PC4 edges and a negative control requires zero PC0 edges. This local simulator evidence does not cover WCH-Link, PFIC, ADC, SPI, the AFIO I2C1 remaps, complementary timer outputs, or USB, and is not hosted model_verified or hardware confirmation.</em></p>
 <h3 id="nrf5340"><code>nrf5340</code></h3>
-<p><em>No tier1 fixture. Unmodified Zephyr v3.7 hello_world boots end-to-end through CLOCK/UARTE0/RTC1. TWIM1 is a behavioural EasyDMA model; the PR-gated nrf5340_clock_boot test attaches the declarative BMI270 model and reads CHIP_ID 0x24 with a repeated-START transaction. Nine peripheral blocks remain benign boot stubs.</em></p>
+<p><em>No tier1 fixture. Unmodified Zephyr v3.7 hello_world boots end-to-end through CLOCK/UARTE0/RTC1. TWIM1 is a behavioural EasyDMA model; nrf5340_clock_boot reads BMI270 CHIP_ID 0x24 over EasyDMA, and nrf5340_ficr checks the vendor SVD FICR register file. Nine other peripheral blocks remain benign boot stubs.</em></p>
 <p><strong>Functional device/protocol reads</strong> (real driver, decoded value):
 - Unmodified Zephyr v3.7 hello_world boots + prints over UARTE0 EasyDMA — <code>nrf5340-zephyr</code> · firmware_survival::test_nrf5340_zephyr_survival (PR gate)</p>
-<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>GPIO</code>, <code>TIMER0-2</code>, <code>RTC0</code>, <code>TWIM1 + BMI270 CHIP_ID EasyDMA transaction</code></p>
+<p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>GPIO</code>, <code>TIMER0-2</code>, <code>RTC0</code>, <code>TWIM1 + BMI270 CHIP_ID EasyDMA transaction</code>, <code>FICR INFO.PART + flash geometry</code></p>
 <p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
-- <code>DCNF/FPU/CACHE/SPU/OSC_REG/CTRLAP/GPIOTE0/DPPIC/FICR</code> (nrf5340_*_stub) — STRUCTURAL: SystemInit pokes them once at boot and never polls them again, so a register stub is byte-faithful for the hello_world boot path.</p>
+- <code>DCNF/FPU/CACHE/SPU/OSC_REG/CTRLAP/GPIOTE0/UICR/trim target</code> (nrf5340_*_stub) — STRUCTURAL: these nine boot-path windows remain bounded zero-answering stubs; FICR is declarative from the vendor SVD, and DPPIC models its channel-enable subset.</p>
 <h3 id="nrf54l05"><code>nrf54l05</code></h3>
 <p><em>Minimal nRF54L05 application-core smoke using real RRAM and SRAM geometry, UARTE20 EasyDMA and GPIO P2.09. Only a synthetic board is tested; no beyond-rubric firmware function exists. Full Zephyr/SDK boot, BLE radio, TrustZone and silicon parity are untested.</em></p>
 <h3 id="nrf54l10"><code>nrf54l10</code></h3>

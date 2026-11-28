@@ -5088,7 +5088,7 @@ authoritative, auto-generated view see the
 </tr>
 <tr>
 <td>Validation</td>
-<td><code>firmware_survival::test_nrf5340_zephyr_survival</code> + <code>tests/nrf5340_clock_boot.rs</code></td>
+<td>Zephyr survival + <code>nrf5340_clock_boot</code> + <code>nrf5340_ficr</code></td>
 </tr>
 <tr>
 <td>Tier</td>
@@ -5108,6 +5108,11 @@ A separate integration test attaches the declarative BMI270 model to TWIM1 and
 reads CHIP_ID <code>0x24</code> through a real EasyDMA repeated-START transaction. This
 proves the board's default I²C controller and the IMU model work together; it
 does not prove physical signal timing or TrustZone isolation.</p>
+<p>The FICR window serves the vendor SVD register file. Its INFO.PART is N5340,
+and its 4-KiB page size × 256-page code size agrees with the chip profile's
+1-MiB flash. The SVD leaves per-device IDs, RAM/FLASH variants, and trim values
+unspecified; the model preserves those erased values rather than assigning a
+specific production device.</p>
 <h2 id="peripherals-from-chip-yaml">Peripherals (from chip yaml)</h2>
 <table>
 <thead>
@@ -5162,10 +5167,22 @@ does not prove physical signal timing or TrustZone isolation.</p>
 <td>nRF GPIO layout (note the unusual 0x_842_500 offset)</td>
 </tr>
 <tr>
-<td>DCNF, SPU, OSC/REG, CTRL-AP, GPIOTE, DPPIC, FICR, UICR, analog trim</td>
+<td>DPPIC</td>
+<td>0x5001_7000</td>
+<td>✅ bounded model</td>
+<td>Channel-enable subset; cross-instance routing is not modeled</td>
+</tr>
+<tr>
+<td>FICR</td>
+<td>0x00FF_0000</td>
+<td>✅ declarative</td>
+<td>INFO.PART and flash geometry; unspecified device IDs, variants, and trims remain erased</td>
+</tr>
+<tr>
+<td>DCNF, FPU, CACHE, SPU, OSC/REG, CTRL-AP, GPIOTE0, UICR, trim target</td>
 <td>various</td>
 <td>⚪ benign stub</td>
-<td>Poked at boot but not polled; zero-returning windows so the bus never faults</td>
+<td>Boot-path windows remain bounded zero-answering placeholders</td>
 </tr>
 </tbody>
 </table>
@@ -5175,9 +5192,10 @@ does not prove physical signal timing or TrustZone isolation.</p>
 <li><strong>TrustZone / SPU</strong> access enforcement (the SPU window is a benign stub; the
   secure/non-secure split is not policed). A secure <code>cpuapp</code> ELF can run, but
   this is not evidence that an isolation policy or TF-M partition is correct.</li>
-<li><strong>Analog trims</strong> — FICR/UICR/OSCILLATORS/REGULATORS are stubs returning 0, so
-  oscillator/radio calibration is absent. This is irrelevant to the digital
-  console path but means RF/analog fidelity is not represented.</li>
+<li><strong>Analog trims</strong> — the FICR trim table remains erased, and UICR,
+  OSCILLATORS/REGULATORS and the trim target remain stubs, so oscillator/radio
+  calibration is absent. This is irrelevant to the digital console path but
+  means RF/analog fidelity is not represented.</li>
 <li>No live <strong>silicon diff</strong> — there is no nRF5340 bench board, so the models are
   validated against real firmware behaviour, not a register capture.</li>
 </ul>
