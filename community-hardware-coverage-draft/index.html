@@ -5293,6 +5293,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#wch-ch32v203c8t6-i2c1-polled-and-i2c2-interrupt-driven-bme280-reads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WCH CH32V203C8T6 — I2C1 polled and I2C2 interrupt-driven BME280 reads
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -6227,6 +6238,19 @@ TKey and dual-ADC modes are not modelled.</p>
 <ul>
 <li><a href="../examples/ch32v203c8t6/README.md#adc">Copy-paste C example, smoke command, and stated model scope</a></li>
 <li><a href="../examples/ch32v203c8t6/evidence/adc-irq-smoke/">Committed ADC smoke evidence</a></li>
+</ul>
+<h3 id="wch-ch32v203c8t6-i2c1-polled-and-i2c2-interrupt-driven-bme280-reads">WCH CH32V203C8T6 — I2C1 polled and I2C2 interrupt-driven BME280 reads</h3>
+<p>A ch32fun-based fixture runs I2C1 (PB6/PB7) and I2C2 (PB10/PB11) as masters,
+each with a BME280 model. USART1 prints
+<code>I2C1 id=60 dig_T1=28528 T2l=43 I2C2 id=60 ev_irqs=8</code>: I2C1 reads the chip id
+and three calibration bytes polled, and I2C2 reads the chip id through the
+event interrupt (PFIC IRQ 49). With the I2C2 IRQ line removed from the
+descriptor, the I2C2 read times out. This is local simulator evidence; it is
+not hardware confirmation. Slave mode, the error interrupts and the I2C1
+remap to PB8/PB9 are not smoke-tested.</p>
+<ul>
+<li><a href="../examples/ch32v203c8t6/README.md#i2c">Copy-paste C example, smoke command, and stated model scope</a></li>
+<li><a href="../examples/ch32v203c8t6/evidence/i2c-bme280-smoke/">Committed I2C smoke evidence</a></li>
 </ul>
 
 
