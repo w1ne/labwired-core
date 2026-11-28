@@ -511,7 +511,10 @@ impl SystemBus {
         let peripheral = self.find_peripheral_index(addr).ok_or_else(|| {
             anyhow::anyhow!("motor '{motor}': {role} pin '{label}' has no GPIO peripheral")
         })?;
-        Ok(ResolvedPin { peripheral, bit })
+        Ok(ResolvedPin {
+            peripheral,
+            bit: self.motor_pad_number(peripheral, label, bit),
+        })
     }
 
     fn resolve_motor_input(
@@ -526,7 +529,29 @@ impl SystemBus {
         let peripheral = self.find_peripheral_index(addr).ok_or_else(|| {
             anyhow::anyhow!("motor '{motor}': {role} pin '{label}' has no GPIO peripheral")
         })?;
-        Ok(ResolvedPin { peripheral, bit })
+        Ok(ResolvedPin {
+            peripheral,
+            bit: self.motor_pad_number(peripheral, label, bit),
+        })
+    }
+
+    /// `resolve_pin_{odr,idr}` returns a register bit. On ESP32-family GPIO,
+    /// GPIO32..39/53 are in bank 1, so that bit is local to OUT1/IN1 (e.g.
+    /// GPIO33 becomes bit 1). Motor controls and feedback call `read_gpio_pad`
+    /// / `set_gpio_input`, whose index is the physical pad number instead.
+    fn motor_pad_number(&self, peripheral: usize, label: &str, register_bit: u8) -> u8 {
+        let Some(any) = self.peripherals[peripheral].dev.as_any() else {
+            return register_bit;
+        };
+        if any.is::<crate::peripherals::esp32::gpio::Esp32Gpio>()
+            || any.is::<crate::peripherals::esp32c3::gpio::Esp32c3Gpio>()
+        {
+            Self::parse_esp32_gpio_pin(label).unwrap_or(register_bit)
+        } else if any.is::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>() {
+            Self::parse_esp32s3_gpio_pin(label).unwrap_or(register_bit)
+        } else {
+            register_bit
+        }
     }
 
     /// The PWM output snapshot of the peripheral at `index`, or `None` when it

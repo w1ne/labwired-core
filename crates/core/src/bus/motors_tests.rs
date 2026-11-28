@@ -1505,3 +1505,66 @@ fn bldc_unsupported_enabled_output_latches_an_explicit_model_failure() {
     assert_eq!(bus.motor_series().1, 0);
     assert_eq!(bus.motor_speed_rpm("drive_motor"), None);
 }
+
+const ESP32_GPIO_BASE: u64 = 0x3FF4_4000;
+
+fn esp32_bridge_with_stby(stby_high: bool) -> SystemBus {
+    let chip: labwired_config::ChipDescriptor =
+        serde_yaml::from_str(include_str!("../../../../configs/chips/esp32.yaml")).unwrap();
+    let manifest: SystemManifest = serde_yaml::from_str(
+        r#"
+name: esp32-high-bank-bridge
+chip: esp32
+external_devices:
+  - id: wheel
+    type: dc-motor
+    connection: gpio
+    config:
+      resistance_ohm: 1.0
+      inductance_h: 0.001
+      torque_constant_nm_per_a: 0.1
+      back_emf_constant_v_per_rad_s: 0.1
+      rotor_inertia_kg_m2: 0.0001
+      viscous_friction_nm_per_rad_s: 0.001
+      supply_voltage_v: 12.0
+      load_torque_nm: 0.0
+      encoder_cpr: 16
+      pwm_pin: 3V3
+      in1_pin: GPIO26
+      in2_pin: GPIO27
+      enable_pin: GPIO33
+"#,
+    )
+    .unwrap();
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("ESP32 bridge motor builds");
+
+    // IN1/IN2 are bank 0; STBY is GPIO33, bit 1 of bank 1.
+    bus.write_u32(ESP32_GPIO_BASE + 0x24, (1 << 26) | (1 << 27))
+        .unwrap(); // ENABLE_W1TS: AIN1/AIN2 output
+    bus.write_u32(ESP32_GPIO_BASE + 0x08, 1 << 26).unwrap(); // OUT_W1TS: AIN1 high, AIN2 low
+    bus.write_u32(ESP32_GPIO_BASE + 0x30, 1 << 1).unwrap(); // ENABLE1_W1TS: GPIO33 output
+    if stby_high {
+        bus.write_u32(ESP32_GPIO_BASE + 0x14, 1 << 1).unwrap(); // OUT1_W1TS: STBY high
+    }
+    bus
+}
+
+#[test]
+fn esp32_gpio33_stby_enables_the_generic_h_bridge_motor() {
+    let mut bus = esp32_bridge_with_stby(true);
+    run_cycles(&mut bus, 8_000_000);
+
+    let motor = &bus.motor_snapshots()[0];
+    assert_eq!(motor.control_state, "forward", "{motor:?}");
+    assert!(motor.speed_rpm > 100.0, "{motor:?}");
+}
+
+#[test]
+fn esp32_gpio33_stby_low_keeps_the_generic_h_bridge_motor_coasted() {
+    let mut bus = esp32_bridge_with_stby(false);
+    run_cycles(&mut bus, 8_000_000);
+
+    let motor = &bus.motor_snapshots()[0];
+    assert_eq!(motor.control_state, "coast", "{motor:?}");
+    assert_eq!(motor.speed_rpm, 0.0, "{motor:?}");
+}
