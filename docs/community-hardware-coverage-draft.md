@@ -1014,3 +1014,20 @@ remap to PB8/PB9 are not smoke-tested.
 
 - [Copy-paste C example, smoke command, and stated model scope](../examples/ch32v203c8t6/README.md#i2c)
 - [Committed I2C smoke evidence](../examples/ch32v203c8t6/evidence/i2c-bme280-smoke/)
+
+### WeAct BluePill Plus (CH32V203C8T6)
+
+A buyable WeAct core board (live AliExpress listing, 2026-11-28: "+1,000
+sold", €3.35) on the existing CH32V203C8T6 model. The board profile wires the
+blue LED on PB2 and the user KEY on PA0, as WeAct's MIT board repository
+documents. A clean-room rewrite of WeAct's own CH32V203 template prints the
+WeAct banner on USART1, blinks PB2 every 250 ms, and blinks every 100 ms after
+a KEY press. A checker measures the PB2 half-periods from the run:
+251.06 ms before the press, 100.43 ms after it. With the press removed, the
+rate stays at 250 ms and the smoke fails. The firmware stays on the 8 MHz HSI
+because the model has no V20x PLL x18. USB is not modelled. This is local
+simulator evidence; it is not hardware confirmation.
+
+- [Board scope, copy-paste example, and smoke command](../examples/weact-bluepill-plus-ch32v203/README.md)
+- [Live WeAct listing receipt](../examples/weact-bluepill-plus-ch32v203/vendor-status.md)
+- [Committed smoke, checker and negative-control evidence](../examples/weact-bluepill-plus-ch32v203/evidence/template-smoke/)

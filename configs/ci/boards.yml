@@ -388,3 +388,10 @@ boards:
     kind: sim-validate
     path: examples/wch-ch32v003evt
     gate: true
+  # WeAct BluePill Plus (CH32V203C8T6): committed, digest-checked RV32IMAC
+  # template ELF; USART1 banner, PB2 LED rate and the PA0 KEY, with the
+  # edge spacing measured by check-blink-rate.py. No USB/PLL claim.
+  - id: weact-bluepill-plus-ch32v203
+    kind: sim-validate
+    path: examples/weact-bluepill-plus-ch32v203
+    gate: true

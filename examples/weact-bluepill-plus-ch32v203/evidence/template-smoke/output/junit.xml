@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="5" failures="0" errors="0" time="9.548112">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="99001a095c9cfc898a7249c213fb84e88cd983392c4e005d5bd4ebd1ae60b1cf"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="9.548112">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;WeAct Studio Core Board&quot;, &quot;SystemClk:8000000&quot;, &quot;Template&quot;]" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpiob:2 &gt;= 10 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x40010800=0x8" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x40010c00=0x300" time="0.000000">
+  </testcase>
+</testsuite>

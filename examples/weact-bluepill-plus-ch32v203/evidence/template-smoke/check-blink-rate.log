@@ -1,0 +1,3 @@
+ok: before press: 2 half-periods [251.06, 251.06] ms, want 250 ms +-1 %, need >= 2
+ok: after release: 7 half-periods [100.43, 100.43, 100.43, 100.43, 100.43, 100.43, 100.43] ms, want 100 ms +-1 %, need >= 5
+PASS
