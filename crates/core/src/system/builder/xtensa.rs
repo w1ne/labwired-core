@@ -282,6 +282,7 @@ fn build_esp32s3_flash(
         ..Esp32s3Opts::for_chip(chip)
     };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+    bus.attach_chip_io_levels(chip);
     if wiring.boot_mode != Esp32s3BootMode::Faithful {
         return Err(anyhow!(
             "ESP32-S3 flash boot needs the real boot ROM, but the injected images did not resolve"
@@ -356,6 +357,7 @@ fn build_esp32s3(
         ..Esp32s3Opts::for_chip(chip)
     };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+    bus.attach_chip_io_levels(chip);
     bus.attach_chip_analog_pins(chip);
     bus.attach_plugin_peripherals(chip, manifest, plugins)?;
     let mut cpu = wiring.cpu;

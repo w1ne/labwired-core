@@ -1495,6 +1495,9 @@ pub enum ModelCard {
     Regulator(RegulatorModel),
     /// An `SW` card, ngspice's voltage-controlled switch.
     Switch(SwitchModel),
+    /// A `CSW` card, ngspice's current-controlled switch. `vt`/`vh` hold
+    /// `IT`/`IH`, in amps.
+    CurrentSwitch(SwitchModel),
 }
 
 impl ModelCard {
@@ -1510,6 +1513,7 @@ impl ModelCard {
             },
             Self::Diode(_) => "D",
             Self::Switch(_) => "SW",
+            Self::CurrentSwitch(_) => "CSW",
             Self::Bjt(model) => match model.polarity {
                 Polarity::N => "NPN",
                 Polarity::P => "PNP",
@@ -2065,9 +2069,9 @@ pub struct Jfet {
 /// solver update (no break-before-make delay).
 #[derive(Debug, Clone, PartialEq)]
 pub struct VoltageSwitchControl {
-    /// Positive sense node.
+    /// Positive sense node. Ground for a current-sensed (`W`) switch.
     pub pos: NodeRef,
-    /// Negative sense node.
+    /// Negative sense node. Ground for a current-sensed (`W`) switch.
     pub neg: NodeRef,
     /// Closing threshold in volts (`|V|` rising through `vt`).
     pub vt: f64,
@@ -2091,6 +2095,13 @@ pub struct VoltageSwitchControl {
     /// value by an ulp, which moves ngspice's inclusive lower edge. `None`
     /// for the inline form, which derives its dropout from `vt − vh`.
     pub dropout: Option<f64>,
+    /// ngspice `W`: the element whose branch current is sensed instead of
+    /// `V(pos) − V(neg)`. The thresholds are then in amps. `None` for a
+    /// voltage-sensed switch.
+    pub control: Option<String>,
+    /// Branch-current index of [`Self::control`] (see
+    /// [`Circuit::branch_index`]). Unused when `control` is `None`.
+    pub control_branch: usize,
 }
 
 /// `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` — an ideal switch whose control is a
@@ -2422,8 +2433,10 @@ struct PendingDevice {
     as_: Option<f64>,
     pd: Option<f64>,
     ps: Option<f64>,
-    /// ngspice `S ... ON`: the switch starts closed.
+    /// ngspice `S ... ON` / `W ... ON`: the switch starts closed.
     switch_on: bool,
+    /// ngspice `W`: the element whose branch current controls the switch.
+    control: Option<String>,
 }
 
 /// A K line held until all its L elements have been parsed.
@@ -2507,6 +2520,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 | 'V'
                 | 'I'
                 | 'S'
+                | 'W'
                 | 'D'
                 | 'Q'
                 | 'M'
@@ -2823,6 +2837,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     pd,
                     ps,
                     switch_on: false,
+                    control: None,
                 });
             }
             'E' | 'G' => {
@@ -2929,6 +2944,46 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     pd: None,
                     ps: None,
                     switch_on: false,
+                    control: None,
+                });
+            }
+            'W' => {
+                let shape = "W<name> n1 n2 <vsource> <model> [ON|OFF]";
+                let rest = &tokens[1..];
+                if !(rest.len() == 4 || rest.len() == 5) || rest.iter().any(|t| t.contains('=')) {
+                    return Err(ctx.parse_err(format!("expected `{shape}`")));
+                }
+                let switch_on = match rest.get(4).map(|token| token.to_ascii_uppercase()) {
+                    None => false,
+                    Some(keyword) if keyword == "OFF" => false,
+                    Some(keyword) if keyword == "ON" => true,
+                    Some(_) => {
+                        return Err(ctx.parse_err(format!(
+                            "switch initial state `{}` must be ON or OFF",
+                            rest[4]
+                        )))
+                    }
+                };
+                let nodes = rest[..2].iter().map(|name| circuit.intern(name)).collect();
+                // The controlling source's branch is bound after the last
+                // line, with the `F` and `H` controls.
+                pending.push(PendingDevice {
+                    line: ctx.number,
+                    text: line.to_string(),
+                    letter,
+                    name: head.to_string(),
+                    nodes,
+                    model_name: rest[3].to_string(),
+                    width: None,
+                    length: None,
+                    nrd: None,
+                    nrs: None,
+                    ad: None,
+                    as_: None,
+                    pd: None,
+                    ps: None,
+                    switch_on,
+                    control: Some(rest[2].to_string()),
                 });
             }
             'S' => {
@@ -2969,6 +3024,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         pd: None,
                         ps: None,
                         switch_on,
+                        control: None,
                     });
                     continue;
                 }
@@ -3051,6 +3107,8 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                             strict: false,
                             initially_closed: false,
                             dropout: None,
+                            control: None,
+                            control_branch: usize::MAX,
                         }),
                     });
                 } else {
@@ -3154,6 +3212,25 @@ fn bind_controls(
     for index in 0..circuit.ccvs.len() {
         let branch = resolve(circuit, 'H', index, &circuit.ccvs[index].control)?;
         circuit.ccvs[index].control_branch = branch;
+    }
+    for index in 0..circuit.switches.len() {
+        let Some(control) = circuit.switches[index]
+            .voltage
+            .as_ref()
+            .and_then(|control| control.control.clone())
+        else {
+            continue;
+        };
+        let branch = circuit.branch_index(&control).ok_or_else(|| {
+            AnalogError::Config(format!(
+                "`{}`: `{control}` carries no branch current; a W element must name a \
+                 V, L, E or H element",
+                circuit.switches[index].name
+            ))
+        })?;
+        if let Some(sense) = circuit.switches[index].voltage.as_mut() {
+            sense.control_branch = branch;
+        }
     }
     for index in 0..circuit.power_sinks.len() {
         let name = circuit.power_sinks[index].control.clone();
@@ -3738,6 +3815,49 @@ fn bind_models(
                         strict: true,
                         initially_closed: device.switch_on,
                         dropout: Some(model.vt - model.vh),
+                        control: None,
+                        control_branch: usize::MAX,
+                    }),
+                });
+            }
+            'W' => {
+                let ModelCard::CurrentSwitch(model) = card else {
+                    return Err(wrong_kind("W"));
+                };
+                if !(model.ron.is_finite()
+                    && model.ron > 0.0
+                    && model.roff.is_finite()
+                    && model.roff > 0.0)
+                {
+                    return Err(ctx.parse_err("a switch model needs RON > 0 and ROFF > 0"));
+                }
+                if !model.vt.is_finite() || !model.vh.is_finite() {
+                    return Err(ctx.parse_err("a current switch model needs finite IT and IH"));
+                }
+                if model.vh < 0.0 {
+                    return Err(ctx.unsupported());
+                }
+                // The `SW` band rule on the signed branch current: close
+                // above `IT + IH`, open below `IT − IH`.
+                circuit.switches.push(Switch {
+                    name: device.name,
+                    a: device.nodes[0],
+                    b: device.nodes[1],
+                    ctrl: String::new(),
+                    ron: model.ron,
+                    roff: model.roff,
+                    voltage: Some(VoltageSwitchControl {
+                        pos: None,
+                        neg: None,
+                        vt: model.vt + model.vh,
+                        vh: 2.0 * model.vh,
+                        invert: false,
+                        signed: true,
+                        strict: true,
+                        initially_closed: device.switch_on,
+                        dropout: Some(model.vt - model.vh),
+                        control: device.control,
+                        control_branch: usize::MAX,
                     }),
                 });
             }
@@ -3885,10 +4005,11 @@ fn parse_model(
         "LDOADJ" => ModelCard::Regulator(RegulatorModel::defaults(RegulatorKind::LinearAdjustable)),
         "BUCK" => ModelCard::Regulator(RegulatorModel::defaults(RegulatorKind::Buck)),
         "SW" => ModelCard::Switch(SwitchModel::default()),
+        "CSW" => ModelCard::CurrentSwitch(SwitchModel::default()),
         other => {
             return Err(ctx.parse_err(format!(
                 "`.model` type `{other}` is not one of `D`, `NPN`, `PNP`, `NMOS`, `PMOS`, `NJF`, `PJF`, \
-                 `SW`, `OPAMP`, `COMP`, `LDO`, `LDOADJ`, `BUCK`"
+                 `SW`, `CSW`, `OPAMP`, `COMP`, `LDO`, `LDOADJ`, `BUCK`"
             )))
         }
     };
@@ -3939,6 +4060,15 @@ fn parse_model(
             (ModelCard::Switch(_), other) => {
                 return Err(ctx.parse_err(format!(
                     "switch model parameter `{other}` is not one of `VT`, `VH`, `RON`, `ROFF`"
+                )))
+            }
+            (ModelCard::CurrentSwitch(model), "IT") => model.vt = value,
+            (ModelCard::CurrentSwitch(model), "IH") => model.vh = value,
+            (ModelCard::CurrentSwitch(model), "RON") => model.ron = value,
+            (ModelCard::CurrentSwitch(model), "ROFF") => model.roff = value,
+            (ModelCard::CurrentSwitch(_), other) => {
+                return Err(ctx.parse_err(format!(
+                    "current switch model parameter `{other}` is not one of `IT`, `IH`, `RON`, `ROFF`"
                 )))
             }
             (ModelCard::Diode(model), "IS") => model.is = value,

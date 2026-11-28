@@ -1,0 +1,33 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+   Compiling labwired-config v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/config)
+   Compiling labwired-core v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/core)
+   Compiling svd-ingestor v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/svd-ingestor)
+   Compiling labwired-loader v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/loader)
+    Finished `test` profile [optimized] target(s) in 1m 56s
+     Running tests/bus/main.rs (/data/cargo-pool/labwired-core/lanes/renode/debug/deps/bus-142db361fbb46964)
+
+running 7 tests
+test unknown_peripheral_type::known_stub_allowlist_is_sorted_unique_and_reasoned ... ok
+test unknown_peripheral_type::known_stub_allowlist_names_no_modelled_type ... ok
+test unknown_peripheral_type::a_peripheral_type_this_engine_does_not_implement_fails_the_load ... ok
+test unknown_peripheral_type::an_unimplemented_type_never_yields_a_bus_that_answers_zeros ... ok
+test unknown_peripheral_type::an_explicitly_declared_stub_still_loads ... ok
+test unknown_peripheral_type::known_stub_allowlist_has_no_stale_entries ... ok
+test unknown_peripheral_type::no_shipped_config_is_rejected_by_the_unknown_type_guard ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 176 filtered out; finished in 13.48s
+

@@ -555,3 +555,91 @@ fn ngspice_sw_on_that_opens_at_the_operating_point_stays_open_in_the_band() {
         solver.node_voltage(out)
     );
 }
+
+/// Pull-up on `out`, shunted by an ngspice `W` switch that senses the branch
+/// current of `Vsense`, driven by `Vctrl` through 1 kΩ (1 mA per volt).
+const CURRENT_SWITCH: &str = "* csw\n\
+     Vctrl ctrl 0 dc 0\n\
+     Rs ctrl s 1k\n\
+     Vsense s 0 dc 0\n\
+     Vdd vdd 0 dc 5\n\
+     R1 vdd out 1k\n\
+     W1 out 0 Vsense WMOD\n\
+     C1 out 0 1p\n\
+     .model WMOD CSW(IT=1m IH=0.5m RON=1 ROFF=1meg)\n\
+     .end\n";
+
+#[test]
+fn ngspice_csw_switch_follows_the_signed_branch_current_band() {
+    let circuit = parse_netlist(CURRENT_SWITCH).expect("netlist parses");
+    let mut solver = Solver::new(circuit, Integration::BackwardEuler).expect("solver");
+    let out = solver.circuit().node("out").expect("out");
+    let level = |solver: &mut Solver, volts: f64| {
+        solver.set_voltage_source(0, volts);
+        run_to(solver, 1e-6, 20);
+        solver.node_voltage(out)
+    };
+    // The band is [IT − IH, IT + IH] = [0.5 mA, 1.5 mA].
+    assert!(level(&mut solver, 1.4) > 4.9, "below IT + IH stays open");
+    assert!(level(&mut solver, 1.6) < 0.05, "above IT + IH closes");
+    assert!(
+        level(&mut solver, 0.6) < 0.05,
+        "inside the band holds closed"
+    );
+    assert!(level(&mut solver, 0.4) > 4.9, "below IT − IH opens");
+    // A magnitude rule would close at −2 mA; the signed rule stays open.
+    assert!(
+        level(&mut solver, -2.0) > 4.9,
+        "negative current keeps it open"
+    );
+}
+
+#[test]
+fn ngspice_csw_switch_on_keyword_seeds_the_operating_point() {
+    let deck = CURRENT_SWITCH
+        .replace("Vctrl ctrl 0 dc 0", "Vctrl ctrl 0 dc 1")
+        .replace("W1 out 0 Vsense WMOD", "W1 out 0 Vsense WMOD ON");
+    let circuit = parse_netlist(&deck).expect("netlist parses");
+    let solver = Solver::new(circuit, Integration::BackwardEuler).expect("solver");
+    let out = solver.circuit().node("out").expect("out");
+    // 1 mA is inside the band, so only `ON` closes the switch.
+    assert!(
+        solver.node_voltage(out) < 0.05,
+        "{} V",
+        solver.node_voltage(out)
+    );
+
+    let off = parse_netlist(&CURRENT_SWITCH.replace("Vctrl ctrl 0 dc 0", "Vctrl ctrl 0 dc 1"))
+        .expect("parses");
+    let solver = Solver::new(off, Integration::BackwardEuler).expect("solver");
+    assert!(
+        solver.node_voltage(out) > 4.9,
+        "{} V",
+        solver.node_voltage(out)
+    );
+}
+
+#[test]
+fn ngspice_csw_switch_rejects_bad_controls_and_models() {
+    let err = parse_netlist("* w\nW1 a 0 Rx WMOD\nRx a 0 1k\n.model WMOD CSW(IT=1m)\n.end\n")
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("carries no branch current"),
+        "{err}"
+    );
+
+    let err =
+        parse_netlist("* w\nV1 a 0 1\nW1 a 0 V1 WMOD\n.model WMOD SW(VT=1)\n.end\n").unwrap_err();
+    assert!(err.to_string().contains("is a SW model"), "{err}");
+
+    let err =
+        parse_netlist("* w\nV1 a 0 1\nW1 a 0 V1 WMOD\n.model WMOD CSW(VT=1)\n.end\n").unwrap_err();
+    assert!(
+        err.to_string().contains("`IT`, `IH`, `RON`, `ROFF`"),
+        "{err}"
+    );
+
+    let err = parse_netlist("* w\nV1 a 0 1\nW1 a 0 V1 WMOD MAYBE\n.model WMOD CSW(IT=1)\n.end\n")
+        .unwrap_err();
+    assert!(err.to_string().contains("must be ON or OFF"), "{err}");
+}

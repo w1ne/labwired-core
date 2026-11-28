@@ -180,10 +180,6 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
         "nRF5340 analog-trim window, authored placeholder. Used by: nrf5340.",
     ),
     (
-        "nrf5340_uicr_stub",
-        "nRF5340 UICR window, authored placeholder. Used by: nrf5340.",
-    ),
-    (
         "nrf54l_dppic_stub",
         "nRF54L DPPIC window, authored placeholder. Used by: nrf54l15.",
     ),

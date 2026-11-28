@@ -1475,6 +1475,26 @@ impl PinPort for Esp32s3Gpio {
 }
 
 impl Peripheral for Esp32s3Gpio {
+    fn gpio_register_banks(&self) -> &[crate::peripherals::gpio::GpioRegisterBank] {
+        use crate::peripherals::gpio::GpioRegisterBank;
+        // ESP32-S3 GPIO_IN/IN1 and GPIO_OUT/OUT1. PIN_COUNT bounds the
+        // modelled pad space; bank 1 must never alias bank 0.
+        &[
+            GpioRegisterBank {
+                first_pad: 0,
+                pad_count: 32,
+                input: 0x3c,
+                output: 0x04,
+            },
+            GpioRegisterBank {
+                first_pad: 32,
+                pad_count: PIN_COUNT - 32,
+                input: 0x40,
+                output: 0x10,
+            },
+        ]
+    }
+
     fn register_esp_gpio_observer(
         &mut self,
         observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,

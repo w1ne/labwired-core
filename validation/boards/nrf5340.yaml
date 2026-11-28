@@ -2,12 +2,13 @@ id: nrf5340
 doc: docs/boards/nrf5340.md
 chip: configs/chips/nrf5340.yaml
 tier: sim-validated
-note: "Application core (Cortex-M33). Boots UNMODIFIED upstream Zephyr v3.7 hello_world (board nrf5340dk/nrf5340/cpuapp) end to end and prints its banner over the UARTE0 EasyDMA console — asserted by firmware_survival::test_nrf5340_zephyr_survival. The ELF-independent nrf5340_clock_boot gate checks the secure cpuapp 0x5000_0000 mapping, HFCLK/LFCLK polls, and a TWIM1 EasyDMA repeated-START read of BMI270 CHIP_ID 0x24 on SDA P1.02 / SCL P1.03. nrf5340_ficr checks FICR register identity and flash geometry against the vendor SVD; unspecified device identity and trim data remain erased. Network core, radio, TrustZone/SPU enforcement, physical I²C edge narration, and analog trims are not modeled. No nRF5340 silicon diff — no bench board."
+note: "Application core (Cortex-M33). Boots UNMODIFIED upstream Zephyr v3.7 hello_world (board nrf5340dk/nrf5340/cpuapp) end to end and prints its banner over the UARTE0 EasyDMA console — asserted by firmware_survival::test_nrf5340_zephyr_survival. The ELF-independent nrf5340_clock_boot gate checks the secure cpuapp 0x5000_0000 mapping, HFCLK/LFCLK polls, and a TWIM1 EasyDMA repeated-START read of BMI270 CHIP_ID 0x24 on SDA P1.02 / SCL P1.03. nrf5340_ficr checks FICR register identity and flash geometry against the vendor SVD; unspecified device identity and trim data remain erased. nrf5340_uicr checks the UICR reads erased (0xFFFFFFFF), including the three protect words whose SVD reset value is 0. Network core, radio, TrustZone/SPU enforcement, physical I²C edge narration, and analog trims are not modeled. No nRF5340 silicon diff — no bench board."
 offline_tests:
   - "firmware_survival::test_nrf5340_zephyr_survival (real Zephyr ELF boots + banner)"
   - "nrf5340_clock_boot (secure cpuapp mapping + HFCLK/LFCLK polls + TWIM1/BMI270 EasyDMA read)"
   - "nrf5340_ficr (vendor SVD register readback and read-only INFO.PART)"
   - "nrf5340_gpiote (SVD-addressed task-mode set updates GPIO0.IN)"
+  - "nrf5340_uicr (erased UICR register file; reset_overrides rejects unknown ids)"
 models:
   - crates/core/src/cpu/cortex_m.rs
   - crates/core/src/decoder/arm.rs
@@ -47,3 +48,7 @@ models:
   # board, so no ack is implied.
   - crates/core/src/peripherals/declarative.rs
   - configs/peripherals/nrf5340/ficr_s.yaml
+  # 2026-11-28, nRF5340 UICR uses the SVD register file through the declarative
+  # model with `reset_overrides` (bus/from_config.rs) for the erased protect
+  # words. No silicon capture is recorded for this board, so no ack is implied.
+  - configs/peripherals/nrf5340/uicr_s.yaml

@@ -1,0 +1,50 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+   Compiling labwired-config v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/config)
+   Compiling labwired-core v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/core)
+   Compiling svd-ingestor v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/svd-ingestor)
+   Compiling labwired-loader v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/loader)
+    Finished `test` profile [optimized] target(s) in 1m 49s
+     Running tests/nrf/main.rs (/data/cargo-pool/labwired-core/lanes/renode/debug/deps/nrf-c5a11bb656de55fd)
+
+running 3 tests
+test nrf5340_uicr::declarative_reset_override_rejects_an_unknown_register ... FAILED
+test nrf5340_uicr::uicr_config_otp_and_keyslot_words_read_erased ... ok
+test nrf5340_uicr::uicr_protect_words_read_erased_not_the_svd_zero ... FAILED
+
+failures:
+
+---- nrf5340_uicr::declarative_reset_override_rejects_an_unknown_register stdout ----
+
+thread 'nrf5340_uicr::declarative_reset_override_rejects_an_unknown_register' (4187522) panicked at crates/core/tests/nrf/nrf5340_uicr.rs:164:10:
+uicr reset_overrides
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- nrf5340_uicr::uicr_protect_words_read_erased_not_the_svd_zero stdout ----
+
+thread 'nrf5340_uicr::uicr_protect_words_read_erased_not_the_svd_zero' (4187524) panicked at crates/core/tests/nrf/nrf5340_uicr.rs:101:9:
+assertion `left == right` failed: APPROTECT reads erased
+  left: 0
+ right: 4294967295
+
+
+failures:
+    nrf5340_uicr::declarative_reset_override_rejects_an_unknown_register
+    nrf5340_uicr::uicr_protect_words_read_erased_not_the_svd_zero
+
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 90 filtered out; finished in 0.04s
+
+error: test failed, to rerun pass `-p labwired-core --test nrf`

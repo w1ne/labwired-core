@@ -1436,6 +1436,7 @@ impl WasmSimulator {
             ..Esp32s3Opts::for_chip(chip)
         };
         let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+        bus.attach_chip_io_levels(chip);
         if wiring.boot_mode != Esp32s3BootMode::Faithful {
             return Err(JsValue::from_str(
                 "ESP32-S3 flash boot needs the real boot ROM, but the injected images did not resolve",
@@ -1576,6 +1577,7 @@ impl WasmSimulator {
             ..Esp32s3Opts::for_chip(chip)
         };
         let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+        bus.attach_chip_io_levels(chip);
         bus.attach_chip_analog_pins(chip);
         let mut cpu = wiring.cpu;
 
