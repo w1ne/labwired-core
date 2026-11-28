@@ -454,6 +454,100 @@ fn ch32v203_tim2_update_stays_unhandled_without_irq_44_wired() {
     );
 }
 
+/// Runs the CH32V203 TIM3 PWM / TIM2 PWM-input fixture. With `wire` set, PA6
+/// (TIM3_CH1) is joined to PA0 (TIM2_CH1) as on the bench. Returns the USART1
+/// TX stream and the engine cycle of each PA6 pad level change with its new
+/// level; the first entry is the level the pad takes when it is first driven.
+fn run_ch32v203_tim_pwm_capture(chip: &ChipDescriptor, wire: bool) -> (String, Vec<(u64, bool)>) {
+    let mut bus = SystemBus::from_config(chip, &SystemManifest::default())
+        .expect("CH32V203 peripherals and clock gates");
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+    let gpioa = bus.find_peripheral_index_by_name("gpioa").expect("GPIOA");
+
+    let image = labwired_loader::load_elf(
+        &root().join("examples/ch32v203c8t6/ch32fun/tim_pwm_capture.elf"),
+    )
+    .expect("CH32V203 TIM PWM capture ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load TIM PWM ELF");
+
+    let mut edges = Vec::new();
+    let mut previous = None;
+    // After the report the firmware spins and TIM3 keeps running; 400 000
+    // more instructions cover two more periods of the PA6 wave.
+    let mut after_report = 400_000;
+    for _ in 0..12_000_000 {
+        machine.step().expect("CH32V203 TIM PWM instruction");
+        let level = machine.bus.peripherals[gpioa].dev.read_gpio_pad(6);
+        if level != previous {
+            if let Some(level) = level {
+                edges.push((machine.total_cycles, level));
+                if wire {
+                    machine.bus.set_peripheral_gpio_input(gpioa, 0, level);
+                }
+            }
+            previous = level;
+        }
+        if sink.lock().unwrap().ends_with(b"\r\n") {
+            after_report -= 1;
+            if after_report == 0 {
+                break;
+            }
+        }
+    }
+
+    let out = String::from_utf8_lossy(&sink.lock().unwrap()).into_owned();
+    (out, edges)
+}
+
+#[test]
+fn ch32v203_tim3_ch1_pwm_reaches_pa6_and_tim2_captures_it_on_pa0() {
+    let row = CHIPS
+        .iter()
+        .find(|r| r.name == "CH32V203")
+        .expect("CH32V203 row");
+    let (out, edges) = run_ch32v203_tim_pwm_capture(&descriptor(row), true);
+    // TIM2 at 1 MHz measures the TIM3 wave: 1000 us period, 250 us high.
+    assert_eq!(out, "PWM_IC period_10us=100 high_10us=25\r\n");
+
+    // The pad itself, in engine cycles at 144 MHz: 144 000 per period and
+    // 36 000 high. The probe reads the pad once per instruction, so each
+    // edge is seen up to a few cycles late. The first rise is skipped: PA6
+    // goes high at the SWEVGR.UG write, a few instructions before CEN
+    // starts the count, so the first period is longer by that gap.
+    let rises: Vec<u64> = edges.iter().filter(|e| e.1).map(|e| e.0).collect();
+    assert!(rises.len() >= 3, "three PA6 rising edges: {edges:?}");
+    let fall = edges
+        .iter()
+        .find(|e| !e.1 && e.0 > rises[1])
+        .expect("PA6 falls after its second rise")
+        .0;
+    let period = rises[2] - rises[1];
+    let high = fall - rises[1];
+    assert!(period.abs_diff(144_000) <= 16, "PA6 period {period} cycles");
+    assert!(high.abs_diff(36_000) <= 16, "PA6 high time {high} cycles");
+}
+
+#[test]
+fn ch32v203_tim2_captures_nothing_without_the_pa6_to_pa0_wire() {
+    // Negative control: the capture result comes from the PA0 pad. With the
+    // wire removed TIM3 still drives PA6, and TIM2 sees no edge.
+    let row = CHIPS
+        .iter()
+        .find(|r| r.name == "CH32V203")
+        .expect("CH32V203 row");
+    let (out, edges) = run_ch32v203_tim_pwm_capture(&descriptor(row), false);
+    assert_eq!(out, "PWM_IC_TIMEOUT rises=0 fall=0\r\n");
+    // The firmware waits 50 ms before it reports the timeout.
+    assert!(
+        edges.len() >= 90,
+        "PA6 keeps its 1 kHz wave: {}",
+        edges.len()
+    );
+}
+
 /// The CH32V203 descriptor as YAML with PA0 (ADC1 IN0) held at 1650 mV and
 /// PA1 (ADC2 IN1) at 825 mV, the pad voltages of `adc-system.yaml`.
 fn ch32v203_adc_yaml() -> serde_yaml::Value {
