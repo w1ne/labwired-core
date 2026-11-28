@@ -454,6 +454,90 @@ fn ch32v203_tim2_update_stays_unhandled_without_irq_44_wired() {
     );
 }
 
+/// The CH32V203 descriptor as YAML with PA0 (ADC1 IN0) held at 1650 mV and
+/// PA1 (ADC2 IN1) at 825 mV, the pad voltages of `adc-system.yaml`.
+fn ch32v203_adc_yaml() -> serde_yaml::Value {
+    let row = CHIPS
+        .iter()
+        .find(|r| r.name == "CH32V203")
+        .expect("CH32V203 row");
+    let text = std::fs::read_to_string(descriptor_path(row)).expect("read CH32V203 descriptor");
+    let mut yaml: serde_yaml::Value = serde_yaml::from_str(&text).expect("parse chip descriptor");
+    for (id, channel, mv) in [("adc1", 0u64, 1650u64), ("adc2", 1, 825)] {
+        let adc = yaml["peripherals"]
+            .as_sequence_mut()
+            .expect("peripherals list")
+            .iter_mut()
+            .find(|p| p["id"].as_str() == Some(id))
+            .expect("adc block");
+        let mut input_mv = serde_yaml::Mapping::new();
+        input_mv.insert(channel.into(), mv.into());
+        adc["config"]
+            .as_mapping_mut()
+            .expect("adc config")
+            .insert("input_mv".into(), input_mv.into());
+    }
+    yaml
+}
+
+/// Runs the CH32V203 ADC1 EOC interrupt / ADC2 polled fixture, returning the
+/// USART1 TX stream and the last QingKe trap cause.
+fn run_ch32v203_adc_irq(chip: &ChipDescriptor) -> (String, u32) {
+    let mut bus = SystemBus::from_config(chip, &SystemManifest::default())
+        .expect("CH32V203 peripherals and clock gates");
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+
+    let image =
+        labwired_loader::load_elf(&root().join("examples/ch32v203c8t6/ch32fun/adc_irq.elf"))
+            .expect("CH32V203 ADC IRQ ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load ADC IRQ ELF");
+
+    for _ in 0..8_000_000 {
+        machine.step().expect("CH32V203 ADC IRQ instruction");
+        if sink.lock().unwrap().ends_with(b"\r\n") {
+            break;
+        }
+    }
+
+    let out = String::from_utf8_lossy(&sink.lock().unwrap()).into_owned();
+    (out, machine.cpu.mcause)
+}
+
+#[test]
+fn ch32v203_adc1_eoc_reaches_qingke_pfic_irq_34_and_adc2_converts() {
+    let chip: ChipDescriptor =
+        serde_yaml::from_value(ch32v203_adc_yaml()).expect("descriptor with pad voltages");
+    let (out, mcause) = run_ch32v203_adc_irq(&chip);
+    // 12-bit codes against 3.3 V: 1650 mV -> 2047, VREFINT 1.2 V -> 1489,
+    // 825 mV -> 1023. Two ADC1 conversions, two interrupts.
+    assert_eq!(out, "ADC1_IN0=2047 VREF=1489 ADC2_IN1=1023 irqs=2\r\n");
+    assert_eq!(mcause, 0x8000_0022, "last trap was ADC_IRQn 34");
+}
+
+#[test]
+fn ch32v203_adc1_eoc_stays_unhandled_without_irq_34_wired() {
+    let mut yaml = ch32v203_adc_yaml();
+    let adc1 = yaml["peripherals"]
+        .as_sequence_mut()
+        .expect("peripherals list")
+        .iter_mut()
+        .find(|p| p["id"].as_str() == Some("adc1"))
+        .expect("adc1 block");
+    assert_eq!(adc1["irq"].as_u64(), Some(34), "ADC_IRQn is wired");
+    adc1.as_mapping_mut()
+        .unwrap()
+        .remove(serde_yaml::Value::String("irq".to_owned()));
+    let chip: ChipDescriptor = serde_yaml::from_value(yaml).expect("descriptor without ADC1 IRQ");
+
+    let (out, _) = run_ch32v203_adc_irq(&chip);
+    // No handler runs, so ADC1 reports a timeout; ADC2 is polled and still
+    // converts.
+    assert_eq!(out, "ADC_TIMEOUT in0=0 VREF=0 ADC2_IN1=1023 irqs=0\r\n");
+}
+
 /// Runs the CH32V203 SPI2 TX DMA fixture, returning the USART1 TX stream and
 /// the last QingKe trap cause.
 fn run_ch32v203_spi2_dma(chip: &ChipDescriptor) -> (String, u32) {

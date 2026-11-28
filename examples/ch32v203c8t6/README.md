@@ -175,6 +175,31 @@ cargo run -q -p labwired-cli -- test \
 is the negative control: with the TIM2 `irq` removed from the descriptor, the
 firmware prints `TIM_TIMEOUT up=0`.
 
+## ADC
+
+The [complete `ch32fun` source](./adc_irq.c) powers on ADC1 and ADC2, runs
+the reset-calibration and calibration sequences, and starts single regular
+conversions by software. ADC1 sets EOCIE: the ADC_IRQn 34 handler reads
+RDATAR, which clears EOC. ADC1 converts IN0 (PA0) and IN17 (VREFINT, with
+CTLR2.TSVREFE set). ADC2 converts IN1 (PA1) and is polled on STATR.EOC.
+[`adc-system.yaml`](./adc-system.yaml) holds PA0 at 1650 mV and PA1 at
+825 mV against the 3.3 V VDDA. USART1 prints the 12-bit codes:
+
+```text
+ADC1_IN0=2047 VREF=1489 ADC2_IN1=1023 irqs=2
+```
+
+```sh
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v203c8t6/adc-irq-smoke.yaml \
+  --output-dir out/boards/ch32v203c8t6/adc-irq-smoke --no-uart-stdout
+```
+
+`ch32_compiled_firmware::ch32v203_adc1_eoc_stays_unhandled_without_irq_34_wired`
+is the negative control: with the ADC1 `irq` removed from the descriptor, no
+handler runs and the firmware prints
+`ADC_TIMEOUT in0=0 VREF=0 ADC2_IN1=1023 irqs=0`.
+
 ## Scope
 
 These smokes exercise the local simulator's QingKe V4B core, the PFIC, the
@@ -188,7 +213,10 @@ smoke. The SPI high-speed bit (HSCR) has no timing effect. TIM2 update
 (40..42) and TIM3/TIM4 (45/46) are wired but not firmware-tested. Timer
 channel outputs and capture inputs are not routed to GPIO pads, so PWM on a
 pin and input capture do not work on this part in the model. The model has
-no ADC, I2C, CAN or USB, no PFIC interrupt nesting and no V4 priority
+ADC1/ADC2 single software-started
+conversions, calibration and the EOC interrupt (IRQ 34). The model has no
+V20x ADC PGA gain, TKey touch-key mode, dual-ADC modes, external-trigger
+conversions or ADC DMA smoke on this part, and no I2C, CAN or USB, no PFIC interrupt nesting and no V4 priority
 grouping. The RCC
 decodes PLLMUL with the STM32F1 table, so a PLLMUL setting of x18 reads as x16
 in the model; `cpu_hz` states the 144 MHz instead. No CH32V203 has been

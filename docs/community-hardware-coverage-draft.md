@@ -955,7 +955,7 @@ RXNE, vectors IRQ 53 through the QingKe PFIC, and transmits the received bytes
 back through USART1 TX. The no-IRQ negative control prints a timeout marker
 instead of echoing bytes. This is local simulator evidence; it is not hardware
 confirmation. USART2 IRQ
-54 is wired but has no firmware smoke yet. ADC, I2C, CAN and USB
+54 is wired but has no firmware smoke yet. I2C, CAN and USB
 remain outside the model.
 
 - [Copy-paste C example, smoke command, and stated model scope](../examples/ch32v203c8t6/README.md#usart-rx-irq)
@@ -987,3 +987,16 @@ pads, and TIM3/TIM4 have no V203 smoke.
 
 - [Copy-paste C example, smoke command, and stated model scope](../examples/ch32v203c8t6/README.md#timer-interrupts)
 - [Committed timer interrupt smoke evidence](../examples/ch32v203c8t6/evidence/tim-irq-smoke/)
+
+### WCH CH32V203C8T6 — ADC1 end-of-conversion interrupt and ADC2
+
+A ch32fun-based fixture calibrates ADC1 and ADC2 and starts single
+conversions by software. With PA0 held at 1650 mV and PA1 at 825 mV, USART1
+prints `ADC1_IN0=2047 VREF=1489 ADC2_IN1=1023 irqs=2`: ADC1 returns IN0 and
+VREFINT through the EOC interrupt (PFIC IRQ 34), and ADC2 is polled. With the
+ADC1 IRQ line removed from the descriptor, no ADC1 handler runs. This is
+local simulator evidence; it is not hardware confirmation. The V20x PGA,
+TKey and dual-ADC modes are not modelled.
+
+- [Copy-paste C example, smoke command, and stated model scope](../examples/ch32v203c8t6/README.md#adc)
+- [Committed ADC smoke evidence](../examples/ch32v203c8t6/evidence/adc-irq-smoke/)
