@@ -681,6 +681,63 @@ fn stm32l476_descriptor_carries_the_ds10198_assignment() {
     assert_eq!(load("stm32l476").analog_pins, expected);
 }
 
+fn adc1_map(pads: &[(&str, u8)]) -> BTreeMap<String, AdcPinFn> {
+    pads.iter()
+        .map(|(pad, channel)| {
+            (
+                (*pad).to_string(),
+                AdcPinFn {
+                    peripheral: "adc1".to_string(),
+                    channel: *channel,
+                },
+            )
+        })
+        .collect()
+}
+
+/// STM32G071RB LQFP64 (ST STM32_open_pin_data `STM32G071R(6-8-B)Tx.xml`):
+/// PA0..PA7 = IN0..IN7, PB0..PB2 = IN8..IN10, PB10 = IN11, PB11 = IN15,
+/// PB12 = IN16, PC4 = IN17, PC5 = IN18.
+#[test]
+fn stm32g071_descriptor_carries_the_lqfp64_assignment() {
+    let mut pads: Vec<(String, u8)> = (0..8).map(|i| (format!("PA{i}"), i)).collect();
+    pads.extend(
+        [
+            ("PB0", 8),
+            ("PB1", 9),
+            ("PB2", 10),
+            ("PB10", 11),
+            ("PB11", 15),
+            ("PB12", 16),
+            ("PC4", 17),
+            ("PC5", 18),
+        ]
+        .map(|(pad, channel)| (pad.to_string(), channel)),
+    );
+    let pads: Vec<(&str, u8)> = pads.iter().map(|(p, c)| (p.as_str(), *c)).collect();
+    assert_eq!(load("stm32g071").analog_pins, adc1_map(&pads));
+}
+
+/// STM32C031C6 LQFP48 (ST STM32_open_pin_data `STM32C031C(4-6)Tx.xml`):
+/// PA0..PA8 = IN0..IN8, PA11..PA14 = IN11..IN14, PB0 = IN17, PB1 = IN18. PB2
+/// and PB10..PB12 (IN19..IN22) are absent on purpose: the `stm32g0` model
+/// converts CHSEL0..18 only.
+#[test]
+fn stm32c031c6_descriptor_carries_the_lqfp48_assignment() {
+    let mut pads: Vec<(String, u8)> = (0..9).map(|i| (format!("PA{i}"), i)).collect();
+    pads.extend((11..15).map(|i| (format!("PA{i}"), i)));
+    pads.extend([("PB0".to_string(), 17), ("PB1".to_string(), 18)]);
+    let pads: Vec<(&str, u8)> = pads.iter().map(|(p, c)| (p.as_str(), *c)).collect();
+    let map = load("stm32c031c6").analog_pins;
+    assert_eq!(map, adc1_map(&pads));
+    for pad in ["PB2", "PB10", "PB11", "PB12"] {
+        assert!(
+            !map.contains_key(pad),
+            "{pad} is past the model's CHSEL0..18"
+        );
+    }
+}
+
 /// Families whose assignment differs from the F1/F4 map were deliberately NOT
 /// transcribed. On a G474 PA0 is ADC1_IN1; an entry there must come from that
 /// part's datasheet, not from this map.
