@@ -431,6 +431,50 @@ fn ngspice_sw_initial_state_keyword_seeds_the_operating_point() {
 }
 
 #[test]
+fn ngspice_sw_on_at_lower_edge_stays_closed_in_op_and_transient() {
+    let circuit = parse_netlist(
+        "* ON at lower hysteresis edge\n\
+         Vctrl ctrl 0 dc 0.5\n\
+         Vdd vdd 0 dc 5\n\
+         Rload vdd out 1k\n\
+         S1 out 0 ctrl 0 SMOD ON\n\
+         .model SMOD SW(VT=1 VH=0.5 RON=1 ROFF=1meg)\n\
+         .end\n",
+    )
+    .expect("netlist parses");
+    let mut solver = Solver::new(circuit, Integration::BackwardEuler).expect("solver");
+    let out = solver.circuit().node("out").expect("out");
+    assert!(
+        solver.node_voltage(out) < 0.05,
+        "ON remains closed at exactly VT − VH in the operating point: {} V",
+        solver.node_voltage(out)
+    );
+
+    run_to(&mut solver, 1e-6, 10);
+    assert!(
+        solver.node_voltage(out) < 0.05,
+        "ON remains closed at exactly VT − VH in transient: {} V",
+        solver.node_voltage(out)
+    );
+
+    solver.set_voltage_source(0, 1.6);
+    run_to(&mut solver, 1e-6, 10);
+    assert!(
+        solver.node_voltage(out) < 0.05,
+        "control above VT + VH closes the switch: {} V",
+        solver.node_voltage(out)
+    );
+
+    solver.set_voltage_source(0, 0.5);
+    run_to(&mut solver, 1e-6, 10);
+    assert!(
+        solver.node_voltage(out) < 0.05,
+        "transient hysteresis holds closed at exactly VT − VH: {} V",
+        solver.node_voltage(out)
+    );
+}
+
+#[test]
 fn ngspice_sw_rejects_an_unknown_trailing_keyword() {
     let err = parse_netlist("* keyword\nS1 a 0 c 0 SMOD MAYBE\n.model SMOD SW(VT=1)\n.end\n")
         .unwrap_err();

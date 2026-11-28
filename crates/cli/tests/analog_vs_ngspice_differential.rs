@@ -831,6 +831,27 @@ const DIFFERENTIALS: &[Differential] = &[
         minimum_swing: 0.5,
         nonlinear: false,
     },
+    Differential {
+        name: "voltage switch ON exactly at lower hysteresis edge",
+        // ngspice preserves an ON seed at exactly VT − VH. The pulse then
+        // falls below the lower edge to open the switch, and returns to that
+        // edge while open. This pins the inclusive initial and transient
+        // boundary behavior against the real ngspice transient.
+        deck: "* voltage switch ON at lower edge: S(SW) + R + C + VPULSE\n\
+               Vdd vdd 0 dc 5\n\
+               Vc c 0 PULSE(0.5 -1 2m 10u 10u 3m 8m)\n\
+               S1 vdd out c 0 SMOD ON\n\
+               Rl out 0 10k\n\
+               C1 out 0 1u\n\
+               .model SMOD SW(VT=1 VH=0.5 RON=1 ROFF=1e9)\n",
+        node: "out",
+        sample: 20e-6,
+        substeps: 20,
+        samples: 400,
+        full_scale: 5.0,
+        minimum_swing: 0.5,
+        nonlinear: false,
+    },
 ];
 
 /// Solve `deck` with the in-core engine, sampling `node` at every boundary.
