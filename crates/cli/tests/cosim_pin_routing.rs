@@ -6,7 +6,7 @@
 //! firmware, routing pins in both directions.
 //!
 //! The unit tests in `cosim::routing` cover the grammar, and
-//! `crates/core/tests/cosim_pin_routing.rs` covers the routing against a real
+//! `crates/core/tests/cosim/cosim_pin_routing.rs` covers the routing against a real
 //! bus. Neither can catch the thing this file exists for: that the run loop
 //! actually CALLS any of it. Before the hook existed, every one of those tests
 //! passed while `labwired test` stepped no model at all.
@@ -15,6 +15,7 @@
 //! drives PA5 (LD2) — so the sampled input is a level the firmware really
 //! produced, not one the test poked in.
 
+use sha2::Digest;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -46,8 +47,35 @@ fn run(name: &str, system_yaml: &str, script_yaml: &str) -> Run {
 
 /// [`run`] with another committed firmware image.
 fn run_firmware(name: &str, firmware_rel: &str, system_yaml: &str, script_yaml: &str) -> Run {
+    run_with_args(name, firmware_rel, system_yaml, script_yaml, &[])
+}
+
+/// [`run_firmware`] with extra `labwired test` arguments.
+fn run_with_args(
+    name: &str,
+    firmware_rel: &str,
+    system_yaml: &str,
+    script_yaml: &str,
+    extra: &[&str],
+) -> Run {
+    run_with_files(name, firmware_rel, system_yaml, script_yaml, extra, &[])
+}
+
+/// [`run_with_args`] with `(name, contents)` files written beside
+/// `system.yaml`, for models whose `model:` must stay inside its directory.
+fn run_with_files(
+    name: &str,
+    firmware_rel: &str,
+    system_yaml: &str,
+    script_yaml: &str,
+    extra: &[&str],
+    files: &[(&str, &str)],
+) -> Run {
     let temp_dir = labwired_cli::test_support::unique_temp_dir(&format!("labwired-cosim-{name}"));
     std::fs::create_dir_all(&temp_dir).unwrap();
+    for (file, contents) in files {
+        std::fs::write(temp_dir.join(file), contents).unwrap();
+    }
 
     let firmware = workspace_root().join(firmware_rel);
     assert!(
@@ -70,6 +98,7 @@ fn run_firmware(name: &str, firmware_rel: &str, system_yaml: &str, script_yaml: 
         .arg("--output-dir")
         .arg(&temp_dir)
         .arg("--no-uart-stdout")
+        .args(extra)
         // The routed values are the evidence; without the `cosim` directive
         // they are filtered out before they reach stderr. `info` keeps the
         // runner's own default level, which a bare `cosim=debug` would drop.
@@ -402,6 +431,88 @@ assertions:
     );
 }
 
+/// A machine snapshot cannot carry an ngspice solver's state, so
+/// `--capture-app-entry` with an `adapter: ngspice` model is a config error
+/// before any solver starts (no python3 or libngspice needed). The same run
+/// without the flag is not refused (negative control: it gets past the
+/// refusal and fails only for its own reasons, if any).
+#[test]
+fn a_runtime_snapshot_with_an_ngspice_model_is_refused() {
+    // `model:` stays inside the manifest directory: the netlist is copied there.
+    let netlist =
+        std::fs::read_to_string(workspace_root().join("examples/cosim-ngspice-ldr/ldr.cir"))
+            .unwrap();
+    let files = [("ldr.cir", netlist.as_str())];
+    let system = r#"
+name: "ngspice-snapshot"
+chip: "stm32f401"
+cosim_models:
+  - id: "ldr"
+    adapter: "ngspice"
+    model: "./ldr.cir"
+    step_ns: 100000
+    inputs: { supply: "board.gpio.pa5" }
+    outputs: { v_out: "board.analog.pa0_volts" }
+    config:
+      input_sources: { supply: { element: "Vsup", scale: 3.3, offset: 0 } }
+      output_nodes: { v_out: { node: "out", scale: 1, offset: 0 } }
+external_devices: []
+"#;
+    const SCRIPT: &str = r#"
+schema_version: "1.2"
+inputs:
+  firmware: "__FIRMWARE__"
+  system: "./system.yaml"
+limits:
+  max_steps: 20000
+assertions:
+  - uart_contains: "LabWired"
+"#;
+    let capture = labwired_cli::test_support::unique_temp_dir("labwired-ngspice-capture")
+        .join("app-entry.lwrs");
+    let refused = run_with_files(
+        "ngspice-snapshot",
+        "tests/fixtures/stm32f401-blinky.elf",
+        system,
+        SCRIPT,
+        &["--capture-app-entry", capture.to_str().unwrap()],
+        &files,
+    );
+    assert_eq!(
+        refused.status,
+        Some(2),
+        "expected the config-error exit.\nstderr: {}",
+        refused.stderr
+    );
+    assert!(
+        refused.stderr.contains(
+            "runtime snapshots cannot capture or restore externally hosted ngspice state"
+        ),
+        "the refusal must say why.\nstderr: {}",
+        refused.stderr
+    );
+    assert!(!capture.exists(), "no snapshot may be written");
+
+    let plain = run_with_files(
+        "ngspice-no-snapshot",
+        "tests/fixtures/stm32f401-blinky.elf",
+        system,
+        SCRIPT,
+        &[],
+        &files,
+    );
+    assert!(
+        !plain.stderr.contains("refused: runtime snapshots"),
+        "without a snapshot flag the run is not refused.\nstderr: {}",
+        plain.stderr
+    );
+    assert!(
+        !plain.stderr.contains("manifest directory"),
+        "the copied netlist is inside the manifest directory.\nstderr: {}",
+        plain.stderr
+    );
+}
+
 /// The zero-change guarantee: the same firmware and limits, with no
 /// `cosim_models:` in the manifest, must retire exactly the same instructions
 /// and cycles. Co-simulation is opt-in, and a manifest that does not ask for it
@@ -539,4 +650,366 @@ fn analog_trace_records_the_session_waveform() {
         last > 3.2,
         "the node should have settled near 3.3 V: {last}"
     );
+}
+
+/// Whether python3 can load libngspice. Without it the caller skips, unless
+/// `LABWIRED_REQUIRE_NGSPICE` is set, as in
+/// `crates/core/tests/cosim/cosim_ngspice.rs`.
+fn ngspice_ready() -> bool {
+    let probe = Command::new("python3")
+        .arg("-c")
+        .arg(
+            "import ctypes, ctypes.util, os;\
+             ctypes.CDLL(os.environ.get('LABWIRED_NGSPICE_LIB') or \
+             ctypes.util.find_library('ngspice') or 'libngspice.so.0')",
+        )
+        .output();
+    let ready = matches!(probe, Ok(output) if output.status.success());
+    if !ready {
+        assert!(
+            std::env::var_os("LABWIRED_REQUIRE_NGSPICE").is_none(),
+            "LABWIRED_REQUIRE_NGSPICE is set, but python3 cannot load libngspice"
+        );
+        eprintln!(
+            "SKIP: python3 cannot load libngspice (apt install libngspice0, or set \
+             LABWIRED_NGSPICE_LIB); the labwired test ngspice run did not run"
+        );
+    }
+    ready
+}
+
+/// `labwired test --script` on the committed Flex ngspice scripts, run from a
+/// working directory that is not the fixture's: `model: ./rc.cir` resolves
+/// from the directory of `system-ngspice.yaml`. The enable run reaches 63.2 %
+/// at 1025 µs; the disabled run is the negative control and stays at 0 V.
+#[test]
+fn labwired_test_runs_flex_ngspice_scripts_from_any_working_directory() {
+    if !ngspice_ready() {
+        return;
+    }
+    let fixture = workspace_root().join("crates/wasm/tests/fixtures/flex-mixed-signal");
+    for (script, entry_result) in [("ngspice-enable.yaml", 1025), ("ngspice-disabled.yaml", 0)] {
+        let temp_dir =
+            labwired_cli::test_support::unique_temp_dir(&format!("labwired-flex-{script}"));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_labwired"))
+            .current_dir(&temp_dir)
+            .arg("test")
+            .arg("--script")
+            .arg(fixture.join(script))
+            .arg("--output-dir")
+            .arg(&temp_dir)
+            .arg("--no-uart-stdout")
+            .output()
+            .expect("failed to run labwired");
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let result: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(temp_dir.join("result.json"))
+                .unwrap_or_else(|error| panic!("{script}: no result.json ({error})\n{stderr}")),
+        )
+        .unwrap();
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{script}: {result:#}\n{stderr}"
+        );
+        assert_eq!(result["status"], "pass", "{script}: {result:#}");
+        assert_eq!(result["stop_reason"], "completed", "{script}: {result:#}");
+        assert_eq!(result["entry_result"], entry_result, "{script}: {result:#}");
+    }
+}
+
+/// The reference-solver variant of the source-pinned HeyPCB ESP32-S3 NTC
+/// fixture. `ngspice-*.yaml` run the same committed firmware, ports and model
+/// sequence as `test-*.yaml`, but the R6/U4/C7 network is solved by ngspice
+/// from `ntc.cir` instead of the in-core engine. Both engines must produce the
+/// same user-visible result: every firmware `loop` result, the console text and
+/// the instrument counts. The run report must pin the deck it solved, and 61 °C
+/// must stop both engines with their own explicit range error.
+#[test]
+fn labwired_test_runs_the_heypcb_ntc_deck_on_ngspice() {
+    if !ngspice_ready() {
+        return;
+    }
+    let fixture = workspace_root().join("crates/wasm/tests/fixtures/flex-heypcb-esp32-ntc");
+    let run_script = |script: &std::path::Path| -> (Option<i32>, serde_json::Value, String) {
+        let dir = labwired_cli::test_support::unique_temp_dir(&format!(
+            "labwired-heypcb-ntc-{}",
+            script.file_stem().unwrap().to_string_lossy()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_labwired"))
+            .current_dir(&dir)
+            .arg("test")
+            .arg("--script")
+            .arg(script)
+            .arg("--output-dir")
+            .arg(&dir)
+            .arg("--no-uart-stdout")
+            .output()
+            .expect("failed to run labwired");
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let result: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(dir.join("result.json"))
+                .unwrap_or_else(|error| panic!("{script:?}: no result.json ({error})\n{stderr}")),
+        )
+        .unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        (output.status.code(), result, stderr)
+    };
+
+    for (deck_script, in_core_script) in [
+        ("ngspice-overtemp-alarm.yaml", "test-overtemp-alarm.yaml"),
+        ("ngspice-range-ends.yaml", "test-range-ends.yaml"),
+        ("ngspice-below-threshold.yaml", "test-below-threshold.yaml"),
+    ] {
+        let (code, deck, stderr) = run_script(&fixture.join(deck_script));
+        assert_eq!(code, Some(0), "{deck_script}: {stderr}\n{deck:#}");
+        assert_eq!(deck["status"], "pass", "{deck_script}: {deck:#}");
+        assert_eq!(deck["stop_reason"], "completed", "{deck_script}");
+
+        let (code, in_core, stderr) = run_script(&fixture.join(in_core_script));
+        assert_eq!(code, Some(0), "{in_core_script}: {stderr}\n{in_core:#}");
+        // The firmware observable and the instrument capture, not just "both
+        // passed": the same scripts assert the same numbers on both engines.
+        assert_eq!(
+            deck["entry_result"], in_core["entry_result"],
+            "{deck_script} vs {in_core_script}"
+        );
+        assert_eq!(
+            deck["console"], in_core["console"],
+            "{deck_script} vs {in_core_script}"
+        );
+        assert_eq!(
+            deck["traces"], in_core["traces"],
+            "{deck_script} vs {in_core_script}"
+        );
+    }
+
+    // Reproducibility: the report pins the deck, not just the manifest.
+    let (code, deck, stderr) = run_script(&fixture.join("ngspice-range-ends.yaml"));
+    assert_eq!(code, Some(0), "{stderr}\n{deck:#}");
+    let netlist = std::fs::read(fixture.join("ntc.cir")).expect("read ntc.cir");
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(&netlist);
+    let digest = format!("{:x}", hasher.finalize());
+    let model = deck["run_report"]["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|model| model["id"] == "source-sns-an1")
+        .expect("the NTC model is in the run report");
+    assert_eq!(model["source"]["kind"], "spice_netlist");
+    assert_eq!(model["source"]["origin"], "file");
+    assert_eq!(model["source"]["path"], "./ntc.cir");
+    assert_eq!(model["source"]["bytes"], netlist.len() as u64);
+    assert_eq!(model["source"]["sha256"], digest);
+
+    // 61 °C is outside the declared 10..60 °C domain. Each engine refuses it
+    // in its own words before the interval is integrated.
+    for (manifest, expected) in [
+        (
+            "system-ngspice.yaml",
+            "ngspice model 'source-sns-an1' input 'temperature' is 61, outside the declared 10..60 °C range",
+        ),
+        (
+            "system.yaml",
+            "analog input `temperature`: thermistor temperature must be within 10..60 C",
+        ),
+    ] {
+        let dir = labwired_cli::test_support::unique_temp_dir("labwired-heypcb-ntc-range-stop");
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = dir.join("range-stop.yaml");
+        let manifest_path = fixture.join(manifest);
+        let firmware = fixture.join("firmware.wasm");
+        let text = [
+            "schema_version: \"1.0\"".to_string(),
+            "inputs:".to_string(),
+            format!("  flex: \"{}\"", manifest_path.display()),
+            format!("  firmware: \"{}\"", firmware.display()),
+            "sequence:".to_string(),
+            "  - call: { export: setup, args: [{ port: sensor_v }, { port: user_led_drive }] }"
+                .to_string(),
+            "  - set: { port: ambient_c, value: 61 }".to_string(),
+            "  - call: { export: loop }".to_string(),
+            "limits:".to_string(),
+            "  max_steps: 1000000".to_string(),
+            "  max_time_ns: 1000000000".to_string(),
+        ]
+        .join("\n");
+        std::fs::write(&script, text + "\n").unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_labwired"))
+            .current_dir(&dir)
+            .arg("test")
+            .arg("--script")
+            .arg(&script)
+            .arg("--output-dir")
+            .arg(&dir)
+            .arg("--no-uart-stdout")
+            .output()
+            .expect("failed to run labwired");
+        let result: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(dir.join("result.json")).expect("result.json"),
+        )
+        .unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(output.status.code(), Some(3), "{manifest}: {result:#}");
+        assert_eq!(result["status"], "error", "{manifest}");
+        assert_eq!(result["stop_reason"], "model_error", "{manifest}");
+        let message = result["message"].as_str().unwrap_or_default();
+        assert!(
+            message.contains(expected),
+            "{manifest}: {message:?} does not state {expected:?}"
+        );
+    }
+}
+
+/// The reference-solver variant of the source-pinned HeyPCB ESP32-S3 LDR
+/// sensor-network fixture. `ngspice-*.yaml` run the same committed firmware,
+/// ports and model sequence as `test-*.yaml`, but the R6/U4/C7 network is
+/// solved by ngspice from `ldr.cir` instead of the in-core engine. Both engines
+/// must produce the same user-visible result: every firmware ADC count and the
+/// instrument counts. The run report must pin the deck it solved, and 0,
+/// 0.5 and 100000 lx must stop both engines with their own explicit range
+/// error.
+#[test]
+fn labwired_test_runs_the_heypcb_ldr_network_deck_on_ngspice() {
+    if !ngspice_ready() {
+        return;
+    }
+    let fixture = workspace_root().join("crates/wasm/tests/fixtures/flex-heypcb-ldr-network");
+    let run_script = |script: &std::path::Path| -> (Option<i32>, serde_json::Value, String) {
+        let dir = labwired_cli::test_support::unique_temp_dir(&format!(
+            "labwired-heypcb-ldr-{}",
+            script.file_stem().unwrap().to_string_lossy()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_labwired"))
+            .current_dir(&dir)
+            .arg("test")
+            .arg("--script")
+            .arg(script)
+            .arg("--output-dir")
+            .arg(&dir)
+            .arg("--no-uart-stdout")
+            .output()
+            .expect("failed to run labwired");
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let result: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(dir.join("result.json"))
+                .unwrap_or_else(|error| panic!("{script:?}: no result.json ({error})\n{stderr}")),
+        )
+        .unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        (output.status.code(), result, stderr)
+    };
+
+    for (deck_script, in_core_script) in [
+        ("ngspice-bright.yaml", "test-bright.yaml"),
+        ("ngspice-dim.yaml", "test-dim.yaml"),
+    ] {
+        let (code, deck, stderr) = run_script(&fixture.join(deck_script));
+        assert_eq!(code, Some(0), "{deck_script}: {stderr}\n{deck:#}");
+        assert_eq!(deck["status"], "pass", "{deck_script}: {deck:#}");
+        assert_eq!(deck["stop_reason"], "completed", "{deck_script}");
+
+        let (code, in_core, stderr) = run_script(&fixture.join(in_core_script));
+        assert_eq!(code, Some(0), "{in_core_script}: {stderr}\n{in_core:#}");
+        // The firmware observable and the instrument capture, not just "both
+        // passed": the same scripts assert the same numbers on both engines.
+        assert_eq!(
+            deck["entry_result"], in_core["entry_result"],
+            "{deck_script} vs {in_core_script}"
+        );
+        assert_eq!(
+            deck["traces"], in_core["traces"],
+            "{deck_script} vs {in_core_script}"
+        );
+    }
+
+    // Reproducibility: the report pins the deck, not just the manifest.
+    let (code, deck, stderr) = run_script(&fixture.join("ngspice-bright.yaml"));
+    assert_eq!(code, Some(0), "{stderr}\n{deck:#}");
+    let netlist = std::fs::read(fixture.join("ldr.cir")).expect("read ldr.cir");
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(&netlist);
+    let digest = format!("{:x}", hasher.finalize());
+    let model = deck["run_report"]["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|model| model["id"] == "source-sns-an1")
+        .expect("the LDR model is in the run report");
+    assert_eq!(model["source"]["kind"], "spice_netlist");
+    assert_eq!(model["source"]["origin"], "file");
+    assert_eq!(model["source"]["path"], "./ldr.cir");
+    assert_eq!(model["source"]["bytes"], netlist.len() as u64);
+    assert_eq!(model["source"]["sha256"], digest);
+
+    // 0, 0.5 and 100000 lx are outside the declared 1..100 lx domain. Each
+    // engine refuses them in its own words before the interval is integrated.
+    for (manifest, expected) in [
+        (
+            "system-ngspice.yaml",
+            "ngspice model 'source-sns-an1' input 'lux' is",
+        ),
+        (
+            "system.yaml",
+            "analog input `lux`: photoresistor illuminance must be within 1..100 lx",
+        ),
+    ] {
+        for lux in ["0", "0.5", "100000"] {
+            let dir = labwired_cli::test_support::unique_temp_dir("labwired-heypcb-ldr-range-stop");
+            std::fs::create_dir_all(&dir).unwrap();
+            let script = dir.join("range-stop.yaml");
+            let manifest_path = fixture.join(manifest);
+            let firmware = fixture.join("firmware.wasm");
+            let text = [
+                "schema_version: \"1.0\"".to_string(),
+                "inputs:".to_string(),
+                format!("  flex: \"{}\"", manifest_path.display()),
+                format!("  firmware: \"{}\"", firmware.display()),
+                "entry:".to_string(),
+                format!(
+                    "  export: run\n  args: [{{ port: lux }}, {{ port: sensor_v }}, {{ port: user_led_drive }}, {{ port: user_led_state }}, {{ number: {lux} }}]"
+                ),
+                "limits:".to_string(),
+                "  max_steps: 1000000".to_string(),
+                "  max_time_ns: 1000000000".to_string(),
+            ]
+            .join("\n");
+            std::fs::write(&script, text + "\n").unwrap();
+            let output = Command::new(env!("CARGO_BIN_EXE_labwired"))
+                .current_dir(&dir)
+                .arg("test")
+                .arg("--script")
+                .arg(&script)
+                .arg("--output-dir")
+                .arg(&dir)
+                .arg("--no-uart-stdout")
+                .output()
+                .expect("failed to run labwired");
+            let result: serde_json::Value = serde_json::from_str(
+                &std::fs::read_to_string(dir.join("result.json")).expect("result.json"),
+            )
+            .unwrap();
+            let _ = std::fs::remove_dir_all(&dir);
+            assert_eq!(
+                output.status.code(),
+                Some(3),
+                "{manifest} at {lux} lx: {result:#}"
+            );
+            assert_eq!(result["status"], "error", "{manifest} at {lux} lx");
+            assert_eq!(
+                result["stop_reason"], "model_error",
+                "{manifest} at {lux} lx"
+            );
+            let message = result["message"].as_str().unwrap_or_default();
+            assert!(
+                message.contains(expected),
+                "{manifest} at {lux} lx: {message:?} does not state {expected:?}"
+            );
+        }
+    }
 }

@@ -55,7 +55,7 @@ attaches the fixture crop; it performs no guest MMIO setup or pixel injection.
 
 ## Acceptance and exclusions
 
-Execute all seven tests in `crates/core/tests/st7735_sam_guest.rs` in both
+Execute all seven tests in `crates/core/tests/samd/st7735_sam_guest.rs` in both
 feature configurations, retain the live original-driver/fixture comparison, and
 require every enabled exact-head check to pass before landing. Record the tested
 source, guest hash and tested/landed tree identities. Static source review or

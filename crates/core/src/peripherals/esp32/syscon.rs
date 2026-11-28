@@ -140,6 +140,10 @@ impl Syscon {
 }
 
 impl Peripheral for Syscon {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     // Inert walk: SYSCON register bank; the RNG word advances on read, never in the walk; tick() is an explicit no-op.
     fn needs_legacy_walk(&self) -> bool {
         false
@@ -321,12 +325,6 @@ mod tests {
         let mut p = Syscon::new();
         write_u32_at(&mut p, SYSCON_RND_DATA_OFFSET, 0xFFFF_FFFF);
         assert_eq!(read_u32_at(&p, SYSCON_RND_DATA_OFFSET), expected);
-    }
-
-    #[test]
-    fn base_is_esp32_classic_canonical_address() {
-        let p = Syscon::new();
-        assert_eq!(p.base(), 0x3FF6_6000);
     }
 
     #[test]

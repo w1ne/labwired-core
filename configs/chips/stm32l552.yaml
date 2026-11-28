@@ -278,8 +278,14 @@ peripherals:
     type: "timer"
     base_address: 0x40012C00
     size: "1KB"
-    # TIM1_UP_IRQn = 42 (CMSIS); the timer model raises on update/compare.
+    # TIM1_UP_IRQn = 42, TIM1_CC_IRQn = 44 (stm32l552xx.h).
+    # BRK (41) and TRG/COM (43) route BIF and TIF/COMIF.
     irq: 42
+    config:
+      capture_compare_irq: 44
+      trigger_com_irq: 43
+      break_irq: 41
+      advanced: true
     clock: { reg: "apb2enr", bit: 11 }
   - id: "tim2"
     type: "timer"
@@ -325,8 +331,14 @@ peripherals:
     type: "timer"
     base_address: 0x40013400
     size: "1KB"
-    # TIM8_UP_IRQn = 52 (CMSIS).
+    # TIM8_UP_IRQn = 52, TIM8_CC_IRQn = 54 (stm32l552xx.h).
+    # BRK (51) and TRG/COM (53) route BIF and TIF/COMIF.
     irq: 52
+    config:
+      capture_compare_irq: 54
+      trigger_com_irq: 53
+      break_irq: 51
+      advanced: true
     clock: { reg: "apb2enr", bit: 13 }
   - id: "tim15"
     type: "timer"

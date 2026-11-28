@@ -15,6 +15,10 @@ on:
       - 'tests/test_plugin_contract.py'
       - '.github/workflows/plugin-contract.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 

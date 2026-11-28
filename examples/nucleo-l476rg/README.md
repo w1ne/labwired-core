@@ -36,7 +36,7 @@ DONE
 The same firmware, flashed to a real NUCLEO-L476RG with `JLinkExe`, emits
 the identical byte stream over USART2 → ST-LINK / J-Link OB Virtual COM
 Port. Drift between the two breaks `test_nucleo_l476rg_demo_survival` in
-`crates/core/tests/firmware_survival.rs`.
+`crates/core/tests/gates/firmware_survival.rs`.
 
 ## Board pinout (UM1724)
 
@@ -52,6 +52,33 @@ Port. Drift between the two breaks `test_nucleo_l476rg_demo_survival` in
 | I2C1_SCL     | PB6   | AF4    | header CN10 D5                        |
 | I2C1_SDA     | PB7   | AF4    | header CN7 D7                         |
 | ADC1_IN5     | PA0   | analog | header CN8 A0                         |
+
+## Analog inputs
+
+`analog-ntc-diode-pa0-pa1-system.yaml` drives a generic Beta-parameter NTC
+divider and a Shockley diode load line into `board.analog.pa0_volts` and
+`board.analog.pa1_volts`. The descriptor's `analog_pins:` map is the chip's
+full LQFP64 ADC1 set
+(PC0-PC3 = IN1-IN4, PA0-PA7 = IN5-IN12, PC4/PC5 = IN13/IN14,
+PB0/PB1 = IN15/IN16, DS10198 pin definitions), so any board on this die can route a
+deck to any ADC pad. The Arduino header uses six of them:
+
+| Header | Pad | ADC1 channel |
+| --- | --- | ---: |
+| A0 | PA0 | 5 |
+| A1 | PA1 | 6 |
+| A2 | PA4 | 9 |
+| A3 | PB0 | 15 |
+| A4 | PC1 | 2 |
+| A5 | PC0 | 1 |
+
+The header pad set comes from Zephyr's `arduino_r3_connector.dtsi` for this
+board, and the board DTS enables `adc1_in1_pc0`, which cross-checks the A5
+entry. On this board PA2/PA3 carry the ST-LINK virtual COM port by default;
+the chip map still lists them because the silicon has the ADC inputs. The
+test converts A0 and A1 through the production L4 ADC block and asserts the
+firmware-visible `DR` code, routes a deck to the off-header pad PA3 (IN8),
+and requires the router to refuse PA9, which has no ADC input.
 
 ## What's modelled
 
@@ -152,7 +179,7 @@ arm-none-eabi-gdb target/thumbv7em-none-eabihf/release/firmware-l476-demo \
 
 ## How the survival tests work
 
-`crates/core/tests/firmware_survival.rs` runs each of the L476 fixtures
+`crates/core/tests/gates/firmware_survival.rs` runs each of the L476 fixtures
 through the simulator and asserts on the byte-for-byte UART output. The
 `expected_uart_output` field for each case is the raw capture from real
 silicon. CI runs this on every commit; any drift in the L4 chip config,

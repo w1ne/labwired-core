@@ -51,7 +51,7 @@ STVREN on, LVP off.
 
 SDCC emits Intel HEX; `firmware/hex2elf.py` wraps it byte for byte in an
 `EM_MCHP_PIC` ELF and the chip's `arch: pic16` selects the PIC16 core
-(`arch_policy::image_arch_for_chip`). `crates/core/tests/pic16f1829_smoke.rs`
+(`arch_policy::image_arch_for_chip`). `crates/core/tests/pic/pic16f1829_smoke.rs`
 and `ci/test.sh` both check that the ELF payload equals the HEX.
 
 ## Build and run

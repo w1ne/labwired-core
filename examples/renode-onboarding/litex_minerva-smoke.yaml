@@ -1,0 +1,14 @@
+# Exact imported-system smoke for the bounded LiteX Minerva RV32I profile.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32i-unknown-none-elf/release/firmware-litex-minerva-smoke"
+  system: "../../configs/systems/onboarding/litex_minerva.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "LITEX MINERVA RV32I SMOKE"
+  - uart_ordered:
+      - "cpu=rv32i uart=litex"
+      - "timer=running"
+      - "timer=zero"
+  - expected_stop_reason: max_steps

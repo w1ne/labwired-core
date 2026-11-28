@@ -1,0 +1,9 @@
+2026-11-08T09:05:01.633683Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/tock_veer_el2_sim.yaml
+2026-11-08T09:05:01.636438Z  INFO labwired_loader: ELF Entry Point: 0x20000000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+2026-11-08T09:05:01.637248Z ERROR labwired_cli::execute: Simulation error at step 0: Memory access violation at 0xd0580000
+2026-11-08T09:05:01.637523Z ERROR labwired_cli::execute: Memory assertion failed at 0x20600010 (size 4): expected 0x7e3ee120, got 0x0 (mask 0xffffffff)
+2026-11-08T09:05:01.637535Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 543162384, expected_value: 2118050080, mask: None, size: Some(4), node: None } }) (captured len=0)
+2026-11-08T09:05:01.637555Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "VeeR EL2 htif ok" }) (captured len=0)
+2026-11-08T09:05:01.637570Z ERROR labwired_cli::execute: Assertion failed: ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }) (captured len=0)
+FAIL  1/4 checks · tock_veer_el2_sim-smoke · 0 steps · 0.00s

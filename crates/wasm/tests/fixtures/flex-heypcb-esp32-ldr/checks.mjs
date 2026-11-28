@@ -1,0 +1,243 @@
+// SPDX-License-Identifier: MIT
+// Portable Wasm firmware + generic Flex runtime checks for the LDR behavior slice.
+export async function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expected) {
+  const check = (ok, message) => { if (!ok) throw new Error(message); };
+  const canonical = (v) => typeof v === 'bigint' ? Number(v) : Array.isArray(v) ? v.map(canonical)
+    : v !== null && typeof v === 'object'
+      ? Object.fromEntries(Object.keys(v).sort().map((key) => [key, canonical(v[key])])) : v;
+  const manifestDigest = new Uint8Array(await crypto.subtle.digest(
+    'SHA-256', new TextEncoder().encode(system),
+  ));
+  const systemSha256 = Array.from(manifestDigest, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  const equal = (got, wanted, message) => {
+    const actual = JSON.stringify(canonical(got));
+    const expectedJson = JSON.stringify(canonical(wanted));
+    check(actual === expectedJson, `${message}; got ${actual}; expected ${expectedJson}`);
+  };
+  const firmware = new WebAssembly.Module(firmwareBytes);
+  equal(WebAssembly.Module.imports(firmware).map(({ module, name }) => `${module}.${name}`).sort(),
+    ['labwired.advance_ns', 'labwired.read', 'labwired.write'], 'unexpected portable firmware imports');
+
+  // The UI-facing host method must use Flex's exact Number time range. A u32
+  // binding capped a single advance at about 4.29 seconds despite the
+  // runtime's wider nanosecond trace range.
+  const advanceProbe = WasmFlexRuntime.new_from_yaml(
+    'schema_version: 1\nname: safe host advance\nports: []\ncosim_models: []\n',
+  );
+  try {
+    const longDelta = 4_294_967_296;
+    advanceProbe.advance_ns(longDelta);
+    check(Number(advanceProbe.time_ns()) === longDelta,
+      'host advance must accept an exact delta larger than u32');
+    for (const invalid of [-1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+      let rejected = false;
+      try { advanceProbe.advance_ns(invalid); } catch { rejected = true; }
+      check(rejected, `host advance must reject invalid delta ${String(invalid)}`);
+    }
+    check(Number(advanceProbe.time_ns()) === longDelta,
+      'rejected host deltas must leave simulated time unchanged');
+  } finally { advanceProbe.free(); }
+
+  let runReport;
+  const run = (lux) => {
+    const runtime = WasmFlexRuntime.new_from_yaml(system);
+    try {
+      for (const invalidCursor of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1, NaN]) {
+        for (const snapshot of [
+          () => runtime.digital_trace_snapshot(invalidCursor),
+          () => runtime.analog_trace_snapshot(invalidCursor),
+        ]) {
+          let rejected = false;
+          try { snapshot(); } catch { rejected = true; }
+          check(rejected, `trace cursor ${String(invalidCursor)} must be rejected`);
+        }
+      }
+      const report = canonical(runtime.run_report());
+      check(report.execution_path === 'flex_portable_wasm'
+        && report.target_cpu_emulated === false
+        && report.time_unit === 'ns'
+        && report.manifest_sha256 === systemSha256
+        && report.scope_notes_complete === true,
+      'the project run report must identify portable firmware, nanoseconds, the exact model input, and declared scope');
+      check(report.execution_scope?.firmware === 'portable_behavior'
+        && report.execution_scope.original_target_firmware_executed === false
+        && report.execution_scope.detailed_target_execution_selected === false
+        && report.execution_scope.full_board_coverage === 'not_established'
+        && report.execution_scope.chip_parity === 'not_established',
+      'the project run report must distinguish portable behavior from target firmware, full-board coverage, and chip parity');
+      check(report.model_name === 'heypcb-esp32-s3-ldr-gl5528'
+        && report.assumptions.length === 4
+        && report.assumptions.some((assumption) => assumption.includes('Part Knowledge')
+          && assumption.includes('GL5528'))
+        && report.unsupported_checks.length === 5
+        && report.unsupported_checks.some((check) => check.includes('two-terminal photoconductive device'))
+        && report.unsupported_checks.some((check) => check.includes('R6 divider')
+          && check.includes('C7 transient behavior')),
+      'the project run report omitted its model assumptions or unsupported checks');
+      const sensorModel = report.models.find((model) => model.id === 'source-u4-gl5528');
+      check(sensorModel?.adapter === 'behavior' && sensorModel.step_ns === 1000
+        && sensorModel.model_type === 'ldr'
+        && sensorModel.config?.device_type === 'ldr'
+        && sensorModel.inputs.some((binding) => binding.name === 'lux'
+          && binding.signal === 'environment.lux')
+        && sensorModel.outputs.some((binding) => binding.name === 'voltage_mv'
+          && binding.signal === 'source.U3.GPIO1'),
+      `the project run report omitted the registered LDR configuration, binding, model type, or time resolution: ${JSON.stringify(sensorModel)}`);
+      const ledModel = report.models.find((model) => model.id === 'source-d1-user-led');
+      check(ledModel?.config?.behavior?.primitive === 'gpio_device'
+        && ledModel.config.behavior.rules.length === 2,
+      'the project run report omitted the complete data-driven LED behavior configuration');
+      if (runReport === undefined) runReport = report;
+      else equal(report, runReport, 'run report changed between positive and negative controls');
+      const ports = Object.fromEntries(['lux', 'sensor_mv', 'user_led_drive', 'user_led_state']
+        .map((name) => [name, runtime.port_id(name)]));
+      const instance = new WebAssembly.Instance(firmware, { labwired: {
+        read: (port) => runtime.read(port),
+        write: (port, value) => runtime.write(port, value),
+        advance_ns: (delta) => runtime.advance_ns(delta),
+      } });
+      const adcCode = instance.exports.run(
+        ports.lux, ports.sensor_mv, ports.user_led_drive, ports.user_led_state, lux,
+      );
+      const batch = canonical(runtime.digital_trace_snapshot(0));
+      const analogBatch = canonical(runtime.analog_trace_snapshot(0));
+      check(Number.isSafeInteger(runtime.time_ns()),
+        'the project virtual clock must use the existing instrument safe-Number contract');
+      check(Number.isSafeInteger(batch.cursor)
+        && batch.edges.every((edge) => Number.isSafeInteger(edge.time_ns)),
+      'logic-analyzer cursors and nanosecond timestamps must fit the existing instrument Number contract');
+      check(Number.isSafeInteger(analogBatch.next_cursor)
+        && analogBatch.samples.every((sample) => Number.isSafeInteger(sample.time_ns)),
+      'oscilloscope cursors and nanosecond timestamps must fit the existing instrument Number contract');
+      const digitalTail = canonical(runtime.digital_trace_snapshot(batch.cursor));
+      const analogTail = canonical(runtime.analog_trace_snapshot(analogBatch.next_cursor));
+      check(digitalTail.edges.length === 0 && digitalTail.cursor === batch.cursor
+        && digitalTail.dropped === 0,
+      'logic-analyzer cursor polling must not replay or drop already-read edges');
+      check(analogTail.samples.length === 0 && analogTail.next_cursor === analogBatch.next_cursor
+        && analogTail.dropped === 0,
+      'oscilloscope cursor polling must not replay or drop already-read samples');
+      check(analogBatch.time_unit === 'ns'
+        && analogBatch.channels.length === 1
+        && analogBatch.channels[0].name === 'source-u4-gl5528.voltage_mv'
+        && analogBatch.channels[0].port_names?.includes('sensor_mv')
+        && analogBatch.channels[0].unit === 'mV',
+      'the registered LDR output, named read port, or nanosecond time unit is missing from the oscilloscope trace');
+      check(analogBatch.samples.length > 0, 'the LDR oscilloscope trace has no samples');
+      const signalById = new Map(batch.channels.map((channel) => [channel.id, channel.signal]));
+      const portNamesBySignal = new Map(batch.channels.map((channel) => [channel.signal, channel.port_names]));
+      check(portNamesBySignal.get('source.U3.GPIO48')?.includes('user_led_drive')
+        && portNamesBySignal.get('source.D1.logic_state')?.includes('user_led_state'),
+      'logic-analyzer channels must expose named firmware ports alongside imported signal paths');
+      return {
+        result: adcCode,
+        lux,
+        sensor_mv: runtime.read(ports.sensor_mv),
+        adc_code: adcCode,
+        led_final: runtime.read(ports.user_led_state),
+        time_ns: Number(runtime.time_ns()),
+        trace: {
+          time_unit: batch.time_unit,
+          dropped: batch.dropped,
+          channels: batch.channels.map(({ signal, port_names, initial }) => ({ signal, port_names, initial }))
+            .sort((a, b) => a.signal.localeCompare(b.signal)),
+          edges: batch.edges.map((edge) => ({
+            signal: signalById.get(edge.ch), time_ns: edge.time_ns, value: edge.value,
+          })).sort((a, b) => a.time_ns - b.time_ns || a.signal.localeCompare(b.signal)),
+        },
+        analog_trace: {
+          time_unit: analogBatch.time_unit,
+          channels: analogBatch.channels,
+          dropped: analogBatch.dropped,
+          next_cursor: analogBatch.next_cursor,
+          samples: analogBatch.samples.map(({ cycle, time_ns, values }) => ({ cycle, time_ns, values })),
+        },
+      };
+    } finally {
+      runtime.free();
+    }
+  };
+
+  const positive = run(100000);
+  equal(positive, expected.positive, 'bright portable run differs from the native Flex model reference');
+  check(positive.adc_code >= 4080 && positive.adc_code <= 4090, 'bright LDR sample did not approach the modeled 3.3 V rail');
+  check(positive.led_final === 0, 'positive run did not clear the IO48 user LED after observing it on');
+  check(positive.trace.dropped === 0 && positive.trace.edges.length === 4, 'positive digital trace did not capture LED on/off edges');
+
+  const negative = run(0);
+  equal(negative, expected.negative, 'dark negative control differs from the native Flex model reference');
+  check(negative.adc_code === 0 && negative.led_final === 0, 'dark negative control must keep the LED off');
+  check(negative.trace.dropped === 0 && negative.trace.edges.length === 0, 'dark negative control emitted a digital edge');
+
+  const overflowRuntime = WasmFlexRuntime.new_from_yaml(system);
+  let trace_overflow;
+  try {
+    const drive = overflowRuntime.port_id('user_led_drive');
+    for (let step = 0; step < 32_769; step += 1) {
+      overflowRuntime.write(drive, step % 2 === 0 ? 1 : 0);
+      overflowRuntime.advance_ns(1_000);
+    }
+    const digital = canonical(overflowRuntime.digital_trace_snapshot(0));
+    const analog = canonical(overflowRuntime.analog_trace_snapshot(0));
+    check(digital.dropped > 0 && digital.edges.length > 0,
+      'a late logic-analyzer poll must report lost edges and preserve the retained window');
+    check(analog.dropped > 0 && analog.samples.length > 0,
+      'a late oscilloscope poll must report lost samples and preserve the retained window');
+    const digitalTail = canonical(overflowRuntime.digital_trace_snapshot(digital.cursor));
+    const analogTail = canonical(overflowRuntime.analog_trace_snapshot(analog.next_cursor));
+    check(digitalTail.edges.length === 0 && digitalTail.dropped === digital.dropped,
+      'the digital cursor must acknowledge retained edges while preserving cumulative loss');
+    check(analogTail.samples.length === 0 && analogTail.dropped === analog.dropped,
+      'the analog cursor must acknowledge retained samples while preserving cumulative loss');
+    trace_overflow = {
+      time_ns: Number(overflowRuntime.time_ns()),
+      digital: {
+        cursor: digital.cursor,
+        retained_edges: digital.edges.length,
+        dropped: digital.dropped,
+        next_poll_dropped: digitalTail.dropped,
+      },
+      analog: {
+        next_cursor: analog.next_cursor,
+        retained_samples: analog.samples.length,
+        dropped: analog.dropped,
+        next_poll_dropped: analogTail.dropped,
+      },
+    };
+  } finally {
+    overflowRuntime.free();
+  }
+
+  const digital_port_aliases = positive.trace.channels
+    .filter(({ port_names }) => port_names.length > 0)
+    .map(({ signal, port_names }) => ({ signal, port_names }))
+    .sort((a, b) => a.signal.localeCompare(b.signal));
+  const scopeSummary = (run) => ({
+    time_unit: run.analog_trace.time_unit,
+    channels: run.analog_trace.channels,
+    dropped: run.analog_trace.dropped,
+    samples: run.analog_trace.samples.map(({ time_ns, values }) => [time_ns, values[0]]),
+  });
+
+  return {
+    status: 'passed',
+    runtime: 'compiled-wasm',
+    firmware_bytes: firmwareBytes.length,
+    cpu_emulation: false,
+    source_board: 'HeyPCB ESP32-S3 LDR / GL5528 / ESP32-S3-WROOM-1-N16R8',
+    observable: 'source.U3.GPIO1 LDR voltage converted to 12-bit ADC count; source.U3.GPIO48 drives D1 logic state',
+    positive_adc_code: positive.adc_code,
+    positive_led_edges: positive.trace.edges.length,
+    negative_adc_code: negative.adc_code,
+    negative_led_edges: negative.trace.edges.length,
+    digital_port_aliases,
+    trace_overflow,
+    analog_trace: {
+      positive: scopeSummary(positive),
+      negative: scopeSummary(negative),
+    },
+    native_model_equality: true,
+    run_report: runReport,
+    checks: ['portable-firmware-execution', 'native-model-equality', 'pinned-source-mapping', 'run-scope-report', 'named-digital-port-aliases', 'named-analog-port-aliases', 'bright-output', 'dark-negative-control', 'oscilloscope-samples', 'oscilloscope-nanosecond-time-unit', 'safe-integer-host-advance', 'trace-overflow-reporting'],
+  };
+}

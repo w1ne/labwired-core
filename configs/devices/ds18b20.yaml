@@ -1,0 +1,103 @@
+# Maxim DS18B20 programmable-resolution 1-Wire digital thermometer.
+#
+# Datasheet: Maxim DS18B20 rev. 6 (19-7487). The bus signalling and the ROM
+# layer (READ/MATCH/SKIP/SEARCH ROM) are the `onewire_device` primitive's;
+# everything below is this part.
+#
+# ROM: family code 0x28 (Figure 6), then the 48-bit serial, then the CRC-8.
+#
+# Scratchpad (Figure 9), power-on state 50 05 4B 46 7F FF 0C 10 + CRC 1C:
+#   0 TEMP_LSB  1 TEMP_MSB   +85 °C (0x0550) until the first conversion
+#   2 TH        3 TL         alarm thresholds, loaded from EEPROM
+#   4 CONFIG    R1 R0 in bits 6:5; bits 7 and 4..0 read 0 and 1 (Figure 10)
+#   5..7 reserved, 8 CRC
+#
+# Temperature (Table 1): a 16-bit two's complement count of 1/16 °C, so the
+# `temperature` input carries expr_scale 16. At 9/10/11-bit resolution the
+# lowest 3/2/1 bits are undefined; they are cleared here. Conversion time
+# (Table 2) is 93.75 ms << (R1R0), 750 ms at the power-on 12 bits, and the
+# result appears in the scratchpad when the conversion ends. During it read
+# slots return 0, then 1 (externally powered part).
+#
+# The `connected` input (default 1) is the probe being on the bus. At 0 there
+# is no presence pulse and DQ is released, so a DallasTemperature read sees
+# DEVICE_DISCONNECTED_C. Setting it back to 1 resumes presence and conversions
+# on the next reset.
+#
+# NOT modelled: parasite power, the alarm flag and ALARM SEARCH (the part
+# never answers it), conversion self-heating and accuracy error.
+type: ds18b20
+
+behavior:
+  primitive: onewire_device
+  pins:
+    DQ: dq_pin
+  onewire:
+    family_code: 0x28
+    serial_number: 0x000000000001
+    registers:
+      - { name: TEMP_LSB, reset: 0x50 }
+      - { name: TEMP_MSB, reset: 0x05 }
+      - { name: TH, reset: 0x4B }
+      - { name: TL, reset: 0x46 }
+      - { name: CONFIG, reset: 0x7F }
+      - { name: RES0, reset: 0xFF }
+      - { name: RES1, reset: 0x0C }
+      - { name: RES2, reset: 0x10 }
+      - { name: EE_TH, reset: 0x4B }
+      - { name: EE_TL, reset: 0x46 }
+      - { name: EE_CONFIG, reset: 0x7F }
+    functions:
+      - opcode: 0x44
+        name: CONVERT_T
+        busy_us: "93750 << ((reg(CONFIG) >> 5) & 3)"
+        on_done:
+          - register: TEMP_LSB
+            value: "input(temperature) - (input(temperature) & ((1 << (3 - ((reg(CONFIG) >> 5) & 3))) - 1))"
+          - register: TEMP_MSB
+            value: "(input(temperature) - (input(temperature) & ((1 << (3 - ((reg(CONFIG) >> 5) & 3))) - 1))) >> 8"
+      - opcode: 0xBE
+        name: READ_SCRATCHPAD
+        reply: [TEMP_LSB, TEMP_MSB, TH, TL, CONFIG, RES0, RES1, RES2, crc8]
+      - opcode: 0x4E
+        name: WRITE_SCRATCHPAD
+        receive: [TH, TL, CONFIG]
+        on_received:
+          - { register: CONFIG, value: "(reg(CONFIG) & 0x60) | 0x1F" }
+      - opcode: 0x48
+        name: COPY_SCRATCHPAD
+        busy_us: "10000"
+        do:
+          - { register: EE_TH, value: "reg(TH)" }
+          - { register: EE_TL, value: "reg(TL)" }
+          - { register: EE_CONFIG, value: "reg(CONFIG)" }
+      - opcode: 0xB8
+        name: RECALL_E2
+        do:
+          - { register: TH, value: "reg(EE_TH)" }
+          - { register: TL, value: "reg(EE_TL)" }
+          - { register: CONFIG, value: "reg(EE_CONFIG)" }
+      - opcode: 0xB4
+        name: READ_POWER_SUPPLY
+
+metadata:
+  label: "DS18B20 1-Wire thermometer"
+  summary: "Maxim DS18B20 digital thermometer on a 1-Wire bus (9-12 bit, -55 to +125 °C)."
+  detail: "One open-drain DQ line. Reset/presence, write and read slots and the ROM commands (READ, MATCH, SKIP, SEARCH ROM) are modelled; CONVERT T takes the datasheet conversion time for the configured resolution and only then updates the scratchpad, READ SCRATCHPAD returns nine bytes with the CRC-8, WRITE/COPY SCRATCHPAD and RECALL E2 move TH, TL and the configuration. Externally powered. The connected input (default 1) drops the part off the bus at 0: no presence pulse, DQ released. Not modelled: parasite power, alarm search, self-heating and accuracy error."
+  category: gpio
+  config_keys:
+    - name: dq_pin
+      ty: str
+      doc: "DQ data line pad (needs a pull-up on the real board)."
+    - name: serial_number
+      ty: int
+      doc: "48-bit ROM serial number. Default 1."
+    - name: temperature_c
+      ty: float
+      doc: "Initial temperature in °C. Default 25."
+    - name: connected
+      ty: float
+      doc: "1 while the probe is on the bus, 0 when disconnected. Default 1."
+  inputs:
+    - { key: temperature, label: "Temperature", unit: "°C", min: -55, max: 125, default: 25, config_key: temperature_c, expr_scale: 16 }
+    - { key: connected, label: "Connected", unit: "", min: 0, max: 1, default: 1, config_key: connected }

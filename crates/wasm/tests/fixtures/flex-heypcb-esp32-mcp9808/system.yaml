@@ -1,0 +1,58 @@
+# Source-grounded functional slice of HeyPCB's ESP32-S3 MCP9808 board.
+# Portable firmware reaches U4 through a Flex I2C bus; the ESP32 CPU and its
+# I2C controller are not emulated.
+schema_version: 1
+name: heypcb-esp32-s3-mcp9808
+assumptions:
+  - Firmware is a newly authored portable WebAssembly behavior program, not firmware from the pinned board source.
+  - U4 is the catalog `mcp9808` device model at address 0x18. The pinned PCB ties A0, A1 and A2 (U4 pads 7, 6 and 5) to GND, and the source README states address 0x18.
+  - The placement sets `noise_sigma` to 0, so a reading has no random noise. The catalog first-order thermal lag (time constant 1 s) stays on; it is updated at each register read.
+  - The bus runs at 100 kHz. The pinned source contains no firmware and states no bus speed.
+  - A transfer takes one SCL period for each bit, START and STOP. Firmware instructions take no virtual time.
+  - T_A gives the lagged stimulus temperature at the time of the read; a conversion is always complete.
+  - The IO48 user LED is represented by digital logic state only.
+  - The console stands for the ESP32-S3 native USB serial port on J1, as the source README states for flashing. A write arrives whole at the time of the call and takes no virtual time.
+unsupported_checks:
+  - Original ESP32-S3 firmware execution and target instruction or I2C controller fidelity; the pinned source contains no board firmware.
+  - The ALERT output on SNS_INT (U4 pad 3, IO7) and its R6 pull-up, and the T_CRIT, T_UPPER and T_LOWER flags in T_A bits 15:13; the catalog model has no alert comparator, so the firmware compares the limits itself.
+  - The SCL and SDA waveforms on IO9 and IO8, the R7 and R8 pull-ups, bus capacitance, and clock stretching.
+  - The 30 to 250 ms conversion time and the coarser LSB of the lower resolution settings; shutdown mode and the CONFIG lock bits.
+  - USB enumeration, CDC transfer timing and host polling of the console; text the host sends to the firmware.
+  - Full-board power, USB, boot/reset, RF, MCU integration, and assembled hardware behavior.
+  - Sensor accuracy (±0.25 °C typical), reading noise, the real thermal response of the package and board, self-heating, and production spread of a physical MCP9808.
+ports:
+  - { name: ambient_c, signal: environment.temperature, access: write, kind: number, unit: "°C", initial: 25 }
+  - { name: user_led_drive, signal: source.U3.GPIO48, access: write, kind: bool, initial: 0 }
+  - { name: user_led_state, signal: source.D1.logic_state, access: read, kind: bool }
+cosim_models:
+  - id: source-d1-user-led
+    adapter: behavior
+    step_ns: 1000
+    inputs: { drive: source.U3.GPIO48 }
+    outputs: { led: source.D1.logic_state }
+    config:
+      behavior:
+        primitive: gpio_device
+        states: [off, on]
+        outputs: [led]
+        pin_defaults: { led: false }
+        rules:
+          - on: { input: drive }
+            when: 'input(drive) != 0'
+            do: [{ goto: on }, { pin: led, level: 1 }]
+          - on: { input: drive }
+            when: 'input(drive) == 0'
+            do: [{ goto: off }, { pin: led, level: 0 }]
+i2c_buses:
+  # Source nets I2C_SCL (U3 pad 17, IO9) and I2C_SDA (U3 pad 12, IO8).
+  - name: sensor_i2c
+    frequency_hz: 100000
+    devices:
+      - id: source-u4-mcp9808
+        type: mcp9808
+        config: { i2c_address: 0x18, noise_sigma: 0 }
+        inputs:
+          temperature: environment.temperature
+console:
+  # The source README: "USB-C, native USB on the ESP32-S3 (no bridge chip)".
+  name: usb_serial

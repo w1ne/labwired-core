@@ -1,0 +1,37 @@
+{
+  "target_id": "nuvoton_npcx9",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": false,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 0,
+    "stop_reason": "config_error"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-nuvoton-npcx9-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/nuvoton_npcx9-smoke.yaml",
+  "system": "configs/systems/onboarding/nuvoton_npcx9.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-16T23:21:49Z",
+  "finished_at_utc": "2026-11-16T23:27:03Z",
+  "elapsed_seconds": 315,
+  "elapsed_ms": 314069,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "Failed to read firmware \"examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke\": No such file or directory (os error 2)",
+  "failure_hint": "Path mismatch. Verify script/system paths in workflow matrix and repository layout.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 311.213,
+    "build_firmware": 2.243,
+    "run_smoke": 0.51
+  },
+  "stages_ms": {
+    "build_cli": 311213,
+    "build_firmware": 2243,
+    "run_smoke": 510
+  }
+}

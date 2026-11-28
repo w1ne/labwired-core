@@ -1,0 +1,40 @@
+# Narrow MSPM0G3507 profile for the LP-MSPM0G3507 LaunchPad UART smoke.
+#
+# The M0+ core, memory geometry, UART0 base and register offsets come from TI's
+# MSPM0G350x datasheet and SDK CMSIS headers. Only UART0's TX data, enable/TX
+# gate, and a constant empty/FIFO status are modelled here. Other MSPM0 blocks
+# (including GPIO, IOMUX, clocks, and peripheral power sequencing) are outside
+# this profile.
+#
+# Sources checked 2026-11-17:
+#   https://www.ti.com/product/MSPM0G3507
+#   https://www.ti.com/lit/ds/symlink/mspm0g3507.pdf
+#   TI MSPM0 SDK source/ti/devices/msp/m0p/mspm0g350x.h and peripherals/hw_uart.h
+
+name: "mspm0g3507"
+arch: "arm"
+core: "cortex-m0+"
+cpu_hz: 80_000_000
+flash:
+  base: 0x00000000
+  size: "128KB"
+ram:
+  base: 0x20200000
+  size: "32KB"
+peripherals:
+  # MSPM0 UART0 (TRM / SDK): STAT@0x1108, CTL0@0x1100, TXDATA@0x1120.
+  # The custom UART model captures TXDATA only when CTL0.EN and CTL0.TXE are
+  # both set. TXFE is reported set with TXFF clear; FIFO timing and pin routing
+  # are not modelled.
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x40108000
+    size: "8KB"
+    config:
+      profile: "custom"
+      tx_offset: 0x1120
+      status_offset: 0x1108
+      status_width: 4
+      status_idle: 0x40
+      enable_offset: 0x1100
+      enable_mask: 0x11

@@ -214,7 +214,7 @@
     },
     {
       "path": "crates/core/src/cosim/external_process.rs",
-      "sha256": "0199578e6b5bd4d75a1967e2e481b61eadb5a959524bef25545ded7f83ec7a7a"
+      "sha256": "14226cccdc958721db0b15247602b28c574c315ae65fb6c8310b27873b781244"
     }
   ],
   "load_schedule": {

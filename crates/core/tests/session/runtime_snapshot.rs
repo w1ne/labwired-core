@@ -1,0 +1,283 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+// SPDX-License-Identifier: MIT
+//
+// Focused round-trip tests for the binary runtime snapshot infrastructure.
+// Validates the foundation (CPU + RamPeripheral + SystemStub + SSD1680
+// snapshot/restore) without needing an Arduino-ESP32 reference firmware in the loop —
+// the heavy end-to-end resume test lives in `e2e_external_arduino_esp32_in_sim.rs`.
+
+use labwired_core::bus::SystemBus;
+use labwired_core::peripherals::components::ssd1680_tricolor_290;
+use labwired_core::runtime_snapshot::{CpuKind, MachineRuntimeSnapshot};
+use labwired_core::system::xtensa::configure_xtensa_esp32;
+use labwired_core::{Bus, Cpu, Machine, Peripheral};
+
+const SYSTIMER_BASE: u64 = 0x6002_3000;
+
+fn systimer_machine() -> Machine<labwired_core::cpu::RiscV> {
+    let mut bus = SystemBus::new();
+    let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+    bus.add_peripheral(
+        "systimer",
+        SYSTIMER_BASE,
+        0x100,
+        None,
+        Box::new(
+            labwired_core::peripherals::esp_systimer::Systimer::new_with_source(160_000_000, 37),
+        ),
+    );
+    Machine::new(cpu, bus)
+}
+
+#[test]
+fn machine_runtime_snapshot_restores_state_beside_an_empty_duplicate_placeholder() {
+    // Historical C3 ROM-boot snapshots captured both a declarative SYSTIMER
+    // placeholder (empty) and its behavioral replacement (real timer state).
+    let mut timer =
+        labwired_core::peripherals::esp_systimer::Systimer::new_with_source(160_000_000, 37);
+    timer.tick_elapsed(250);
+    timer.write_u32(0x04, 1 << 30).unwrap();
+    timer.write_u32(0x64, 5).unwrap();
+    let state = timer.runtime_snapshot();
+
+    for placeholder_first in [true, false] {
+        let mut machine = systimer_machine();
+        let mut snapshot = machine.take_runtime_snapshot().unwrap();
+        snapshot.peripherals = vec![
+            ("systimer".into(), Vec::new()),
+            ("systimer".into(), state.clone()),
+        ];
+        if !placeholder_first {
+            snapshot.peripherals.reverse();
+        }
+        machine.apply_runtime_snapshot(&snapshot).unwrap();
+
+        assert_eq!(
+            machine
+                .bus
+                .peripherals
+                .iter()
+                .filter(|entry| entry.name == "systimer")
+                .count(),
+            1
+        );
+        assert_eq!(machine.bus.read_u32(SYSTIMER_BASE + 0x44).unwrap(), 25);
+        assert_eq!(machine.bus.read_u32(SYSTIMER_BASE + 0x04).unwrap(), 1 << 29);
+        assert_eq!(machine.bus.read_u32(SYSTIMER_BASE + 0x64).unwrap(), 5);
+    }
+}
+
+#[test]
+fn machine_runtime_snapshot_rejects_empty_state_without_a_nonempty_duplicate() {
+    let mut machine = systimer_machine();
+    let mut snapshot = machine.take_runtime_snapshot().unwrap();
+    snapshot.peripherals = vec![("systimer".into(), Vec::new())];
+    let error = machine.apply_runtime_snapshot(&snapshot).unwrap_err();
+    assert!(error.to_string().contains("Systimer snapshot decode"));
+}
+
+#[test]
+fn machine_runtime_snapshot_rejects_truncated_state_beside_an_empty_placeholder() {
+    let mut machine = systimer_machine();
+    let mut snapshot = machine.take_runtime_snapshot().unwrap();
+    snapshot.peripherals = vec![
+        ("systimer".into(), Vec::new()),
+        ("systimer".into(), vec![0; 3]),
+    ];
+    let error = machine.apply_runtime_snapshot(&snapshot).unwrap_err();
+    assert!(error.to_string().contains("Systimer snapshot decode"));
+}
+
+#[test]
+fn machine_runtime_snapshot_rejects_missing_device_even_with_empty_placeholder() {
+    let mut machine = systimer_machine();
+    let mut snapshot = machine.take_runtime_snapshot().unwrap();
+    snapshot.peripherals = vec![("missing".into(), Vec::new()), ("missing".into(), vec![1])];
+    let error = machine.apply_runtime_snapshot(&snapshot).unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("peripheral 'missing' not on bus"));
+}
+
+#[test]
+fn cpu_runtime_snapshot_roundtrips_full_state() {
+    let mut bus = SystemBus::new();
+    let mut cpu = configure_xtensa_esp32(&mut bus);
+
+    // Write a sentinel into every logical register + a stash in PC so we can
+    // catch a corrupted snapshot decode at glance.
+    cpu.set_pc(0x400D_BEEF);
+    for i in 0..16u8 {
+        cpu.set_register(i, 0xDEAD_0000 | (i as u32));
+    }
+
+    let (kind, blob) = cpu
+        .runtime_snapshot()
+        .expect("Xtensa LX7 models a runtime snapshot");
+    assert_eq!(kind, CpuKind::XtensaLx7);
+    assert!(blob.len() > 64, "snapshot blob should be substantial");
+
+    // Mutate state — show that restore actually does something.
+    cpu.set_pc(0);
+    for i in 0..16u8 {
+        cpu.set_register(i, 0);
+    }
+    assert_eq!(cpu.get_pc(), 0);
+
+    cpu.apply_runtime_snapshot(kind, &blob).expect("apply");
+    assert_eq!(cpu.get_pc(), 0x400D_BEEF);
+    for i in 0..16u8 {
+        assert_eq!(
+            cpu.get_register(i),
+            0xDEAD_0000 | (i as u32),
+            "register a{i} not restored"
+        );
+    }
+}
+
+#[test]
+fn ram_peripheral_runtime_snapshot_roundtrips_memory() {
+    let mut bus = SystemBus::new();
+    let _cpu = configure_xtensa_esp32(&mut bus);
+
+    // Write a sentinel pattern into DRAM (0x3FFA_E000 + 0x100, picked to
+    // dodge the .bss zero-fill region the firmware would normally use).
+    let addr: u64 = 0x3FFB_0100;
+    let pattern: [u8; 16] = [
+        0xCA, 0xFE, 0xBA, 0xBE, 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0x55, 0xAA, 0x33,
+        0xCC,
+    ];
+    for (i, b) in pattern.iter().enumerate() {
+        bus.write_u8(addr + i as u64, *b).expect("write");
+    }
+
+    // Snapshot the DRAM peripheral.
+    let dram = bus
+        .peripherals
+        .iter()
+        .find(|p| p.name == "dram")
+        .expect("dram on bus");
+    let blob = dram.dev.runtime_snapshot();
+    assert_eq!(blob.len(), 0x32000, "dram backing should be 200 KiB");
+    // Pattern should appear at the matching offset inside the snapshot.
+    let offset_in_dram = (addr - 0x3FFA_E000) as usize;
+    assert_eq!(&blob[offset_in_dram..offset_in_dram + 16], &pattern);
+
+    // Clobber the live state, then restore.
+    for i in 0..pattern.len() {
+        bus.write_u8(addr + i as u64, 0).expect("clobber");
+    }
+    for i in 0..pattern.len() {
+        assert_eq!(bus.read_u8(addr + i as u64).unwrap(), 0, "clobber visible");
+    }
+    let dram = bus
+        .peripherals
+        .iter_mut()
+        .find(|p| p.name == "dram")
+        .expect("dram still on bus");
+    dram.dev.restore_runtime_snapshot(&blob).expect("restore");
+
+    for (i, b) in pattern.iter().enumerate() {
+        assert_eq!(
+            bus.read_u8(addr + i as u64).unwrap(),
+            *b,
+            "byte at offset {i} not restored"
+        );
+    }
+}
+
+#[test]
+fn ssd1680_runtime_snapshot_roundtrips_panel_planes() {
+    let mut panel = ssd1680_tricolor_290("GPIO5");
+    // Drive the panel through a minimal command sequence so internal state
+    // diverges from default: SWRESET → power_on toggle → write a black byte.
+    use labwired_core::peripherals::spi::SpiDevice;
+    panel.cs_select();
+    let _ = panel.transfer(0x12); // SWRESET
+    panel.cs_release();
+
+    let blob = SpiDevice::runtime_snapshot(&panel);
+    assert!(
+        blob.len() >= 9472,
+        "snapshot must include both 4736-byte planes"
+    );
+
+    // Build a fresh panel; verify it starts blank, restore, verify state
+    // matches the original.
+    let mut fresh = ssd1680_tricolor_290("GPIO5");
+    SpiDevice::restore_runtime_snapshot(&mut fresh, &blob).expect("restore");
+    // Round-trip stability: serialize both and compare.
+    let blob2 = SpiDevice::runtime_snapshot(&fresh);
+    assert_eq!(blob, blob2, "round-trip should be byte-stable");
+}
+
+#[test]
+fn machine_runtime_snapshot_roundtrips_through_serialization() {
+    let mut bus = SystemBus::new();
+    let cpu = configure_xtensa_esp32(&mut bus);
+
+    // Attach an SSD1680 to spi3 so the snapshot covers the SPI-device path.
+    bus.attach_spi_device("spi3", Box::new(ssd1680_tricolor_290("GPIO5")))
+        .expect("spi3 is an Esp32Spi controller");
+    bus.refresh_peripheral_index();
+
+    let mut machine = Machine::new(cpu, bus);
+
+    // Write some state into DRAM + CPU registers so the snapshot has
+    // something nontrivial to restore.
+    machine.cpu.set_pc(0x400D_0042);
+    machine.cpu.set_register(5, 0x1234_5678);
+    machine
+        .bus
+        .write_u32(0x3FFB_0200, 0xDEAD_BEEF)
+        .expect("dram write");
+
+    let snap = machine
+        .take_runtime_snapshot()
+        .expect("Xtensa machine models a runtime snapshot");
+    let bytes = snap.to_bytes();
+    assert!(
+        bytes.len() > 1000,
+        "machine snapshot blob should be substantial"
+    );
+
+    // Round-trip via bytes (proving the on-disk format survives).
+    let decoded = MachineRuntimeSnapshot::from_bytes(&bytes).expect("from_bytes");
+    assert_eq!(decoded.cpu_kind, CpuKind::XtensaLx7);
+    assert!(
+        decoded
+            .peripherals
+            .iter()
+            .any(|(name, blob)| name == "dram" && !blob.is_empty()),
+        "dram blob present"
+    );
+    assert!(
+        decoded
+            .peripherals
+            .iter()
+            .any(|(name, blob)| name == "spi3" && !blob.is_empty()),
+        "spi3 blob present (carries SSD1680 device snapshot)"
+    );
+
+    // Clobber and restore on the same machine.
+    machine.cpu.set_pc(0);
+    machine.cpu.set_register(5, 0);
+    machine.bus.write_u32(0x3FFB_0200, 0).expect("dram clobber");
+
+    machine.apply_runtime_snapshot(&decoded).expect("apply");
+    assert_eq!(machine.cpu.get_pc(), 0x400D_0042);
+    assert_eq!(machine.cpu.get_register(5), 0x1234_5678);
+    assert_eq!(machine.bus.read_u32(0x3FFB_0200).unwrap(), 0xDEAD_BEEF);
+}
+
+#[test]
+fn snapshot_magic_and_version_are_enforced() {
+    let snap = MachineRuntimeSnapshot::new(CpuKind::XtensaLx7, vec![], vec![]);
+    let mut bytes = snap.to_bytes();
+
+    // Trip the magic bytes — must reject.
+    bytes[0] = b'X';
+    let err = MachineRuntimeSnapshot::from_bytes(&bytes).unwrap_err();
+    assert!(format!("{err}").contains("bad magic"), "got: {err}");
+}

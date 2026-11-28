@@ -135,11 +135,13 @@ pub fn build_esp32_system_from_manifest_with_plugins(
         labwired_config::ChipDescriptor::resolve_with(&manifest.chip, chip_dir, plugin_chips)?;
 
     let mut bus = SystemBus::new();
+    bus.cpu_hz = manifest.cpu_hz.unwrap_or(chip.cpu_hz);
     let pro_cpu = crate::system::xtensa::configure_xtensa_esp32(&mut bus);
     // The peripheral bank is programmatic, but voltage routes still need the
     // resolved descriptor's electrical data, just as SystemBus::from_config does.
     // Keep absent metadata absent so co-simulation refuses untranscribed levels.
     bus.attach_chip_io_levels(&chip);
+    bus.attach_chip_analog_pins(&chip);
     crate::system::xtensa::attach_esp32_external_devices(&mut bus, manifest)?;
     // The peripheral BANK is programmatic (above), but the chip YAML is still
     // where a peripheral's debugger register schema is declared. Without this,
@@ -150,6 +152,40 @@ pub fn build_esp32_system_from_manifest_with_plugins(
     let app_cpu = XtensaLx7::new_app_cpu();
 
     Ok((bus, pro_cpu, app_cpu))
+}
+
+/// Build the narrow, single-core ESP32-S2 system profile from its chip
+/// descriptor. Unlike classic ESP32 and S3, the S2 board profile uses the
+/// descriptor's memory and peripheral map directly and does not install a
+/// programmatic ESP peripheral bank.
+pub fn build_esp32s2_system_from_manifest_with_plugins(
+    manifest: &labwired_config::SystemManifest,
+    system_path: &Path,
+    plugin_chips: &dyn Fn(&str) -> Option<&'static str>,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<(SystemBus, XtensaLx7, u32)> {
+    let chip_dir = system_path.parent().unwrap_or_else(|| Path::new("."));
+    let chip =
+        labwired_config::ChipDescriptor::resolve_with(&manifest.chip, chip_dir, plugin_chips)?;
+    if !chip.is_esp32s2() {
+        anyhow::bail!("ESP32-S2 builder received chip descriptor '{}'", chip.name);
+    }
+
+    let anchored = anchor_chip_path(manifest, chip_dir);
+    let mut bus = SystemBus::from_config_with_plugins(&chip, &anchored, plugins)?;
+    bus.bit_band_enabled = false;
+    bus.attach_debug_schemas(&chip, &anchored);
+    bus.refresh_peripheral_index();
+
+    let stack_top = chip
+        .ram
+        .base
+        .checked_add(chip.ram.size)
+        .and_then(|top| top.checked_sub(16))
+        .and_then(|top| u32::try_from(top).ok())
+        .ok_or_else(|| anyhow::anyhow!("ESP32-S2 RAM range cannot provide a 32-bit stack"))?;
+
+    Ok((bus, XtensaLx7::new(), stack_top))
 }
 
 /// A copy of `manifest` whose `chip:` is anchored to `chip_dir`, mirroring what
@@ -188,10 +224,12 @@ pub fn build_esp32_system(system_path: &Path) -> anyhow::Result<(SystemBus, Xten
 
 mod aarch64;
 mod arm;
+mod arm7;
 mod avr;
 mod cortex_a;
 mod cortex_r;
 mod mips;
+mod msp430;
 mod pic16;
 mod pic18;
 mod pic24;
@@ -370,6 +408,7 @@ pub fn build_machine_with_plugins(
         MachineFamily::CortexM => arm::build(req, plugins),
         MachineFamily::CortexA => cortex_a::build(req, plugins),
         MachineFamily::CortexR => cortex_r::build(req, plugins),
+        MachineFamily::Arm7Tdmi => arm7::build(req, plugins),
         MachineFamily::RiscV => riscv::build(req, plugins),
         MachineFamily::Xtensa => xtensa::build(req, plugins),
         MachineFamily::Avr => avr::build(req, plugins),
@@ -379,6 +418,7 @@ pub fn build_machine_with_plugins(
         MachineFamily::Aarch64 => aarch64::build(req, plugins),
         MachineFamily::Rx => rx::build(req, plugins),
         MachineFamily::Mips => mips::build(req, plugins),
+        MachineFamily::Msp430 => msp430::build(req, plugins),
     }
 }
 
@@ -417,6 +457,22 @@ mod esp32_input_threshold_tests {
     use labwired_config::{CosimAdapter, CosimModelConfig, SystemManifest};
     use std::collections::HashMap;
     use std::path::Path;
+
+    #[test]
+    fn classic_esp32_hosted_bus_carries_the_descriptor_adc_pad_map() {
+        // The programmatic bank bypasses `from_config`, which is where the
+        // `analog_pins:` table used to be loaded. GPIO34 is SAR ADC1_CH6 in
+        // esp32.yaml; GPIO2 has no ADC1 function there.
+        let manifest: SystemManifest =
+            serde_yaml::from_str("name: esp32-analog-pads\nchip: esp32\n").expect("parse manifest");
+        let (mut bus, _, _) = build_esp32_system_from_manifest(&manifest, Path::new("system.yaml"))
+            .expect("build classic ESP32");
+        assert!(bus.set_analog_pad_mv("GPIO34", 1_650), "GPIO34 is ADC1_CH6");
+        assert!(
+            !bus.set_analog_pad_mv("GPIO2", 1_650),
+            "GPIO2 is not on the map"
+        );
+    }
 
     #[test]
     fn classic_esp32_voltage_routes_use_the_descriptor_thresholds() {
@@ -481,6 +537,104 @@ mod esp32_input_threshold_tests {
                 Some(dt_high),
                 "GPIO33 at {dt_volts} V"
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod esp32_clock_tests {
+    use super::{
+        build_esp32_system_from_manifest, build_machine, BlobMap, BootMode, BuildOptions,
+        BuildRequest, FirmwareSource,
+    };
+    use crate::bus::Bus;
+    use crate::cosim::CosimSession;
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use std::path::Path;
+
+    fn inputs() -> (ChipDescriptor, SystemManifest) {
+        let chip = serde_yaml::from_str(include_str!("../../../../configs/chips/esp32.yaml"))
+            .expect("ESP32 chip descriptor");
+        let manifest = serde_yaml::from_str(
+            r#"
+name: esp32-clock
+chip: esp32
+cosim_models:
+  - id: pad
+    adapter: analog
+    step_ns: 1000
+    outputs: { pad: board.gpio_in.gpio18 }
+    config:
+      netlist_text: |
+        Vpad pad 0 dc 3.3
+        Rload pad 0 10k
+      probes: { pad: "v(pad)" }
+"#,
+        )
+        .expect("analog clock manifest");
+        (chip, manifest)
+    }
+
+    #[test]
+    fn classic_esp32_clock_reaches_hosted_cosim_and_peripheral_registration() {
+        let (chip, mut manifest) = inputs();
+        for override_hz in [None, Some(chip.cpu_hz / 2)] {
+            manifest.cpu_hz = override_hz;
+            let expected_hz = override_hz.unwrap_or(chip.cpu_hz);
+            let (mut bus, _, _) =
+                build_esp32_system_from_manifest(&manifest, Path::new("system.yaml"))
+                    .expect("hosted ESP32 constructor");
+            let cosim = CosimSession::new(&manifest.cosim_models, Path::new("."), &bus)
+                .expect("analog routes bind")
+                .expect("analog model exists");
+            assert_eq!(cosim.cpu_hz(), expected_hz, "hosted analog clock");
+
+            // APB timer 0, 8-bit PWM, divider 1, duty 50%. The first pulse
+            // latches at overflow. Its edges must use the clock that was
+            // present when the constructor registered LEDC on the bus.
+            bus.write_u32(0x3ff5_9140, 8 | (256 << 5) | (1 << 25))
+                .unwrap();
+            bus.write_u32(0x3ff5_9000, 1 << 2).unwrap();
+            bus.write_u32(0x3ff5_9008, 128 << 4).unwrap();
+            bus.write_u32(0x3ff5_900c, 1 << 31).unwrap();
+            let index = bus.find_peripheral_index_by_name("ledc").expect("LEDC");
+            let ledc = &mut bus.peripherals[index].dev;
+            let period_cycles = 256 * expected_hz / 80_000_000;
+            ledc.sync_to(period_cycles + 1);
+            assert!(
+                ledc.wire_lines().expect("LEDC pad wire").level(0),
+                "LEDC pulse rises at selected clock"
+            );
+            ledc.sync_to(period_cycles + period_cycles / 2 + 1);
+            assert!(
+                !ledc.wire_lines().expect("LEDC pad wire").level(0),
+                "LEDC pulse falls at selected clock"
+            );
+        }
+    }
+
+    #[test]
+    fn classic_esp32_clock_reaches_session_cosimulation() {
+        let (chip, mut manifest) = inputs();
+        let firmware = include_bytes!("../../../../tests/fixtures/tier1/esp32.elf");
+        let blobs = BlobMap::new();
+        for override_hz in [None, Some(chip.cpu_hz / 2)] {
+            manifest.cpu_hz = override_hz;
+            let built = build_machine(BuildRequest {
+                chip: &chip,
+                system: &manifest,
+                firmware: FirmwareSource::Elf(firmware),
+                boot: BootMode::FastBoot,
+                blobs: &blobs,
+                options: BuildOptions::default(),
+            })
+            .expect("session ESP32 constructor");
+            let cosim = built
+                .machine
+                .bind_cosim(&manifest.cosim_models, Path::new("."))
+                .expect("analog routes bind")
+                .expect("analog model exists");
+            assert_eq!(cosim.cpu_hz(), override_hz.unwrap_or(chip.cpu_hz));
         }
     }
 }

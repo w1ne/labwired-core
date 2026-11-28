@@ -1,23 +1,40 @@
 name: IO-Link customer firmware prerequisites
 on:
   pull_request:
+    # Lean PR gate (2026-11-13): on pull requests this lane runs only when
+    # its own files change. Shared engine paths (crates/core, crates/cli,
+    # Cargo.*) trigger it in the daily schedule instead.
     paths:
-      - 'crates/core/**'
-      - 'crates/cli/**'
       - 'validation/iolinki/**'
       - 'configs/systems/iolinki-g0-startup.yaml'
-      - 'crates/config/**'
-      - 'crates/loader/**'
       - 'configs/chips/stm32g0b1re.yaml'
       - 'configs/chips/stm32u575.yaml'
       - '.github/workflows/iolinki-reference.yml'
   push:
     branches: [main]
+    paths:
+      - 'validation/iolinki/**'
+      - 'configs/systems/iolinki-g0-startup.yaml'
+      - 'configs/chips/stm32g0b1re.yaml'
+      - 'configs/chips/stm32u575.yaml'
+      - '.github/workflows/iolinki-reference.yml'
+  # Shared-engine regressions (crates/core, crates/cli, crates/config, Cargo.*)
+  # are caught daily instead of on every main push: this lane cost ~9 runner-min
+  # per push, ~31 pushes/day, and the PR lane already skips it for engine edits.
+  schedule:
+    - cron: "40 2 * * *"
   workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 jobs:
   g0-firmware-wake:
+    # Cron runs are gated to this repository (a fork would mail failures to a
+    # maintainer here about a run they cannot see).
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -58,18 +75,22 @@ jobs:
         env:
           IOLINKI_G0_ELF: ${{ github.workspace }}/.iolinki-g0-build/reference-device.elf
         run: |
-          cargo test -p labwired-core --test g0_uart_pad --test g0_exti --test g0_reference_firmware -- --include-ignored
-          cargo test -p labwired-core --features event-scheduler --test g0_uart_pad --test g0_exti --test g0_reference_firmware -- --include-ignored
+          cargo test -p labwired-core --test stm32 -- --include-ignored g0_uart_pad:: g0_exti:: g0_reference_firmware::
+          cargo test -p labwired-core --features event-scheduler --test stm32 -- --include-ignored g0_uart_pad:: g0_exti:: g0_reference_firmware::
       - name: Prove actual ELF startup through the user-facing CLI
         run: |
           cargo run -p labwired-cli --bin labwired -- test --script validation/iolinki/g0-startup.yaml
       - uses: actions/upload-artifact@v4
         with:
+          retention-days: 1
           name: iolinki-g0-firmware-prerequisite
           path: .iolinki-g0-build/reference-device.*
           include-hidden-files: true
           if-no-files-found: error
   u5-zephyr-firmware-wake:
+    # Cron runs are gated to this repository (a fork would mail failures to a
+    # maintainer here about a run they cannot see).
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -116,10 +137,11 @@ jobs:
         env:
           IOLINKI_U5_ELF: ${{ github.workspace }}/.iolinki-u5-build/zephyr/zephyr.elf
         run: |
-          cargo test -p labwired-core --test u5_exti --test u5_reference_firmware -- --include-ignored
-          cargo test -p labwired-core --features event-scheduler --test u5_exti --test u5_reference_firmware -- --include-ignored
+          cargo test -p labwired-core --test stm32 -- --include-ignored u5_exti:: u5_reference_firmware::
+          cargo test -p labwired-core --features event-scheduler --test stm32 -- --include-ignored u5_exti:: u5_reference_firmware::
       - uses: actions/upload-artifact@v4
         with:
+          retention-days: 1
           name: iolinki-u5-firmware-prerequisite
           path: |
             .iolinki-u5-build/zephyr/zephyr.elf

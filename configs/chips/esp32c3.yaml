@@ -13,6 +13,28 @@ registers_count: 50
 # esp32c3/i2c.rs CPU_CLK_HZ, esp32c3/rtc_timer.rs CPU_HZ) and the
 # `cpu_hz: 160_000_000` every in-tree C3 system manifest declares.
 cpu_hz: 160_000_000
+# GPIO pad thresholds for analog/digital co-simulation. Espressif
+# ESP32-C3 Series Datasheet v2.5, Table 5-4 "DC Characteristics"
+# (3.3 V, 25 °C): VIL max 0.25 * VDD, VIH min 0.75 * VDD.
+# https://documentation.espressif.com/esp32-c3_datasheet_en.html
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.25
+  vih: 0.75
+# SAR ADC1 inputs, as the ESP32-C3 Series Datasheet pin tables ("Analog
+# Functions": ADC1_CH0..ADC1_CH4) list them: ADC1_CH0..CH4 are GPIO0..GPIO4,
+# one channel per pad. The analog router reads this table, so a deck that
+# names only `board.analog.gpio3_volts` reaches APB_SARADC without naming a
+# channel. The map is deliberately ADC1-only: the ESP32-C3 errata list an
+# ADC2 hardware limitation, and ESP-IDF refuses ADC2 one-shot reads on the C3
+# unless `CONFIG_ADC_ONESHOT_FORCE_USE_ADC2_ON_C3` is set. GPIO5 (ADC2_CH0)
+# is therefore not a board analog pad.
+analog_pins:
+  GPIO0: { peripheral: "apb_saradc", channel: 0 }
+  GPIO1: { peripheral: "apb_saradc", channel: 1 }
+  GPIO2: { peripheral: "apb_saradc", channel: 2 }
+  GPIO3: { peripheral: "apb_saradc", channel: 3 }
+  GPIO4: { peripheral: "apb_saradc", channel: 4 }
 
 flash:
   base: 0x42000000
@@ -79,6 +101,9 @@ peripherals:
     size: "512B"
     config:
       debug_schema: "../peripherals/esp32c3/uart0.yaml"
+      # CLK_CONF.SCLK_SEL: 1 = APB 80 MHz, 2 = RC_FAST 17.5 MHz, 3 = XTAL
+      # 40 MHz (ESP32-C3 TRM v1.1, UART chapter). esp-hal 1.2 selects XTAL.
+      uart_sclk_sel_hz: [0, 80000000, 17500000, 40000000]
   - id: "gpio"
     type: "esp32c3_gpio"
     base_address: 0x60004000
@@ -105,6 +130,9 @@ peripherals:
     size: "512B"
     config:
       debug_schema: "../peripherals/esp32c3/uart1.yaml"
+      # CLK_CONF.SCLK_SEL: 1 = APB 80 MHz, 2 = RC_FAST 17.5 MHz, 3 = XTAL
+      # 40 MHz (ESP32-C3 TRM v1.1, UART chapter). esp-hal 1.2 selects XTAL.
+      uart_sclk_sel_hz: [0, 80000000, 17500000, 40000000]
   - id: "timg1"
     type: "esp32_timg"
     base_address: 0x60020000

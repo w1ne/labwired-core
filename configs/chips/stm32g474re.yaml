@@ -14,9 +14,25 @@ ram:
   base: 0x20000000
   size: "128KB"
 
-# PA8 is TIM1_CH1/AF6 and is exposed as Arduino D7 on CN9 (ST UM2505).
-pins:
-  PA8: { gpio: "gpioa", bit: 8 }
+# No `pins:` map. A non-empty map is the complete pad list in
+# `SystemBus::resolve_pin_odr`, so a PA8-only map refused every other pad
+# as a GPIO output. Without a map the STM32 label parse resolves all
+# PA..PD pads. TIM1_CH1 reaches PA8 (AF6, Arduino D7 on CN9, ST UM2505)
+# through `STM32G4_TIMER_PADS` in `bus/attach.rs`, not through this map.
+
+# SRAMCAN (stm32g474xx.h SRAMCAN_BASE) sits at 0x4000A400, 0x4000 above
+# FDCAN1's registers, while the shared `fdcan` model serves its message RAM at
+# window offset +0x800. A window that wide would claim PWR, I2C3, LPUART1 and
+# the other APB1 blocks in between, so this same-backing mirror routes SRAMCAN
+# onto the model's RAM instead (the stm32g0b1re pattern). The mirror is 1 KiB
+# (0x4000A400-0x4000A800 onto 0x40006C00-0x40007000): the FDCAN1 section
+# (0x350, HAL SRAMCAN_SIZE) plus the head of the FDCAN2 section. FDCAN2 and
+# FDCAN3 are not modelled.
+memory_regions:
+  - name: "sramcan"
+    base: 0x4000A400
+    size: "1KB"
+    alias_of: 0x40006C00
 
 peripherals:
   - id: "rcc"
@@ -85,7 +101,8 @@ peripherals:
     size: "1KB"
     config:
       debug_schema: "../peripherals/stm32g474re/flash.yaml"
-      profile: "l4"
+      # L4 register file with a 4-bit ACR.LATENCY (RM0440 §3.7.1).
+      profile: "stm32g4"
   - id: "pwr"
     type: "pwr"
     base_address: 0x40007000
@@ -130,12 +147,37 @@ peripherals:
     type: "timer"
     base_address: 0x40012C00
     size: "1KB"
-    irq: 24
+    # TIM1_UP_TIM16_IRQn = 25, TIM1_CC_IRQn = 27 (stm32g4xx CMSIS).
+    # BRK (24) and TRG/COM (26) route BIF and TIF/COMIF.
+    irq: 25
     config:
+      capture_compare_irq: 27
+      trigger_com_irq: 26
+      break_irq: 24
       debug_schema: "../peripherals/stm32g474re/tim1.yaml"
       advanced: true
       pad_map: "stm32g4"
     clock: { reg: "apb2enr", bit: 11 }
+  # FDCAN1 (FDCAN1_BASE 0x40006400). The same Bosch M_CAN register map as the
+  # H5 (stm32g474xx.h FDCAN_GlobalTypeDef, FDCAN_CONFIG_BASE = FDCAN1 + 0x100)
+  # and the same fixed SRAMCAN layout (stm32g4xx_hal_fdcan.c SRAMCAN_RF0SA 0xB0,
+  # SRAMCAN_TFQSA 0x278, SRAMCAN_SIZE 0x350), so it uses the shared `fdcan`
+  # model. Message RAM: see `sramcan` in memory_regions. Divergences: FDCAN2
+  # (0x40006800) reads 0, and the model keeps SRAMCAN where the G474 has
+  # FDCAN3's registers (0x40006C00), so FDCAN3 is not usable. No G474 silicon
+  # capture backs this block; the register behaviour is the H5 capture13 pin.
+  - id: "fdcan1"
+    type: "fdcan"
+    base_address: 0x40006400
+    # 3 KiB: registers + message RAM at +0x800, ending where PWR (0x40007000)
+    # begins. A 4 KiB window collides with PWR.
+    size: "3KB"
+    irq: 21  # FDCAN1_IT0; IT1 = 22 via ILS not modeled
+    # RCC_APB1ENR1.FDCANEN (bit 25, RCC_APB1ENR1_FDCANEN_Pos) gates all three
+    # instances.
+    clock: { reg: "apb1enr", bit: 25 }
+    config:
+      debug_schema: "../peripherals/stm32h563/fdcan1.yaml"
   # I2C1 (APB1) — modern v2 controller. RCC_APB1ENR1.I2C1EN (bit 21).
   - id: "i2c1"
     type: "i2c"

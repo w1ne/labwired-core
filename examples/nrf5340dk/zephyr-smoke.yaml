@@ -17,9 +17,11 @@ inputs:
   system: "./system.yaml"
 limits:
   max_steps: 3000000
+  # After the banner Zephyr enters tickless K_FOREVER WFI idle on RTC1; stop
+  # once both UART assertions pass rather than spending the step budget asleep.
+  stop_when_assertions_pass: true
 assertions:
   # The Zephyr banner names the board it was built for: a fixture swapped for
   # some other Nordic image would still print "Booting Zephyr OS" and fail here.
   - uart_contains: "*** Booting Zephyr OS build"
   - uart_contains: "Hello World! nrf5340dk/nrf5340/cpuapp"
-  - expected_stop_reason: max_steps

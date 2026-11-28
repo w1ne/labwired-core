@@ -1,0 +1,101 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1204,
+      536891360,
+      536871932,
+      0,
+      0,
+      0,
+      0,
+      1023,
+      0,
+      1338,
+      536891348,
+      50,
+      0,
+      1073821696,
+      64,
+      9,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1222,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 3,
+    "mscratch": 0,
+    "mepc": 552,
+    "mcause": 2147483682,
+    "mtval": 0,
+    "mtime": 19997,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 20000,
+  "cycles": 20000,
+  "instructions": 20000,
+  "stop_reason": "assertions_passed",
+  "stop_reason_details": {
+    "triggered_stop_condition": "assertions_passed",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 120000,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": true,
+    "stop_when_assertions_pass_settle_steps": 500,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "bddf4b1e850801b2b8eb7289bbe8a7462d93633cfc127a76618b4df40ddc10e6",
+  "config": {
+    "firmware": "examples/ch32v203c8t6/ch32fun/adc_irq.elf",
+    "system": "examples/ch32v203c8t6/./adc-system.yaml",
+    "script": "examples/ch32v203c8t6/adc-irq-smoke.yaml"
+  }
+}

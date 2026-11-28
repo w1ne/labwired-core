@@ -7,16 +7,31 @@ on:
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
+      # docs/boards/VALIDATION_STATUS.md is rendered at deploy time from the
+      # manifest and the source it watches, so those changes republish it.
+      - 'validation/boards/**'
+      - 'validation/registry_dir.py'
+      - 'scripts/generate_validation_status.py'
+      - 'configs/**'
+      - 'crates/**'
       - '.github/workflows/deploy-docs.yml'
 
 permissions:
+  actions: write
   contents: write
+
+concurrency:
+  group: deploy-docs
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The validation report derives source dates from full history.
+          fetch-depth: 0
 
       - name: Configure Git User
         run: |
@@ -30,7 +45,61 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r docs/requirements.txt
+          pip install -r docs/requirements.txt pyyaml
+
+      # Not committed: render the board validation report into the docs tree so
+      # the site serves it at /boards/VALIDATION_STATUS/ and existing links work.
+      - name: Render validation status report
+        run: python3 scripts/generate_validation_status.py
+
+      # Before pages-build-deployment uploads the next ~26 MiB artifact, prune
+      # all prior github-pages artifacts so steady-state storage stays at 1
+      # artifact (~26 MiB) rather than stacking 2 (~52 MiB).
+      - name: Prune superseded github-pages artifacts
+        uses: actions/github-script@v7
+        continue-on-error: true
+        with:
+          script: |
+            const KEEP = 0;
+            const artifacts = await github.paginate(
+              github.rest.actions.listArtifactsForRepo,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'github-pages',
+                per_page: 100,
+              }
+            );
+            const current = artifacts
+              .filter((artifact) => !artifact.expired)
+              .sort((a, b) => {
+                const byCreatedAt = Date.parse(b.created_at) - Date.parse(a.created_at);
+                return byCreatedAt || Number(b.id) - Number(a.id);
+              });
+            const kept = current.slice(0, KEEP);
+            const superseded = current.slice(KEEP);
+            let deleted = 0;
+            let failed = 0;
+            let freedBytes = 0;
+
+            for (const artifact of superseded) {
+              try {
+                await github.rest.actions.deleteArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id: artifact.id,
+                });
+                deleted += 1;
+                freedBytes += artifact.size_in_bytes || 0;
+              } catch (error) {
+                failed += 1;
+                core.warning(`Could not delete artifact ${artifact.id}: ${error.message}`);
+              }
+            }
+
+            core.info(`Kept ${kept.length} github-pages artifact(s).`);
+            core.info(`Deleted ${deleted} superseded artifact(s); ${failed} failed.`);
+            core.info(`Freed ${(freedBytes / (1024 * 1024)).toFixed(2)} MiB.`);
 
       - name: Build and Deploy
         run: mkdocs gh-deploy --force

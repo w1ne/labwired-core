@@ -1,0 +1,32 @@
+{
+  "source": {
+    "repository": "HeyPCB/led-art",
+    "revision": "b0830dcfa3f71c409e9784fa784b9c6864a6ff12",
+    "asset": "boards/arcade-invader",
+    "license_spdx": "CERN-OHL-S-2.0",
+    "manifest_sha256": "3baac62f9232475dd71f8415f068ba94a7050d4e5ccdc3690437f3d42a7f9765",
+    "firmware_sha256": "acab7e5facadacbd48ce7f3f577e6a975a2c52f01be787ebc81f6ccd7647ed8d"
+  },
+  "positive": {
+    "entry_result": 21,
+    "time_ns": 690000,
+    "digital_edges": 1008,
+    "edge_sha256": "080d5bcdb91a9c5c041b133276d482bd2caa531df8e0460db62083267c287b82",
+    "first_edges": [[0, 1], [400, 0], [1250, 1], [1650, 0], [2500, 1], [3300, 0], [3750, 1], [4150, 0]],
+    "pixels_decoded": 21,
+    "lit_pixels": 2,
+    "frame_bytes": 63,
+    "frame_prefix": [32, 16, 8, 1, 2, 3]
+  },
+  "negative": {
+    "entry_result": 0,
+    "time_ns": 690000,
+    "digital_edges": 1008,
+    "edge_sha256": "8f2887a933f7532b141e293b3ffa0c3f98b0a19303db04d932439cf7c5d25222",
+    "first_edges": [[0, 1], [400, 0], [1250, 1], [1650, 0], [2500, 1], [2900, 0], [3750, 1], [4150, 0]],
+    "pixels_decoded": 21,
+    "lit_pixels": 0,
+    "frame_bytes": 63,
+    "frame_prefix": [0, 0, 0, 0, 0, 0]
+  }
+}

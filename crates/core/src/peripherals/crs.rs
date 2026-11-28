@@ -22,12 +22,18 @@
 //! * HSI48 trimming itself is not simulated (no trim loop / FECAP movement).
 //! * The APB1RSTR force-reset pulse `HAL_RCCEx_CRSConfig` issues first is not
 //!   modelled: CRS state survives it instead of returning to reset values.
+//!
+//! TRIM width differs by family: 7 bits (CR[14:8], reset 0x40) on the U5,
+//! 6 bits (CR[13:8], reset 0x20) on the H7 (RM0468 §8.8, vendored
+//! `stm32h735.svd`). `Crs::with_trim_bits(6)` selects the narrow layout; the
+//! chip descriptor sets it with `config: { trim_bits: 6 }`.
 
 use crate::SimResult;
 
-/// CR writable bits: SYNCOKIE(0), SYNCWARNIE(1), ERRIE(2), ESYNCIE(3),
-/// CEN(5), AUTOTRIMEN(6), SWSYNC(7), TRIM(14:8); bit 4 is reserved (SVD).
-const CR_WRITABLE_MASK: u32 = 0x0000_7FEF;
+/// CR writable control bits: SYNCOKIE(0), SYNCWARNIE(1), ERRIE(2),
+/// ESYNCIE(3), CEN(5), AUTOTRIMEN(6), SWSYNC(7); bit 4 is reserved (SVD).
+/// TRIM (from bit 8, `trim_bits` wide) is added per instance.
+const CR_CONTROL_MASK: u32 = 0x0000_00EF;
 /// CFGR writable bits: RELOAD(15:0), FELIM(23:16), SYNCDIV(26:24),
 /// SYNCSRC(29:28), SYNCPOL(31); bits 27/30 are reserved.
 const CFGR_WRITABLE_MASK: u32 = 0xB7FF_FFFF;
@@ -36,6 +42,7 @@ const ISR_FLAG_MASK: u32 = 0x0000_000F;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Crs {
+    trim_bits: u32,
     cr: u32,
     cfgr: u32,
     isr: u32,
@@ -43,11 +50,22 @@ pub struct Crs {
 
 impl Crs {
     pub fn new() -> Self {
+        Self::with_trim_bits(7)
+    }
+
+    /// CRS with a `trim_bits`-wide TRIM field reset to its mid-scale value
+    /// (0x40 for 7 bits, 0x20 for 6 bits), as both SVDs specify.
+    pub fn with_trim_bits(trim_bits: u32) -> Self {
         Self {
-            cr: 0x0000_4000,
+            trim_bits,
+            cr: (1 << (trim_bits - 1)) << 8,
             cfgr: 0x2022_BB7F,
             isr: 0,
         }
+    }
+
+    fn cr_writable_mask(&self) -> u32 {
+        CR_CONTROL_MASK | (((1 << self.trim_bits) - 1) << 8)
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -69,7 +87,7 @@ impl Crs {
             // state — it is dropped from the stored value and latches the
             // SYNCOKF flag like the software sync event it generates.
             0x00 => {
-                self.cr = value & CR_WRITABLE_MASK & !(1 << 7);
+                self.cr = value & self.cr_writable_mask() & !(1 << 7);
                 if value & (1 << 7) != 0 {
                     self.isr |= 1 << 0;
                 }
@@ -182,5 +200,19 @@ mod tests {
         assert_eq!(crs.read_u32(0x08).unwrap() & 1, 1, "ISR write ignored");
         crs.write_u32(0x0C, 1).unwrap();
         assert_eq!(crs.read_u32(0x08).unwrap() & 1, 0, "SYNCOKF cleared");
+    }
+
+    /// H7 layout (`stm32h735.svd`): CR resets to 0x2000 and TRIM is CR[13:8],
+    /// so bit 14 does not stick.
+    #[test]
+    fn crs_six_bit_trim_matches_h7_svd() {
+        let mut crs = Crs::with_trim_bits(6);
+        assert_eq!(crs.read_u32(0x00).unwrap(), 0x0000_2000, "CR reset (TRIM)");
+        crs.write_u32(0x00, 0x0000_7F60).unwrap();
+        assert_eq!(
+            crs.read_u32(0x00).unwrap(),
+            0x0000_3F60,
+            "TRIM[13:8] + AUTOTRIMEN + CEN; bit 14 reserved"
+        );
     }
 }

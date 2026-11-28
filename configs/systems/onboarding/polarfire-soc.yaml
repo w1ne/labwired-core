@@ -6,3 +6,4 @@
 
 name: polarfire-soc
 chip: ../../chips/onboarding/polarfire-soc.yaml
+debug_uart: mmuart1

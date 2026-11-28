@@ -1,0 +1,24 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+   Compiling firmware-riscv-virt-smoke v0.1.0 (/home/andrii/worktrees/labwired-core/renode/crates/firmware-riscv-virt-smoke)
+error: <inline asm>:6:1: instruction requires the following: 'Zmmul' (Integer Multiplication)
+mul t2, t0, t1
+^
+
+error: could not compile `firmware-riscv-virt-smoke` (bin "firmware-riscv-virt-smoke")
+
+Caused by:
+  process didn't exit successfully: `/home/andrii/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/rustc --crate-name firmware_riscv_virt_smoke --edition=2021 crates/firmware-riscv-virt-smoke/src/main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C opt-level=3 -C panic=abort -C lto=thin -C debuginfo=2 -C overflow-checks=on --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=f97c5f04786d577c -C extra-filename=-26bbf1956360123f --out-dir /home/andrii/worktrees/labwired-core/renode/target/riscv32imc-unknown-none-elf/release/deps --target riscv32imc-unknown-none-elf -L dependency=/home/andrii/worktrees/labwired-core/renode/target/riscv32imc-unknown-none-elf/release/deps -L dependency=/home/andrii/worktrees/labwired-core/renode/target/release/deps -C link-arg=-T/home/andrii/worktrees/labwired-core/renode/crates/firmware-riscv-virt-smoke/memory.x` (exit status: 1)

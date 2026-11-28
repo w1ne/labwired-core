@@ -1,0 +1,169 @@
+{
+  "status": "passed",
+  "runtime": "compiled-wasm",
+  "firmware_bytes": 425,
+  "cpu_emulation": false,
+  "source_board": "HeyPCB Pomodoro Pal / ch32v003f4p6",
+  "observable": "source.U1.PD6 drives D1/D2 logic-state outputs",
+  "positive_edges": 6,
+  "negative_edges": 0,
+  "run_report": {
+    "assumptions": [
+      "This is a newly authored portable WebAssembly behavior program; it does not execute the pinned CH32V003 HEX.",
+      "U1.PD6 and the two green LEDs are represented by one declarative digital behavior model at 1 us boundaries.",
+      "Each LED output reports logic state only; resistor current and the shared return path are not modeled."
+    ],
+    "execution_path": "flex_portable_wasm",
+    "model_name": "heypcb-pomodoro-u1-pd6-led-pair",
+    "models": [
+      {
+        "adapter": "behavior",
+        "config": {
+          "behavior": {
+            "outputs": [
+              "d1",
+              "d2"
+            ],
+            "pin_defaults": {
+              "d1": false,
+              "d2": false
+            },
+            "primitive": "gpio_device",
+            "rules": [
+              {
+                "do": [
+                  {
+                    "goto": "on"
+                  },
+                  {
+                    "level": 1,
+                    "pin": "d1"
+                  },
+                  {
+                    "level": 1,
+                    "pin": "d2"
+                  }
+                ],
+                "on": {
+                  "input": "drive"
+                },
+                "when": "input(drive) != 0"
+              },
+              {
+                "do": [
+                  {
+                    "goto": "off"
+                  },
+                  {
+                    "level": 0,
+                    "pin": "d1"
+                  },
+                  {
+                    "level": 0,
+                    "pin": "d2"
+                  }
+                ],
+                "on": {
+                  "input": "drive"
+                },
+                "when": "input(drive) == 0"
+              }
+            ],
+            "states": [
+              "off",
+              "on"
+            ]
+          }
+        },
+        "id": "source-pd6-green-indicators",
+        "inputs": [
+          {
+            "name": "drive",
+            "signal": "source.U1.PD6"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "d1",
+            "signal": "source.D1.logic_state"
+          },
+          {
+            "name": "d2",
+            "signal": "source.D2.logic_state"
+          }
+        ],
+        "step_ns": 1000
+      }
+    ],
+    "ports": [
+      {
+        "access": "write",
+        "initial": 0,
+        "kind": "bool",
+        "name": "u1_pd6",
+        "signal": "source.U1.PD6"
+      },
+      {
+        "access": "read",
+        "kind": "bool",
+        "name": "d1_state",
+        "signal": "source.D1.logic_state"
+      },
+      {
+        "access": "read",
+        "kind": "bool",
+        "name": "d2_state",
+        "signal": "source.D2.logic_state"
+      }
+    ],
+    "schema_version": 1,
+    "scope_notes_complete": true,
+    "target_cpu_emulated": false,
+    "time_unit": "ns",
+    "unsupported_checks": [
+      "Original CH32V003 firmware execution, target instruction fidelity, and MCU peripheral fidelity.",
+      "LED current, optical output, resistor behavior, shared-return behavior, and electrical power behavior.",
+      "Buzzer behavior, complete-board integration, and physical hardware behavior."
+    ]
+  },
+  "checks": [
+    "portable-firmware-execution",
+    "native-model-equality",
+    "source-pin-mapping",
+    "named-port-discovery",
+    "run-scope-report",
+    "positive-output",
+    "negative-control"
+  ],
+  "measured_browser_ms": 307.9,
+  "browser": "156.0.8078.79",
+  "browser_driver": "Playwright",
+  "core_commit": "d6ee8fffa73d9698f29fb753829b6bc4e496bac7",
+  "firmware_sha256": "ab98dfec16e96f75e72f39bec6d98fc12fb9b92cf7439a45bbcb43811f137d5f",
+  "firmware_source_sha256": "8685e3fa8cb7e546449db51ac3f59f3ca5ffae4d74eb9280ada239a1b7bad2d1",
+  "system_sha256": "e5ead8f93681bcf92671f1d6c40490ef419d75c7fba20046a8196268c7e1ef12",
+  "source_map_sha256": "de7456ee5d20eb77427f9d41ae7f485f3ba2d0d634f881a579d3e879ed9c4462",
+  "source": {
+    "repository": "HeyPCB/pomodoro-pal",
+    "revision": "1d6e50ff9998978e6f4521895042ae240fff7c42",
+    "license_spdx": "CERN-OHL-S-2.0",
+    "files": {
+      "schematic": {
+        "path": "kicad/pomodoro_pal.kicad_sch",
+        "git_blob": "330d113217e04ba5b15c1c5c6439909bce3bddfd"
+      },
+      "pcb": {
+        "path": "kicad/pomodoro_pal.kicad_pcb",
+        "git_blob": "561268221ce4d066582156a71ffc5ec3e071f047"
+      },
+      "license": {
+        "path": "LICENSE",
+        "git_blob": "0f1092207caa645ff426e0cc40b7eaad69caecb1"
+      },
+      "original_firmware_hex": {
+        "path": "firmware/pomodoro.hex",
+        "git_blob": "be13b893def87531ac8f06468b81b1da3b93c963"
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+* NTC beta divider for adapter: ngspice.
+* Vtemp carries the bench temperature in degrees Celsius (1 V = 1 degC).
+* The NTC follows R = R25 * exp(B * (1/(T + 273.15) - 1/(25 + 273.15))) with
+* R25 = 10 kOhm and B25/50 = 3380 K, the NCP18XH103F03RB row of Murata
+* catalog R44E. It is written as a behavioral current, which the in-core
+* analog engine cannot parse; the same curve is its `thermistors` entry.
+V3V3 3v3 0 dc 3.3
+Vtemp temp 0 dc 25
+Bntc sns_an1 0 I = V(sns_an1) / (10k * exp(3380 * (1/(273.15 + V(temp)) - 1/298.15)))
+R6 3v3 sns_an1 10k
+C7 sns_an1 0 100n
+.tran 10u 10 uic
+.end

@@ -1,0 +1,438 @@
+# LabWired - STM32L432KC chip configuration (UFQFPN32, NUCLEO-L432KC)
+#
+# Source references:
+# - ST CMSIS device header stm32l432xx.h (STMicroelectronics/cmsis_device_l4,
+#   Include/stm32l432xx.h): every base address and IRQ number below. The
+#   L432 is an RM0394 part (STM32L41x..L46x), NOT the RM0351 L476 die, so the
+#   instance set is its own: no USART3/UART4/UART5, no SPI2, no I2C2, no
+#   TIM3/4/5/8/17, no FMC/SDMMC, GPIOA/B/C/H only, USB FS device instead of
+#   OTG.
+# - RM0394 DBGMCU_IDCODE: DEV_ID 0x435 (STM32L43xxx/L44xxx). REV_ID is
+#   left 0: no L432 bench capture exists, so the revision is visibly a
+#   placeholder (same rule as the stm32g431rb descriptor).
+# - DS11451 (STM32L432KB/KC): 256 KB flash, 64 KB SRAM (SRAM1 48 KB at
+#   0x20000000 + SRAM2 16 KB, aliased contiguously at 0x2000C000; the
+#   stm32duino L432K linker script places 64 KB RAM at 0x20000000).
+#
+# Register models: every block below reuses the STM32L4 family models that
+# the STM32L476RG descriptor runs (same RCC/GPIO/USART/I2C/SPI/ADC/DMA/TIM IP,
+# same IRQ numbering), and points at the L476 debug schemas for the same IP.
+#
+# NOT DECLARED, STATED PLAINLY: USB FS device (0x40006800), CRS (0x40006000),
+# OPAMP1 (0x40007800), SWPMI1 (0x40008800) and FIREWALL (0x40011C00) have no
+# model in this engine, so they are left out instead of answering with zeros.
+# Firmware that touches them faults on an unmapped access.
+#
+# Tier: experimental — stock STM32duino on NUCLEO-L432KC boots; not
+# hardware-validated over SWD.
+
+name: "stm32l432kc"
+arch: "arm"
+core: "cortex-m4"
+registers_count: 200
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. STM32L432KC maximum
+# core clock, 80 MHz (DS11451); stm32duino's NUCLEO_L432KC
+# SystemClock_Config runs MSI 4 MHz × PLLN 40 / PLLR 2 = 80 MHz.
+cpu_hz: 80_000_000
+
+# DS11451 "I/O static characteristics", all I/Os except
+# BOOT0: VIL max 0.3·VDDIOx, VIH min 0.7·VDDIOx (same rows as the L476).
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+
+flash:
+  base: 0x08000000
+  size: "256KB"
+ram:
+  base: 0x20000000
+  size: "64KB"
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/rcc.yaml"
+      profile: "stm32l4"
+
+  # UFQFPN32 bonds PA0..PA15, PB0/1/3..7, PC14/15 and PH3 (DS11451 pinout).
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x48000000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/gpioa.yaml"
+      profile: "stm32v2"
+    # RCC_AHB2ENR.GPIOAEN (bit 0).
+    clock: { reg: "ahb2enr", bit: 0 }
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x48000400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/gpiob.yaml"
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 1 }
+
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x48000800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/gpioc.yaml"
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 2 }
+
+  - id: "gpioh"
+    type: "gpio"
+    base_address: 0x48001C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/gpioh.yaml"
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 7 }
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    config:
+      debug_schema: "../peripherals/stm32l476/stk.yaml"
+
+  # USART2 is the ST-LINK virtual COM port on NUCLEO-L432KC (TX PA2, RX PA15).
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+    config:
+      debug_schema: "../peripherals/stm32l476/usart2.yaml"
+      profile: "stm32v2"
+    # RCC_APB1ENR1.USART2EN (bit 17).
+    clock: { reg: "apb1enr1", bit: 17 }
+
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    irq: 37
+    config:
+      debug_schema: "../peripherals/stm32l476/usart1.yaml"
+      profile: "stm32v2"
+    clock: { reg: "apb2enr", bit: 14 }
+
+  - id: "lpuart1"
+    type: "uart"
+    base_address: 0x40008000
+    size: "1KB"
+    irq: 70
+    config:
+      debug_schema: "../peripherals/stm32l476/lpuart1.yaml"
+      profile: "stm32v2"
+
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 35
+    config:
+      debug_schema: "../peripherals/stm32l476/spi1.yaml"
+      profile: "stm32_fifo"
+    clock: { reg: "apb2enr", bit: 12 }
+
+  - id: "spi3"
+    type: "spi"
+    base_address: 0x40003C00
+    size: "1KB"
+    irq: 51
+    config:
+      debug_schema: "../peripherals/stm32l476/spi3.yaml"
+      profile: "stm32_fifo"
+
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
+    config:
+      debug_schema: "../peripherals/stm32l476/i2c1.yaml"
+      profile: "stm32l4"
+
+  - id: "i2c3"
+    type: "i2c"
+    base_address: 0x40005C00
+    size: "1KB"
+    irq: 72
+    config:
+      debug_schema: "../peripherals/stm32l476/i2c3.yaml"
+      profile: "stm32l4"
+
+  # One ADC (ADC1 at 0x000, common block at 0x300).
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x50040000
+    size: "1KB"
+    irq: 18
+    config:
+      debug_schema: "../peripherals/stm32l476/adc1.yaml"
+      profile: "stm32l4"
+
+  # RM0394 DMA1/DMA2 request mapping (CSELR): same SPI1/SPI3 rows as
+  # the L476; SPI2 does not exist on this part.
+  - id: "dma1"
+    type: "dma"
+    base_address: 0x40020000
+    size: "1KB"
+    irq: 11
+    config:
+      debug_schema: "../peripherals/stm32l476/dma1.yaml"
+      requests:
+        spi1_rx: [2, 1]
+        spi1_tx: [3, 1]
+
+  - id: "dma2"
+    type: "dma"
+    base_address: 0x40020400
+    size: "1KB"
+    irq: 56
+    config:
+      debug_schema: "../peripherals/stm32l476/dma2.yaml"
+      requests:
+        spi3_rx: [1, 3]
+        spi3_tx: [2, 3]
+        spi1_rx: [3, 4]
+        spi1_tx: [4, 4]
+
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/pwr.yaml"
+
+  - id: "flash"
+    type: "flash"
+    base_address: 0x40022000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/flash.yaml"
+
+  - id: "rng"
+    type: "rng"
+    base_address: 0x50060800
+    size: "1KB"
+    irq: 80
+    config:
+      debug_schema: "../peripherals/stm32l476/rng.yaml"
+
+  - id: "crc"
+    type: "crc"
+    base_address: 0x40023000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/crc.yaml"
+
+  # 32-bit general-purpose TIM2. Channel outputs reach the pads through the
+  # L4 AF table (bus/attach.rs STM32L4_TIMER_PADS); A0 = PA0 = TIM2_CH1.
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 28
+    config:
+      pad_map: "stm32l4"
+      debug_schema: "../peripherals/stm32l476/tim2.yaml"
+      width: 32
+
+  - id: "tim6"
+    type: "timer"
+    base_address: 0x40001000
+    size: "1KB"
+    irq: 54
+    config:
+      debug_schema: "../peripherals/stm32l476/tim6.yaml"
+      basic: true
+
+  - id: "tim7"
+    type: "timer"
+    base_address: 0x40001400
+    size: "1KB"
+    irq: 55
+    config:
+      debug_schema: "../peripherals/stm32l476/tim7.yaml"
+      basic: true
+
+  - id: "tim1"
+    type: "timer"
+    base_address: 0x40012C00
+    size: "1KB"
+    # TIM1_UP_TIM16_IRQn = 25, TIM1_CC_IRQn = 27 (stm32l4xx CMSIS).
+    # BRK (24) and TRG/COM (26) route BIF and TIF/COMIF.
+    irq: 25
+    config:
+      capture_compare_irq: 27
+      trigger_com_irq: 26
+      break_irq: 24
+      pad_map: "stm32l4"
+      debug_schema: "../peripherals/stm32l476/tim1.yaml"
+      advanced: true
+
+  - id: "tim15"
+    type: "timer"
+    base_address: 0x40014000
+    size: "1KB"
+    irq: 24
+    config:
+      debug_schema: "../peripherals/stm32l476/tim15.yaml"
+
+  - id: "tim16"
+    type: "timer"
+    base_address: 0x40014400
+    size: "1KB"
+    irq: 25
+    config:
+      debug_schema: "../peripherals/stm32l476/tim16.yaml"
+
+  - id: "rtc"
+    type: "rtc"
+    base_address: 0x40002800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/rtc.yaml"
+
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/iwdg.yaml"
+
+  - id: "wwdg"
+    type: "wwdg"
+    base_address: 0x40002C00
+    size: "1KB"
+    irq: 0
+    config:
+      debug_schema: "../peripherals/stm32l476/wwdg.yaml"
+
+  - id: "dac"
+    type: "dac"
+    base_address: 0x40007400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/dac.yaml"
+
+  - id: "exti"
+    type: "exti"
+    base_address: 0x40010400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/exti.yaml"
+      profile: "stm32l4"
+
+  # Same read-zero placeholder as the L476 (EXTICR routing is not modelled).
+  # SYSCFG, COMP and EXTI share the 0x4001_0000 block at 0x200 spacing, so
+  # SYSCFG and COMP are declared at their true 0x200 extents (the L476
+  # declares three 1 KB windows and needs a WINDOW_OVERLAP_ALLOWLIST entry).
+  - id: "syscfg"
+    type: "stub"
+    base_address: 0x40010000
+    size: "512B"
+    config:
+      debug_schema: "../peripherals/stm32l476/syscfg.yaml"
+
+  - id: "lptim1"
+    type: "lptim"
+    base_address: 0x40007C00
+    size: "1KB"
+    irq: 65
+    config:
+      debug_schema: "../peripherals/stm32l476/lptim1.yaml"
+
+  - id: "lptim2"
+    type: "lptim"
+    base_address: 0x40009400
+    size: "1KB"
+    irq: 66
+    config:
+      debug_schema: "../peripherals/stm32l476/lptim2.yaml"
+
+  - id: "quadspi"
+    type: "quadspi"
+    base_address: 0xA0001000
+    size: "1KB"
+    irq: 71
+    config:
+      debug_schema: "../peripherals/stm32l476/quadspi.yaml"
+
+  - id: "sai1"
+    type: "sai"
+    base_address: 0x40015400
+    size: "1KB"
+    irq: 74
+    config:
+      debug_schema: "../peripherals/stm32l476/sai1.yaml"
+
+  - id: "can1"
+    type: "bxcan"
+    base_address: 0x40006400
+    size: "1KB"
+    irq: 19
+    config:
+      debug_schema: "../peripherals/stm32l476/can1.yaml"
+
+  - id: "comp"
+    type: "comp"
+    base_address: 0x40010200
+    size: "512B"
+    irq: 64
+    config:
+      debug_schema: "../peripherals/stm32l476/comp.yaml"
+
+  - id: "tsc"
+    type: "tsc"
+    base_address: 0x40024000
+    size: "1KB"
+    irq: 77
+    config:
+      debug_schema: "../peripherals/stm32l476/tsc.yaml"
+
+  - id: "scb"
+    type: "scb"
+    base_address: 0xE000ED00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/scb.yaml"
+
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/nvic.yaml"
+
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0xE0042000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/dbgmcu.yaml"
+      idcode: 0x00000435
+
+# Package pins used by NUCLEO-L432KC (UFQFPN32 STM32L432KCU6), from the
+# stm32duino NUCLEO_L432KC variant (PeripheralPins.c, variant header).
+# Board-level connections are recorded in configs/systems/nucleo-l432kc.yaml.
+pins:
+  PA0: { gpio: "gpioa", bit: 0, functions: [{ type: adc, peripheral: "adc1", channel: 5 }, { type: timer, peripheral: "tim2", channel: 1 }] }
+  PA2: { gpio: "gpioa", bit: 2, functions: [{ type: uart, peripheral: "uart2", role: tx }] }
+  PA15: { gpio: "gpioa", bit: 15, functions: [{ type: uart, peripheral: "uart2", role: rx }] }
+  PB3: { gpio: "gpiob", bit: 3, functions: [{ type: gpio, peripheral: "gpiob" }, { type: timer, peripheral: "tim2", channel: 2 }, { type: spi, peripheral: "spi1", role: sck }] }
+  PB4: { gpio: "gpiob", bit: 4, functions: [{ type: spi, peripheral: "spi1", role: miso }] }
+  PB5: { gpio: "gpiob", bit: 5, functions: [{ type: spi, peripheral: "spi1", role: mosi }] }
+  PB6: { gpio: "gpiob", bit: 6, functions: [{ type: i2c, peripheral: "i2c1", role: scl }] }
+  PB7: { gpio: "gpiob", bit: 7, functions: [{ type: i2c, peripheral: "i2c1", role: sda }] }
+  PA11: { gpio: "gpioa", bit: 11, functions: [{ type: can, peripheral: "can1", role: rx }] }
+  PA12: { gpio: "gpioa", bit: 12, functions: [{ type: can, peripheral: "can1", role: tx }] }

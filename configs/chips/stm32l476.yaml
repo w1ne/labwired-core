@@ -29,6 +29,18 @@ io_voltage_v: 3.3
 gpio_input_thresholds:
   vil: 0.3
   vih: 0.7
+# GPIO pad output resistance, ohms: a driven pad is VDD (or 0 V) behind it.
+# DS10198 Rev 11 (STM32L476xx), section 6.3.14, Table 71 "Output voltage
+# characteristics", CMOS port, VDDIOx >= 2.7 V: VOH min VDD - 0.4 V and VOL max
+# 0.4 V at |IIO| = 8 mA. (VDD - VOH) / IIO = 0.4 V / 8 mA = 50 ohm, both sides.
+# Guaranteed limits, so a typical pad is stiffer. Read by the diagram compiler,
+# which places it as the pad driver's on-resistance in the analog netlist.
+gpio_output_ohms: 50
+# Absolute maximum current sunk or sourced by any I/O and control pin, mA.
+# DS10198 Rev 11, Table 21 "Current characteristics": IIO 20 (sunk, sourced). A
+# run reports a pad whose simulated current went past it; the simulation does
+# not stop or clamp it.
+gpio_abs_max_ma: 20
 
 flash:
   base: 0x08000000
@@ -40,7 +52,43 @@ ram:
   base: 0x20000000
   size: "96KB"
 
+# Regular ADC1 inputs by pad, from the DS10198 LQFP64 pin definitions:
+# PC0-PC3 are IN1-IN4, PA0-PA7 are IN5-IN12, PC4/PC5 are IN13/IN14 and
+# PB0/PB1 are IN15/IN16. The map is the chip's, not one board's: every board
+# on this die (NUCLEO-L476RG, iolink-multiport-demo) reads the same table. The
+# NUCLEO-L476RG Arduino A0-A5 header (Zephyr `arduino_r3_connector.dtsi`) is
+# PA0, PA1, PA4, PB0, PC1, PC0; its DTS enables `adc1_in1_pc0`, which
+# cross-checks PC0 = IN1. Consumed by co-simulation
+# `board.analog.<pad>_volts`; pads not listed (PA8 up, PB2 up, PC6 up) are
+# refused instead of guessing a channel.
+analog_pins:
+  PC0: { peripheral: "adc1", channel: 1 }
+  PC1: { peripheral: "adc1", channel: 2 }
+  PC2: { peripheral: "adc1", channel: 3 }
+  PC3: { peripheral: "adc1", channel: 4 }
+  PA0: { peripheral: "adc1", channel: 5 }
+  PA1: { peripheral: "adc1", channel: 6 }
+  PA2: { peripheral: "adc1", channel: 7 }
+  PA3: { peripheral: "adc1", channel: 8 }
+  PA4: { peripheral: "adc1", channel: 9 }
+  PA5: { peripheral: "adc1", channel: 10 }
+  PA6: { peripheral: "adc1", channel: 11 }
+  PA7: { peripheral: "adc1", channel: 12 }
+  PC4: { peripheral: "adc1", channel: 13 }
+  PC5: { peripheral: "adc1", channel: 14 }
+  PB0: { peripheral: "adc1", channel: 15 }
+  PB1: { peripheral: "adc1", channel: 16 }
+
 peripherals:
+  # RM0351 / CMSIS UID_BASE: exactly 96 read-only bits. The descriptor
+  # documents its unspecified simulated identity; it is not a silicon UID.
+  - id: "uid"
+    type: "declarative"
+    base_address: 0x1FFF7590
+    size: "12B"
+    config:
+      path: "../peripherals/stm32l476/uid.yaml"
+
   - id: "rcc"
     type: "rcc"
     base_address: 0x40021000
@@ -377,8 +425,13 @@ peripherals:
     type: "timer"
     base_address: 0x40012C00
     size: "1KB"
-    irq: 27
+    # TIM1_UP_TIM16_IRQn = 25, TIM1_CC_IRQn = 27 (stm32l4xx CMSIS).
+    # BRK (24) and TRG/COM (26) route BIF and TIF/COMIF.
+    irq: 25
     config:
+      capture_compare_irq: 27
+      trigger_com_irq: 26
+      break_irq: 24
       # Channel outputs reach the pads through the L4 AF table
       # (bus/attach.rs STM32L4_TIMER_PADS, from stm32duino PinMap_TIM).
       pad_map: "stm32l4"
@@ -389,8 +442,13 @@ peripherals:
     type: "timer"
     base_address: 0x40013400
     size: "1KB"
-    irq: 46
+    # TIM8_UP_IRQn = 44, TIM8_CC_IRQn = 46 (stm32l476xx.h).
+    # BRK (43) and TRG/COM (45) route BIF and TIF/COMIF.
+    irq: 44
     config:
+      capture_compare_irq: 46
+      trigger_com_irq: 45
+      break_irq: 43
       debug_schema: "../peripherals/stm32l476/tim8.yaml"
       advanced: true
 
@@ -457,12 +515,13 @@ peripherals:
       debug_schema: "../peripherals/stm32l476/exti.yaml"
       profile: "stm32l4"
 
-  # SYSCFG — system config (mostly EXTI line source selection); modeled as stub.
+  # SYSCFG — EXTICR port-selection mux only; other configuration functions are unmodeled.
   - id: "syscfg"
-    type: "stub"
+    type: "syscfg"
     base_address: 0x40010000
     size: "1KB"
     config:
+      profile: "stm32l4"
       debug_schema: "../peripherals/stm32l476/syscfg.yaml"
 
   # Low-power timers.

@@ -405,6 +405,42 @@ impl GatedI2cDevice {
     }
 }
 impl I2cDevice for GatedI2cDevice {
+    fn runtime_snapshot(&self) -> Option<Vec<u8>> {
+        // A legacy gate is immutable wiring. Routed domains also own voltage,
+        // availability, and generation state, which must not be silently lost.
+        if self.gate.is_routed() {
+            return None;
+        }
+        let state = (
+            0x4c57_4947u32,
+            self.gate.enabled,
+            self.inner.runtime_snapshot()?,
+        );
+        Some(bincode::serialize(&state).expect("serialize static I2C supply gate"))
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> crate::SimResult<()> {
+        if self.gate.is_routed() {
+            return Err(crate::SimulationError::NotImplemented(
+                "I2C routed supply domain does not support runtime snapshots".into(),
+            ));
+        }
+        let (tag, enabled, inner): (u32, bool, Vec<u8>) =
+            bincode::deserialize(bytes).map_err(|e| {
+                crate::SimulationError::NotImplemented(format!("I2C supply snapshot decode: {e}"))
+            })?;
+        if tag != 0x4c57_4947 || enabled != self.gate.enabled {
+            return Err(crate::SimulationError::NotImplemented(
+                "I2C static supply snapshot topology mismatch".into(),
+            ));
+        }
+        self.inner.restore_runtime_snapshot(&inner)
+    }
+
+    fn is_i2c_mux(&self) -> bool {
+        self.inner.is_i2c_mux()
+    }
+
     fn address(&self) -> u8 {
         self.inner.address()
     }
@@ -472,6 +508,15 @@ impl I2cDevice for GatedI2cDevice {
     fn logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
         self.inner.logs()
     }
+    /// Forward the controller pulse query only while its supply is powered.
+    /// Output-enable wiring is not modeled by this query.
+    fn pwm_channel_pulse_us(&self, channel: u8) -> Option<f64> {
+        if self.gate.powered() {
+            self.inner.pwm_channel_pulse_us(channel)
+        } else {
+            None
+        }
+    }
     fn wrapped_device(&self) -> Option<&dyn I2cDevice> {
         Some(self.inner.as_ref())
     }
@@ -486,5 +531,76 @@ impl I2cDevice for GatedI2cDevice {
         f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
     ) -> bool {
         self.inner.for_each_sim_input(f)
+    }
+}
+
+/// Intern a rail name as `&'static str` once per distinct name, because
+/// [`DeviceSupplyRail::name`] is `'static` and descriptors are data. Leaks one
+/// string per distinct name for the life of the process, never one per device.
+fn intern_rail_name(name: &str) -> &'static str {
+    use std::collections::HashSet;
+    use std::sync::{Mutex, OnceLock};
+    static NAMES: OnceLock<Mutex<HashSet<&'static str>>> = OnceLock::new();
+    let mut names = NAMES
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(existing) = names.get(name) {
+        return existing;
+    }
+    let leaked: &'static str = Box::leak(name.to_owned().into_boxed_str());
+    names.insert(leaked);
+    leaked
+}
+
+/// The required rails a descriptor's `behavior.power` block declares, shared by
+/// every declarative engine. Empty when the block is absent.
+pub(crate) fn device_rails(
+    power: Option<&labwired_config::DevicePowerSpec>,
+) -> Vec<crate::peripherals::device::DeviceSupplyRail> {
+    power
+        .into_iter()
+        .flat_map(|p| &p.rails)
+        .map(|r| crate::peripherals::device::DeviceSupplyRail {
+            name: intern_rail_name(&r.name),
+            min_v: r.min_v,
+            max_v: r.max_v,
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod runtime_snapshot_tests {
+    use super::*;
+    use crate::peripherals::components::ssd1306;
+
+    #[test]
+    fn i2c_supply_runtime_snapshot_preserves_static_gate_and_rejects_dynamic_domains() {
+        let source = GatedI2cDevice::new(Box::new(ssd1306(0x3c)), SupplyGate::legacy(true));
+        let bytes = source.runtime_snapshot().unwrap();
+        let mut restored = GatedI2cDevice::new(Box::new(ssd1306(0x3c)), SupplyGate::legacy(true));
+        restored.restore_runtime_snapshot(&bytes).unwrap();
+        assert_eq!(restored.runtime_snapshot().unwrap(), bytes);
+        assert!(restored.claims_address(0x3c));
+
+        let mut unpowered = GatedI2cDevice::new(Box::new(ssd1306(0x3c)), SupplyGate::legacy(false));
+        assert!(unpowered.restore_runtime_snapshot(&bytes).is_err());
+        let unpowered_bytes = unpowered.runtime_snapshot().unwrap();
+        unpowered
+            .restore_runtime_snapshot(&unpowered_bytes)
+            .unwrap();
+        assert!(!unpowered.claims_address(0x3c));
+
+        let domain = Arc::new(SupplyDomain::new(BTreeMap::from([(
+            String::new(),
+            RailBounds {
+                min_v: 3.0,
+                max_v: None,
+            },
+        )])));
+        let mut routed =
+            GatedI2cDevice::new(Box::new(ssd1306(0x3c)), SupplyGate::routed(domain, true));
+        assert!(routed.runtime_snapshot().is_none());
+        assert!(routed.restore_runtime_snapshot(&bytes).is_err());
     }
 }

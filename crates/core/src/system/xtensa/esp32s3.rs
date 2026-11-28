@@ -803,6 +803,7 @@ pub(crate) fn register_esp32s3_peripherals(bus: &mut SystemBus, opts: &Esp32s3Op
     // released pad reports. Without this the pad words are write-only storage
     // and every button-to-GND lab reads permanently pressed.
     bus.wire_esp32s3_pad_controls();
+    bus.wire_shared_adc_banks();
 }
 
 /// Register the default thunk set for esp-hal hello-world boot.
@@ -1025,11 +1026,11 @@ pub(crate) const ESP32S3_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &
     ("rsa",             "esp32s3_rsa",             0x6003_C000, 0x1000, Some(76)),
     ("hmac",            "esp32s3_hmac",            0x6003_E000, 0x1000, Some(0)),
     ("ds",              "esp32s3_ds",              0x6003_D000, 0x1000, Some(0)),
-    ("mcpwm0",          "esp32s3_mcpwm",           0x6001_E000, 0x1000, Some(38)),
-    ("mcpwm1",          "esp32s3_mcpwm",           0x6002_C000, 0x1000, Some(39)),
+    ("mcpwm0",          "esp32s3_mcpwm",           0x6001_E000, 0x1000, Some(31)),
+    ("mcpwm1",          "esp32s3_mcpwm",           0x6002_C000, 0x1000, Some(32)),
     ("sdmmc",           "esp32s3_sdmmc",           0x6002_8000, 0x1000, Some(36)),
     ("lcd_cam",         "esp32s3_lcd_cam",         0x6004_1000, 0x1000, Some(24)),
-    ("usb_otg",         "esp32s3_usb_otg",         0x6008_0000, 0x1000, Some(23)),
+    ("usb_otg",         "esp32s3_usb_otg",         0x6008_0000, 0x8000, Some(38)),
     ("i2c0",            "esp32s3_i2c",             0x6001_3000, 0x1000, Some(42)),
     ("i2c1",            "esp32s3_i2c",             0x6002_7000, 0x1000, Some(43)),
     ("uart0_s3",        "esp32s3_uart",            0x6000_0000, 0x0100, Some(27)),

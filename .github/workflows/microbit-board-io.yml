@@ -1,27 +1,17 @@
 name: microbit active board qualification
 on:
+  # CI cut O11: no push-to-main run (22 min each merge); nightly instead.
+  schedule:
+    - cron: "50 3 * * *"
   workflow_dispatch:
   pull_request:
+    # Lean PR gate (2026-11-13): on pull requests this lane runs only when
+    # its own files change. Shared engine paths (crates/core, crates/cli,
+    # Cargo.*) trigger it on push to main instead.
     paths:
       - 'configs/chips/nrf52833.yaml'
       - 'configs/peripherals/nrf52833/**'
       - 'configs/systems/microbit-v2.yaml'
-      - 'crates/core/src/**'
-      - 'crates/core/Cargo.toml'
-      - 'crates/wasm/src/inputs.rs'
-      - 'crates/core/tests/microbit_v2*.rs'
-      - 'examples/microbit-v2/**'
-      - 'scripts/perf/*microbit*'
-      - '.github/workflows/microbit-board-io.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'configs/chips/nrf52833.yaml'
-      - 'configs/peripherals/nrf52833/**'
-      - 'configs/systems/microbit-v2.yaml'
-      - 'crates/core/src/**'
-      - 'crates/core/Cargo.toml'
-      - 'crates/wasm/src/inputs.rs'
       - 'crates/core/tests/microbit_v2*.rs'
       - 'examples/microbit-v2/**'
       - 'scripts/perf/*microbit*'
@@ -30,9 +20,10 @@ permissions:
   contents: read
 concurrency:
   group: microbit-board-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   board:
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -63,10 +54,9 @@ jobs:
         run: |
           python3 scripts/perf/test_microbit_active_report.py
           python3 scripts/perf/test_microbit_motion_report.py
-          cargo test --release -p labwired-core --features microbit-board-io-test \
-            --test nrf52833_config --test nrf52833_gpio_geometry \
-            --test microbit_v2_led_matrix --test microbit_v2_board_io_guest \
-            --test microbit_v2_motion_io_guest --test peripheral_kit_gate
+          cargo test --release -p labwired-core --features microbit-board-io-test --test microbit_v2_board_io_guest --test microbit_v2_motion_io_guest && \
+          cargo test --release -p labwired-core --features microbit-board-io-test --test nrf -- nrf52833_config:: nrf52833_gpio_geometry:: microbit_v2_led_matrix:: && \
+          cargo test --release -p labwired-core --features microbit-board-io-test --test bus -- peripheral_kit_gate::
           cargo test --release -p labwired-core --features microbit-board-io-test \
             --test microbit_v2_adc_scan_guest
           cargo test --release -p labwired-core --features microbit-board-io-test \
@@ -110,6 +100,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
+          retention-days: 2
           name: microbit-active-board-evidence
           path: |
             microbit-runner-context.txt

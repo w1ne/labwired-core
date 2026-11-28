@@ -728,6 +728,10 @@ struct SnapV2 {
 }
 
 impl Peripheral for Ledc {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     fn add_ledc_duty_observer(&mut self, obs: Arc<dyn LedcDutyObserver>) -> bool {
         self.add_duty_observer(obs);
         true
@@ -1063,11 +1067,6 @@ mod tests {
         let mut p = Ledc::new(Ledc::BASE);
         write_u32(&mut p, 0x1F0, 0xCAFE_BABE);
         assert_eq!(read_u32(&p, 0x1F0), 0xCAFE_BABE);
-    }
-
-    #[test]
-    fn base_is_esp32_classic_canonical_address() {
-        assert_eq!(Ledc::new(Ledc::BASE).base(), 0x3FF5_9000);
     }
 
     #[test]

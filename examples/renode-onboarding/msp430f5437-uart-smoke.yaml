@@ -1,0 +1,31 @@
+# MSP430F5437 declared surface on the MSP430 core: SFRIE1/SFRIFG1, the x5xx
+# USCI_A0/USCI_A1 (UART mode, own UCAxIE/UCAxIFG/UCAxIV), the WDT_A password
+# and the PUC it requests, MPY32, the UCS oscillator fault flags, the PMM
+# password and core voltage step, LPM0 wake-up. One letter per check on UART0
+# (see msp430-uart-smoke.c); the loopback bytes Z, k and z of checks 5 to 7
+# also leave on the transmit line. Check 4 clears OFIFG only after the FLL
+# reference and ACLK leave XT1 (no crystal). Check 9 calls a function and
+# reads a table in flash above 64 KiB. Checks 10 and 11 are the PMM core
+# voltage step and MPY32 with 32-bit operands. The host byte `R` arrives
+# through the receive interrupt, which reads UCA0IV. The run ends after the
+# firmware has restarted through a WDTCTL security key violation and found
+# WDTIFG set. The system declares no debug_uart, so the capture holds both
+# UARTs.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/msp430f5437-uart-smoke.elf"
+  system: "../../configs/systems/onboarding/mspsim-msp430f5437.yaml"
+limits:
+  max_steps: 400000
+uart_injections:
+  - uart: "usci_a0"
+    bytes: "R"
+    trigger: !after_cycles { cycles: 100000 }
+assertions:
+  - uart_ordered:
+      - "MSP430F5437 boot"
+      - "MSP430F5437 checks PPPPZPkPzPPPPP DONE rx=52"
+      - "MSP430F5437 PUC WDTIFG=1"
+      - "MSP430F5437 smoke complete"
+  - uart_contains: "MSP430F5437 UART1 ok"
+  - expected_stop_reason: max_steps

@@ -52,8 +52,12 @@ impl NativeSession {
 }
 #[pymethods]
 impl NativeSession {
+    // The Python-facing constructor intentionally has individually optional
+    // keyword arguments for backwards-compatible session setup. Grouping
+    // them into a Rust struct would not change the public Python signature.
+    #[allow(clippy::too_many_arguments)]
     #[new]
-    #[pyo3(signature=(elf, chip_path, system_path=None, uart=None, catalog_root=None, coverage=false))]
+    #[pyo3(signature=(elf, chip_path, system_path=None, uart=None, catalog_root=None, coverage=false, flash_path=None, optimized_execution=false))]
     fn new(
         elf: PathBuf,
         chip_path: Option<PathBuf>,
@@ -61,6 +65,8 @@ impl NativeSession {
         uart: Option<String>,
         catalog_root: Option<PathBuf>,
         coverage: bool,
+        flash_path: Option<PathBuf>,
+        optimized_execution: bool,
     ) -> PyResult<Self> {
         let loaded = system_path
             .as_ref()
@@ -102,13 +108,43 @@ impl NativeSession {
         }
         let firmware =
             std::fs::read(elf).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        // ESP32-C3 Arduino/ESP-IDF ELFs call real mask-ROM helpers even on
+        // fast boot. The plain Python path used to pass an empty blob map,
+        // so these legitimate calls jumped into zero-filled ROM at 0x40000018.
+        // Provision the same ROM used by the native CLI, never fake a return.
+        let mut blobs = BlobMap::new();
+        if chip.name == "esp32c3" {
+            let images =
+                labwired_core::boot::esp32c3_rom::provision_rom_images().ok_or_else(|| {
+                    PyValueError::new_err(
+                        "ESP32-C3 ROM unavailable: install the provisioned ROM/toolchain ELF",
+                    )
+                })?;
+            blobs.insert("esp32c3_irom".into(), images.irom);
+            blobs.insert("esp32c3_drom".into(), images.drom);
+        }
+        let flash = flash_path
+            .map(|p| {
+                std::fs::read(p).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+            })
+            .transpose()?;
+        let (source, boot) = match flash.as_deref() {
+            Some(image) => (
+                FirmwareSource::FlashImage {
+                    image,
+                    symbols: Some(&firmware),
+                },
+                BootMode::RomBoot,
+            ),
+            None => (FirmwareSource::Elf(&firmware), BootMode::FastBoot),
+        };
         let session = Session::open(
             BuildRequest {
                 chip: &chip,
                 system: &system,
-                firmware: FirmwareSource::Elf(&firmware),
-                boot: BootMode::FastBoot,
-                blobs: &BlobMap::new(),
+                firmware: source,
+                boot,
+                blobs: &blobs,
                 options: BuildOptions {
                     uart_rx: system.debug_uart.clone(),
                     rtt: None,
@@ -117,6 +153,7 @@ impl NativeSession {
             },
             OpenOptions {
                 coverage,
+                optimized_execution,
                 // A model's relative `model:` path resolves beside the system file.
                 cosim_base_dir: system_path
                     .as_ref()
@@ -190,6 +227,15 @@ impl NativeSession {
     fn set_inputs(&mut self, values: Vec<(String, f64)>) -> PyResult<()> {
         self.get_mut()?.set_inputs(&values).map_err(error)
     }
+    /// Read *modeled* peripheral and device observables without advancing the MCU.
+    /// The JSON structure is the same MachineInspect contract used by the host
+    /// inspector; in particular PCA9685 off_counts are measured I2C state.
+    #[pyo3(signature=(peripheral=None))]
+    fn inspect_json(&self, peripheral: Option<&str>) -> PyResult<String> {
+        serde_json::to_string(&self.get()?.inspect(peripheral))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
     fn list_inputs(&mut self) -> PyResult<String> {
         serde_json::to_string(&self.get_mut()?.list_inputs())
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))

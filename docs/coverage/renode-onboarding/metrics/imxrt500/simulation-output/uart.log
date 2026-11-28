@@ -1,0 +1,27 @@
+MIMXRT595 EVK SMOKE
+cpu=cortex-m33 uart=flexcomm0 pselid=000000f1 fifosize=16
+fcb tag=42464346 vtor=08001000
+clk frodivsel=1 mainclksela=1 pscctl0=00000100 pscctl1=0000000b
+uart fclk=48000000 osr=16 brg=26 baud=115384
+leds=off r=0 g=0 b=0 pin0=00000000
+set red r=1 g=0 b=0 pin0=00004000
+byte green r=1 g=1 b=0 pin0=00004000
+word blue r=1 g=1 b=1 pin0=00004000
+not red r=0 g=1 b=1 pin0=00000000
+mpin red r=1 g=1 b=1 pin0=00004000
+clr all r=0 g=0 b=0 pin0=00000000
+sw1=0 sw2=0
+hb=0 green=1
+hb=1 green=0
+hb=2 green=1
+hb=3 green=0
+hb=4 green=1
+hb=5 green=0
+hb=6 green=1
+hb=7 green=0
+hb=8 green=1
+hb=9 green=0
+hb=10 green=1
+hb=11 green=0
+hb=12 green=1
+hb=13 green=0

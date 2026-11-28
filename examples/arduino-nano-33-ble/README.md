@@ -49,6 +49,26 @@ cd core
   --output-dir out/arduino-nano-33-ble-smoke --no-uart-stdout
 ```
 
+## Mixed-signal test
+
+```bash
+cd core
+cargo test -p labwired-core --test analog cosim_nrf52840_family_analog
+```
+
+The test loads the same `analog-ntc-diode-system.yaml` deck against this board,
+the nRF52840-DK and the Seeed XIAO nRF52840 Sense. It compares each solved node
+with an independent closed form, then drives the SAADC register sequence and
+checks the EasyDMA buffer against the 600 mV internal reference at gain 1/6.
+
+## Analog deck
+
+`analog-ntc-diode-system.yaml` declares two generic analog models. Neither
+names this board, the SAADC or a channel: each publishes to
+`board.analog.p0.04_volts` or `board.analog.p0.05_volts`, and the chip
+descriptor's `analog_pins:` map selects AIN2 and AIN3. The same file runs on
+any nRF52840 profile with the same chip descriptor.
+
 ## What the board models
 
 | Surface | State |
@@ -58,8 +78,9 @@ cd core
 | UARTE0 (0x40002000, EasyDMA) | modelled — the board's `Serial1` (D0/D1) |
 | RGB LED (P0.24/P0.16/P0.06) | modelled GPIO — active low |
 | Built-in D13 LED (P0.13) | modelled GPIO — active high |
+| SAADC AIN0..AIN7 (P0.02/P0.03/P0.04/P0.05/P0.28/P0.29/P0.30/P0.31) | modelled — `analog-ntc-diode-system.yaml` solves a Beta NTC divider on A0 (P0.04/AIN2) and a Shockley diode load line on A1 (P0.05/AIN3) into the EasyDMA result buffer |
 | LSM9DS1 IMU (TWI0 0x6B/0x1E) | **not modelled** (the TWI0 controller is) |
-| USB CDC (`Serial`) | **not modelled** |
+| USB CDC (`Serial`) | not used by this smoke; modelled, see `examples/arduino-nano-33-ble-bme280/` |
 | Silicon capture / executing-fidelity differential | **none** — SIM-DERIVED |
 
 ## Documents

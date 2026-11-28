@@ -124,13 +124,24 @@ hb=0 podr=0040 s1=1 s2=1
 | Console UART | SCI0 P411 (TX) / P410 (RX) | Zephyr `ek_ra6m5-pinctrl.dtsi`, `zephyr,console = &uart0` |
 | SCI0 clock / gate | PCLKA, `MSTPCRB` bit 31 | Zephyr `ra6-cm33-common.dtsi` (`clocks = <&pclka MSTPB 31>`) |
 
+## Analog inputs
+
+`analog-ntc-system.yaml` drives a generic Beta-parameter NTC divider into
+`board.analog.p000_volts`. The RA6M5 descriptor maps P000 (AN000, Arduino
+header A0) to ADC0 channel 0, and the test converts it with the production
+`ra_adc12` single-scan path (`ADANSA0`, `ADST`, `ADDR0`). This slice maps only
+AN000: the other Arduino header inputs (A1-A5) are not transcribed from the
+board manual yet, and the router refuses a pad that is not in the map rather
+than guessing a channel.
+
 ## Explicitly not claimed
 
 - **Clock generation.** The SYSTEM window models only `HOCOCR`/`OSCSF`.
   `SCKDIVCR`, `SCKSCR` and `PRCR` read 0 and drop writes, so the simulator
   neither checks the PRCR key nor applies the divider.
-- **Module stop.** `MSTP` is a stub: SCI0 runs whether or not `MSTPB31` is
-  cleared.
+- **Module stop.** The SVD-derived MSTP register file reads reset values and
+  stores writes; the exact-system smoke checks `MSTPCRB.MSTPB31` readback.
+  Module gating is not modelled, so SCI0 also runs while the bit is set.
 - **SCI interrupts.** SCI0 raises RXI/TXI/TEI through the ICU, but not ERI
   or the receive error flags. RXI comes once per character a frame apart,
   not at `FCR.RTRG` or 15 ETU after the last stop bit, and `SSR_FIFO.DR`

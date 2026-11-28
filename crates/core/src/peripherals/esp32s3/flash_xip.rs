@@ -326,6 +326,32 @@ pub fn new_mmu_table_esp32() -> SharedMmuTable {
     })
 }
 
+/// ESP32-S2 MMU format (`soc/esp32s2/include/soc/ext_mem_defs.h`):
+/// - 384 × 64 KiB entries at `DR_REG_MMU_TABLE` (0x6180_1000)
+/// - invalid = BIT(14), page number = bits[13:0] (`SOC_MMU_VALID_VAL_MASK`)
+/// - flash entries carry `SOC_MMU_ACCESS_FLASH` = BIT(15); PSRAM BIT(16)
+/// - each bus owns its own 64-entry slice (`PRO_CACHE_IBUS0_MMU_START` …), so a
+///   window's entry is `slice + ((vaddr & 0x3F_FFFF) >> 16)`: see
+///   [`FlashXipPeripheral::with_entry_base`] and `mmu_ll_get_entry_id`.
+pub const MMU_FMT_S2: MmuFmt = MmuFmt {
+    invalid_bit: 1 << 14,
+    valid_bit: 0,
+    valid_val_mask: 0x3FFF,
+    vaddr_mask: 0x3F_FFFF, // SOC_MMU_VADDR_MASK
+    spiram_bit: 1 << 16,
+};
+
+/// ESP32-S2 flash-cache MMU table length (`SOC_MMU_ENTRY_NUM`).
+pub const SOC_MMU_ENTRY_NUM_S2: usize = 384;
+
+/// Allocate an ESP32-S2 MMU table (384 entries, all invalid).
+pub fn new_mmu_table_s2() -> SharedMmuTable {
+    Arc::new(SharedMmu {
+        entries: Mutex::new(vec![MMU_FMT_S2.invalid_bit; SOC_MMU_ENTRY_NUM_S2]),
+        generation: AtomicU64::new(1),
+    })
+}
+
 #[derive(Debug)]
 pub struct FlashXipPeripheral {
     backing: Arc<Mutex<Vec<u8>>>,
@@ -339,6 +365,10 @@ pub struct FlashXipPeripheral {
     /// MMU entry format for this chip (defaults to S3).
     fmt: MmuFmt,
     base: u32,
+    /// First MMU entry of this window's bus slice, on chips whose buses each
+    /// own a slice of one table (ESP32-S2). `None` keeps the per-chip entry
+    /// formula in [`Self::translate`].
+    entry_base: Option<u32>,
     /// Last MMU page translation (generation, entry_id, phys_page). Atomic so
     /// `&self` reads stay Sync without taking the MMU mutex on the hot path.
     xlat_gen: AtomicU64,
@@ -371,6 +401,7 @@ impl Clone for FlashXipPeripheral {
             mmu_table: self.mmu_table.clone(),
             fmt: self.fmt,
             base: self.base,
+            entry_base: self.entry_base,
             xlat_gen: AtomicU64::new(0),
             xlat_entry_id: AtomicU32::new(u32::MAX),
             xlat_phys_page: AtomicU32::new(0),
@@ -397,6 +428,7 @@ impl FlashXipPeripheral {
             mmu_table,
             fmt,
             base,
+            entry_base: None,
             xlat_gen: AtomicU64::new(0),
             xlat_entry_id: AtomicU32::new(u32::MAX),
             xlat_phys_page: AtomicU32::new(0),
@@ -433,6 +465,14 @@ impl FlashXipPeripheral {
     /// path used when booting the real ROM.
     pub fn new_mmu(backing: Arc<Mutex<Vec<u8>>>, base: u32, mmu_table: SharedMmuTable) -> Self {
         Self::new_fields(backing, base, Some(mmu_table), MMU_FMT_S3)
+    }
+
+    /// Translate through the MMU slice that starts at entry `entry_base`
+    /// (ESP32-S2: DROM0 = 0x80, IRAM0 cache = 0). The entry for `vaddr` is
+    /// then `entry_base + ((vaddr & fmt.vaddr_mask) >> 16)`.
+    pub fn with_entry_base(mut self, entry_base: u32) -> Self {
+        self.entry_base = Some(entry_base);
+        self
     }
 
     /// Map virtual page `virt` (0..=63) to physical page `phys` in the
@@ -474,7 +514,9 @@ impl FlashXipPeripheral {
             //   C6: (vaddr & 16MiB_mask) >> 16 — IROM==DROM @ 0x4200_0000
             //   C3/classic: (vaddr >> 16) & 0x7F (NOT vaddr_mask — IROM/DROM
             //     share the table; masking 0x4200_0000 would yield entry 32)
-            let entry_id = if self.fmt.vaddr_mask == MMU_FMT_S3.vaddr_mask
+            let entry_id = if let Some(slice) = self.entry_base {
+                slice + ((vaddr & self.fmt.vaddr_mask) >> 16)
+            } else if self.fmt.vaddr_mask == MMU_FMT_S3.vaddr_mask
                 || self.fmt.vaddr_mask == MMU_FMT_C6.vaddr_mask
             {
                 (vaddr & self.fmt.vaddr_mask) >> 16
@@ -571,25 +613,23 @@ impl FlashXipPeripheral {
         if out.is_empty() {
             return;
         }
-        let Some((target, phys0)) = self.translate(offset) else {
-            out.fill(0);
-            return;
-        };
-        // PSRAM is writable, so it must NOT go through the page mirror: the
-        // mirror caches immutable flash bytes and would hand back a stale copy
-        // of memory the guest has since written.
-        if target == XipTarget::Psram {
-            self.read_psram(phys0, out);
-            return;
-        }
         let in_page = (offset % PAGE_SIZE as u64) as usize;
-        if in_page + out.len() <= PAGE_BYTES {
-            let phys_page = (phys0 / PAGE_SIZE as u64) as u32;
-            let way = self.ensure_page_mirror(phys_page);
-            self.page_mirror.copy_from(way, in_page, out);
+        if out.len() <= PAGE_BYTES - in_page {
+            match self.translate(offset) {
+                // PSRAM is writable, so it must bypass the flash page mirror.
+                Some((XipTarget::Psram, phys)) => self.read_psram(phys, out),
+                Some((XipTarget::Flash, phys)) => {
+                    let phys_page = (phys / PAGE_SIZE as u64) as u32;
+                    let way = self.ensure_page_mirror(phys_page);
+                    self.page_mirror.copy_from(way, in_page, out);
+                }
+                None => out.fill(0),
+            }
             return;
         }
-        // Rare: multi-page span — fall back to per-byte path via mirror.
+        // Rare: multi-page span — translate every byte. This also applies when
+        // the first page is PSRAM or unmapped: the next page can use a different
+        // physical page, a different backing array, or a different validity.
         for (i, b) in out.iter_mut().enumerate() {
             match self.translate(offset + i as u64) {
                 Some((XipTarget::Psram, phys)) => {
@@ -900,6 +940,34 @@ impl Peripheral for Esp32s3MmuTable {
 
 #[cfg(test)]
 mod tests {
+    /// ESP32-S2: each bus owns a slice of one 384-entry table. DROM0
+    /// (0x3F00_0000) starts at entry 0x80 and IRAM0's cache part
+    /// (0x4008_0000) at entry 0 + page 8 (`mmu_ll_get_entry_id`); a flash
+    /// entry carries SOC_MMU_ACCESS_FLASH (BIT 15).
+    #[test]
+    fn esp32s2_windows_translate_through_their_own_slice() {
+        let backing = Arc::new(Mutex::new(vec![0u8; 0x40000]));
+        backing.lock().unwrap()[0x10000] = 0xD5;
+        backing.lock().unwrap()[0x20004] = 0x1A;
+        let mmu = new_mmu_table_s2();
+        {
+            let mut e = mmu.entries.lock().unwrap();
+            e[0x80] = 1 | (1 << 15); // DROM0 page 0 -> flash 0x10000
+            e[8] = 2 | (1 << 15); // IRAM0 cache page 8 -> flash 0x20000
+        }
+        let drom =
+            FlashXipPeripheral::new_mmu_fmt(backing.clone(), 0x3F00_0000, mmu.clone(), MMU_FMT_S2)
+                .with_entry_base(0x80);
+        let irom = FlashXipPeripheral::new_mmu_fmt(backing, 0x4008_0000, mmu.clone(), MMU_FMT_S2)
+            .with_entry_base(0);
+        assert_eq!(drom.read(0).unwrap(), 0xD5);
+        assert_eq!(irom.read(4).unwrap(), 0x1A);
+        // An invalid entry (BIT 14, the reset state) maps nothing.
+        mmu.entries.lock().unwrap()[0x80] = 1 << 14;
+        mmu.generation.fetch_add(1, Ordering::Release);
+        assert_ne!(drom.read(0).ok(), Some(0xD5));
+    }
+
     use super::*;
 
     #[test]
@@ -950,6 +1018,50 @@ mod tests {
         // Map virtual page 0 → physical page 1.
         p.map_page(0, 1);
         assert_eq!(p.read(0).unwrap(), 0xAB);
+    }
+
+    /// Bulk reads must translate each virtual page, even when the first
+    /// page is PSRAM or unmapped. Adjacent virtual pages need not be adjacent
+    /// in physical memory or even use the same backing array.
+    #[test]
+    fn cross_page_reads_match_byte_reads_for_each_backing() {
+        let page = PAGE_BYTES;
+        let flash = Arc::new(Mutex::new(vec![0xF1; page * 3]));
+        let psram = Arc::new(Mutex::new(vec![0xA2; page * 3]));
+        psram.lock().unwrap()[page * 2..].fill(0xB3);
+        let ram_bit = MMU_FMT_S3.spiram_bit;
+        let invalid = MMU_FMT_S3.invalid_bit;
+        for (label, first, second) in [
+            ("PSRAM to nonadjacent PSRAM", ram_bit, ram_bit | 2),
+            ("PSRAM to flash", ram_bit, 2),
+            ("PSRAM to unmapped", ram_bit, invalid),
+            ("unmapped to flash", invalid, 2),
+            ("flash to PSRAM", 0, ram_bit | 2),
+        ] {
+            let mmu = new_mmu_table();
+            {
+                let mut entries = mmu.entries.lock().unwrap();
+                entries[0] = first;
+                entries[1] = second;
+            }
+            let mut p = FlashXipPeripheral::new_mmu(flash.clone(), 0x3C00_0000, mmu);
+            p.attach_psram(psram.clone());
+            let offset = PAGE_SIZE as u64 - 2;
+            let expected: [u8; 4] = std::array::from_fn(|i| p.read(offset + i as u64).unwrap());
+            let mut span = [0; 4];
+            p.read_span(offset, &mut span);
+            assert_eq!(span, expected, "{label}: bulk span");
+            assert_eq!(
+                p.read_u32(offset).unwrap(),
+                u32::from_le_bytes(expected),
+                "{label}: u32"
+            );
+            assert_eq!(
+                p.read_u16(offset + 1).unwrap(),
+                u16::from_le_bytes([expected[1], expected[2]]),
+                "{label}: u16"
+            );
+        }
     }
 
     #[test]

@@ -1,0 +1,33 @@
+# CPU-free Flex contract: a firmware-switched LDR divider solved by ngspice.
+# Firmware (or a test host) writes `enable` and the bench writes `light`;
+# both are read by the ngspice model at its next 100 us boundary.
+#
+# Flex resolves `model:` from the process working directory (the runtime
+# builds its models without a base directory); the core test substitutes an
+# absolute path. Requires python3 and libngspice (apt install libngspice0).
+schema_version: 1
+name: flex-ngspice-ldr
+ports:
+  - { name: enable, signal: fw.ldr_enable, access: write, kind: bool, initial: 0 }
+  - { name: light, signal: bench.lux, access: write, kind: number, unit: lx, initial: 100 }
+  - { name: ldr_volts, signal: ldr.out_volts, access: read, kind: number, unit: V }
+  - { name: dark, signal: ldr.dark, access: read, kind: bool }
+cosim_models:
+  - id: ldr
+    adapter: ngspice
+    model: ./ldr.cir
+    step_ns: 100000
+    inputs: { supply: fw.ldr_enable, lux: bench.lux }
+    outputs: { v_out: ldr.out_volts, dark: ldr.dark }
+    config:
+      input_sources:
+        supply: { element: Vsup, scale: 3.3, offset: 0 }
+        lux: { element: Vlux, scale: 1, offset: 0 }
+      output_nodes:
+        v_out: { node: out, scale: 1, offset: 0 }
+        dark: { node: out, scale: 1, offset: 0, threshold: 1.65 }
+      trace_volts: [v_out]
+      # The deck's curve is stated for 1-100 lx; a value outside it stops the
+      # run with the declared range instead of a plausible extrapolation.
+      input_ranges:
+        lux: { min: 1, max: 100, unit: lx }

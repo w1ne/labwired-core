@@ -1,0 +1,25 @@
+{
+  "id": "stm32h723zg",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "examples/nucleo-h723zg/io-smoke.yaml",
+    "test": "NUCLEO-H723ZG: USART3 + LD1",
+    "signal": "crates/firmware-nucleo-h723zg-smoke boots on configs/systems/nucleo-h723zg.yaml, enables GPIOB/GPIOD and USART3 in RCC, sets PD8/PD9 to AF7 and writes the banner to USART3 (the ST-LINK VCP); uart_contains matches it, and gpio_edges requires LD1 on PB0 to toggle at least 4 times.",
+    "lane": "core-onboarding-smoke (push to main + nightly cron): matrix id nucleo-h723zg (scripts/onboarding_smoke.sh)"
+  },
+  "spi": {
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino",
+    "test": "LW_L4_OK",
+    "signal": "stock stm32duino SPI.transfer on SPI1 (PA5/PA6/PB5) reads the MAX31855 device's own 32-bit frame (exact default frame 0x01901600 required for LW_L4_OK).",
+    "lane": "core-arduino-matrix-smoke (board nucleo-h723zg): validation/arduino-matrix/run_matrix.py + labwired test"
+  },
+  "i2c": {
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+    "test": "LW_L3_OK",
+    "signal": "stock stm32duino Wire on I2C1 (PB8/PB9) writes and reads back the INA219 model at 0x40: config 0x399F and bus-voltage register 0x19CA must match exactly for LW_L3_OK.",
+    "lane": "core-arduino-matrix-smoke (board nucleo-h723zg): validation/arduino-matrix/run_matrix.py + labwired test"
+  }
+}

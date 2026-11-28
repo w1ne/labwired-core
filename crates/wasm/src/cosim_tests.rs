@@ -16,6 +16,18 @@ use wasm_bindgen::JsValue;
 
 const CHIP_YAML: &str = include_str!("../../../configs/chips/stm32f401.yaml");
 const FIRMWARE: &[u8] = include_bytes!("../../../tests/fixtures/stm32f401-blinky.elf");
+const INA219_CHIP_YAML: &str = include_str!("../../../configs/chips/stm32f103.yaml");
+const INA219_FIRMWARE: &[u8] = include_bytes!("../tests/fixtures/ina219-power-lab.elf");
+const INA219_SYSTEM: &str = r#"
+name: "wasm-ina219-calibration"
+chip: "stm32f103c8"
+external_devices:
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x40
+"#;
 
 const PLAIN_SYSTEM: &str = r#"
 name: "wasm-blinky"
@@ -63,6 +75,18 @@ fn step_until(sim: &mut WasmSimulator, total_cycles: u64, batch: u32) {
             .unwrap_or_else(|_| panic!("step_batch failed"));
         assert!(executed > 0, "step_batch made no progress");
     }
+}
+
+#[test]
+fn work_limited_cosim_call_bounds_total_fuel_across_model_boundaries() {
+    let mut sim = build(RC_SYSTEM);
+    let report = sim
+        .step_batch_with_work_limit_recorded(50_000, 10_000)
+        .unwrap_or_else(|_| panic!("bounded co-simulation step failed"));
+    assert!(report.work_limit_reached);
+    assert_eq!(report.executed_cycles, 10_000);
+    assert_eq!(sim.machine.as_ref().unwrap().total_cycles, 10_000);
+    assert!(sim.analog_trace_batch(0).samples.len() >= 2);
 }
 
 /// The RC demo, end to end through the browser entry points: the constructor
@@ -483,6 +507,57 @@ fn set_cosim_signal_refuses_what_it_cannot_deliver() {
         .set_cosim_signal_number("ui.touch.pressed", 1.0)
         .expect_err("no session, nothing to set");
     assert!(none.contains("declares no cosim_models"), "{none}");
+}
+
+/// The browser entry point runs real STM32 firmware through the INA219's I²C
+/// registers. At power-on it observes CALIBRATION=0 and CURRENT=0; its actual
+/// 16-bit I²C write programs CALIBRATION=4096, after which simulated current
+/// and bus-voltage inputs become visible to firmware.
+#[test]
+fn ina219_calibration_reset_and_register_write_run_in_browser_backend() {
+    let mut sim = WasmSimulator::new_from_config(
+        INA219_SYSTEM,
+        INA219_CHIP_YAML,
+        INA219_FIRMWARE,
+        JsValue::NULL,
+    )
+    .expect("INA219 firmware and system build in the browser backend");
+    let mut uart = Vec::new();
+    for _ in 0..20 {
+        sim.step_batch(100_000).expect("browser step");
+        uart.extend(sim.drain_uart_output());
+        let text = String::from_utf8_lossy(&uart);
+        if text.contains("Vbus_mV=3300 I_mA=0") {
+            break;
+        }
+    }
+    let startup = String::from_utf8_lossy(&uart);
+    assert!(
+        startup.contains("CAL_POR=0 CURRENT_POR=0 CAL=4096\n"),
+        "firmware did not observe POR and program calibration over I²C: {startup:?}"
+    );
+    assert!(
+        startup.contains("Vbus_mV=3300 I_mA=0"),
+        "uncalibrated startup reading is absent: {startup:?}"
+    );
+
+    sim.set_input("current", 1.5)
+        .expect("INA219 current input is attached");
+    sim.set_input("bus_voltage", 12.0)
+        .expect("INA219 bus voltage input is attached");
+    for _ in 0..20 {
+        sim.step_batch(100_000)
+            .expect("browser step after stimulus");
+        uart.extend(sim.drain_uart_output());
+        if String::from_utf8_lossy(&uart).contains("Vbus_mV=12000 I_mA=1500") {
+            break;
+        }
+    }
+    let stimulated = String::from_utf8_lossy(&uart);
+    assert!(
+        stimulated.contains("Vbus_mV=12000 I_mA=1500"),
+        "calibrated firmware did not report simulated inputs: {stimulated:?}"
+    );
 }
 
 // ── Arduino Nano (ATmega328P) in the browser ───────────────────────────────
@@ -1334,4 +1409,126 @@ cosim_models:
         (second - 5.0 * resistance / (10_000.0 + resistance)).abs() < 0.01,
         "{second}"
     );
+}
+
+/// The browser Flex constructor builds its models through the same factory as
+/// `WasmSimulator`: without a callback an `adapter: ngspice` model is refused
+/// with the same message (no native solver host is started), and a model of
+/// another adapter is built and primed as before (negative control).
+#[test]
+fn browser_flex_builds_ngspice_through_the_shared_factory() {
+    const NGSPICE: &str = r#"
+schema_version: 1
+name: flex-ngspice-callback
+ports:
+  - { name: enable, signal: fw.enable, access: write, kind: bool, initial: 0 }
+  - { name: volts, signal: plant.volts, access: read, kind: number, unit: V }
+cosim_models:
+  - id: plant
+    adapter: ngspice
+    model: rc.cir
+    step_ns: 100000
+    inputs: { supply: fw.enable }
+    outputs: { v_out: plant.volts }
+    config:
+      input_sources: { supply: { element: Vsup, scale: 3.3, offset: 0 } }
+      output_nodes: { v_out: { node: out, scale: 1, offset: 0 } }
+"#;
+    let error = crate::flex::WasmFlexRuntime::build_for_test(NGSPICE)
+        .err()
+        .expect("no callback: refused");
+    assert!(
+        error
+            .to_string()
+            .contains("plant needs an ngspice callback"),
+        "{error}"
+    );
+    const BEHAVIOR: &str = r#"
+schema_version: 1
+name: flex-behavior
+ports:
+  - { name: command, signal: command, access: write, kind: bool, initial: 1 }
+  - { name: echo, signal: echo, access: read, kind: bool }
+cosim_models:
+  - id: echo
+    adapter: behavior
+    step_ns: 1000
+    inputs: { enable: command }
+    outputs: { echo: echo }
+    config:
+      behavior:
+        primitive: gpio_device
+        outputs: [echo]
+        pin_defaults: { echo: false }
+        rules:
+          - on: { input: enable }
+            do: [{ pin: echo, level: 'input(enable)' }]
+"#;
+    crate::flex::WasmFlexRuntime::build_for_test(BEHAVIOR).expect("behavior builds");
+}
+
+/// Classic ESP32 uses a programmatic bus. Its browser constructor must still
+/// retain the resolved descriptor's electrical levels before binding an analog
+/// voltage to GPIO18 (the MOSFET motor driver's gate feedback path).
+#[test]
+fn esp32_browser_analog_gpio_uses_descriptor_levels() {
+    use labwired_core::bus::Bus;
+    let chip: ChipDescriptor =
+        serde_yaml::from_str(include_str!("../../../configs/chips/esp32.yaml")).unwrap();
+    let cfg = manifest(
+        r#"
+name: esp32-analog-gpio
+chip: esp32
+external_devices: []
+cosim_models:
+  - id: gate
+    adapter: analog
+    step_ns: 1000
+    inputs: { drive: ui.pad_voltage }
+    outputs: { pad: board.gpio_in.gpio18 }
+    config:
+      netlist_text: |
+        Vdrive pad 0 dc 0
+        Rload pad 0 10k
+      probes: { pad: "v(pad)" }
+      sources: { drive: Vdrive }
+"#,
+    );
+    let fw = include_bytes!("../../../tests/fixtures/tier1/esp32.elf");
+    let mut sim = WasmSimulator::new_from_config_xtensa_esp32(&chip, &cfg, fw)
+        .unwrap_or_else(|_| panic!("classic ESP32 browser constructor"));
+    sim.attach_cosim(&cfg)
+        .expect("voltage-to-GPIO route binds using chip thresholds");
+    for (volts, high) in [(3.0, true), (0.5, false)] {
+        sim.set_cosim_signal_number("ui.pad_voltage", volts)
+            .unwrap();
+        sim.advance_machine(AdvanceRequest::run(Some(2400)))
+            .unwrap_or_else(|error| match error {
+                crate::cosim::AdvanceFailure::Machine(error) => panic!("machine: {error}"),
+                crate::cosim::AdvanceFailure::Cosim(error) => panic!("cosim: {error}"),
+            });
+        let pad = sim
+            .machine
+            .as_ref()
+            .unwrap()
+            .bus
+            .read_u32(0x3ff4_403c)
+            .unwrap();
+        assert_eq!(pad & (1 << 18) != 0, high, "GPIO18 at {volts} V");
+    }
+    assert_eq!(
+        sim.cosim.as_ref().unwrap().cpu_hz(),
+        chip.cpu_hz,
+        "analog time must use the descriptor's ESP32 clock"
+    );
+
+    // The co-simulation timeline honors the manifest clock override,
+    // matching the descriptor-built bus's precedence.
+    let mut cfg = cfg;
+    cfg.cpu_hz = Some(chip.cpu_hz / 2);
+    let mut sim = WasmSimulator::new_from_config_xtensa_esp32(&chip, &cfg, fw)
+        .unwrap_or_else(|_| panic!("classic ESP32 browser constructor"));
+    sim.attach_cosim(&cfg)
+        .expect("analog routes bind with a manifest clock");
+    assert_eq!(sim.cosim.as_ref().unwrap().cpu_hz(), chip.cpu_hz / 2);
 }

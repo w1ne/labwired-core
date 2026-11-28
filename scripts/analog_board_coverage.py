@@ -1,0 +1,288 @@
+#!/usr/bin/env python3
+"""Inventory of end-to-end mixed-signal coverage for every system profile.
+
+The report is mechanical on purpose: a profile counts as covered only when an
+integration test loads that profile (or one of its `examples/<dir>/analog-*.yaml`
+fixtures) and routes a solved `board.analog.<pad>_volts` signal to a board
+endpoint. Device-only unit tests, ADC register tests with no netlist, and
+`analog_*` helper tests do not count, because they prove the model and not the
+board.
+
+Usage (from the repository root):
+
+    scripts/analog_board_coverage.py            # write docs/analog_board_coverage.md
+    scripts/analog_board_coverage.py --stdout   # print the report instead
+
+The generated document is the queue for the mixed-signal lane: the first
+uncovered profile in the table is the next board to model.
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+SYSTEMS = ROOT / "configs" / "systems"
+TESTS = ROOT / "crates" / "core" / "tests"
+OUT = ROOT / "docs" / "analog_board_coverage.md"
+
+PROFILE_REF = re.compile(r"configs/systems/([\w./-]+)\.ya?ml")
+EXAMPLE_REF = re.compile(r"examples/([\w./-]+)/analog-[\w.-]+\.ya?ml")
+ADC_ROUTE = re.compile(r"adc\.[A-Za-z0-9_]+\.\d+_volts")
+ANALOG_ROUTE = "board.analog."
+# One flow-style pin-table entry that names an ADC function:
+#   PA0: { gpio: gpioa, bit: 0, functions: [{ type: adc, peripheral: adc1, channel: 5 }, ...] }
+ADC_PIN_FUNCTION = re.compile(
+    r"^\s+\"?([A-Za-z0-9_.]+)\"?\s*:\s*\{[^\n]*\btype:\s*\"?adc\"?[^\n]*\bchannel:\s*(\d+)",
+    re.MULTILINE,
+)
+
+
+def profiles() -> list[tuple[str, Path]]:
+    """Every system manifest, by declared `name:`, in stable path order."""
+    found: list[tuple[str, Path]] = []
+    for path in sorted(SYSTEMS.rglob("*.yaml")):
+        if path.parent == SYSTEMS or path.parent.name in {"stm32-catalog", "onboarding"}:
+            found.append((read_name(path) or path.stem, path))
+    return found
+
+
+def read_name(path: Path) -> str | None:
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("name:"):
+            value = line.split(":", 1)[1].strip()
+            return value.strip('"').strip("'")
+    return None
+
+
+def read_chip(path: Path) -> Path | None:
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("chip:"):
+            value = line.split(":", 1)[1].strip().strip('"').strip("'")
+            return (path.parent / value).resolve()
+    return None
+
+
+def analog_pad_count(chip: Path | None) -> int:
+    """Pads this chip can hand to an ADC, from either table that may name one.
+
+    `analog_pins:` is the dedicated block. A chip that transcribes its pin
+    table can instead (or as well) record `{ type: adc, peripheral, channel }`
+    in a pad's `functions:` list — that is the list the analog router reads
+    (`ChipDescriptor::analog_pin_table`), so a pad named there is reachable
+    without a duplicate block. Counting both keeps this inventory and the
+    engine's answer to "can this pad reach an ADC?" the same number.
+    """
+    if chip is None or not chip.is_file():
+        return 0
+    text = chip.read_text(encoding="utf-8", errors="replace")
+    pads: set[str] = set()
+    match = re.search(r"^analog_pins:\n((?:[ \t]+.*\n)+)", text, re.MULTILINE)
+    if match:
+        # Pad labels are not all `PA0`: nRF parts use `P0.02` and friends.
+        pads.update(
+            re.findall(r"^\s+([A-Za-z0-9_.]+)\s*:\s*\{", match.group(1), re.MULTILINE)
+        )
+    for pad, _channel in ADC_PIN_FUNCTION.findall(text):
+        pads.add(pad)
+    return len(pads)
+
+
+def resolve_profile_keys() -> tuple[dict[str, Path], list[str]]:
+    """Translate manifest references and example directories to manifest paths.
+
+    The key is the manifest's path relative to `configs/systems/`, always. A
+    top-level manifest keeps the long-standing short form
+    (`configs/systems/nucleo-f103rb.yaml` names `nucleo-f103rb`); a nested one
+    must be named with its directory
+    (`configs/systems/stm32-catalog/stm32f103c4.yaml` names
+    `stm32-catalog/stm32f103c4`). Registering a bare stem for a nested file as
+    well would make `stm32f401cdu6-blackpill` ambiguous: the onboarding tree
+    keeps a file of that name whose chip declares no analog pad at all.
+    """
+    by_key: dict[str, Path] = {}
+    names: list[str] = []
+    for name, path in profiles():
+        by_key[path.relative_to(SYSTEMS).with_suffix("").as_posix()] = path
+        names.append(name)
+    return by_key, names
+
+
+def profile_for_example_dir(directory: str, names: list[str]) -> str | None:
+    """The profile an `examples/<dir>` deck belongs to.
+
+    Most boards keep the profile name as the directory name. A few add a
+    qualifier: `examples/arduino-mega-2560-io/` is the `arduino-mega-2560`
+    profile plus two pots, and its own `system.yaml` says so. Resolve to the
+    LONGEST profile name the directory extends, never the other way round: a
+    shorter directory (`nucleo-f103rb`) must not credit a longer profile
+    (`nucleo-f103rb-epaper`), whose own manifest no test loads.
+    """
+    if directory in names:
+        return directory
+    candidates = [name for name in names if directory.startswith(name)]
+    return max(candidates, key=len) if candidates else None
+
+
+def evidence() -> dict[Path, str]:
+    """Map manifest path -> the test file that proves its analog endpoint.
+
+    Keyed by path, not by declared `name:`: the onboarding tree keeps its own
+    `stm32f401cdu6-blackpill.yaml` under the same name as the catalog one, and
+    a name-keyed map credited that uncovered board from its sibling's test.
+    Example-deck directories resolve through the declared name, first manifest
+    in path order winning, because a directory carries no path of its own.
+    """
+    by_key, names = resolve_profile_keys()
+    by_name: dict[str, Path] = {}
+    for name, path in profiles():
+        by_name.setdefault(name, path)
+    by_profile: dict[Path, str] = {}
+    for test in sorted(TESTS.rglob("*.rs")):
+        text = test.read_text(encoding="utf-8", errors="replace")
+        fixtures = EXAMPLE_REF.findall(text)
+        # The test must advance a co-simulation session to a boundary. A file
+        # that only lists fixture paths (an existence gate) or only calls into
+        # the solver proves nothing about a board.
+        if "advance_to(" not in text:
+            continue
+        # The endpoint must be a route the manifest declares: `board.analog.`
+        # (ADC channel or digital pad through the pack map) or an explicit
+        # `adc.<peripheral>.<channel>_volts` route such as the Mega's ADC8.
+        routed = ANALOG_ROUTE in text or ADC_ROUTE.search(text) is not None
+        if not routed and not fixtures:
+            continue
+        rel = test.relative_to(ROOT).as_posix()
+        for reference in PROFILE_REF.findall(text):
+            path = by_key.get(reference)
+            if path:
+                by_profile.setdefault(path, rel)
+        for directory in fixtures:
+            name = profile_for_example_dir(directory, names)
+            if name and name in by_name:
+                by_profile.setdefault(by_name[name], rel)
+    return by_profile
+
+
+def report() -> str:
+    covered_by = evidence()
+    rows: list[tuple[str, str, int, str]] = []
+    for name, path in profiles():
+        chip = read_chip(path)
+        rows.append(
+            (
+                name,
+                chip.stem if chip else "-",
+                analog_pad_count(chip),
+                covered_by.get(path, ""),
+            )
+        )
+    covered = [row for row in rows if row[3]]
+    uncovered = [row for row in rows if not row[3]]
+    routable = [row for row in uncovered if row[2] > 0]
+
+    lines = [
+        "# End-to-end mixed-signal board coverage",
+        "",
+        "Generated by `scripts/analog_board_coverage.py`. Do not edit by hand; rerun",
+        "the script after adding or removing a board test.",
+        "",
+        "A profile is **covered** only when an integration test advances a",
+        "`CosimSession` that loads that profile (or one of its",
+        "`examples/<dir>/analog-*.yaml` decks) and reaches an endpoint route the",
+        "manifest declares: `board.analog.<pad>_volts`, which the chip's",
+        "`analog_pins:` map or the pad's `adc` pin function resolves to an ADC",
+        "channel, or an explicit `adc.<peripheral>.<channel>_volts` route.",
+        "Device-only unit tests, ADC register tests with no netlist, files that only",
+        "list fixture paths, and helper tests do not count: they prove the model,",
+        "not the board.",
+        "",
+        f"- Profiles in `configs/systems/`: **{len(rows)}**",
+        f"- Covered end to end: **{len(covered)}**",
+        f"- Not covered: **{len(uncovered)}**",
+        f"- Not covered but with an ADC pad map: **{len(routable)}** (these are the",
+        "  boards the generic NTC and diode decks can reach next; the rest need an",
+        "  `analog_pins:` block or `adc` pin functions, an ADC model, or a digital",
+        "  endpoint first)",
+        "",
+        "The `Analog pad map` column counts the pads a chip can hand to an ADC:\n"
+        "`analog_pins:` entries plus pads whose `pins:` table carries an\n"
+        "`{ type: adc, peripheral, channel }` function (the union the router uses).\n"
+        "Every such entry in this tree names an ADC peripheral, so the count is what\n"
+        "the generic decks can reach without new routing.",
+        "",
+        "## Next queue: not covered, ADC pads already mapped",
+        "",
+    ]
+    if routable:
+        lines += ["| Profile | Chip | Analog pad map |", "| --- | --- | ---: |"]
+        lines += [f"| `{name}` | `{chip}` | {pads} |" for name, chip, pads, _ in routable]
+    else:
+        lines.append("None.")
+    lines += [
+        "",
+        "## Not covered",
+        "",
+        "| Profile | Chip | Analog pad map |",
+        "| --- | --- | ---: |",
+    ]
+    lines += [f"| `{name}` | `{chip}` | {pads} |" for name, chip, pads, _ in uncovered]
+    lines += ["", "## Covered", "", "| Profile | Chip | Evidence |", "| --- | --- | --- |"]
+    lines += [
+        f"| `{name}` | `{chip}` | `{evidence_file}` |" for name, chip, _, evidence_file in covered
+    ]
+    lines += [
+        "",
+        "## How to add a board",
+        "",
+        "1. Add `examples/<board>/analog-ntc-diode-system.yaml` with the generic Beta NTC",
+        "   divider and the Shockley diode load line, routing to `board.analog.<pad>_volts`.",
+        "2. Add a test under `crates/core/tests/analog/` that loads the profile, solves",
+        "   the netlists, compares each solved node against an independent closed form,",
+        "   advances the session to a boundary, and asserts the firmware-visible",
+        "   endpoint (ADC data register or input level).",
+        "3. Rerun this script and commit the regenerated document.",
+        "",
+        "## Reference solver",
+        "",
+        "`examples/nucleo-f401re/analog-ntc-diode-ngspice.yaml` is the same deck shape",
+        "with both models on `adapter: ngspice`. `ntc-beta.cir` writes the Beta NTC as a",
+        "behavioural current and `diode-load-line.cir` keeps the in-core diode model card;",
+        "the manifest keeps the same `ui.ntc.temperature_c` input and",
+        "`board.analog.pa0_volts` / `pa1_volts` routes. The diode deck pins",
+        "`.options temp=26.85 tnom=26.85` to match the in-core engine's 300.00 K.",
+        "",
+        "```bash",
+        "labwired cosim-step examples/nucleo-f401re/analog-ntc-diode-system.yaml \\",
+        "  --set ui.ntc.temperature_c=25 --steps 4 --json",
+        "labwired cosim-step examples/nucleo-f401re/analog-ntc-diode-ngspice.yaml \\",
+        "  --set ui.ntc.temperature_c=25 --steps 4 --json",
+        "```",
+        "",
+        "`crates/cli/tests/analog_vs_ngspice_differential.rs` compares the two runs and",
+        "requires the NTC output to change with temperature. It is a solver-parity check",
+        "for this shape, not evidence that every board listing above has been re-run on",
+        "ngspice.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--stdout", action="store_true", help="print instead of writing the doc")
+    args = parser.parse_args()
+    text = report()
+    if args.stdout:
+        sys.stdout.write(text)
+        return 0
+    OUT.write_text(text, encoding="utf-8")
+    print(f"wrote {OUT.relative_to(ROOT)}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,7 +1,11 @@
 name: SAMD authored transfer state ARM guest
 on:
   pull_request:
-    paths: ['crates/core/tests/samd_transfer_state_guest.rs', 'scripts/samd-transfer-state/**', '.github/workflows/samd-transfer-state-guest.yml']
+    paths: ['crates/core/tests/samd/samd_transfer_state_guest.rs', 'scripts/samd-transfer-state/**', '.github/workflows/samd-transfer-state-guest.yml']
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
   actions: read
@@ -45,8 +49,8 @@ jobs:
           LABWIRED_TRANSFER_FIXTURE_DIR: ${{ runner.temp }}/state-guests
         run: |
           set -o pipefail
-          cargo test --release -p labwired-core --test samd_transfer_state_guest -- --ignored --nocapture | tee state-guest-default.log
-          cargo test --release -p labwired-core --features event-scheduler --test samd_transfer_state_guest -- --ignored --nocapture | tee state-guest-scheduler.log
+          cargo test --release -p labwired-core --test samd -- --ignored --nocapture samd_transfer_state_guest:: | tee state-guest-default.log
+          cargo test --release -p labwired-core --features event-scheduler --test samd -- --ignored --nocapture samd_transfer_state_guest:: | tee state-guest-scheduler.log
       - name: Bind fresh execution to actual source snapshot
         if: steps.prior.outputs.reuse != 'true'
         env:
@@ -56,6 +60,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
+          retention-days: 7
           name: authored-state-guest-results
           path: |
             state-guest-default.log

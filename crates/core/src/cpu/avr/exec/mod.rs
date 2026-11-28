@@ -32,4 +32,5 @@ pub(in crate::cpu::avr) mod bitops;
 pub(in crate::cpu::avr) mod branch;
 pub(in crate::cpu::avr) mod load_store;
 pub(in crate::cpu::avr) mod mul;
+pub(in crate::cpu::avr) mod reduced;
 pub(in crate::cpu::avr) mod system;

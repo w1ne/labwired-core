@@ -1,0 +1,26 @@
+{
+  "id": "stm32f767",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "examples/nucleo-f767zi/uart-smoke.yaml",
+    "test": "uart_contains",
+    "signal": "real firmware (firmware-f401-demo, link-compatible reuse) boots on the stm32f767 descriptor and its USART2 output matches the uart_contains 'OK' oracle; run 2026-08-05, exit 0",
+    "lane": "manual example run (examples/nucleo-f767zi) - not yet CI-wired",
+    "note": "evidence covers the F4-profile shared IP the F767 reuses; F7-only peripherals (Ethernet/LTDC/CAN2/CAN3/USB/SAI/QSPI) are not declared in the chip yaml"
+  },
+  "spi": {
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino",
+    "test": "LW_L4_OK",
+    "signal": "stock stm32duino SPI.transfer on SPI1 (PA5/PA6/PA7) reads the MAX31855 device's own 32-bit frame (exact default frame 0x01901600 required for LW_L4_OK).",
+    "lane": "core-arduino-matrix-smoke (board nucleo-f767zi): validation/arduino-matrix/run_matrix.py + labwired test"
+  },
+  "i2c": {
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+    "test": "LW_L3_OK",
+    "signal": "stock stm32duino Wire on I2C1 (PB8/PB9) writes and reads back the INA219 model at 0x40: config 0x399F and bus-voltage register 0x19CA must match exactly for LW_L3_OK.",
+    "lane": "core-arduino-matrix-smoke (board nucleo-f767zi): validation/arduino-matrix/run_matrix.py + labwired test"
+  }
+}

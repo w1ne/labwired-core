@@ -1,0 +1,1494 @@
+{
+  "status": "passed",
+  "runtime": "compiled-wasm",
+  "firmware_bytes": 381,
+  "cpu_emulation": false,
+  "source_board": "HeyPCB ESP32-S3 LDR revision A",
+  "observable": "SNS_AN1 volts from the U4/R6/C7 network and D1 logic state",
+  "adc_threshold_code": 2048,
+  "c7_transient_63pct_crossing_ns": 350000,
+  "observations": {
+    "bright": {
+      "result": 2974,
+      "lux": 100,
+      "initial_v": 1.3199999999999998,
+      "sensor_v": 2.396891285087728,
+      "adc_code": 2974,
+      "led_final": 0,
+      "time_ns": 4002000,
+      "analog": {
+        "time_unit": "ns",
+        "channels": [
+          {
+            "name": "source-sns-an1.voltage",
+            "port_names": [
+              "sensor_v"
+            ],
+            "unit": "V"
+          }
+        ],
+        "dropped": 0,
+        "samples": [
+          {
+            "cycle": 0,
+            "time_ns": 0,
+            "values": [
+              1.3200000524520874
+            ]
+          },
+          {
+            "cycle": 1,
+            "time_ns": 50000,
+            "values": [
+              1.3200000524520874
+            ]
+          },
+          {
+            "cycle": 2,
+            "time_ns": 100000,
+            "values": [
+              1.4983432292938232
+            ]
+          },
+          {
+            "cycle": 3,
+            "time_ns": 150000,
+            "values": [
+              1.647151231765747
+            ]
+          },
+          {
+            "cycle": 4,
+            "time_ns": 200000,
+            "values": [
+              1.7713152170181274
+            ]
+          },
+          {
+            "cycle": 5,
+            "time_ns": 250000,
+            "values": [
+              1.874916434288025
+            ]
+          },
+          {
+            "cycle": 6,
+            "time_ns": 300000,
+            "values": [
+              1.9613604545593262
+            ]
+          },
+          {
+            "cycle": 7,
+            "time_ns": 350000,
+            "values": [
+              2.0334885120391846
+            ]
+          },
+          {
+            "cycle": 8,
+            "time_ns": 400000,
+            "values": [
+              2.0936713218688965
+            ]
+          },
+          {
+            "cycle": 9,
+            "time_ns": 450000,
+            "values": [
+              2.143887519836426
+            ]
+          },
+          {
+            "cycle": 10,
+            "time_ns": 500000,
+            "values": [
+              2.1857874393463135
+            ]
+          },
+          {
+            "cycle": 11,
+            "time_ns": 550000,
+            "values": [
+              2.22074818611145
+            ]
+          },
+          {
+            "cycle": 12,
+            "time_ns": 600000,
+            "values": [
+              2.2499191761016846
+            ]
+          },
+          {
+            "cycle": 13,
+            "time_ns": 650000,
+            "values": [
+              2.274259328842163
+            ]
+          },
+          {
+            "cycle": 14,
+            "time_ns": 700000,
+            "values": [
+              2.2945683002471924
+            ]
+          },
+          {
+            "cycle": 15,
+            "time_ns": 750000,
+            "values": [
+              2.311514139175415
+            ]
+          },
+          {
+            "cycle": 16,
+            "time_ns": 800000,
+            "values": [
+              2.325653553009033
+            ]
+          },
+          {
+            "cycle": 17,
+            "time_ns": 850000,
+            "values": [
+              2.337451219558716
+            ]
+          },
+          {
+            "cycle": 18,
+            "time_ns": 900000,
+            "values": [
+              2.3472952842712402
+            ]
+          },
+          {
+            "cycle": 19,
+            "time_ns": 950000,
+            "values": [
+              2.355508804321289
+            ]
+          },
+          {
+            "cycle": 20,
+            "time_ns": 1000000,
+            "values": [
+              2.3623623847961426
+            ]
+          },
+          {
+            "cycle": 21,
+            "time_ns": 1050000,
+            "values": [
+              2.3680806159973145
+            ]
+          },
+          {
+            "cycle": 22,
+            "time_ns": 1100000,
+            "values": [
+              2.372852087020874
+            ]
+          },
+          {
+            "cycle": 23,
+            "time_ns": 1150000,
+            "values": [
+              2.376833438873291
+            ]
+          },
+          {
+            "cycle": 24,
+            "time_ns": 1200000,
+            "values": [
+              2.380155324935913
+            ]
+          },
+          {
+            "cycle": 25,
+            "time_ns": 1250000,
+            "values": [
+              2.3829269409179688
+            ]
+          },
+          {
+            "cycle": 26,
+            "time_ns": 1300000,
+            "values": [
+              2.385239601135254
+            ]
+          },
+          {
+            "cycle": 27,
+            "time_ns": 1350000,
+            "values": [
+              2.387169361114502
+            ]
+          },
+          {
+            "cycle": 28,
+            "time_ns": 1400000,
+            "values": [
+              2.388779640197754
+            ]
+          },
+          {
+            "cycle": 29,
+            "time_ns": 1450000,
+            "values": [
+              2.390123128890991
+            ]
+          },
+          {
+            "cycle": 30,
+            "time_ns": 1500000,
+            "values": [
+              2.3912439346313477
+            ]
+          },
+          {
+            "cycle": 31,
+            "time_ns": 1550000,
+            "values": [
+              2.392179489135742
+            ]
+          },
+          {
+            "cycle": 32,
+            "time_ns": 1600000,
+            "values": [
+              2.3929598331451416
+            ]
+          },
+          {
+            "cycle": 33,
+            "time_ns": 1650000,
+            "values": [
+              2.393610954284668
+            ]
+          },
+          {
+            "cycle": 34,
+            "time_ns": 1700000,
+            "values": [
+              2.3941543102264404
+            ]
+          },
+          {
+            "cycle": 35,
+            "time_ns": 1750000,
+            "values": [
+              2.3946077823638916
+            ]
+          },
+          {
+            "cycle": 36,
+            "time_ns": 1800000,
+            "values": [
+              2.3949859142303467
+            ]
+          },
+          {
+            "cycle": 37,
+            "time_ns": 1850000,
+            "values": [
+              2.395301580429077
+            ]
+          },
+          {
+            "cycle": 38,
+            "time_ns": 1900000,
+            "values": [
+              2.3955650329589844
+            ]
+          },
+          {
+            "cycle": 39,
+            "time_ns": 1950000,
+            "values": [
+              2.395784854888916
+            ]
+          },
+          {
+            "cycle": 40,
+            "time_ns": 2000000,
+            "values": [
+              2.395968198776245
+            ]
+          },
+          {
+            "cycle": 41,
+            "time_ns": 2050000,
+            "values": [
+              2.396121025085449
+            ]
+          },
+          {
+            "cycle": 42,
+            "time_ns": 2100000,
+            "values": [
+              2.3962488174438477
+            ]
+          },
+          {
+            "cycle": 43,
+            "time_ns": 2150000,
+            "values": [
+              2.396355390548706
+            ]
+          },
+          {
+            "cycle": 44,
+            "time_ns": 2200000,
+            "values": [
+              2.396444082260132
+            ]
+          },
+          {
+            "cycle": 45,
+            "time_ns": 2250000,
+            "values": [
+              2.3965182304382324
+            ]
+          },
+          {
+            "cycle": 46,
+            "time_ns": 2300000,
+            "values": [
+              2.396580219268799
+            ]
+          },
+          {
+            "cycle": 47,
+            "time_ns": 2350000,
+            "values": [
+              2.3966317176818848
+            ]
+          },
+          {
+            "cycle": 48,
+            "time_ns": 2400000,
+            "values": [
+              2.396674871444702
+            ]
+          },
+          {
+            "cycle": 49,
+            "time_ns": 2450000,
+            "values": [
+              2.3967108726501465
+            ]
+          },
+          {
+            "cycle": 50,
+            "time_ns": 2500000,
+            "values": [
+              2.3967409133911133
+            ]
+          },
+          {
+            "cycle": 51,
+            "time_ns": 2550000,
+            "values": [
+              2.396765947341919
+            ]
+          },
+          {
+            "cycle": 52,
+            "time_ns": 2600000,
+            "values": [
+              2.396786689758301
+            ]
+          },
+          {
+            "cycle": 53,
+            "time_ns": 2650000,
+            "values": [
+              2.396804094314575
+            ]
+          },
+          {
+            "cycle": 54,
+            "time_ns": 2700000,
+            "values": [
+              2.3968186378479004
+            ]
+          },
+          {
+            "cycle": 55,
+            "time_ns": 2750000,
+            "values": [
+              2.3968307971954346
+            ]
+          },
+          {
+            "cycle": 56,
+            "time_ns": 2800000,
+            "values": [
+              2.396841049194336
+            ]
+          },
+          {
+            "cycle": 57,
+            "time_ns": 2850000,
+            "values": [
+              2.3968493938446045
+            ]
+          },
+          {
+            "cycle": 58,
+            "time_ns": 2900000,
+            "values": [
+              2.3968565464019775
+            ]
+          },
+          {
+            "cycle": 59,
+            "time_ns": 2950000,
+            "values": [
+              2.396862268447876
+            ]
+          },
+          {
+            "cycle": 60,
+            "time_ns": 3000000,
+            "values": [
+              2.396867275238037
+            ]
+          },
+          {
+            "cycle": 61,
+            "time_ns": 3050000,
+            "values": [
+              2.396871328353882
+            ]
+          },
+          {
+            "cycle": 62,
+            "time_ns": 3100000,
+            "values": [
+              2.3968746662139893
+            ]
+          },
+          {
+            "cycle": 63,
+            "time_ns": 3150000,
+            "values": [
+              2.3968775272369385
+            ]
+          },
+          {
+            "cycle": 64,
+            "time_ns": 3200000,
+            "values": [
+              2.3968799114227295
+            ]
+          },
+          {
+            "cycle": 65,
+            "time_ns": 3250000,
+            "values": [
+              2.3968820571899414
+            ]
+          },
+          {
+            "cycle": 66,
+            "time_ns": 3300000,
+            "values": [
+              2.396883487701416
+            ]
+          },
+          {
+            "cycle": 67,
+            "time_ns": 3350000,
+            "values": [
+              2.3968849182128906
+            ]
+          },
+          {
+            "cycle": 68,
+            "time_ns": 3400000,
+            "values": [
+              2.396886110305786
+            ]
+          },
+          {
+            "cycle": 69,
+            "time_ns": 3450000,
+            "values": [
+              2.3968870639801025
+            ]
+          },
+          {
+            "cycle": 70,
+            "time_ns": 3500000,
+            "values": [
+              2.396888017654419
+            ]
+          },
+          {
+            "cycle": 71,
+            "time_ns": 3550000,
+            "values": [
+              2.396888494491577
+            ]
+          },
+          {
+            "cycle": 72,
+            "time_ns": 3600000,
+            "values": [
+              2.3968892097473145
+            ]
+          },
+          {
+            "cycle": 73,
+            "time_ns": 3650000,
+            "values": [
+              2.3968896865844727
+            ]
+          },
+          {
+            "cycle": 74,
+            "time_ns": 3700000,
+            "values": [
+              2.3968899250030518
+            ]
+          },
+          {
+            "cycle": 75,
+            "time_ns": 3750000,
+            "values": [
+              2.39689040184021
+            ]
+          },
+          {
+            "cycle": 76,
+            "time_ns": 3800000,
+            "values": [
+              2.396890640258789
+            ]
+          },
+          {
+            "cycle": 77,
+            "time_ns": 3850000,
+            "values": [
+              2.396890878677368
+            ]
+          },
+          {
+            "cycle": 78,
+            "time_ns": 3900000,
+            "values": [
+              2.396890878677368
+            ]
+          },
+          {
+            "cycle": 79,
+            "time_ns": 3950000,
+            "values": [
+              2.3968911170959473
+            ]
+          },
+          {
+            "cycle": 80,
+            "time_ns": 4000000,
+            "values": [
+              2.3968913555145264
+            ]
+          }
+        ]
+      },
+      "digital": {
+        "time_unit": "ns",
+        "channels": [
+          {
+            "id": 0,
+            "initial": false,
+            "port_names": [
+              "user_led_state"
+            ],
+            "signal": "source.D1.logic_state"
+          },
+          {
+            "id": 1,
+            "initial": false,
+            "port_names": [
+              "user_led_drive"
+            ],
+            "signal": "source.U3.GPIO48"
+          }
+        ],
+        "dropped": 0,
+        "edges": [
+          {
+            "ch": 1,
+            "time_ns": 4000000,
+            "value": 1
+          },
+          {
+            "ch": 0,
+            "time_ns": 4001000,
+            "value": 1
+          },
+          {
+            "ch": 1,
+            "time_ns": 4001000,
+            "value": 0
+          },
+          {
+            "ch": 0,
+            "time_ns": 4002000,
+            "value": 0
+          }
+        ]
+      }
+    },
+    "dim": {
+      "result": 597,
+      "lux": 1,
+      "initial_v": 1.3199999999999998,
+      "sensor_v": 0.4818754620332178,
+      "adc_code": 597,
+      "led_final": 0,
+      "time_ns": 4001000,
+      "analog": {
+        "time_unit": "ns",
+        "channels": [
+          {
+            "name": "source-sns-an1.voltage",
+            "port_names": [
+              "sensor_v"
+            ],
+            "unit": "V"
+          }
+        ],
+        "dropped": 0,
+        "samples": [
+          {
+            "cycle": 0,
+            "time_ns": 0,
+            "values": [
+              1.3200000524520874
+            ]
+          },
+          {
+            "cycle": 1,
+            "time_ns": 50000,
+            "values": [
+              1.3200000524520874
+            ]
+          },
+          {
+            "cycle": 2,
+            "time_ns": 100000,
+            "values": [
+              1.2721288204193115
+            ]
+          },
+          {
+            "cycle": 3,
+            "time_ns": 150000,
+            "values": [
+              1.2269642353057861
+            ]
+          },
+          {
+            "cycle": 4,
+            "time_ns": 200000,
+            "values": [
+              1.1843534708023071
+            ]
+          },
+          {
+            "cycle": 5,
+            "time_ns": 250000,
+            "values": [
+              1.1441519260406494
+            ]
+          },
+          {
+            "cycle": 6,
+            "time_ns": 300000,
+            "values": [
+              1.106223464012146
+            ]
+          },
+          {
+            "cycle": 7,
+            "time_ns": 350000,
+            "values": [
+              1.0704395771026611
+            ]
+          },
+          {
+            "cycle": 8,
+            "time_ns": 400000,
+            "values": [
+              1.0366790294647217
+            ]
+          },
+          {
+            "cycle": 9,
+            "time_ns": 450000,
+            "values": [
+              1.0048272609710693
+            ]
+          },
+          {
+            "cycle": 10,
+            "time_ns": 500000,
+            "values": [
+              0.9747764468193054
+            ]
+          },
+          {
+            "cycle": 11,
+            "time_ns": 550000,
+            "values": [
+              0.9464248418807983
+            ]
+          },
+          {
+            "cycle": 12,
+            "time_ns": 600000,
+            "values": [
+              0.9196762442588806
+            ]
+          },
+          {
+            "cycle": 13,
+            "time_ns": 650000,
+            "values": [
+              0.8944400548934937
+            ]
+          },
+          {
+            "cycle": 14,
+            "time_ns": 700000,
+            "values": [
+              0.8706307411193848
+            ]
+          },
+          {
+            "cycle": 15,
+            "time_ns": 750000,
+            "values": [
+              0.8481676578521729
+            ]
+          },
+          {
+            "cycle": 16,
+            "time_ns": 800000,
+            "values": [
+              0.8269747495651245
+            ]
+          },
+          {
+            "cycle": 17,
+            "time_ns": 850000,
+            "values": [
+              0.8069800734519958
+            ]
+          },
+          {
+            "cycle": 18,
+            "time_ns": 900000,
+            "values": [
+              0.788115918636322
+            ]
+          },
+          {
+            "cycle": 19,
+            "time_ns": 950000,
+            "values": [
+              0.7703183889389038
+            ]
+          },
+          {
+            "cycle": 20,
+            "time_ns": 1000000,
+            "values": [
+              0.7535271644592285
+            ]
+          },
+          {
+            "cycle": 21,
+            "time_ns": 1050000,
+            "values": [
+              0.7376853823661804
+            ]
+          },
+          {
+            "cycle": 22,
+            "time_ns": 1100000,
+            "values": [
+              0.7227392792701721
+            ]
+          },
+          {
+            "cycle": 23,
+            "time_ns": 1150000,
+            "values": [
+              0.7086382508277893
+            ]
+          },
+          {
+            "cycle": 24,
+            "time_ns": 1200000,
+            "values": [
+              0.6953345537185669
+            ]
+          },
+          {
+            "cycle": 25,
+            "time_ns": 1250000,
+            "values": [
+              0.6827830672264099
+            ]
+          },
+          {
+            "cycle": 26,
+            "time_ns": 1300000,
+            "values": [
+              0.6709412336349487
+            ]
+          },
+          {
+            "cycle": 27,
+            "time_ns": 1350000,
+            "values": [
+              0.6597689986228943
+            ]
+          },
+          {
+            "cycle": 28,
+            "time_ns": 1400000,
+            "values": [
+              0.6492284536361694
+            ]
+          },
+          {
+            "cycle": 29,
+            "time_ns": 1450000,
+            "values": [
+              0.6392838358879089
+            ]
+          },
+          {
+            "cycle": 30,
+            "time_ns": 1500000,
+            "values": [
+              0.6299015879631042
+            ]
+          },
+          {
+            "cycle": 31,
+            "time_ns": 1550000,
+            "values": [
+              0.6210497617721558
+            ]
+          },
+          {
+            "cycle": 32,
+            "time_ns": 1600000,
+            "values": [
+              0.612698495388031
+            ]
+          },
+          {
+            "cycle": 33,
+            "time_ns": 1650000,
+            "values": [
+              0.6048193573951721
+            ]
+          },
+          {
+            "cycle": 34,
+            "time_ns": 1700000,
+            "values": [
+              0.5973857641220093
+            ]
+          },
+          {
+            "cycle": 35,
+            "time_ns": 1750000,
+            "values": [
+              0.5903725028038025
+            ]
+          },
+          {
+            "cycle": 36,
+            "time_ns": 1800000,
+            "values": [
+              0.5837557315826416
+            ]
+          },
+          {
+            "cycle": 37,
+            "time_ns": 1850000,
+            "values": [
+              0.5775130987167358
+            ]
+          },
+          {
+            "cycle": 38,
+            "time_ns": 1900000,
+            "values": [
+              0.5716234445571899
+            ]
+          },
+          {
+            "cycle": 39,
+            "time_ns": 1950000,
+            "values": [
+              0.5660668015480042
+            ]
+          },
+          {
+            "cycle": 40,
+            "time_ns": 2000000,
+            "values": [
+              0.5608243346214294
+            ]
+          },
+          {
+            "cycle": 41,
+            "time_ns": 2050000,
+            "values": [
+              0.5558782815933228
+            ]
+          },
+          {
+            "cycle": 42,
+            "time_ns": 2100000,
+            "values": [
+              0.5512118935585022
+            ]
+          },
+          {
+            "cycle": 43,
+            "time_ns": 2150000,
+            "values": [
+              0.5468093752861023
+            ]
+          },
+          {
+            "cycle": 44,
+            "time_ns": 2200000,
+            "values": [
+              0.5426557660102844
+            ]
+          },
+          {
+            "cycle": 45,
+            "time_ns": 2250000,
+            "values": [
+              0.5387369990348816
+            ]
+          },
+          {
+            "cycle": 46,
+            "time_ns": 2300000,
+            "values": [
+              0.5350398421287537
+            ]
+          },
+          {
+            "cycle": 47,
+            "time_ns": 2350000,
+            "values": [
+              0.5315516591072083
+            ]
+          },
+          {
+            "cycle": 48,
+            "time_ns": 2400000,
+            "values": [
+              0.5282607674598694
+            ]
+          },
+          {
+            "cycle": 49,
+            "time_ns": 2450000,
+            "values": [
+              0.5251559019088745
+            ]
+          },
+          {
+            "cycle": 50,
+            "time_ns": 2500000,
+            "values": [
+              0.5222266316413879
+            ]
+          },
+          {
+            "cycle": 51,
+            "time_ns": 2550000,
+            "values": [
+              0.5194630026817322
+            ]
+          },
+          {
+            "cycle": 52,
+            "time_ns": 2600000,
+            "values": [
+              0.5168555974960327
+            ]
+          },
+          {
+            "cycle": 53,
+            "time_ns": 2650000,
+            "values": [
+              0.5143955945968628
+            ]
+          },
+          {
+            "cycle": 54,
+            "time_ns": 2700000,
+            "values": [
+              0.5120747089385986
+            ]
+          },
+          {
+            "cycle": 55,
+            "time_ns": 2750000,
+            "values": [
+              0.5098850727081299
+            ]
+          },
+          {
+            "cycle": 56,
+            "time_ns": 2800000,
+            "values": [
+              0.5078192353248596
+            ]
+          },
+          {
+            "cycle": 57,
+            "time_ns": 2850000,
+            "values": [
+              0.5058702230453491
+            ]
+          },
+          {
+            "cycle": 58,
+            "time_ns": 2900000,
+            "values": [
+              0.5040313601493835
+            ]
+          },
+          {
+            "cycle": 59,
+            "time_ns": 2950000,
+            "values": [
+              0.502296507358551
+            ]
+          },
+          {
+            "cycle": 60,
+            "time_ns": 3000000,
+            "values": [
+              0.500659704208374
+            ]
+          },
+          {
+            "cycle": 61,
+            "time_ns": 3050000,
+            "values": [
+              0.4991154968738556
+            ]
+          },
+          {
+            "cycle": 62,
+            "time_ns": 3100000,
+            "values": [
+              0.4976585805416107
+            ]
+          },
+          {
+            "cycle": 63,
+            "time_ns": 3150000,
+            "values": [
+              0.49628403782844543
+            ]
+          },
+          {
+            "cycle": 64,
+            "time_ns": 3200000,
+            "values": [
+              0.49498721957206726
+            ]
+          },
+          {
+            "cycle": 65,
+            "time_ns": 3250000,
+            "values": [
+              0.4937637448310852
+            ]
+          },
+          {
+            "cycle": 66,
+            "time_ns": 3300000,
+            "values": [
+              0.4926094114780426
+            ]
+          },
+          {
+            "cycle": 67,
+            "time_ns": 3350000,
+            "values": [
+              0.49152037501335144
+            ]
+          },
+          {
+            "cycle": 68,
+            "time_ns": 3400000,
+            "values": [
+              0.49049291014671326
+            ]
+          },
+          {
+            "cycle": 69,
+            "time_ns": 3450000,
+            "values": [
+              0.4895235300064087
+            ]
+          },
+          {
+            "cycle": 70,
+            "time_ns": 3500000,
+            "values": [
+              0.4886089563369751
+            ]
+          },
+          {
+            "cycle": 71,
+            "time_ns": 3550000,
+            "values": [
+              0.48774611949920654
+            ]
+          },
+          {
+            "cycle": 72,
+            "time_ns": 3600000,
+            "values": [
+              0.48693203926086426
+            ]
+          },
+          {
+            "cycle": 73,
+            "time_ns": 3650000,
+            "values": [
+              0.48616400361061096
+            ]
+          },
+          {
+            "cycle": 74,
+            "time_ns": 3700000,
+            "values": [
+              0.48543938994407654
+            ]
+          },
+          {
+            "cycle": 75,
+            "time_ns": 3750000,
+            "values": [
+              0.4847557544708252
+            ]
+          },
+          {
+            "cycle": 76,
+            "time_ns": 3800000,
+            "values": [
+              0.4841107726097107
+            ]
+          },
+          {
+            "cycle": 77,
+            "time_ns": 3850000,
+            "values": [
+              0.48350223898887634
+            ]
+          },
+          {
+            "cycle": 78,
+            "time_ns": 3900000,
+            "values": [
+              0.4829281270503998
+            ]
+          },
+          {
+            "cycle": 79,
+            "time_ns": 3950000,
+            "values": [
+              0.4823864996433258
+            ]
+          },
+          {
+            "cycle": 80,
+            "time_ns": 4000000,
+            "values": [
+              0.4818754494190216
+            ]
+          }
+        ]
+      },
+      "digital": {
+        "time_unit": "ns",
+        "channels": [
+          {
+            "id": 0,
+            "initial": false,
+            "port_names": [
+              "user_led_state"
+            ],
+            "signal": "source.D1.logic_state"
+          },
+          {
+            "id": 1,
+            "initial": false,
+            "port_names": [
+              "user_led_drive"
+            ],
+            "signal": "source.U3.GPIO48"
+          }
+        ],
+        "dropped": 0,
+        "edges": []
+      }
+    }
+  },
+  "out_of_range_refusals": [
+    {
+      "lux": 0,
+      "error": "Simulation error: analog input `lux`: photoresistor illuminance must be within 1..100 lx",
+      "sensor_v_before": 1.3199999999999998,
+      "read_after": "Simulation error: Flex runtime stopped: Simulation error: analog input `lux`: photoresistor illuminance must be within 1..100 lx",
+      "time_ns": 0,
+      "led_edges": 0
+    },
+    {
+      "lux": 100000,
+      "error": "Simulation error: analog input `lux`: photoresistor illuminance must be within 1..100 lx",
+      "sensor_v_before": 1.3199999999999998,
+      "read_after": "Simulation error: Flex runtime stopped: Simulation error: analog input `lux`: photoresistor illuminance must be within 1..100 lx",
+      "time_ns": 0,
+      "led_edges": 0
+    }
+  ],
+  "native_model_equality": true,
+  "run_report": {
+    "assumptions": [
+      "Firmware is a newly authored portable WebAssembly behavior program, not firmware from the pinned board source.",
+      "U4 follows the GL5528 row of Senba's GL55 series manual: R = R10 * (lux / 10)^-0.6. The manual defines the 0.6 slope between 10 lx and 100 lx; this model extends the same line down to 1 lx, the lower edge of the manual's illuminance-resistance figure.",
+      "R10 is 15 kΩ, the midpoint of the manual's 10-20 kΩ light-resistance range at 10 lx. The manual gives no typical value.",
+      "3V3 is an ideal 3.3 V source. R6 (10 kΩ) and C7 (100 nF) use their nominal BOM values.",
+      "GPIO1 is an ideal voltage probe on SNS_AN1 with no input current, sampling capacitance, or ADC conversion.",
+      "The IO48 user LED is represented by digital logic state only."
+    ],
+    "execution_path": "flex_portable_wasm",
+    "execution_scope": {
+      "chip_parity": "not_established",
+      "detailed_target_execution_selected": false,
+      "firmware": "portable_behavior",
+      "full_board_coverage": "not_established",
+      "original_target_firmware_executed": false
+    },
+    "manifest_sha256": "1058a4c72ea606799693dd0bf5b5fe2754329e6ebc95e0b30654badc6d923d76",
+    "model_name": "heypcb-esp32-s3-ldr-sensor-network",
+    "models": [
+      {
+        "adapter": "analog",
+        "config": {
+          "input_sampling": "previous_boundary",
+          "netlist_text": "V3V3 3v3 0 dc 3.3\nRU4 3v3 sns_an1 15k\nR6 sns_an1 0 10k\nC7 sns_an1 0 100n\n",
+          "photoresistors": {
+            "lux": {
+              "gamma": 0.6,
+              "max_lux": 100,
+              "min_lux": 1,
+              "r_ref_ohms": 15000,
+              "reference_lux": 10,
+              "resistor": "RU4"
+            }
+          },
+          "probes": {
+            "voltage": "v(sns_an1)"
+          },
+          "vdd": 3.3
+        },
+        "id": "source-sns-an1",
+        "inputs": [
+          {
+            "name": "lux",
+            "signal": "environment.lux"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "voltage",
+            "signal": "source.U3.GPIO1"
+          }
+        ],
+        "step_ns": 50000
+      },
+      {
+        "adapter": "behavior",
+        "config": {
+          "behavior": {
+            "outputs": [
+              "led"
+            ],
+            "pin_defaults": {
+              "led": false
+            },
+            "primitive": "gpio_device",
+            "rules": [
+              {
+                "do": [
+                  {
+                    "goto": "on"
+                  },
+                  {
+                    "level": 1,
+                    "pin": "led"
+                  }
+                ],
+                "on": {
+                  "input": "drive"
+                },
+                "when": "input(drive) != 0"
+              },
+              {
+                "do": [
+                  {
+                    "goto": "off"
+                  },
+                  {
+                    "level": 0,
+                    "pin": "led"
+                  }
+                ],
+                "on": {
+                  "input": "drive"
+                },
+                "when": "input(drive) == 0"
+              }
+            ],
+            "states": [
+              "off",
+              "on"
+            ]
+          }
+        },
+        "id": "source-d1-user-led",
+        "inputs": [
+          {
+            "name": "drive",
+            "signal": "source.U3.GPIO48"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "led",
+            "signal": "source.D1.logic_state"
+          }
+        ],
+        "step_ns": 1000
+      }
+    ],
+    "ports": [
+      {
+        "access": "write",
+        "initial": 10,
+        "kind": "number",
+        "name": "lux",
+        "signal": "environment.lux",
+        "unit": "lx"
+      },
+      {
+        "access": "read",
+        "kind": "number",
+        "name": "sensor_v",
+        "signal": "source.U3.GPIO1",
+        "unit": "V"
+      },
+      {
+        "access": "write",
+        "initial": 0,
+        "kind": "bool",
+        "name": "user_led_drive",
+        "signal": "source.U3.GPIO48"
+      },
+      {
+        "access": "read",
+        "kind": "bool",
+        "name": "user_led_state",
+        "signal": "source.D1.logic_state"
+      }
+    ],
+    "schema_version": 1,
+    "scope_notes_complete": true,
+    "target_cpu_emulated": false,
+    "time_unit": "ns",
+    "unsupported_checks": [
+      "Original ESP32-S3 firmware execution and target instruction or ADC peripheral fidelity; the pinned source contains no board firmware.",
+      "Full-board power, USB, boot/reset, RF, MCU integration, and assembled hardware behavior.",
+      "Illuminance below 1 lx or above 100 lx, including darkness. The run stops with an explicit range error; the manual's 1 MΩ dark resistance is a minimum 10 s after a 10 lx light is removed, not a curve point.",
+      "GL5528 response time (20 ms rise, 30 ms decay in the manual), light history, spectral response, and temperature dependence. The modeled transient is C7 charging through R6 and the static U4 resistance only.",
+      "Part-to-part spread inside the 10-20 kΩ range and R6, C7, and 3V3 tolerances. The native regression runs the 10 kΩ and 20 kΩ corners; one run uses one value.",
+      "The generic importer does not produce this network: the schematic import drops U4 and the PCB import maps it as a fixed resistor. The netlist is written from the pinned source nets."
+    ]
+  },
+  "checks": [
+    "portable-firmware-execution",
+    "pinned-divider-network",
+    "c7-transient-on-oscilloscope",
+    "named-analog-and-digital-ports",
+    "oscilloscope-nanoseconds",
+    "logic-analyzer-nanoseconds",
+    "dim-negative-control",
+    "bright-positive-control",
+    "out-of-range-refusal"
+  ],
+  "measured_browser_ms": 276.2,
+  "browser": "156.0.8078.79",
+  "browser_driver": "Playwright",
+  "core_commit": "3c3d634807daf29b91a195f6b8d9f5a7f58c4a9a",
+  "firmware_sha256": "667830c209d63a4df64d6215112da3491dff70f12729e93f3c48608765a401b4",
+  "firmware_source_sha256": "9484a85c2a3e744fd22d1a201a24cc3380ef128c225b2fde116d9686bb0abbb8",
+  "system_sha256": "1058a4c72ea606799693dd0bf5b5fe2754329e6ebc95e0b30654badc6d923d76",
+  "source_map_sha256": "6e586e5292d98d1a936fe61e3c8c8ea9e188a49891329fb4a1f7417fb2bbf32e",
+  "source": {
+    "repository": "HeyPCB/esp32-sensors-1",
+    "revision": "57a2122a19ac1aa9c092e43fb5b123c461508752",
+    "asset": "boards/ldr/kicad/esp32_ldr",
+    "license_spdx": "CERN-OHL-S-2.0",
+    "files": {
+      "schematic": {
+        "path": "boards/ldr/kicad/esp32_ldr.kicad_sch",
+        "git_blob": "64667760dad1369a130b8935718b7a262d746d66"
+      },
+      "pcb": {
+        "path": "boards/ldr/kicad/esp32_ldr.kicad_pcb",
+        "git_blob": "54b05837a3e254b6a424b2ea2eb97a4b8318e578"
+      },
+      "bom": {
+        "path": "boards/ldr/fab/esp32_ldr_bom.csv",
+        "git_blob": "c42c7209415891c84ec8ed2a44922763c36a6134"
+      },
+      "board_json": {
+        "path": "boards/ldr/board.json",
+        "git_blob": "409e43b9a6afe61c082635c30461e433e8d39772"
+      },
+      "board_readme": {
+        "path": "boards/ldr/README.md",
+        "git_blob": "e41508ce5052097c2e6ab1a11ba6b31a1d37cbd6"
+      },
+      "license": {
+        "path": "LICENSE",
+        "git_blob": "0f1092207caa645ff426e0cc40b7eaad69caecb1"
+      }
+    }
+  }
+}

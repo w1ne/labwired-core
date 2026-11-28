@@ -6,6 +6,8 @@ pub mod builtin_chip_self_contained;
 pub mod bus_proof_matrix;
 #[cfg(test)]
 pub mod bus_trace_one_home;
+#[cfg(test)]
+pub mod ch32v003_input_levels;
 
 /// A chip may not declare a memory size no silicon has (decimal-MB trap).
 #[cfg(test)]
@@ -68,6 +70,8 @@ pub mod esp32_ledc_waveform;
 pub mod esp32_pcnt_inputs;
 pub mod esp32c3_s3_ledc_waveform;
 #[cfg(test)]
+pub mod esp32s3_adc_efuse_gc9a01;
+#[cfg(test)]
 pub mod esp32s3_i2c_waveform;
 pub mod esp_spi_uart_waveform;
 #[cfg(test)]
@@ -81,6 +85,8 @@ pub mod no_vacuous_test_targets;
 #[cfg(test)]
 pub mod nrf52;
 pub mod nrf52_nvmc;
+#[cfg(test)]
+pub mod onboarding_timer_fallback;
 #[cfg(test)]
 pub mod one_arch_policy;
 #[cfg(test)]
@@ -119,6 +125,11 @@ pub mod source_text;
 pub mod spi_byte_level_golden;
 #[cfg(test)]
 pub mod spi_edge_sampling_lab;
+/// The one place that knows where the engine's Rust source lives (shared with
+/// the integration tests, which include the same file).
+#[cfg(test)]
+#[path = "../../tests/common/src_roots.rs"]
+pub mod src_roots;
 #[cfg(test)]
 pub mod stm32_i2c_waveform;
 #[cfg(test)]
@@ -126,6 +137,8 @@ pub mod stm32_legacy_i2c_waveform;
 pub mod stm32_spi_waveform;
 #[cfg(test)]
 pub mod stm32_uart_waveform;
+#[cfg(test)]
+pub mod stm32f103_flash;
 #[cfg(test)]
 pub mod stm32f1_bus_visibility;
 #[cfg(test)]

@@ -1,0 +1,21 @@
+{
+  "id": "atsamd51",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/gates/firmware_survival.rs",
+    "test": "test_atsamd51_metro_m4_smoke_survival",
+    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'OK' on SERCOM3 Serial1.",
+    "lane": "core-ci / pr-workspace-tests: cargo test -p labwired-core --test gates firmware_survival::"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "Metro M4 twin models SERCOM3 USART only; SPI mode is not modelled.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "Metro M4 twin models SERCOM3 USART only; I2C mode is not modelled.",
+    "lane": "none"
+  }
+}

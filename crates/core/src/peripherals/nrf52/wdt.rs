@@ -1,28 +1,38 @@
 // LabWired - Firmware Simulation Platform
 // SPDX-License-Identifier: MIT
 
-//! Nordic nRF52 WDT peripheral.
+//! Nordic nRF52 and bounded nRF54L WDT peripheral.
 //!
-//! Source: nRF52840 PS rev 1.7 §6.34 (WDT). One-shot watchdog: once
-//! TASKS_START is written, CRV/RREN/CONFIG become RO. The model doesn't
-//! enforce the latch in *register* terms (writes are silently dropped
-//! while running), so MMIO diff tests that pin pre-start state see
-//! round-trip behavior matching silicon.
+//! Source: nRF52840 PS rev 1.7 §6.34 (WDT); nRF54L15 Product Specification,
+//! WDT chapter. One-shot watchdog: once TASKS_START is written,
+//! CRV/RREN/CONFIG become RO until reset (nRF52) or a permitted stop
+//! (nRF54L). The nRF54L addition is the documented STOPEN + TSEN + STOP
+//! sequence and STOPPED event/interrupt. CONFIG.SLEEP/HALT pause behavior,
+//! watchdog reset, NMI delivery, and DPPI subscribe/publish are not modelled.
 //!
 //! # Dynamics
 //!
-//! When running, `tick()` decrements an internal counter from CRV. RR[i]
+//! The counter runs on the 32.768 kHz LFCLK, not on the CPU clock: the
+//! timeout period is `(CRV + 1) / 32768` s (PS §6.34.1). The model converts
+//! CPU cycles into LFCLK ticks with an exact rational accumulator at the
+//! descriptor's core clock, which it takes from [`Peripheral::attach_cpu_hz`]
+//! (64 MHz until then, the nRF52 core clock).
+//!
+//! When running, the counter is loaded with `CRV + 1` LFCLK ticks. RR[i]
 //! writes carrying the magic key (`0x6E524635`) acknowledge the enabled
 //! channels; once every enabled RREN bit has been ack'd, the counter is
-//! reloaded to CRV and `reqstatus` cleared. If the counter hits zero
-//! before all enabled channels ack, EVENTS_TIMEOUT fires and (if
-//! configured) IRQ is pended. The model does **not** trigger a CPU reset
+//! reloaded and `reqstatus` cleared. If the counter hits zero before all
+//! enabled channels ack, EVENTS_TIMEOUT fires and (if configured) IRQ is
+//! pended. The model does **not** trigger a CPU reset
 //! — it surfaces the timeout signal so test firmware can observe it.
 
+use crate::peripherals::nrf52::rtc::LFCLK_HZ;
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 const OFF_TASKS_START: u64 = 0x000;
+const OFF_TASKS_STOP: u64 = 0x004;
 const OFF_EVENTS_TIMEOUT: u64 = 0x100;
+const OFF_EVENTS_STOPPED: u64 = 0x104;
 const OFF_INTENSET: u64 = 0x304;
 const OFF_INTENCLR: u64 = 0x308;
 const OFF_RUNSTATUS: u64 = 0x400;
@@ -30,18 +40,30 @@ const OFF_REQSTATUS: u64 = 0x404;
 const OFF_CRV: u64 = 0x504;
 const OFF_RREN: u64 = 0x508;
 const OFF_CONFIG: u64 = 0x50C;
+const OFF_TSEN: u64 = 0x520;
 const OFF_RR0: u64 = 0x600;
 const OFF_RR7: u64 = 0x61C;
 
 /// Magic value firmware must write to RR[i] to reload the watchdog
 /// (PS §6.34.5, table 263).
 const RR_RELOAD_KEY: u32 = 0x6E52_4635;
+/// nRF54L TSEN key that permits TASKS_STOP when CONFIG.STOPEN is enabled.
+const TSEN_STOP_KEY: u32 = 0x6E52_4635;
 
 const INTEN_TIMEOUT: u32 = 1;
+const INTEN_STOPPED: u32 = 1 << 1;
+// nRF54L CONFIG.STOPEN is bit 6 (the nRF52 bit 3 is HALT); see the
+// nRF54L15 SVD and Product Specification, WDT.CONFIG.
+const CONFIG_STOPEN: u32 = 1 << 6;
+
+/// Core clock assumed until [`Peripheral::attach_cpu_hz`] runs: the 64 MHz
+/// nRF52 application core.
+pub const CPU_HZ_DEFAULT: u64 = 64_000_000;
 
 #[derive(Debug)]
 pub struct Nrf52Wdt {
     events_timeout: u32,
+    events_stopped: u32,
     inten: u32,
     runstatus: u32,
     /// Per-RR pending acknowledgment bits: set when firmware writes the
@@ -50,8 +72,18 @@ pub struct Nrf52Wdt {
     crv: u32,
     rren: u32,
     config: u32,
+    /// nRF54L-only STOP task and TSEN register support. nRF52 leaves the
+    /// added register offsets as unknown/reserved.
+    supports_stop: bool,
+    stop_enabled: bool,
 
-    counter: u32,
+    /// LFCLK ticks left before the timeout. `CRV + 1` after start or reload,
+    /// so it needs 33 bits.
+    counter: u64,
+    /// Core clock that drives the CPU-cycle to LFCLK conversion.
+    cpu_hz: u64,
+    /// Sub-tick LFCLK phase in `cycles * LFCLK_HZ` units; always `< cpu_hz`.
+    lf_phase: u64,
     /// Latches whether the watchdog has been bitten. Once true, no
     /// further countdown happens; firmware can clear EVENTS_TIMEOUT but
     /// a real chip would have reset by now — we just stop the dog.
@@ -65,13 +97,19 @@ impl Default for Nrf52Wdt {
     fn default() -> Self {
         Self {
             events_timeout: 0,
+            events_stopped: 0,
             inten: 0,
             runstatus: 0,
             reqstatus_pending: 0,
             crv: 0xFFFF_FFFF, // nRF52840 PS §6.34: CRV reset value
-            rren: 0,
-            config: 0,
+            // PS §6.34.9: RREN resets to RR[0] enabled, CONFIG to SLEEP=Run.
+            rren: 0x1,
+            config: 0x1,
+            supports_stop: false,
+            stop_enabled: false,
             counter: 0,
+            cpu_hz: CPU_HZ_DEFAULT,
+            lf_phase: 0,
             bitten: false,
             clock: None,
             anchor: 0,
@@ -83,6 +121,39 @@ impl Default for Nrf52Wdt {
 impl Nrf52Wdt {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Bounded nRF54L WDT profile. It shares the LFCLK/RR countdown and adds
+    /// the documented CONFIG.STOPEN + TSEN + TASKS_STOP behavior.
+    pub fn new_nrf54l() -> Self {
+        Self {
+            supports_stop: true,
+            ..Self::default()
+        }
+    }
+
+    /// A WDT whose LFCLK runs at the CPU clock, one tick per cycle. For
+    /// unit tests that count ticks directly.
+    pub fn new_fast() -> Self {
+        Self {
+            cpu_hz: u64::from(LFCLK_HZ),
+            ..Self::default()
+        }
+    }
+
+    /// LFCLK ticks from start or reload to the timeout (PS §6.34.1).
+    fn reload_ticks(&self) -> u64 {
+        u64::from(self.crv) + 1
+    }
+
+    /// CPU cycles until `counter` reaches zero from the current phase.
+    fn cycles_until_timeout(&self) -> u64 {
+        if self.counter == 0 {
+            return 1;
+        }
+        let need = u128::from(self.counter) * u128::from(self.cpu_hz) - u128::from(self.lf_phase);
+        let lf = u128::from(LFCLK_HZ);
+        need.div_ceil(lf).clamp(1, u128::from(u64::MAX)) as u64
     }
 
     fn running(&self) -> bool {
@@ -110,13 +181,16 @@ impl Peripheral for Nrf52Wdt {
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         Ok(match offset {
             OFF_TASKS_START => 0,
+            OFF_TASKS_STOP if self.supports_stop => 0,
             OFF_EVENTS_TIMEOUT => self.events_timeout,
+            OFF_EVENTS_STOPPED if self.supports_stop => self.events_stopped,
             OFF_INTENSET | OFF_INTENCLR => self.inten,
             OFF_RUNSTATUS => self.runstatus & 1,
             OFF_REQSTATUS => self.reqstatus_view(),
             OFF_CRV => self.crv,
             OFF_RREN => self.rren & 0xFF,
-            OFF_CONFIG => self.config & 0x9,
+            OFF_CONFIG => self.config & if self.supports_stop { 0x49 } else { 0x9 },
+            OFF_TSEN if self.supports_stop => 0, // WO
             OFF_RR0..=OFF_RR7 if offset.is_multiple_of(4) => 0, // WO
             _ => {
                 crate::census_reg!("nrf52.wdt:Nrf52Wdt", offset, "read");
@@ -128,14 +202,33 @@ impl Peripheral for Nrf52Wdt {
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
             OFF_TASKS_START
-                if value & 1 != 0 && !self.bitten => {
+                // A START while running has no effect on silicon; it must
+                // not reload the counter.
+                if value & 1 != 0 && !self.bitten && !self.running() => {
                     self.runstatus = 1;
-                    self.counter = self.crv;
+                    self.counter = self.reload_ticks();
+                    self.lf_phase = 0;
                     // On start every enabled channel needs a fresh ack.
                     self.reqstatus_pending = 0;
                 }
+            OFF_TASKS_STOP
+                if self.supports_stop
+                    && value & 1 != 0
+                    && self.running()
+                    && !self.bitten
+                    && self.config & CONFIG_STOPEN != 0
+                    && self.stop_enabled =>
+                {
+                    self.runstatus = 0;
+                    self.counter = 0;
+                    self.lf_phase = 0;
+                    self.events_stopped = 1;
+                }
             OFF_EVENTS_TIMEOUT => self.events_timeout = value & 1,
-            OFF_INTENSET => self.inten |= value & 1,
+            OFF_EVENTS_STOPPED if self.supports_stop => self.events_stopped = value & 1,
+            OFF_INTENSET => {
+                self.inten |= value & if self.supports_stop { 0x3 } else { 1 };
+            }
             OFF_INTENCLR => self.inten &= !value,
             OFF_CRV
                 // Per PS §6.34.5 CRV is RO once running; drop writes silently.
@@ -148,8 +241,9 @@ impl Peripheral for Nrf52Wdt {
                 }
             OFF_CONFIG
                 if !self.running() => {
-                    self.config = value & 0x9;
+                    self.config = value & if self.supports_stop { 0x49 } else { 0x9 };
                 }
+            OFF_TSEN if self.supports_stop => self.stop_enabled = value == TSEN_STOP_KEY,
             OFF_RR0..=OFF_RR7 if offset.is_multiple_of(4)
                 && self.running() && value == RR_RELOAD_KEY => {
                     let i = ((offset - OFF_RR0) / 4) as usize;
@@ -159,7 +253,7 @@ impl Peripheral for Nrf52Wdt {
                         self.reqstatus_pending |= bit;
                         // If every enabled RREN bit has been ack'd, reload.
                         if self.reqstatus_pending & self.rren == self.rren {
-                            self.counter = self.crv;
+                            self.counter = self.reload_ticks();
                             self.reqstatus_pending = 0;
                         }
                     }
@@ -167,6 +261,18 @@ impl Peripheral for Nrf52Wdt {
             _ => { crate::census_reg!("nrf52.wdt:Nrf52Wdt", offset, "write"); }
         }
         Ok(())
+    }
+
+    /// Nordic WDT IRQ is a level: a latched event whose INTEN bit is set.
+    /// nRF54L adds STOPPED at event bit 1; nRF52 implements TIMEOUT only.
+    fn irq_line_level(&self) -> Option<bool> {
+        if !self.supports_stop {
+            // Preserve the nRF52 model's existing pulse IRQ behavior.
+            return None;
+        }
+        let timeout = self.events_timeout != 0 && self.inten & INTEN_TIMEOUT != 0;
+        let stopped = self.events_stopped != 0 && self.inten & INTEN_STOPPED != 0;
+        Some(timeout || stopped)
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
@@ -185,6 +291,15 @@ impl Peripheral for Nrf52Wdt {
         self.clock = Some(clock);
     }
 
+    fn attach_cpu_hz(&mut self, hz: u64) {
+        if hz == 0 {
+            return;
+        }
+        self.cpu_hz = hz;
+        // The phase is in units of the old clock; drop the partial tick.
+        self.lf_phase = 0;
+    }
+
     fn sync_to(&mut self, now_cycle: u64) {
         if self.clock.is_none() || now_cycle <= self.anchor {
             return;
@@ -198,12 +313,8 @@ impl Peripheral for Nrf52Wdt {
         if self.clock.is_none() || !self.running() || self.bitten {
             return Vec::new();
         }
-        // Fire when counter would hit 0: need `counter` ticks (or 1 if already 0).
-        let d = if self.counter == 0 {
-            1u64
-        } else {
-            self.counter as u64
-        };
+        // Fire when counter would hit 0 (or next cycle if already 0).
+        let d = self.cycles_until_timeout();
         self.arm_seq = self.arm_seq.wrapping_add(1);
         vec![(d.saturating_sub(1), self.arm_seq)]
     }
@@ -226,11 +337,7 @@ impl Peripheral for Nrf52Wdt {
             self.advance_cycles(1)
         };
         let next = if self.running() && !self.bitten {
-            Some(if self.counter == 0 {
-                1u64
-            } else {
-                self.counter as u64
-            })
+            Some(self.cycles_until_timeout())
         } else {
             None
         };
@@ -248,30 +355,24 @@ impl Nrf52Wdt {
         if !self.running() || self.bitten || cycles == 0 {
             return PeripheralTickResult::default();
         }
-        let mut left = cycles;
         let mut irq = false;
         let mut fired = Vec::new();
-        while left > 0 && !self.bitten {
-            if self.counter == 0 {
-                // Already at zero — timeout.
-            } else if left >= self.counter as u64 {
-                left -= self.counter as u64;
-                self.counter = 0;
-            } else {
-                self.counter -= left as u32;
-                break;
+        let total = u128::from(self.lf_phase) + u128::from(cycles) * u128::from(LFCLK_HZ);
+        let cpu_hz = u128::from(self.cpu_hz);
+        let ticks = total / cpu_hz;
+        self.lf_phase = (total % cpu_hz) as u64;
+        if ticks < u128::from(self.counter) {
+            self.counter -= ticks as u64;
+        } else {
+            self.counter = 0;
+            self.bitten = true;
+            let already = self.events_timeout != 0;
+            self.events_timeout = 1;
+            if self.inten & INTEN_TIMEOUT != 0 {
+                irq = true;
             }
-            if self.counter == 0 {
-                self.bitten = true;
-                let already = self.events_timeout != 0;
-                self.events_timeout = 1;
-                if self.inten & INTEN_TIMEOUT != 0 {
-                    irq = true;
-                }
-                if !already {
-                    fired.push(OFF_EVENTS_TIMEOUT as u32);
-                }
-                break;
+            if !already {
+                fired.push(OFF_EVENTS_TIMEOUT as u32);
             }
         }
         PeripheralTickResult {
@@ -289,27 +390,27 @@ mod tests {
 
     #[test]
     fn crv_starts_at_reset_value() {
-        let w = Nrf52Wdt::new();
+        let w = Nrf52Wdt::new_fast();
         assert_eq!(w.read_u32(OFF_CRV).unwrap(), 0xFFFF_FFFF);
     }
 
     #[test]
     fn crv_round_trips_full_width_when_stopped() {
-        let mut w = Nrf52Wdt::new();
+        let mut w = Nrf52Wdt::new_fast();
         w.write_u32(OFF_CRV, 0x0002_0000).unwrap();
         assert_eq!(w.read_u32(OFF_CRV).unwrap(), 0x0002_0000);
     }
 
     #[test]
     fn rren_masks_to_8_bits() {
-        let mut w = Nrf52Wdt::new();
+        let mut w = Nrf52Wdt::new_fast();
         w.write_u32(OFF_RREN, 0xFFFF).unwrap();
         assert_eq!(w.read_u32(OFF_RREN).unwrap(), 0xFF);
     }
 
     #[test]
     fn countdown_fires_timeout_event() {
-        let mut w = Nrf52Wdt::new();
+        let mut w = Nrf52Wdt::new_fast();
         w.write_u32(OFF_CRV, 5).unwrap();
         w.write_u32(OFF_RREN, 1).unwrap();
         w.write_u32(OFF_INTENSET, 1).unwrap();
@@ -327,7 +428,7 @@ mod tests {
 
     #[test]
     fn rr_magic_key_reload_extends_countdown() {
-        let mut w = Nrf52Wdt::new();
+        let mut w = Nrf52Wdt::new_fast();
         w.write_u32(OFF_CRV, 10).unwrap();
         w.write_u32(OFF_RREN, 1).unwrap();
         w.write_u32(OFF_TASKS_START, 1).unwrap();
@@ -346,7 +447,7 @@ mod tests {
 
     #[test]
     fn rr_wrong_key_does_not_reload() {
-        let mut w = Nrf52Wdt::new();
+        let mut w = Nrf52Wdt::new_fast();
         w.write_u32(OFF_CRV, 5).unwrap();
         w.write_u32(OFF_RREN, 1).unwrap();
         w.write_u32(OFF_TASKS_START, 1).unwrap();
@@ -363,7 +464,7 @@ mod tests {
     fn rr_disabled_channel_ignored() {
         // Two channels enabled (RREN=0b11); writing key to only RR0
         // should NOT cause a reload.
-        let mut w = Nrf52Wdt::new();
+        let mut w = Nrf52Wdt::new_fast();
         w.write_u32(OFF_CRV, 5).unwrap();
         w.write_u32(OFF_RREN, 0b11).unwrap();
         w.write_u32(OFF_TASKS_START, 1).unwrap();
@@ -382,10 +483,212 @@ mod tests {
 
     #[test]
     fn writes_to_crv_while_running_are_dropped() {
-        let mut w = Nrf52Wdt::new();
+        let mut w = Nrf52Wdt::new_fast();
         w.write_u32(OFF_CRV, 100).unwrap();
         w.write_u32(OFF_TASKS_START, 1).unwrap();
         w.write_u32(OFF_CRV, 200).unwrap();
         assert_eq!(w.read_u32(OFF_CRV).unwrap(), 100);
+    }
+
+    /// Cycles until the walk sets EVENTS_TIMEOUT.
+    fn walk_until_timeout(w: &mut Nrf52Wdt, limit: u64) -> Option<u64> {
+        for n in 1..=limit {
+            w.tick();
+            if w.read_u32(OFF_EVENTS_TIMEOUT).unwrap() == 1 {
+                return Some(n);
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn timeout_is_crv_plus_one_lfclk_ticks_at_64_mhz() {
+        // 33 LFCLK ticks at 64 MHz = 64_453.125 cycles -> cycle 64_454.
+        let mut w = Nrf52Wdt::new();
+        w.write_u32(OFF_CRV, 32).unwrap();
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        assert_eq!(walk_until_timeout(&mut w, 70_000), Some(64_454));
+    }
+
+    #[test]
+    fn timeout_follows_attached_core_clock() {
+        // nRF51 at 16 MHz: 33 ticks = 16_113.28 cycles -> cycle 16_114.
+        let mut w = Nrf52Wdt::new();
+        w.attach_cpu_hz(16_000_000);
+        w.write_u32(OFF_CRV, 32).unwrap();
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        assert_eq!(walk_until_timeout(&mut w, 20_000), Some(16_114));
+    }
+
+    #[test]
+    fn zero_core_clock_keeps_previous_ratio() {
+        let mut w = Nrf52Wdt::new_fast();
+        w.attach_cpu_hz(0);
+        w.write_u32(OFF_CRV, 4).unwrap();
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        assert_eq!(walk_until_timeout(&mut w, 10), Some(5));
+    }
+
+    #[test]
+    fn reload_restores_full_period() {
+        let mut w = Nrf52Wdt::new_fast();
+        w.write_u32(OFF_CRV, 9).unwrap();
+        w.write_u32(OFF_RREN, 1).unwrap();
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        for _ in 0..7 {
+            w.tick();
+        }
+        w.write_u32(OFF_RR0, RR_RELOAD_KEY).unwrap();
+        // CRV + 1 = 10 ticks from the reload.
+        assert_eq!(walk_until_timeout(&mut w, 20), Some(10));
+    }
+
+    #[test]
+    fn scheduled_timeout_delay_counts_lfclk_ticks() {
+        let mut w = Nrf52Wdt::new();
+        w.attach_cycle_clock(CycleClock::default());
+        w.write_u32(OFF_CRV, 32).unwrap();
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        let ev = w.take_scheduled_events();
+        // The scheduler fires at `delay + 1` cycles from now.
+        assert_eq!(ev.len(), 1);
+        assert_eq!(ev[0].0 + 1, 64_454);
+        // A sync one cycle short leaves the event clear; the next cycle sets it.
+        w.sync_to(64_453);
+        assert_eq!(w.read_u32(OFF_EVENTS_TIMEOUT).unwrap(), 0);
+        w.sync_to(64_454);
+        assert_eq!(w.read_u32(OFF_EVENTS_TIMEOUT).unwrap(), 1);
+    }
+
+    #[test]
+    fn largest_crv_does_not_overflow() {
+        let mut w = Nrf52Wdt::new();
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        // CRV reset value 0xFFFF_FFFF: 2^32 LFCLK ticks, about 36.4 hours.
+        assert_eq!(w.cycles_until_timeout(), (1u64 << 32) * 64_000_000 / 32_768);
+    }
+
+    #[test]
+    fn rren_and_config_reset_values() {
+        let w = Nrf52Wdt::new();
+        assert_eq!(w.read_u32(OFF_RREN).unwrap(), 0x1);
+        assert_eq!(w.read_u32(OFF_CONFIG).unwrap(), 0x1);
+    }
+
+    #[test]
+    fn start_while_running_does_not_reload() {
+        let mut w = Nrf52Wdt::new_fast();
+        w.write_u32(OFF_CRV, 9).unwrap();
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        for _ in 0..7 {
+            w.tick();
+        }
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        assert_eq!(walk_until_timeout(&mut w, 20), Some(3));
+    }
+
+    #[test]
+    fn nrf54l_stop_requires_stopen_and_tsen_key() {
+        for (config, tsen, should_stop) in [
+            (0x1, TSEN_STOP_KEY, false),
+            (0x9, TSEN_STOP_KEY, false), // bit 3 is HALT, not STOPEN
+            (0x41, TSEN_STOP_KEY ^ 1, false),
+            (0x41, TSEN_STOP_KEY, true),
+        ] {
+            let mut w = Nrf52Wdt::new_nrf54l();
+            w.write_u32(OFF_CRV, 20).unwrap();
+            w.write_u32(OFF_CONFIG, config).unwrap();
+            w.write_u32(OFF_TSEN, tsen).unwrap();
+            w.write_u32(OFF_TASKS_START, 1).unwrap();
+            w.write_u32(OFF_TASKS_STOP, 1).unwrap();
+            assert_eq!(
+                w.read_u32(OFF_RUNSTATUS).unwrap(),
+                u32::from(!should_stop),
+                "config={config:#x}, tsen={tsen:#x}"
+            );
+            assert_eq!(
+                w.read_u32(OFF_EVENTS_STOPPED).unwrap(),
+                u32::from(should_stop),
+                "config={config:#x}, tsen={tsen:#x}"
+            );
+        }
+    }
+
+    #[test]
+    fn nrf54l_stopped_irq_is_level_latched_and_can_restart() {
+        let mut w = Nrf52Wdt::new_nrf54l();
+        w.write_u32(OFF_CRV, 20).unwrap();
+        w.write_u32(OFF_CONFIG, 0x41).unwrap(); // SLEEP=Run, STOPEN(bit 6)=Enable
+        w.write_u32(OFF_INTENSET, INTEN_STOPPED | 0x80).unwrap();
+        w.write_u32(OFF_TSEN, TSEN_STOP_KEY).unwrap();
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        w.write_u32(OFF_TASKS_STOP, 1).unwrap();
+
+        assert_eq!(w.read_u32(OFF_RUNSTATUS).unwrap(), 0);
+        assert_eq!(w.read_u32(OFF_CONFIG).unwrap(), 0x41);
+        assert_eq!(w.read_u32(OFF_INTENSET).unwrap(), INTEN_STOPPED);
+        assert_eq!(w.irq_line_level(), Some(true));
+        // Writes are unlocked after STOP, and the stopped counter no longer
+        // advances toward TIMEOUT.
+        w.write_u32(OFF_CRV, 99).unwrap();
+        assert_eq!(w.read_u32(OFF_CRV).unwrap(), 99);
+        for _ in 0..100_000 {
+            w.tick();
+        }
+        assert_eq!(w.read_u32(OFF_EVENTS_TIMEOUT).unwrap(), 0);
+
+        w.write_u32(OFF_EVENTS_STOPPED, 0).unwrap();
+        assert_eq!(w.irq_line_level(), Some(false));
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        assert_eq!(w.read_u32(OFF_RUNSTATUS).unwrap(), 1);
+    }
+
+    #[test]
+    fn nrf52_constructor_does_not_gain_nrf54l_stop_behavior() {
+        let mut w = Nrf52Wdt::new_fast();
+        w.write_u32(OFF_CONFIG, 0xD).unwrap();
+        w.write_u32(OFF_TSEN, TSEN_STOP_KEY).unwrap();
+        w.write_u32(OFF_CRV, 20).unwrap();
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        w.write_u32(OFF_TASKS_STOP, 1).unwrap();
+        assert_eq!(w.read_u32(OFF_RUNSTATUS).unwrap(), 1);
+        assert_eq!(w.read_u32(OFF_EVENTS_STOPPED).unwrap(), 0);
+    }
+
+    /// Scheduler path at 64 MHz with a mid-period reload: the LFCLK phase
+    /// carries across RR, and `on_event` bites on the exact cycle.
+    #[test]
+    fn on_event_bites_on_exact_cycle_after_mid_period_reload() {
+        fn fire(w: &mut Nrf52Wdt, token: u32, at: u64) -> crate::sched::EventResult {
+            let mut sched = crate::sched::EventScheduler::new();
+            sched.advance_to(at);
+            let mut bus = crate::bus::SystemBus::new();
+            w.on_event(token, &mut sched, &mut bus)
+        }
+        let mut w = Nrf52Wdt::new();
+        w.attach_cycle_clock(CycleClock::default());
+        w.write_u32(OFF_CRV, 32).unwrap();
+        w.write_u32(OFF_INTENSET, INTEN_TIMEOUT).unwrap();
+        w.write_u32(OFF_TASKS_START, 1).unwrap();
+        let _ = w.take_scheduled_events();
+        // 30_000 cycles = 15 LFCLK ticks + 23_040_000 / 64e6 of a tick.
+        w.sync_to(30_000);
+        w.write_u32(OFF_RR0, RR_RELOAD_KEY).unwrap();
+        // 33 ticks from that phase: (33 * 64e6 - 23_040_000) / 32768
+        // = 63_750 cycles exactly -> cycle 93_750.
+        let ev = w.take_scheduled_events();
+        assert_eq!(ev.len(), 1);
+        let (delay, token) = ev[0];
+        assert_eq!(30_000 + delay + 1, 93_750);
+        // A stale token from before the reload is ignored.
+        assert!(!fire(&mut w, token.wrapping_sub(1), 93_749).raise_own_irq);
+        let early = fire(&mut w, token, 93_749);
+        assert!(!early.raise_own_irq);
+        assert_eq!(w.read_u32(OFF_EVENTS_TIMEOUT).unwrap(), 0);
+        assert_eq!(early.reschedule_delay, Some(0));
+        let bite = fire(&mut w, token, 93_750);
+        assert!(bite.raise_own_irq);
+        assert_eq!(w.read_u32(OFF_EVENTS_TIMEOUT).unwrap(), 1);
+        assert_eq!(bite.reschedule_delay, None);
     }
 }

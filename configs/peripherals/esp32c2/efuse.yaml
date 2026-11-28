@@ -1,0 +1,912 @@
+peripheral: EFUSE
+version: 0.1.0
+registers:
+- id: PGM_DATA0
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_DATA_0
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 0th 32-bit data to be programmed.
+  side_effects: null
+- id: PGM_DATA1
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_DATA_1
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 1st 32-bit data to be programmed.
+  side_effects: null
+- id: PGM_DATA2
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_DATA_2
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 2nd 32-bit data to be programmed.
+  side_effects: null
+- id: PGM_DATA3
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_DATA_3
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 3rd 32-bit data to be programmed.
+  side_effects: null
+- id: PGM_DATA4
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_DATA_4
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 4th 32-bit data to be programmed.
+  side_effects: null
+- id: PGM_DATA5
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_DATA_5
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 5th 32-bit data to be programmed.
+  side_effects: null
+- id: PGM_DATA6
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_DATA_6
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 6th 32-bit data to be programmed.
+  side_effects: null
+- id: PGM_DATA7
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_DATA_7
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 7th 32-bit data to be programmed.
+  side_effects: null
+- id: PGM_CHECK_VALUE0
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_RS_DATA_0
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 0th 32-bit RS code to be programmed.
+  side_effects: null
+- id: PGM_CHECK_VALUE1
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_RS_DATA_1
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 1st 32-bit RS code to be programmed.
+  side_effects: null
+- id: PGM_CHECK_VALUE2
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_RS_DATA_2
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 2nd 32-bit RS code to be programmed.
+  side_effects: null
+- id: RD_WR_DIS
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WR_DIS
+    bit_range:
+    - 7
+    - 0
+    description: Disable programming of individual eFuses.
+  side_effects: null
+- id: RD_REPEAT_DATA0
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RD_DIS
+    bit_range:
+    - 1
+    - 0
+    description: The bit be set to disable software read high/low 128-bit of BLK3.
+  - name: WDT_DELAY_SEL
+    bit_range:
+    - 3
+    - 2
+    description: 'Selects RTC watchdog timeout threshold, in unit of slow clock cycle. 0: 40000. 1: 80000. 2: 160000. 3:320000.'
+  - name: DIS_PAD_JTAG
+    bit_range:
+    - 4
+    - 4
+    description: Set this bit to disable pad jtag.
+  - name: DIS_DOWNLOAD_ICACHE
+    bit_range:
+    - 5
+    - 5
+    description: The bit be set to disable icache in download mode.
+  - name: DIS_DOWNLOAD_MANUAL_ENCRYPT
+    bit_range:
+    - 6
+    - 6
+    description: The bit be set to disable manual encryption.
+  - name: SPI_BOOT_ENCRYPT_DECRYPT_CNT
+    bit_range:
+    - 9
+    - 7
+    description: 'These bits be set to enable SPI boot encrypt/decrypt. Odd number of 1: enable. even number of 1: disable.'
+  - name: XTS_KEY_LENGTH_256
+    bit_range:
+    - 10
+    - 10
+    description: The bit be set means XTS_AES use the whole 256-bit efuse data in BLOCK3. Otherwise, XTS_AES use 128-bit eFuse data in BLOCK3.
+  - name: UART_PRINT_CONTROL
+    bit_range:
+    - 12
+    - 11
+    description: Set this bit to disable usb printing.
+  - name: FORCE_SEND_RESUME
+    bit_range:
+    - 13
+    - 13
+    description: Set this bit to force ROM code to send a resume command during SPI boot.
+  - name: DIS_DOWNLOAD_MODE
+    bit_range:
+    - 14
+    - 14
+    description: Set this bit to disable download mode (boot_mode[3:0] = 0, 1, 2, 4, 5, 6, 7).
+  - name: DIS_DIRECT_BOOT
+    bit_range:
+    - 15
+    - 15
+    description: This bit set means disable direct_boot mode.
+  - name: ENABLE_SECURITY_DOWNLOAD
+    bit_range:
+    - 16
+    - 16
+    description: Set this bit to enable secure UART download mode.
+  - name: FLASH_TPUW
+    bit_range:
+    - 20
+    - 17
+    description: Configures flash waiting time after power-up, in unit of ms. If the value is less than 15, the waiting time is the configurable value.  Otherwise, the waiting time is twice the configurable value.
+  - name: SECURE_BOOT_EN
+    bit_range:
+    - 21
+    - 21
+    description: The bit be set to enable secure boot.
+  - name: RPT4_RESERVED
+    bit_range:
+    - 31
+    - 22
+    description: Reserved (used for four backups method).
+  side_effects: null
+- id: RD_BLK1_DATA0
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYSTEM_DATA0
+    bit_range:
+    - 31
+    - 0
+    description: Stores the bits [0:31] of system data.
+  side_effects: null
+- id: RD_BLK1_DATA1
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYSTEM_DATA1
+    bit_range:
+    - 31
+    - 0
+    description: Stores the bits [32:63] of system data.
+  side_effects: null
+- id: RD_BLK1_DATA2
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYSTEM_DATA2
+    bit_range:
+    - 23
+    - 0
+    description: Stores the bits [64:87] of system data.
+  side_effects: null
+- id: RD_BLK2_DATA0
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BLK2_DATA0
+    bit_range:
+    - 31
+    - 0
+    description: Store the bit [0:31] of MAC.
+  side_effects: null
+- id: RD_BLK2_DATA1
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAC_ID_HIGH
+    bit_range:
+    - 15
+    - 0
+    description: Store the bit [31:47] of MAC.
+  - name: WAFER_VERSION
+    bit_range:
+    - 18
+    - 16
+    description: Store wafer version.
+  - name: PKG_VERSION
+    bit_range:
+    - 21
+    - 19
+    description: Store package version.
+  - name: BLK2_EFUSE_VERSION
+    bit_range:
+    - 24
+    - 22
+    description: Store efuse version.
+  - name: RF_REF_I_BIAS_CONFIG
+    bit_range:
+    - 28
+    - 25
+    description: Store rf configuration parameters.
+  - name: LDO_VOL_BIAS_CONFIG_LOW
+    bit_range:
+    - 31
+    - 29
+    description: Store the bit [0:2] of ido configuration parameters.
+  side_effects: null
+- id: RD_BLK2_DATA2
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LDO_VOL_BIAS_CONFIG_HIGH
+    bit_range:
+    - 26
+    - 0
+    description: Store the bit [3:29] of ido configuration parameters.
+  - name: PVT_LOW
+    bit_range:
+    - 31
+    - 27
+    description: Store the bit [0:4] of pvt.
+  side_effects: null
+- id: RD_BLK2_DATA3
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PVT_HIGH
+    bit_range:
+    - 9
+    - 0
+    description: Store the bit [5:14] of pvt.
+  - name: ADC_CALIBRATION_0
+    bit_range:
+    - 31
+    - 10
+    description: Store the bit [0:21] of ADC calibration data.
+  side_effects: null
+- id: RD_BLK2_DATA4
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADC_CALIBRATION_1
+    bit_range:
+    - 31
+    - 0
+    description: Store the bit [22:53] of ADC calibration data.
+  side_effects: null
+- id: RD_BLK2_DATA5
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADC_CALIBRATION_2
+    bit_range:
+    - 31
+    - 0
+    description: Store the bit [54:85] of ADC calibration data.
+  side_effects: null
+- id: RD_BLK2_DATA6
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADC_CALIBRATION_3
+    bit_range:
+    - 10
+    - 0
+    description: Store the bit [86:96] of ADC calibration data.
+  - name: BLK2_RESERVED_DATA_0
+    bit_range:
+    - 31
+    - 11
+    description: Store the bit [0:20] of block2 reserved data.
+  side_effects: null
+- id: RD_BLK2_DATA7
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BLK2_RESERVED_DATA_1
+    bit_range:
+    - 31
+    - 0
+    description: Store the bit [21:52] of block2 reserved data.
+  side_effects: null
+- id: RD_BLK3_DATA0
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BLK3_DATA0
+    bit_range:
+    - 31
+    - 0
+    description: Store the first 32-bit of Block3.
+  side_effects: null
+- id: RD_BLK3_DATA1
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BLK3_DATA1
+    bit_range:
+    - 31
+    - 0
+    description: Store the second 32-bit of Block3.
+  side_effects: null
+- id: RD_BLK3_DATA2
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BLK3_DATA2
+    bit_range:
+    - 31
+    - 0
+    description: Store the third 32-bit of Block3.
+  side_effects: null
+- id: RD_BLK3_DATA3
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BLK3_DATA3
+    bit_range:
+    - 31
+    - 0
+    description: Store the fourth 32-bit of Block3.
+  side_effects: null
+- id: RD_BLK3_DATA4
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BLK3_DATA4
+    bit_range:
+    - 31
+    - 0
+    description: Store the fifth 32-bit of Block3.
+  side_effects: null
+- id: RD_BLK3_DATA5
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BLK3_DATA5
+    bit_range:
+    - 31
+    - 0
+    description: Store the sixth 32-bit of Block3.
+  side_effects: null
+- id: RD_BLK3_DATA6
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BLK3_DATA6
+    bit_range:
+    - 31
+    - 0
+    description: Store the seventh 32-bit of Block3.
+  side_effects: null
+- id: RD_BLK3_DATA7
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BLK3_DATA7
+    bit_range:
+    - 31
+    - 0
+    description: Store the eighth 32-bit of Block3.
+  side_effects: null
+- id: RD_REPEAT_ERR
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RD_DIS_ERR
+    bit_range:
+    - 1
+    - 0
+    description: If any bit in RD_DIS is 1, then it indicates a programming error.
+  - name: WDT_DELAY_SEL_ERR
+    bit_range:
+    - 3
+    - 2
+    description: If any bit in WDT_DELAY_SEL is 1, then it indicates a programming error.
+  - name: DIS_PAD_JTAG_ERR
+    bit_range:
+    - 4
+    - 4
+    description: If any bit in DIS_PAD_JTAG is 1, then it indicates a programming error.
+  - name: DIS_DOWNLOAD_ICACHE_ERR
+    bit_range:
+    - 5
+    - 5
+    description: If any bit in this filed is 1, then it indicates a programming error.
+  - name: DIS_DOWNLOAD_MANUAL_ENCRYPT_ERR
+    bit_range:
+    - 6
+    - 6
+    description: If any bit in DIS_DOWNLOAD_MANUAL_ENCRYPT is 1, then it indicates a programming error.
+  - name: SPI_BOOT_ENCRYPT_DECRYPT_CNT_ERR
+    bit_range:
+    - 9
+    - 7
+    description: If any bit in SPI_BOOT_ENCRYPT_DECRYPT_CNT is 1, then it indicates a programming error.
+  - name: XTS_KEY_LENGTH_256_ERR
+    bit_range:
+    - 10
+    - 10
+    description: If any bit in XTS_KEY_LENGTH_256 is 1, then it indicates a programming error.
+  - name: UART_PRINT_CONTROL_ERR
+    bit_range:
+    - 12
+    - 11
+    description: If any bit in UART_PRINT_CONTROL is 1, then it indicates a programming error.
+  - name: FORCE_SEND_RESUME_ERR
+    bit_range:
+    - 13
+    - 13
+    description: If any bit in FORCE_SEND_RESUME is 1, then it indicates a programming error.
+  - name: DIS_DOWNLOAD_MODE_ERR
+    bit_range:
+    - 14
+    - 14
+    description: If any bit in this filed is 1, then it indicates a programming error.
+  - name: DIS_DIRECT_BOOT_ERR
+    bit_range:
+    - 15
+    - 15
+    description: If any bit in this filed is 1, then it indicates a programming error.
+  - name: ENABLE_SECURITY_DOWNLOAD_ERR
+    bit_range:
+    - 16
+    - 16
+    description: If any bit in this filed is 1, then it indicates a programming error.
+  - name: FLASH_TPUW_ERR
+    bit_range:
+    - 20
+    - 17
+    description: If any bit in this filed is 1, then it indicates a programming error.
+  - name: SECURE_BOOT_EN_ERR
+    bit_range:
+    - 21
+    - 21
+    description: If any bit in this filed is 1, then it indicates a programming error.
+  - name: RPT4_RESERVED_ERR
+    bit_range:
+    - 31
+    - 22
+    description: Reserved.
+  side_effects: null
+- id: RD_RS_ERR
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BLK1_ERR_NUM
+    bit_range:
+    - 2
+    - 0
+    description: The value of this signal means the number of error bytes in block1.
+  - name: BLK1_FAIL
+    bit_range:
+    - 3
+    - 3
+    description: '0: Means no failure and that the data of block1 is reliable 1: Means that programming user data failed and the number of error bytes is over 6.'
+  - name: BLK2_ERR_NUM
+    bit_range:
+    - 6
+    - 4
+    description: The value of this signal means the number of error bytes in block2.
+  - name: BLK2_FAIL
+    bit_range:
+    - 7
+    - 7
+    description: '0: Means no failure and that the data of block2 is reliable 1: Means that programming user data failed and the number of error bytes is over 6.'
+  - name: BLK3_ERR_NUM
+    bit_range:
+    - 10
+    - 8
+    description: The value of this signal means the number of error bytes in block3.
+  - name: BLK3_FAIL
+    bit_range:
+    - 11
+    - 11
+    description: '0: Means no failure and that the block3 data is reliable 1: Means that programming user data failed and the number of error bytes is over 6.'
+  side_effects: null
+- id: CLK
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: EFUSE_MEM_FORCE_PD
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to force eFuse SRAM into power-saving mode.
+  - name: MEM_CLK_FORCE_ON
+    bit_range:
+    - 1
+    - 1
+    description: Set this bit and force to activate clock signal of eFuse SRAM.
+  - name: EFUSE_MEM_FORCE_PU
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to force eFuse SRAM into working mode.
+  - name: EN
+    bit_range:
+    - 16
+    - 16
+    description: Set this bit and force to enable clock signal of eFuse memory.
+  side_effects: null
+- id: CONF
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OP_CODE
+    bit_range:
+    - 15
+    - 0
+    description: '0x5A5A: Operate programming command 0x5AA5: Operate read command.'
+  side_effects: null
+- id: STATUS
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STATE
+    bit_range:
+    - 3
+    - 0
+    description: Indicates the state of the eFuse state machine.
+  - name: OTP_LOAD_SW
+    bit_range:
+    - 4
+    - 4
+    description: The value of OTP_LOAD_SW.
+  - name: OTP_VDDQ_C_SYNC2
+    bit_range:
+    - 5
+    - 5
+    description: The value of OTP_VDDQ_C_SYNC2.
+  - name: OTP_STROBE_SW
+    bit_range:
+    - 6
+    - 6
+    description: The value of OTP_STROBE_SW.
+  - name: OTP_CSB_SW
+    bit_range:
+    - 7
+    - 7
+    description: The value of OTP_CSB_SW.
+  - name: OTP_PGENB_SW
+    bit_range:
+    - 8
+    - 8
+    description: The value of OTP_PGENB_SW.
+  - name: OTP_VDDQ_IS_SW
+    bit_range:
+    - 9
+    - 9
+    description: The value of OTP_VDDQ_IS_SW.
+  - name: BLK0_VALID_BIT_CNT
+    bit_range:
+    - 15
+    - 10
+    description: Record the number of bit '1' in BLOCK0.
+  side_effects: null
+- id: CMD
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READ_CMD
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to send read command.
+  - name: PGM_CMD
+    bit_range:
+    - 1
+    - 1
+    description: Set this bit to send programming command.
+  - name: BLK_NUM
+    bit_range:
+    - 3
+    - 2
+    description: The serial number of the block to be programmed. Value 0-3 corresponds to block number 0-3, respectively.
+  side_effects: null
+- id: INT_RAW
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READ_DONE_INT_RAW
+    bit_range:
+    - 0
+    - 0
+    description: The raw bit signal for read_done interrupt.
+  - name: PGM_DONE_INT_RAW
+    bit_range:
+    - 1
+    - 1
+    description: The raw bit signal for pgm_done interrupt.
+  side_effects: null
+- id: INT_ST
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READ_DONE_INT_ST
+    bit_range:
+    - 0
+    - 0
+    description: The status signal for read_done interrupt.
+  - name: PGM_DONE_INT_ST
+    bit_range:
+    - 1
+    - 1
+    description: The status signal for pgm_done interrupt.
+  side_effects: null
+- id: INT_ENA
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READ_DONE_INT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The enable signal for read_done interrupt.
+  - name: PGM_DONE_INT_ENA
+    bit_range:
+    - 1
+    - 1
+    description: The enable signal for pgm_done interrupt.
+  side_effects: null
+- id: INT_CLR
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READ_DONE_INT_CLR
+    bit_range:
+    - 0
+    - 0
+    description: The clear signal for read_done interrupt.
+  - name: PGM_DONE_INT_CLR
+    bit_range:
+    - 1
+    - 1
+    description: The clear signal for pgm_done interrupt.
+  side_effects: null
+- id: DAC_CONF
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 130588
+  fields:
+  - name: DAC_CLK_DIV
+    bit_range:
+    - 7
+    - 0
+    description: Controls the division factor of the rising clock of the programming voltage.
+  - name: DAC_CLK_PAD_SEL
+    bit_range:
+    - 8
+    - 8
+    description: Don't care.
+  - name: DAC_NUM
+    bit_range:
+    - 16
+    - 9
+    description: Controls the rising period of the programming voltage.
+  - name: OE_CLR
+    bit_range:
+    - 17
+    - 17
+    description: Reduces the power supply of the programming voltage.
+  side_effects: null
+- id: RD_TIM_CONF
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 302055937
+  fields:
+  - name: THR_A
+    bit_range:
+    - 7
+    - 0
+    description: Configures hold time for efuse read.
+  - name: TRD
+    bit_range:
+    - 15
+    - 8
+    description: Configures pulse time for efuse read.
+  - name: TSUR_A
+    bit_range:
+    - 23
+    - 16
+    description: Configures setup time for efuse read.
+  - name: READ_INIT_NUM
+    bit_range:
+    - 31
+    - 24
+    description: Configures the initial read time of eFuse.
+  side_effects: null
+- id: WR_TIM_CONF0
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 13107457
+  fields:
+  - name: THP_A
+    bit_range:
+    - 7
+    - 0
+    description: Configures hold time for efuse program.
+  - name: TPGM_INACTIVE
+    bit_range:
+    - 15
+    - 8
+    description: Configures pulse time for burning '0' bit.
+  - name: TPGM
+    bit_range:
+    - 31
+    - 16
+    description: Configures pulse time for burning '1' bit.
+  side_effects: null
+- id: WR_TIM_CONF1
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 3145729
+  fields:
+  - name: TSUP_A
+    bit_range:
+    - 7
+    - 0
+    description: Configures setup time for efuse program.
+  - name: PWR_ON_NUM
+    bit_range:
+    - 23
+    - 8
+    description: Configures the power up time for VDDQ.
+  side_effects: null
+- id: WR_TIM_CONF2
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 400
+  fields:
+  - name: PWR_OFF_NUM
+    bit_range:
+    - 15
+    - 0
+    description: Configures the power outage time for VDDQ.
+  side_effects: null
+- id: DATE
+  address_offset: 508
+  size: 32
+  access: READ_WRITE
+  reset_value: 34636176
+  fields:
+  - name: DATE
+    bit_range:
+    - 27
+    - 0
+    description: Stores eFuse version.
+  side_effects: null
+interrupts:
+  EFUSE: 20
+timing: null

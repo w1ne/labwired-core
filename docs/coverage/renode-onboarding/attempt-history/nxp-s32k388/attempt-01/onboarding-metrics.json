@@ -1,0 +1,37 @@
+{
+  "target_id": "nxp-s32k388",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 10000,
+    "stop_reason": "memory_violation"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-s32k388-onboarding-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/nxp-s32k388-smoke.yaml",
+  "system": "configs/systems/onboarding/nxp-s32k388.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-04T12:15:26Z",
+  "finished_at_utc": "2026-11-04T12:15:41Z",
+  "elapsed_seconds": 16,
+  "elapsed_ms": 15120,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-04T12:15:41.670601Z  WARN labwired_core: Failed to load segment at 0x10000 - outside of memory map",
+  "failure_hint": "Simulation failed. Inspect logs/run_smoke.log and fix the first failing operation only.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 14.194,
+    "build_firmware": 0.448,
+    "run_smoke": 0.464
+  },
+  "stages_ms": {
+    "build_cli": 14194,
+    "build_firmware": 448,
+    "run_smoke": 464
+  }
+}

@@ -1,0 +1,22 @@
+id: arduino_nano_esp32
+chip: esp32s3
+system: systems/arduino_nano_esp32.yaml
+# Arduino Nano ESP32 (ABX00092, u-blox NORA-W106 = ESP32-S3) on stock
+# Arduino-ESP32. The board JSON builds with BOARD_HAS_PIN_REMAP: sketches use
+# Arduino pin numbers (D13 = GPIO48) and the core remaps them. ARDUINO_USB_MODE
+# is unset, so `Serial` is the TinyUSB CDC on the USB-OTG controller. L0-L2
+# print only on `Serial`, so their markers arrive over USB CDC; L3-L8 also
+# mirror each line to Serial0 (UART0).
+pio: { platform: espressif32, board: arduino_nano_esp32, framework: arduino }
+max_steps: 400000000
+budget_reason: "Stock Nano variant runs boot_double_tap_logic() before setup(): rgb_pulse_delay() fades the RGB LED in ~100 delayMicroseconds(10000) steps, about 1 s of firmware time"
+# max_steps above the CLI's 50M guard needs a wall-clock bound.
+wall_time_ms: 300000
+# LED_BUILTIN = D13 = GPIO48, a plain active-high GPIO LED.
+led_watch: "gpio:48"
+led_min_edges: 2
+# L6: analogWrite(2, 128) = D2 = GPIO5; the watch counts real LEDC pad edges.
+pwm_watch: "gpio:5"
+pwm_min_edges: 20
+family: esp32
+notes: "Nano pins: Wire A4/A5 = GPIO11/12, SPI D11/D12/D13 = GPIO38/47/48, CS = SS = D10 = GPIO21; L5 A0 = GPIO1 held at 1650 mV"

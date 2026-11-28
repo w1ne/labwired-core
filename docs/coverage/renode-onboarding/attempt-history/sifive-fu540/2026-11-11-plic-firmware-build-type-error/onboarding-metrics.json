@@ -1,0 +1,33 @@
+{
+  "target_id": "sifive-fu540",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": false,
+  "booted": null,
+  "boot_evidence": null,
+  "smoke_passed": null,
+  "crate": "firmware-sifive-fu540-smoke",
+  "target_triple": "riscv64imac-unknown-none-elf",
+  "script": "examples/renode-onboarding/sifive-fu540-smoke.yaml",
+  "system": "configs/systems/onboarding/sifive-fu540.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T18:46:31Z",
+  "finished_at_utc": "2026-11-11T18:48:20Z",
+  "elapsed_seconds": 110,
+  "elapsed_ms": 109012,
+  "failure_stage": "build_firmware",
+  "first_error_signature": "error[E0308]: mismatched types",
+  "failure_hint": "Firmware build failed. Start with the first compiler error in logs/build_firmware.log.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 108.692,
+    "build_firmware": 0.306,
+    "run_smoke": null
+  },
+  "stages_ms": {
+    "build_cli": 108692,
+    "build_firmware": 306,
+    "run_smoke": null
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "ch32v005f6p6",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/vendor/ch32_compiled_firmware.rs",
+    "test": "every_ch32_compiled_uart_hello_prints_on_usart1",
+    "signal": "the committed RV32EC+Zmmul fixture ELF (examples/ch32v005f6p6/uart_hello.c) clocks USART1 from PB2PCENR bit 14, maps TX to PD5, checks a MUL result and writes 'Hello from CH32V005\\r\\n' through DATAR (0x40013804); the test asserts the console sink receives exactly that string, and a negative control with the clock gate moved to an unset bit asserts the sink stays empty. Polled TX only: no PFIC, so USART1_IRQn is not wired",
+    "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test vendor ch32_compiled_firmware::"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "SPI1 (0x40013000) is not modelled; it is not in the ch32v005f6p6 descriptor's peripherals list.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "I2C1 (0x40005400) is not modelled; it is not in the ch32v005f6p6 descriptor's peripherals list.",
+    "lane": "none"
+  }
+}

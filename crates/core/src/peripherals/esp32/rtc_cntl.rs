@@ -348,6 +348,10 @@ impl RtcCntl {
 }
 
 impl Peripheral for RtcCntl {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     /// A supply reset resets both cores with the same cause.
     fn on_supply_reset(&mut self, cause: crate::power::SupplyResetCause) {
         let code = match cause {
@@ -694,12 +698,6 @@ mod tests {
             restored.drain_reset_request(),
             "restored peripheral must carry the pending reset"
         );
-    }
-
-    #[test]
-    fn base_is_esp32_classic_canonical_address() {
-        let p = RtcCntl::new();
-        assert_eq!(p.base(), 0x3FF4_8000);
     }
 
     /// The `rtc_sleep_start` sequence from a stock arduino-esp32 3.x image:

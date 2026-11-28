@@ -257,9 +257,20 @@ impl SystemBus {
                 crate::bus::motors::MotorRuntime::Dc { id, .. }
                 | crate::bus::motors::MotorRuntime::Bldc { id, .. } => id,
             };
-            let mut channels = vec![(id.clone(), crate::bus::motors::MOTOR_STALL_INPUT)];
+            let mut channels = vec![
+                (id.clone(), crate::bus::motors::MOTOR_STALL_INPUT),
+                (id.clone(), crate::bus::motors::MOTOR_QUADRATIC_DRAG_INPUT),
+            ];
             if matches!(motor, crate::bus::motors::MotorRuntime::Bldc { .. }) {
                 channels.push((id.clone(), crate::bus::motors::MOTOR_INVERTER_FAULT_INPUT));
+                channels.push((
+                    id.clone(),
+                    crate::bus::motors::MOTOR_OVERCURRENT_FAULT_INPUT,
+                ));
+                channels.push((
+                    id.clone(),
+                    crate::bus::motors::MOTOR_UNDERVOLTAGE_FAULT_INPUT,
+                ));
             }
             channels
         }));
@@ -331,6 +342,18 @@ impl SystemBus {
     /// peripheral's bus name (`i2c1`). Errors if no device (or more than one,
     /// after narrowing) exposes the channel, or the value is out of range.
     pub fn set_input(
+        &mut self,
+        component: Option<&str>,
+        channel: &str,
+        value: f64,
+    ) -> Result<(), crate::sim_input::SimInputError> {
+        self.reject_external_input_write(component, channel)?;
+        self.apply_input_at_frontier(component, channel, value)
+    }
+
+    /// Private ownership-bypass used only after a complete mechanical-frame
+    /// preflight; no CPU instruction can interleave with this apply pass.
+    pub(crate) fn apply_input_at_frontier(
         &mut self,
         component: Option<&str>,
         channel: &str,
@@ -445,6 +468,17 @@ impl SystemBus {
         sets: &[(Option<&str>, &str, f64)],
     ) -> Result<(), crate::sim_input::SimInputError> {
         use crate::sim_input::SimInputError;
+        // A one-element transaction uses the complete single-input resolver,
+        // including virtual motor inputs that are not SimInput devices. There
+        // is no partial-update risk for one set. Multi-input transactions keep
+        // their existing device validation pass below.
+        if let [(component, channel, value)] = sets {
+            return self.set_input(*component, channel, *value);
+        }
+        // Ownership is also a whole-batch preflight, before any writes.
+        for &(component, channel, _) in sets {
+            self.reject_external_input_write(component, channel)?;
+        }
         // Validate pass: unique resolution + range for every set.
         for &(component, channel, value) in sets {
             let mut matches = 0usize;
@@ -479,6 +513,107 @@ impl SystemBus {
             self.set_input(component, channel, value)?;
         }
         Ok(())
+    }
+
+    fn reject_external_input_write(
+        &mut self,
+        component: Option<&str>,
+        channel: &str,
+    ) -> Result<(), crate::sim_input::SimInputError> {
+        if self.external_mechanical_inputs.is_empty() {
+            return Ok(());
+        }
+        let owned = self.external_mechanical_inputs.clone();
+        let mut blocked = false;
+        self.for_each_sim_input(&mut |name, si| {
+            let owner = si.component_id().unwrap_or(name);
+            blocked = Self::component_matches(component, name, si)
+                && owned.iter().any(|(id, key)| id == owner && key == channel);
+            blocked
+        });
+        if blocked {
+            return Err(crate::sim_input::SimInputError::Evaluation(format!(
+                "input '{channel}' is owned by the external mechanical frame"
+            )));
+        }
+        Ok(())
+    }
+
+    /// Canonical identities after strict resolution, including bus-name aliases.
+    pub(crate) fn canonical_atomic_input_keys(
+        &mut self,
+        sets: &[(Option<&str>, &str, f64)],
+    ) -> Vec<(String, String)> {
+        let mut keys = Vec::new();
+        for &(component, channel, _) in sets {
+            self.for_each_sim_input(&mut |name, si| {
+                if Self::component_matches(component, name, si)
+                    && si.input_channels().iter().any(|c| c.key == channel)
+                {
+                    keys.push((
+                        si.component_id().unwrap_or(name).to_owned(),
+                        channel.to_owned(),
+                    ));
+                    return true;
+                }
+                false
+            });
+        }
+        keys.sort();
+        keys
+    }
+
+    /// Strict preflight for an external mechanical frame. Unlike the legacy
+    /// range-only batch, only devices promising atomic application may join.
+    pub(crate) fn validate_atomic_inputs(
+        &mut self,
+        sets: &[(Option<&str>, &str, f64)],
+    ) -> Result<(), crate::sim_input::SimInputError> {
+        use crate::sim_input::SimInputError;
+        // Resolve every target first. Virtual motor controls are intentionally
+        // absent: changing ownership, load or a fault is not sensor feedback.
+        for &(component, channel, value) in sets {
+            let mut matches = 0usize;
+            let mut range = Ok(());
+            self.for_each_sim_input(&mut |name, si| {
+                if Self::component_matches(component, name, si)
+                    && si.input_channels().iter().any(|c| c.key == channel)
+                {
+                    matches += 1;
+                    range = si.require_channel(channel, value).map(|_| ());
+                }
+                false
+            });
+            if matches == 0 {
+                return Err(SimInputError::NoDevice(component.map_or_else(
+                    || channel.to_owned(),
+                    |id| format!("{id}/{channel}"),
+                )));
+            }
+            if matches != 1 {
+                return Err(SimInputError::Ambiguous {
+                    channel: channel.to_owned(),
+                    matches,
+                });
+            }
+            range?;
+        }
+        let mut result = Ok(());
+        self.for_each_sim_input(&mut |name, si| {
+            let own: Vec<_> = sets
+                .iter()
+                .filter(|(component, channel, _)| {
+                    Self::component_matches(*component, name, si)
+                        && si.input_channels().iter().any(|c| c.key == *channel)
+                })
+                .map(|(_, channel, value)| (*channel, *value))
+                .collect();
+            if !own.is_empty() {
+                result = si.validate_atomic_inputs(&own);
+            }
+            result.is_err()
+        });
+        result
     }
 
     /// Snapshot of the universal bus-transaction trace (logic analyzer):

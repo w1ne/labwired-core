@@ -47,6 +47,18 @@
 //! trapezoidal resumes from the consistent state it leaves. This is what SPICE
 //! does at a breakpoint, and it brings the same fixture to 0.002 %.
 //!
+//! A change is a discontinuity only where the drive's slope changes, not
+//! wherever its value does. A sine, or the flat part of a pulse, moves on every
+//! step while the derivative carried from the previous step stays the state of
+//! the circuit one step earlier; restarting there would downgrade a whole
+//! waveform-driven run to backward Euler, which is first order. So the restart
+//! follows [`Waveform::has_corner_between`](super::netlist::Waveform::has_corner_between)
+//! — a pulse edge, the start of a delayed sine — and the value setters a routed
+//! input or a test calls between steps, which can change at any boundary.
+//! Measured on a 1 kΩ / 100 nF low-pass driven by a 1 kHz sine at 1 µs steps,
+//! against the closed form: 0.14 % of the drive amplitude before this rule,
+//! 9.3e-5 % after, and the error falls fourfold when the step halves.
+//!
 //! ## Determinism
 //!
 //! `f64` throughout, `Vec` indices in the hot path, `BTreeMap` only for name
@@ -363,6 +375,10 @@ pub struct Solver {
     saved_sink_point: Vec<[f64; 3]>,
     saved_output_limit_point: Vec<f64>,
     saved_slew_limit_point: Vec<f64>,
+    /// Leaf-first KCL rows whose diode series resistance is eliminated without
+    /// forming the large 1/RS conductance. Cyclic/aliased rows retain that stamp.
+    diode_series_order: Vec<usize>,
+    diode_series_reduced: Vec<bool>,
     /// Conductance from every node to ground, siemens; nonzero only inside
     /// [`Solver::gmin_stepping`].
     node_shunt: f64,
@@ -398,16 +414,63 @@ pub struct Solver {
     restart: bool,
 }
 
+/// Series-resistor edges form trees rooted at external anodes. Eliminate a
+/// leaf before its parent so each internal KCL row still includes its children.
+/// Explicit references to generated internal nodes can make cycles or aliases;
+/// those edges keep their original conductance stamps instead of losing a row.
+fn diode_series_reduction_order(circuit: &Circuit) -> Vec<usize> {
+    let mut owners = vec![0usize; circuit.node_count()];
+    for diode in &circuit.diodes {
+        if diode.model.rs > 0.0 {
+            if let Some(junction) = diode.junction_anode {
+                owners[junction] += 1;
+            }
+        }
+    }
+    let mut pending: Vec<_> = circuit
+        .diodes
+        .iter()
+        .enumerate()
+        .filter_map(|(index, diode)| {
+            let junction = diode.junction_anode?;
+            (diode.model.rs.is_finite()
+                && diode.model.rs > 0.0
+                && diode.anode != Some(junction)
+                && owners[junction] == 1)
+                .then_some(index)
+        })
+        .collect();
+    let mut order = Vec::with_capacity(pending.len());
+    while let Some(position) = pending.iter().position(|&index| {
+        let junction = circuit.diodes[index].junction_anode;
+        !pending
+            .iter()
+            .any(|&other| circuit.diodes[other].anode == junction)
+    }) {
+        order.push(pending.remove(position));
+    }
+    order
+}
+
 impl Solver {
     /// Build a solver over `circuit` and solve its operating point.
     ///
     /// The operating point uses the netlist's own DC values with capacitors
     /// open and inductors shorted, then applies `.ic` / `ic=` overrides —
     /// exactly what the ngspice wrapper gets from a transient that pauses just
-    /// after t = 0 before any routed input is applied. Switches start open
-    /// (`roff`), because their control is a routed input and no input has
-    /// arrived yet.
+    /// after t = 0 before any routed input is applied. Digitally routed
+    /// switches start open (`roff`) until their input arrives; ngspice `SW`
+    /// voltage switches seed from their `ON` / `OFF` initial-state keyword.
     pub fn new(circuit: Circuit, integration: Integration) -> Result<Self, AnalogError> {
+        for resistor in &circuit.resistors {
+            let resistance = resistor.resistance_ohms();
+            if !resistance.is_finite() || resistance == 0.0 || !resistance.recip().is_finite() {
+                return Err(AnalogError::Config(format!(
+                    "resistor `{}` must have finite non-zero resistance and finite conductance",
+                    resistor.name
+                )));
+            }
+        }
         let unknowns = circuit.unknowns();
         if unknowns > MAX_UNKNOWNS {
             return Err(AnalogError::TooLarge {
@@ -425,12 +488,28 @@ impl Solver {
         let branches = circuit.branch_count();
         let voltage_source_values = circuit.voltage_sources.iter().map(|s| s.dc).collect();
         let current_source_values = circuit.current_sources.iter().map(|s| s.dc).collect();
-        let switch_closed = vec![false; circuit.switches.len()];
+        // A voltage switch's `ON` keyword seeds the operating point, where
+        // ngspice's inclusive hysteresis hold rule rechecks that seed.
+        let switch_closed = circuit
+            .switches
+            .iter()
+            .map(|switch| {
+                switch
+                    .voltage
+                    .as_ref()
+                    .is_some_and(|control| control.initially_closed)
+            })
+            .collect();
         let capacitors = circuit.capacitors.len();
         let inductors = circuit.inductors.len();
         let nonlinear = circuit.is_nonlinear();
         let has_waveforms = circuit.has_waveforms();
         let diodes = circuit.diodes.len();
+        let diode_series_order = diode_series_reduction_order(&circuit);
+        let mut diode_series_reduced = vec![false; diodes];
+        for &index in &diode_series_order {
+            diode_series_reduced[index] = true;
+        }
         let bjts = circuit.bjts.len();
         let mosfets = circuit.mosfets.len();
         let jfets = circuit.jfets.len();
@@ -499,6 +578,8 @@ impl Solver {
             saved_sink_point: vec![[0.0; 3]; sinks],
             saved_output_limit_point: vec![0.0; output_limits],
             saved_slew_limit_point: vec![0.0; slew_limits],
+            diode_series_order,
+            diode_series_reduced,
             node_shunt: 0.0,
             limiter_clamped: false,
             nonlinear,
@@ -558,9 +639,24 @@ impl Solver {
 
     /// Set a positive, finite resistance in ohms for the next solver step.
     pub fn set_resistance(&mut self, index: usize, ohms: f64) -> Result<(), AnalogError> {
-        if !ohms.is_finite() || ohms <= 0.0 || !ohms.recip().is_finite() {
+        if !ohms.is_finite() || ohms <= 0.0 {
             return Err(AnalogError::Config(
-                "resistance must be positive and finite with finite conductance".to_string(),
+                "resistance must be positive and finite".to_string(),
+            ));
+        }
+        let effective = self.circuit.resistors[index]
+            .ntc
+            .map(|ntc| ntc.resistance_ohms(ohms))
+            .or_else(|| {
+                self.circuit.resistors[index]
+                    .temperature_coefficients
+                    .map(|model| model.resistance_ohms(ohms))
+            })
+            .unwrap_or(ohms);
+        if !effective.is_finite() || effective <= 0.0 || !effective.recip().is_finite() {
+            return Err(AnalogError::Config(
+                "effective resistance must be positive and finite with finite conductance"
+                    .to_string(),
             ));
         }
         if self.circuit.resistors[index].ohms != ohms {
@@ -580,6 +676,15 @@ impl Solver {
         })
     }
 
+    /// Index of a named resistor whose resistance depends on external temperature.
+    pub fn temperature_dependent_resistor_index(&self, name: &str) -> Option<usize> {
+        let key = name.trim().to_ascii_lowercase();
+        self.circuit.resistors.iter().position(|resistor| {
+            (resistor.ntc.is_some() || resistor.temperature_coefficients.is_some())
+                && resistor.name.to_ascii_lowercase() == key
+        })
+    }
+
     /// Set an NTC's external temperature input in Celsius. A changed value
     /// invalidates the linear stamp so its resistance is rebuilt next step.
     /// Returns false for a non-NTC element, an invalid temperature or a model
@@ -596,11 +701,55 @@ impl Solver {
         };
         ntc.temperature_celsius = celsius;
         let resistance = ntc.resistance_ohms(resistor.ohms);
-        if !resistance.is_finite() || resistance <= 0.0 {
+        if !resistance.is_finite() || resistance <= 0.0 || !resistance.recip().is_finite() {
             return false;
         }
         if resistor.ntc != Some(ntc) {
             resistor.ntc = Some(ntc);
+            self.cached_stamp = None;
+            self.restart = true;
+            self.settled = false;
+        }
+        true
+    }
+
+    /// Set an NTC or temperature-coefficient resistor's external temperature.
+    /// A changed value invalidates the linear stamp so its resistance is
+    /// rebuilt on the next step. Returns false for a fixed resistor, an invalid
+    /// temperature, or a model whose resulting resistance is not finite and
+    /// positive.
+    pub fn set_resistor_temperature(&mut self, index: usize, celsius: f64) -> bool {
+        if !celsius.is_finite() || celsius <= -273.15 {
+            return false;
+        }
+        let Some(resistor) = self.circuit.resistors.get_mut(index) else {
+            return false;
+        };
+        let (ntc, temperature_coefficients) =
+            match (resistor.ntc, resistor.temperature_coefficients) {
+                (Some(mut ntc), None) => {
+                    ntc.temperature_celsius = celsius;
+                    (Some(ntc), None)
+                }
+                (None, Some(mut model)) => {
+                    model.temperature_celsius = celsius;
+                    (None, Some(model))
+                }
+                // Parsing rejects a resistor that has both temperature laws.
+                // Treat a fixed resistor (or an invalid hand-built circuit) as
+                // non-routable.
+                _ => return false,
+            };
+        let resistance = ntc
+            .map(|model| model.resistance_ohms(resistor.ohms))
+            .or_else(|| temperature_coefficients.map(|model| model.resistance_ohms(resistor.ohms)))
+            .unwrap_or(f64::NAN);
+        if !resistance.is_finite() || resistance <= 0.0 || !resistance.recip().is_finite() {
+            return false;
+        }
+        if resistor.ntc != ntc || resistor.temperature_coefficients != temperature_coefficients {
+            resistor.ntc = ntc;
+            resistor.temperature_coefficients = temperature_coefficients;
             self.cached_stamp = None;
             self.restart = true;
             self.settled = false;
@@ -690,7 +839,15 @@ impl Solver {
             let sensed = node_diff(&self.node_v, control.pos, control.neg);
             let v = if control.signed { sensed } else { sensed.abs() };
             let on = control.vt;
-            let off = (control.vt - control.vh).max(0.0);
+            // A magnitude cannot fall below 0, so its dropout is clamped
+            // there. A signed control (ngspice `SW`) may open below 0 V.
+            let off = if let Some(dropout) = control.dropout {
+                dropout
+            } else if control.signed {
+                control.vt - control.vh
+            } else {
+                (control.vt - control.vh).max(0.0)
+            };
             let closed_now = self.switch_closed[index];
             let desired = if control.invert {
                 // NC: stays closed while |V| < vt; re-closes from open only at
@@ -699,6 +856,14 @@ impl Solver {
                     v < on
                 } else {
                     v <= off
+                }
+            } else if control.strict {
+                // ngspice `SW`: hold the last state anywhere in the closed
+                // band `[vt − vh, vt]`, including exactly on its edges.
+                if closed_now {
+                    v >= off
+                } else {
+                    v > on
                 }
             } else if closed_now {
                 // NO: stay closed until |V| falls through dropout.
@@ -1312,26 +1477,51 @@ impl Solver {
     ///
     /// Sources are evaluated at the END of the step, which is the point the
     /// backward-Euler and trapezoidal companion models are written about, and
-    /// is what SPICE does. A value that actually moved counts as a
-    /// discontinuity for the trapezoidal restart rule, exactly as a routed
-    /// input does.
+    /// is what SPICE does.
+    ///
+    /// A new value is not a discontinuity. A smooth waveform — a sine, or the
+    /// flat part of a pulse — changes every step, and the reactive state the
+    /// trapezoidal rule carries is still the state of the circuit one step
+    /// earlier; restarting there would silently downgrade a waveform-driven
+    /// circuit to backward Euler for its whole run. What does restart the
+    /// integration is a corner of the waveform inside the step
+    /// ([`super::netlist::Waveform::has_corner_between`]), and a value another part of the
+    /// engine set through [`Self::set_voltage_source`], which can change
+    /// between any two steps. The settled early-out is cleared on any move,
+    /// because a resistive circuit has no reactive state to compare and would
+    /// otherwise report a stale solution.
     fn apply_waveforms(&mut self, time: f64) {
         if !self.has_waveforms {
             return;
         }
+        let from = self.time;
         for index in 0..self.circuit.voltage_sources.len() {
             let wave = self.circuit.voltage_sources[index].wave;
             if wave.is_constant() {
                 continue;
             }
-            self.set_voltage_source(index, wave.at(time));
+            let volts = wave.at(time);
+            if self.voltage_source_values[index] != volts {
+                self.voltage_source_values[index] = volts;
+                self.settled = false;
+            }
+            if wave.has_corner_between(from, time) {
+                self.restart = true;
+            }
         }
         for index in 0..self.circuit.current_sources.len() {
             let wave = self.circuit.current_sources[index].wave;
             if wave.is_constant() {
                 continue;
             }
-            self.set_current_source(index, wave.at(time));
+            let amps = wave.at(time);
+            if self.current_source_values[index] != amps {
+                self.current_source_values[index] = amps;
+                self.settled = false;
+            }
+            if wave.has_corner_between(from, time) {
+                self.restart = true;
+            }
         }
     }
 
@@ -1504,6 +1694,41 @@ impl Solver {
         if self.node_shunt != 0.0 {
             for node in 0..self.nodes {
                 self.matrix[node * dim + node] += self.node_shunt;
+            }
+        }
+        self.reduce_diode_series_rows();
+    }
+
+    /// Eliminate each series resistor from its two KCL rows without 1/RS.
+    ///
+    /// Before this transform the resistor alone is unstamped. Its equations
+    /// are Fa + (va-vj)/R = 0 and Fj + (vj-va)/R = 0. Replace them by
+    /// Fa + Fj = 0 and s*Fj + (s/R)*(vj-va) = 0, where s=min(R,1).
+    /// This invertible row operation preserves every other stamp, including
+    /// charge, dependent-source branch currents and gmin. It avoids subtracting
+    /// ampere-scale conductance terms to recover picoampere leakage currents.
+    fn reduce_diode_series_rows(&mut self) {
+        let dim = self.dim();
+        for &index in &self.diode_series_order {
+            let diode = &self.circuit.diodes[index];
+            let junction = diode
+                .junction_anode
+                .expect("series reduction owns a junction row");
+            if let Some(anode) = diode.anode {
+                for column in 0..dim {
+                    self.matrix[anode * dim + column] += self.matrix[junction * dim + column];
+                }
+                self.rhs[anode] += self.rhs[junction];
+            }
+            let scale = diode.model.rs.min(1.0);
+            for column in 0..dim {
+                self.matrix[junction * dim + column] *= scale;
+            }
+            self.rhs[junction] *= scale;
+            let coefficient = scale / diode.model.rs;
+            self.matrix[junction * dim + junction] += coefficient;
+            if let Some(anode) = diode.anode {
+                self.matrix[junction * dim + anode] -= coefficient;
             }
         }
     }
@@ -1760,12 +1985,17 @@ impl Solver {
         self.previous[..dim].fill(f64::NAN);
         self.limiter_clamped = true;
 
-        for _ in 1..=MAX_NEWTON_ITERATIONS {
+        for iteration in 1..=MAX_NEWTON_ITERATIONS {
             self.build(stamp);
             self.factorize()?;
             self.solve();
             if self.newton_converged() {
                 return Ok(());
+            }
+            // Preserve the previous iterate for the failure diagnostic. There
+            // is no next iteration to seed after the final failed solve.
+            if iteration == MAX_NEWTON_ITERATIONS {
+                break;
             }
             self.previous[..dim].copy_from_slice(&self.solution[..dim]);
             self.relinearise();
@@ -2026,7 +2256,7 @@ impl Solver {
         let rhs = &mut self.rhs;
 
         for (index, diode) in self.circuit.diodes.iter().enumerate() {
-            if diode.model.rs > 0.0 {
+            if diode.model.rs > 0.0 && !self.diode_series_reduced[index] {
                 conductance(
                     matrix,
                     dim,
@@ -2474,7 +2704,9 @@ impl Solver {
             let op = device::jfet_op_with_b(
                 vgs,
                 vds,
-                sign * jfet.model.vto,
+                // SPICE writes a JFET's VTO in the channel's own frame: a
+                // depletion device has VTO < 0 for both NJF and PJF.
+                jfet.model.vto,
                 jfet.model.beta,
                 jfet.model.lambda,
                 jfet.model.b,

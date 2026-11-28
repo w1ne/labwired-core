@@ -43,6 +43,8 @@ const SOURCES: &[(&str, &str)] = &[
     ("cosim_tests.rs", include_str!("cosim_tests.rs")),
     ("debug_writes.rs", include_str!("debug_writes.rs")),
     ("fidelity_surface.rs", include_str!("fidelity_surface.rs")),
+    ("flex.rs", include_str!("flex.rs")),
+    ("flex_tests.rs", include_str!("flex_tests.rs")),
     ("inputs.rs", include_str!("inputs.rs")),
     ("inspect.rs", include_str!("inspect.rs")),
     ("install.rs", include_str!("install.rs")),
@@ -50,6 +52,7 @@ const SOURCES: &[(&str, &str)] = &[
     ("lab_tools.rs", include_str!("lab_tools.rs")),
     ("ngspice.rs", include_str!("ngspice.rs")),
     ("lib.rs", include_str!("lib.rs")),
+    ("mechanical.rs", include_str!("mechanical.rs")),
     ("playground_repro.rs", include_str!("playground_repro.rs")),
     ("pic24_wasm_tests.rs", include_str!("pic24_wasm_tests.rs")),
     ("rtt_arch_tests.rs", include_str!("rtt_arch_tests.rs")),
@@ -248,6 +251,18 @@ mod tests {
             .join("\n")
     }
 
+    fn uncovered_source_files<'a>(
+        on_disk: &BTreeSet<&'a str>,
+        listed: &BTreeSet<&str>,
+        excepted: &BTreeSet<&str>,
+    ) -> Vec<&'a str> {
+        on_disk
+            .iter()
+            .filter(|file| !listed.contains(**file) && !excepted.contains(**file))
+            .copied()
+            .collect()
+    }
+
     #[test]
     fn failure_blind_boundary_only_shrinks() {
         let blind = failure_blind();
@@ -379,11 +394,7 @@ mod tests {
         );
 
         // Direction 1: a crate file that no ceiling can see.
-        let uncovered: Vec<&str> = on_disk_set
-            .iter()
-            .filter(|f| !listed.contains(*f) && !excepted.contains(*f))
-            .copied()
-            .collect();
+        let uncovered = uncovered_source_files(&on_disk_set, &listed, &excepted);
         assert!(
             uncovered.is_empty(),
             "crates/wasm/src file(s) not covered by SOURCES: {uncovered:?}.\n\
@@ -433,6 +444,19 @@ mod tests {
                  justify the new surface — the standing reason is:\n  {reason}"
             );
         }
+    }
+
+    #[test]
+    fn source_coverage_negative_control_rejects_an_omitted_file() {
+        let on_disk = BTreeSet::from(["flex.rs"]);
+        let listed = BTreeSet::new();
+        let excepted = BTreeSet::new();
+
+        assert_eq!(
+            uncovered_source_files(&on_disk, &listed, &excepted),
+            vec!["flex.rs"],
+            "a crate source omitted from both inventories must remain visible to the ratchet"
+        );
     }
 
     /// Guards the scanner itself: if `include_str!` or the signature join ever

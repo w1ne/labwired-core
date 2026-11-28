@@ -4,8 +4,8 @@ name: Core Board CI
 # `if: github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core'`.
 # GitHub attributes a cron run to whoever last edited the schedule, so a fork
 # with Actions enabled mails this workflow's failures to a maintainer here,
-# about a run they can neither see nor stop. Pushes, PRs and manual dispatch
-# are untouched — a fork still gets full CI on its own changes.
+# about a run they can neither see nor stop. Pushes and manual dispatch are
+# untouched — a fork still gets the configured push and manual lanes.
 on:
   push:
     branches: [main]
@@ -14,28 +14,23 @@ on:
       - "examples/**"
       - "hil/**"
       - "platformio/**"
+      - ".github/actions/apt-install-cached/**"
+      - ".github/actions/fetch-pack/**"
       - "scripts/ci/board_matrix.py"
+      - "configs/ci/boards.yml"
       - "scripts/generate_tier1_scoreboard.py"
       - "docs/coverage/tier1-matrix.json"
       - ".github/workflows/core-board-ci.yml"
-  pull_request:
-    branches: [main]
-    paths:
-      - "configs/**"
-      - "examples/**"
-      - "hil/**"
-      - "platformio/**"
-      - "scripts/ci/board_matrix.py"
-      - "scripts/generate_tier1_scoreboard.py"
-      - "docs/coverage/tier1-matrix.json"
-      - ".github/workflows/core-board-ci.yml"
+  # Lean PR gate (2026-11-13): no pull_request trigger. This lane runs on
+  # push to main (and on demand via workflow_dispatch, e.g.
+  # `gh workflow run core-board-ci.yml --ref <branch>` for a PR that needs it).
   schedule:
     - cron: "0 3 * * 0"
   workflow_dispatch:
 
 concurrency:
   group: core-board-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   setup:
@@ -44,6 +39,8 @@ jobs:
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
+      has_boards: ${{ steps.gen.outputs.has_boards }}
+      run_coverage: ${{ steps.gen.outputs.run_coverage }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -53,13 +50,48 @@ jobs:
       - id: gen
         env:
           EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
-          matrix="$(python scripts/ci/board_matrix.py --event "$EVENT_NAME")"
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [ "$EVENT_NAME" = push ]; then
+            if [[ "$BASE_SHA" =~ ^0{40}$ ]]; then
+              echo "::warning::Push has no before SHA; selecting the full board matrix."
+              git ls-tree -r --name-only "$HEAD_SHA" > changed-paths.txt
+            elif git fetch --no-tags --depth=1 origin "$BASE_SHA"; then
+              git diff --name-only "$BASE_SHA" "$HEAD_SHA" > changed-paths.txt
+            else
+              echo "::warning::Could not fetch push base $BASE_SHA; selecting the full board matrix."
+              git ls-tree -r --name-only "$HEAD_SHA" > changed-paths.txt
+            fi
+            matrix="$(python scripts/ci/board_matrix.py --event "$EVENT_NAME" --changed-paths-file changed-paths.txt)"
+            if grep -Eq '^(docs/coverage/tier1-matrix\.json|scripts/generate_tier1_scoreboard\.py)$' changed-paths.txt; then
+              run_coverage=true
+            else
+              run_coverage=false
+            fi
+          else
+            matrix="$(python scripts/ci/board_matrix.py --event "$EVENT_NAME")"
+            run_coverage=true
+          fi
+          # A scoped push may select no board (board_matrix.py exits 0 with
+          # {"include": []}). GitHub Actions rejects a matrix with an empty
+          # include list and fails the run, so `board` is gated on has_boards.
+          # board_matrix.py still fails closed on every gate event, scoped
+          # push included, when the manifest has no `gate: true` board, and
+          # on an unscoped gate event that selects no board.
+          has_boards="$(printf '%s' "$matrix" | python -c 'import json, sys; print("true" if json.load(sys.stdin)["include"] else "false")')"
+          {
+            echo "matrix=$matrix"
+            echo "has_boards=$has_boards"
+            echo "run_coverage=$run_coverage"
+          } >> "$GITHUB_OUTPUT"
 
   board:
-    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
     needs: setup
+    if: >-
+      ${{ needs.setup.outputs.has_boards == 'true' &&
+          (github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -125,7 +157,7 @@ jobs:
         with:
           name: board-${{ matrix.id }}
           path: out/boards/${{ matrix.id }}/
-          retention-days: 3
+          retention-days: 1
           if-no-files-found: ignore
 
   # The tier1 scoreboard is generated from docs/coverage/tier1-matrix.json (the
@@ -133,7 +165,10 @@ jobs:
   # auto-committing to protected main: regenerate here and fail if it drifted, so
   # whoever changed the matrix must commit the regenerated scoreboard.
   coverage-staleness:
-    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
+    needs: setup
+    if: >-
+      ${{ needs.setup.outputs.run_coverage == 'true' &&
+          (github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

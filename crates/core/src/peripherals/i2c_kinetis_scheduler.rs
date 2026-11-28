@@ -26,6 +26,8 @@ fn ramp_slave() -> Box<dyn I2cDevice> {
     })
 }
 
+const F1_ER_IRQ: u32 = 32;
+
 fn kinetis(scheduler: bool) -> I2c {
     let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Kinetis);
     i2c.push_slave(ramp_slave());
@@ -38,6 +40,8 @@ fn kinetis(scheduler: bool) -> I2c {
 fn f1(scheduler: bool) -> I2c {
     let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32F1);
     i2c.push_slave(ramp_slave());
+    // The ER line (`irq_error`), so its pends are compared too.
+    i2c.set_error_irq(F1_ER_IRQ);
     if scheduler {
         i2c.attach_cycle_clock(CycleClock::default());
     }
@@ -82,6 +86,8 @@ struct SchedHarness {
     events: Vec<(u64, u32)>,
     now: u64,
     pends: Vec<u64>,
+    /// `(cycle, line)` for every explicit (ER) line an event pended.
+    explicit: Vec<(u64, u32)>,
 }
 
 impl SchedHarness {
@@ -95,6 +101,7 @@ impl SchedHarness {
             events: Vec::new(),
             now: 0,
             pends: Vec::new(),
+            explicit: Vec::new(),
         }
     }
 
@@ -130,6 +137,9 @@ impl SchedHarness {
             if res.raise_own_irq {
                 self.pends.push(self.now);
             }
+            for line in res.explicit_irqs {
+                self.explicit.push((self.now, line));
+            }
             if let Some(delay) = res.reschedule_delay {
                 self.events.push((self.now + delay, token));
             }
@@ -137,9 +147,10 @@ impl SchedHarness {
     }
 }
 
-/// Legacy per-tick oracle.
-fn walk_tick(i2c: &mut I2c) -> bool {
-    i2c.tick().irq
+/// Legacy per-tick oracle: the own-line verdict and the explicit lines.
+fn walk_tick(i2c: &mut I2c) -> (bool, Vec<u32>) {
+    let res = i2c.tick();
+    (res.irq, res.explicit_irqs.unwrap_or_default())
 }
 
 /// The heart of the gate: replay the SAME op script against (a) the legacy
@@ -156,6 +167,7 @@ fn assert_walk_identical_with(
     let mut walk = build(false);
     let mut sched = SchedHarness::new(build);
     let mut walk_pends: Vec<u64> = Vec::new();
+    let mut walk_explicit: Vec<(u64, u32)> = Vec::new();
 
     for c in 1..=cycles {
         for (sc, op) in script {
@@ -175,9 +187,11 @@ fn assert_walk_identical_with(
                 }
             }
         }
-        if walk_tick(&mut walk) {
+        let (irq, explicit) = walk_tick(&mut walk);
+        if irq {
             walk_pends.push(c);
         }
+        walk_explicit.extend(explicit.into_iter().map(|line| (c, line)));
         sched.now = c - 1;
         sched.step();
         assert_eq!(
@@ -187,6 +201,10 @@ fn assert_walk_identical_with(
         );
     }
     assert_eq!(walk_pends, sched.pends, "{what}: NVIC pend cycles diverged");
+    assert_eq!(
+        walk_explicit, sched.explicit,
+        "{what}: explicit (ER) line pends diverged"
+    );
 }
 
 /// Kinetis-variant convenience wrapper.
@@ -286,6 +304,22 @@ fn f1_address_nack_walk_identity() {
         (32, Op::Write(0x01, 0x02)),   // STOP releases the bus
     ];
     assert_walk_identical_with(&f1, &script, 40, "f1 address NACK");
+    // Not vacuous: the NACK does pend the ER line on the event path.
+    let mut sched = SchedHarness::new(&f1);
+    for c in 1..=40u64 {
+        for (sc, op) in &script {
+            if let (true, Op::Write(off, val)) = (*sc == c, *op) {
+                sched.now = c - 1;
+                sched.write(off, val);
+            }
+        }
+        sched.now = c - 1;
+        sched.step();
+    }
+    assert!(
+        sched.explicit.iter().any(|&(_, line)| line == F1_ER_IRQ),
+        "AF under ITERREN pends the ER line"
+    );
 }
 
 // ── STM32 L4 transaction-engine walk-vs-scheduler byte identity ───────────
@@ -379,4 +413,66 @@ fn iicie_disabled_never_pends_walk_identity() {
         (5, Op::Write(0x04, 0x55)),                    // byte → IICIF
     ];
     assert_walk_identical(&script, 12, "kinetis IICIE-off no pend");
+}
+
+/// IICIE set on a bus with no read transfer in flight and IICIF clear: nothing
+/// can change until the next write, so the level chain must stop instead of
+/// re-polling every cycle; a write re-arms it, and a read transfer keeps it
+/// polling because a `&self` `D` read can latch IICIF.
+#[test]
+fn idle_bus_with_iicie_stops_the_chain_and_a_write_rearms_it() {
+    let mut h = SchedHarness::new(&kinetis);
+    // IICIE with nothing latched: the first (armed) poll finds nothing to do.
+    h.write(0x02, KI_C1_IICIE);
+    assert_eq!(h.events.len(), 1, "an IICIE write arms the chain");
+    h.step();
+    assert!(h.events.is_empty(), "idle chain must not re-arm itself");
+    for _ in 0..1000 {
+        h.step();
+    }
+    assert!(h.events.is_empty(), "no wake while the bus is idle");
+    assert!(h.pends.is_empty());
+
+    // A write-only transfer: address byte latches IICIF -> level pends each
+    // cycle, then clearing IICIF lets the chain stop again.
+    h.write(0x02, KI_C1_IICIE | KI_C1_MST | KI_C1_TX);
+    h.write(0x04, 0x1E << 1);
+    for _ in 0..3 {
+        h.step();
+    }
+    assert_eq!(
+        h.pends.len(),
+        3,
+        "held level pends every cycle: {:?}",
+        h.pends
+    );
+    h.write(0x03, KI_S_IICIF);
+    h.step();
+    h.step();
+    assert!(h.events.is_empty(), "chain stops once IICIF is cleared");
+
+    // A read transfer keeps the chain polling (a D read latches IICIF).
+    h.write(0x02, KI_C1_IICIE | KI_C1_MST | KI_C1_TX | KI_C1_RSTA);
+    h.write(0x04, (0x1E << 1) | 1);
+    h.write(0x03, KI_S_IICIF);
+    h.step();
+    assert_eq!(h.events.len(), 1, "is_reading keeps the poll alive");
+}
+
+#[test]
+fn idle_iicie_then_late_write_transfer_walk_identity() {
+    // Long idle with IICIE set (chain stopped), then a full write transfer:
+    // pend cycles and registers must match the per-cycle walk.
+    let script = [
+        (1u64, Op::Write(0x02, KI_C1_IICIE)),
+        (300, Op::Write(0x02, KI_C1_IICIE | KI_C1_MST | KI_C1_TX)),
+        (300, Op::Write(0x04, 0x1E << 1)),
+        (306, Op::Write(0x03, KI_S_IICIF)),
+        (306, Op::Write(0x04, 0xAA)),
+        (311, Op::Write(0x03, KI_S_IICIF)),
+        (700, Op::Write(0x04, 0xBB)),
+        (704, Op::Write(0x03, KI_S_IICIF)),
+        (705, Op::Write(0x02, KI_C1_IICIE)),
+    ];
+    assert_walk_identical(&script, 720, "kinetis idle IICIE then write transfer");
 }

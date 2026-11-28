@@ -1,0 +1,44 @@
+# `labwired test --script test-overtemp-alarm.yaml`. The firmware reads the
+# DEVICE_ID of U4 at 0x48, stores 30.00 °C and 29.50 °C in T_HIGH_LIMIT and
+# T_LOW_LIMIT, reads T_HIGH_LIMIT back, and reads one sample per period. The
+# test bench steps the temperature 25 -> 30.1 -> 29.6 -> 29.4 °C. The
+# indicator goes on at 30.1 °C, stays on at 29.6 °C (hysteresis) and goes off
+# below 29.50 °C. `loop` returns the temperature in m°C plus 100,000.
+# All expected values were calculated from the TMP117 model encoding
+# (round(°C x 128)) and the firmware arithmetic before the first run.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ bus: sensor_i2c }, { port: user_led_drive }, { number: 0x48 }] }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 30.1 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 29.6 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 29.4 }
+  - call: { export: loop }
+limits:
+  max_steps: 1000000
+  max_time_ns: 5000000000
+assertions:
+  - entry_result: { equals: 129398 }
+  - entry_result: { equals: 0, step: 0 }
+  - entry_result: { equals: 125000, step: 1 }
+  - entry_result: { equals: 130102, step: 3 }
+  - entry_result: { equals: 129602, step: 5 }
+  # DEVICE_ID read, two limit writes and the limit read-back in `setup`;
+  # CONFIGURATION and TEMP_RESULT reads in each `loop`. None was refused.
+  - i2c_transfers: { bus: sensor_i2c, address: 0x48, ack: true, equals: 12 }
+  - i2c_transfers: { bus: sensor_i2c, ack: false, equals: 0 }
+  - port_value: { port: user_led_state, equals: 0 }
+  # `setup` takes 1.72 ms (480 + 380 + 380 + 480 µs); each `loop` 1.00096 s
+  # (two 480 µs reads and the 1 s period). The drive changes at the end of
+  # the read that gives 30.102 °C and of the one that gives 29.398 °C; D1
+  # follows 1 µs later.
+  - digital_edges: { port: user_led_drive, times_ns: [1003640000, 3005560000] }
+  - digital_edges: { port: user_led_state, times_ns: [1003641000, 3005561000] }
+  - final_time_ns: { equals: 4005560000 }
+  - console_contains: "TMP117 ID 0x0117 at 0x48 high 30.000 C\nT=25.000 C\nT=30.102 C\nT=29.602 C\nT=29.398 C\n"

@@ -4,7 +4,9 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use crate::decoder::riscv::{decode_rv32, Instruction};
+use super::qingke_pfic::{PficFrame, QingKePfic, HPE_REGS, HPE_REGS_V4, INTSYSCR_HWSTKEN};
+use super::riscv64_plic::{Plic, PlicParams};
+use crate::decoder::riscv::{decode_qingke_xw, decode_rv32, Instruction};
 use crate::{Bus, Cpu, SimResult, SimulationObserver};
 use std::sync::Arc;
 
@@ -34,6 +36,12 @@ pub enum RiscVCoreProfile {
     StandardRv32,
     /// RV32E profile: the integer register file contains x0..x15 only.
     Rv32e,
+    /// WCH QingKe V4 (CH32V20x/V30x, `core: qingke-v4*`): the standard RV32
+    /// machine plus the vendor core configuration CSR CORECFGR (0xBC0) that
+    /// WCH's startup and ch32fun write before `main` (stored; it tunes the
+    /// pipeline and has no architectural effect here), and a PFIC whose
+    /// hardware prologue saves the 16-register V4 set.
+    QingkeV4,
 }
 
 impl RiscVCoreProfile {
@@ -57,6 +65,9 @@ impl RiscVCoreProfile {
         if matches!(core.as_str(), "rv32e" | "rv32ec" | "rv32emc" | "rv32em") {
             return Self::Rv32e;
         }
+        if core.starts_with("qingke-v4") {
+            return Self::QingkeV4;
+        }
         if chip.name.to_ascii_lowercase().contains("esp32") {
             return Self::Esp32C3;
         }
@@ -65,6 +76,140 @@ impl RiscVCoreProfile {
         } else {
             Self::Esp32C3
         }
+    }
+}
+
+impl RiscVCoreProfile {
+    /// The registers a QingKe PFIC's hardware prologue saves on this core.
+    fn hpe_regs(self) -> &'static [usize] {
+        if self == Self::QingkeV4 {
+            &HPE_REGS_V4
+        } else {
+            &HPE_REGS
+        }
+    }
+}
+
+const CLINT_SIZE: u32 = 0x1_0000;
+const CLINT_MTIMECMP: u32 = 0x4000;
+const CLINT_MTIME: u32 = 0xBFF8;
+
+/// Imported Renode systems built on `platforms/cpus/miv.repl` (Microchip
+/// Mi-V RV32), which share its CLINT and PLIC.
+fn is_miv(name: &str) -> bool {
+    matches!(
+        name,
+        "miv" | "miv_rv32" | "miv-board" | "miv-board-additional-uarts"
+    )
+}
+
+/// Memory-mapped core-local interruptor of a single-hart RV32 chip, in the
+/// SiFive `clint0` layout that RISC-V `riscv,machine-timer` drivers use:
+/// `msip` at +0x0, `mtimecmp` at +0x4000, `mtime` at +0xBFF8. `msip` drives
+/// `mip.MSIP`, `mtime >= mtimecmp` drives `mip.MTIP`. The window is decoded by
+/// the core, as on the RV64 core, so it never reaches the bus.
+///
+/// `mtime` counts the chip's timer reference, not CPU clocks: it is derived
+/// from the core's retired-cycle count as `cycles * mtime_hz / cpu_hz`, so a
+/// reference that does not divide the CPU clock (FE310: 32 768 Hz from
+/// 62 MHz) keeps its exact long-run rate. A firmware write to `mtime` moves
+/// `mtime_offset`.
+///
+/// Not modelled: AMO and LR/SC accesses to the window (they reach the bus),
+/// other harts' registers (read zero, writes dropped), and `msip` /
+/// `mtime_offset` in CPU snapshots (`mtimecmp` is saved).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rv32Clint {
+    pub base: u32,
+    pub mtime_hz: u64,
+    pub cpu_hz: u64,
+    pub msip: bool,
+    pub mtime_offset: u64,
+}
+
+impl Rv32Clint {
+    pub fn new(base: u32, mtime_hz: u64, cpu_hz: u64) -> Self {
+        Self {
+            base,
+            mtime_hz: mtime_hz.max(1),
+            cpu_hz: cpu_hz.max(1),
+            msip: false,
+            mtime_offset: 0,
+        }
+    }
+
+    /// The CLINT a chip descriptor's core complex carries, if any.
+    ///
+    /// Keyed by chip name, as [`crate::cpu::riscv64::Rv64Params`] is: the
+    /// block belongs to the core complex, not to a board.
+    pub fn for_chip(chip: &labwired_config::ChipDescriptor) -> Option<Self> {
+        let name = chip.name.to_ascii_lowercase();
+        if name == "sifive-fe310" && chip.cpu_hz != 0 {
+            // FE310-G002: CLINT at 0x0200_0000 (Zephyr `riscv32-fe310.dtsi`
+            // `clint@2000000`, Renode `sifive-fe310.repl`). `mtime` runs from
+            // the 32 768 Hz lfclk (Zephyr `soc/sifive/sifive_freedom/fe300`
+            // Kconfig.defconfig). Renode clocks it at 62 MHz instead.
+            return Some(Self::new(0x0200_0000, 32_768, chip.cpu_hz));
+        }
+        if is_miv(&name) && chip.cpu_hz != 0 {
+            // Mi-V: CoreLevelInterruptor at 0x4400_0000, clocked at the
+            // 66 MHz CPU clock (Renode `platforms/cpus/miv.repl`
+            // `clint ... frequency: 66000000`, `[0, 1] -> cpu@[3, 7]`).
+            return Some(Self::new(0x4400_0000, chip.cpu_hz, chip.cpu_hz));
+        }
+        None
+    }
+
+    /// The PLIC a chip descriptor's core complex carries, if any. Keyed by
+    /// chip name, as [`Self::for_chip`] is. The bus forwards a peripheral's
+    /// raw `irq:` number, which on these chips is its PLIC source ID.
+    pub fn plic_for_chip(chip: &labwired_config::ChipDescriptor) -> Option<PlicParams> {
+        let name = chip.name.to_ascii_lowercase();
+        if name == "sifive-fe310" {
+            // FE310-G002: PLIC at 0x0C00_0000 with sources 1..52, 7 priority
+            // levels (3-bit fields) and one context, hart 0 M-mode (FE310-G002
+            // Manual v1p1 Ch. 8; Zephyr `riscv32-fe310.dtsi`
+            // `interrupt-controller@c000000` `riscv,ndev = <52>`; Renode
+            // `sifive-fe310.repl` `numberOfSources: 52`, `numberOfContexts: 1`,
+            // uart0 `IRQ -> plic@3`).
+            return Some(PlicParams {
+                base: 0x0C00_0000,
+                num_sources: 53, // Plic stores the one-past-last ID.
+                num_contexts: 1,
+                priority_bits: 3,
+                context: 0,
+            });
+        }
+        if is_miv(&name) {
+            // Mi-V: PLIC at 0x4000_0000 with sources 1..31, no priority
+            // levels and one context (Renode `platforms/cpus/miv.repl`
+            // `numberOfSources: 31`, `numberOfContexts: 1`,
+            // `prioritiesEnabled: false`, `0 -> cpu@11`; timer0 and timer1
+            // drive sources 30 and 31).
+            return Some(PlicParams {
+                base: 0x4000_0000,
+                num_sources: 32, // Plic stores the one-past-last ID.
+                num_contexts: 1,
+                priority_bits: 0,
+                context: 0,
+            });
+        }
+        None
+    }
+
+    fn mtime(&self, cycles: u64) -> u64 {
+        let ticks = u128::from(cycles) * u128::from(self.mtime_hz) / u128::from(self.cpu_hz);
+        (ticks as u64).wrapping_add(self.mtime_offset)
+    }
+
+    /// First retired-cycle count at which `mtime >= cmp`.
+    fn first_cycle_at(&self, cmp: u64) -> u64 {
+        let Some(ticks) = cmp.checked_sub(self.mtime_offset) else {
+            return 0;
+        };
+        let cycles =
+            (u128::from(ticks) * u128::from(self.cpu_hz)).div_ceil(u128::from(self.mtime_hz));
+        u64::try_from(cycles).unwrap_or(u64::MAX)
     }
 }
 
@@ -147,7 +292,7 @@ fn rv32e_reg_operands(instruction: &Instruction) -> [Option<u8>; 3] {
     }
 }
 
-fn rv32e_uses_high_register(instruction: &Instruction) -> bool {
+pub(crate) fn rv32e_uses_high_register(instruction: &Instruction) -> bool {
     rv32e_reg_operands(instruction)
         .into_iter()
         .flatten()
@@ -170,9 +315,26 @@ pub struct RiscV {
     pub mcause: u32,
     pub mtval: u32,
 
-    // CLINT-like internal state (minimal)
+    // CLINT-like internal state (minimal). `mtime` is the retired-cycle
+    // count; with a memory-mapped [`Rv32Clint`] `mtimecmp` compares against
+    // the CLINT's own `mtime` instead.
     pub mtime: u64,
     pub mtimecmp: u64,
+    /// Memory-mapped CLINT of a chip that declares one ([`Rv32Clint::for_chip`]).
+    pub clint: Option<Rv32Clint>,
+    /// Memory-mapped PLIC of a chip that declares one
+    /// ([`Rv32Clint::plic_for_chip`]). It drives `mip.MEIP`; peripheral IRQs
+    /// pend its sources through [`Cpu::set_exception_pending`].
+    pub plic: Option<Plic>,
+    /// WCH QingKe V2 PFIC of a CH32V00x part ([`QingKePfic::for_chip`]).
+    /// Peripheral IRQs pend its lines through [`Cpu::set_exception_pending`];
+    /// the core takes them itself, through the mtvec vector table.
+    pub pfic: Option<QingKePfic>,
+    /// QingKe INTSYSCR (CSR 0x804). Stored only while a PFIC is attached;
+    /// `HWSTKEN` enables the hardware prologue/epilogue (HPE).
+    pub intsyscr: u32,
+    /// QingKe V4 CORECFGR (CSR 0xBC0), stored only.
+    pub corecfgr: u32,
 
     /// Active LR/SC reservation address. `None` means no outstanding
     /// reservation; the next SC.W to any address will fail. On a single
@@ -186,6 +348,7 @@ pub struct RiscV {
 
     waiting_for_interrupt: bool,
     decode_cache: Box<[Option<RiscVDecodeCacheEntry>; 4096]>,
+    block_cache: super::riscv_block_cache::Rv32BlockCache,
 
     /// Side-effect-free instruction-fetch window over flash-XIP and linear
     /// code memories (`extra_mem` IRAM/ROM). Avoids per-instruction
@@ -263,10 +426,16 @@ impl RiscV {
             mtval: 0,
             mtime: 0,
             mtimecmp: 0,
+            clint: None,
+            plic: None,
+            pfic: None,
+            intsyscr: 0,
+            corecfgr: 0,
             reservation: None,
             triggers: trigger::TriggerModule::default(),
             waiting_for_interrupt: false,
             decode_cache: Box::new([None; 4096]),
+            block_cache: super::riscv_block_cache::Rv32BlockCache::new(),
             fetch_base: 0,
             fetch_len: 0,
             fetch_bytes: [0; FETCH_WINDOW_BYTES],
@@ -357,6 +526,7 @@ impl RiscV {
     /// outside it (the common case: stack/data stores while fetching code).
     #[inline]
     fn invalidate_fetch_if_store_overlaps(&mut self, addr: u32, size: u32) {
+        self.block_cache.invalidate_if_store_overlaps(addr, size);
         if self.fetch_len == 0 || size == 0 {
             return;
         }
@@ -462,12 +632,246 @@ impl RiscV {
         Self::new_for(RiscVCoreProfile::Esp32C3)
     }
 
+    /// Map a CLINT at `clint.base`. `mtimecmp` resets to all-ones, which keeps
+    /// MTIP low until firmware arms it, as SiFive-derived drivers assume.
+    pub fn attach_clint(&mut self, clint: Rv32Clint) {
+        self.clint = Some(clint);
+        self.mtimecmp = u64::MAX;
+        self.refresh_timer_lines();
+    }
+
+    /// Map a PLIC. Every source resets disabled at priority 0, so MEIP stays
+    /// low until firmware enables a source.
+    pub fn attach_plic(&mut self, params: PlicParams) {
+        self.plic = Some(Plic::new(params));
+        self.refresh_meip();
+    }
+
+    /// Map a QingKe PFIC at 0xE000E000 (V2, or V4 on a `QingkeV4` core).
+    /// Every line resets disabled.
+    pub fn attach_pfic(&mut self) {
+        self.pfic = Some(QingKePfic::new());
+    }
+
+    /// Take PFIC interrupt `irq`, with `mepc = next_pc`. QingKe mtvec bit 0
+    /// selects the vector table; bit 1 makes each entry an absolute handler
+    /// address (vendor startup: `_start | 3`) instead of a jump instruction.
+    fn enter_pfic_interrupt(&mut self, bus: &mut dyn Bus, irq: u32, next_pc: u32) -> SimResult<()> {
+        if let Some(pfic) = self.pfic.as_mut() {
+            pfic.take(irq);
+        }
+        self.handle_trap(0x8000_0000 | irq, next_pc);
+        if self.mtvec & 1 != 0 {
+            let slot = (self.mtvec & !3).wrapping_add(irq.wrapping_mul(4));
+            self.pc = if self.mtvec & 2 != 0 {
+                bus.read_u32(u64::from(slot))? & !1
+            } else {
+                slot
+            };
+        }
+        Ok(())
+    }
+
+    /// True when the attached PFIC has an interrupt the core would take.
+    #[inline]
+    fn pfic_ready(&self) -> bool {
+        self.pfic.as_ref().is_some_and(QingKePfic::has_ready)
+    }
+
+    /// Drive `mip.MEIP` from the PLIC's notification to this hart's context.
+    fn refresh_meip(&mut self) {
+        if let Some(plic) = &self.plic {
+            if plic.meip() {
+                self.mip |= 1 << 11;
+            } else {
+                self.mip &= !(1 << 11);
+            }
+        }
+    }
+
+    /// True when the core decodes a memory-mapped window itself (CLINT or
+    /// PLIC), so bus-only fast paths would miss its accesses.
+    #[inline]
+    fn decodes_core_mmio(&self) -> bool {
+        self.clint.is_some() || self.plic.is_some() || self.pfic.is_some()
+    }
+
+    #[inline]
+    fn plic_offset(&self, addr: u32) -> Option<u64> {
+        self.plic.as_ref()?.offset(u64::from(addr))
+    }
+
+    /// PLIC load: its registers are 32-bit, so a narrower load returns the
+    /// addressed lanes of the containing word. A claim read is a side effect.
+    fn plic_read(&mut self, off: u64, size: u32) -> u32 {
+        let Some(plic) = self.plic.as_mut() else {
+            return 0;
+        };
+        let word = plic.read_u32(off & !3);
+        self.refresh_meip();
+        let v = word >> ((off & 3) * 8);
+        if size >= 4 {
+            v
+        } else {
+            v & ((1u32 << (size * 8)) - 1)
+        }
+    }
+
+    /// PLIC store. Narrower stores write the zero-extended value to the
+    /// containing word, as SiFive's 32-bit-only register file does.
+    fn plic_write(&mut self, off: u64, size: u32, value: u32) {
+        let Some(plic) = self.plic.as_mut() else {
+            return;
+        };
+        let v = if size >= 4 {
+            value
+        } else {
+            (value & ((1u32 << (size * 8)) - 1)) << ((off & 3) * 8)
+        };
+        plic.write_u32(off & !3, v);
+        self.refresh_meip();
+    }
+
     fn update_mtime_after_elapsed_cycles(&mut self, cycles: u64) {
         self.mtime = self.mtime.wrapping_add(cycles);
-        if self.mtime >= self.mtimecmp {
+        self.refresh_timer_lines();
+    }
+
+    fn refresh_timer_lines(&mut self) {
+        let mtip = match &self.clint {
+            None => self.mtime >= self.mtimecmp,
+            Some(c) => {
+                if c.msip {
+                    self.mip |= 1 << 3; // MSIP
+                } else {
+                    self.mip &= !(1 << 3);
+                }
+                c.mtime(self.mtime) >= self.mtimecmp
+            }
+        };
+        if mtip {
             self.mip |= 1 << 7; // MTIP
         } else {
             self.mip &= !(1 << 7);
+        }
+    }
+
+    /// Retired cycles until MTIP rises: `None` when it is already pending,
+    /// `Some(u64::MAX)` when `mtimecmp` is disarmed.
+    fn cycles_until_mtip(&self) -> Option<u64> {
+        if self.mtimecmp == u64::MAX {
+            return Some(u64::MAX);
+        }
+        let target = match &self.clint {
+            None => self.mtimecmp,
+            Some(c) => c.first_cycle_at(self.mtimecmp),
+        };
+        target.checked_sub(self.mtime).filter(|n| *n != 0)
+    }
+
+    #[inline]
+    fn clint_offset(&self, addr: u32) -> Option<u32> {
+        let c = self.clint.as_ref()?;
+        let off = addr.wrapping_sub(c.base);
+        (off < CLINT_SIZE).then_some(off)
+    }
+
+    /// The 64-bit CLINT register containing `off` and its offset.
+    fn clint_reg(&self, off: u32) -> Option<(u32, u64)> {
+        let c = self.clint.as_ref()?;
+        if off < 4 {
+            Some((0, u64::from(c.msip)))
+        } else if (CLINT_MTIMECMP..CLINT_MTIMECMP + 8).contains(&off) {
+            Some((CLINT_MTIMECMP, self.mtimecmp))
+        } else if (CLINT_MTIME..CLINT_MTIME + 8).contains(&off) {
+            Some((CLINT_MTIME, c.mtime(self.mtime)))
+        } else {
+            None
+        }
+    }
+
+    fn clint_read(&self, off: u32, size: u32) -> u32 {
+        let Some((reg_off, value)) = self.clint_reg(off) else {
+            return 0;
+        };
+        let v = (value >> ((off - reg_off) * 8)) as u32;
+        if size >= 4 {
+            v
+        } else {
+            v & ((1u32 << (size * 8)) - 1)
+        }
+    }
+
+    fn clint_write(&mut self, off: u32, size: u32, value: u32) {
+        let Some((reg_off, old)) = self.clint_reg(off) else {
+            return;
+        };
+        let shift = (off - reg_off) * 8;
+        let mask = if size >= 4 {
+            u64::from(u32::MAX) << shift
+        } else {
+            u64::from((1u32 << (size * 8)) - 1) << shift
+        };
+        let new = (old & !mask) | ((u64::from(value) << shift) & mask);
+        let cycles = self.mtime;
+        let Some(c) = self.clint.as_mut() else {
+            return;
+        };
+        match reg_off {
+            0 => c.msip = new & 1 != 0,
+            CLINT_MTIMECMP => self.mtimecmp = new,
+            _ => {
+                let base = c.mtime(cycles).wrapping_sub(c.mtime_offset);
+                c.mtime_offset = new.wrapping_sub(base);
+            }
+        }
+        self.refresh_timer_lines();
+    }
+
+    /// Data load of `size` bytes, decoding the CLINT and PLIC windows before
+    /// the bus.
+    #[inline]
+    fn load(&mut self, bus: &mut dyn Bus, addr: u32, size: u32) -> SimResult<u32> {
+        if let Some(off) = self.clint_offset(addr) {
+            return Ok(self.clint_read(off, size));
+        }
+        if let Some(off) = self.plic_offset(addr) {
+            return Ok(self.plic_read(off, size));
+        }
+        if let Some(pfic) = self.pfic.as_ref() {
+            if let Some(off) = QingKePfic::offset(addr) {
+                return Ok(pfic.read(off, size));
+            }
+        }
+        Ok(match size {
+            1 => u32::from(bus.read_u8(u64::from(addr))?),
+            2 => u32::from(bus.read_u16(u64::from(addr))?),
+            _ => bus.read_u32(u64::from(addr))?,
+        })
+    }
+
+    /// Data store of `size` bytes, decoding the CLINT and PLIC windows before
+    /// the bus.
+    #[inline]
+    fn store(&mut self, bus: &mut dyn Bus, addr: u32, size: u32, value: u32) -> SimResult<()> {
+        if let Some(off) = self.clint_offset(addr) {
+            self.clint_write(off, size, value);
+            return Ok(());
+        }
+        if let Some(off) = self.plic_offset(addr) {
+            self.plic_write(off, size, value);
+            return Ok(());
+        }
+        if let Some(pfic) = self.pfic.as_mut() {
+            if let Some(off) = QingKePfic::offset(addr) {
+                pfic.write(off, size, value);
+                return Ok(());
+            }
+        }
+        match size {
+            1 => bus.write_u8(u64::from(addr), value as u8),
+            2 => bus.write_u16(u64::from(addr), value as u16),
+            _ => bus.write_u32(u64::from(addr), value),
         }
     }
 
@@ -538,6 +942,9 @@ impl RiscV {
         const LOOP_INSNS: u32 = 4;
         if budget < LOOP_INSNS
             // An armed trigger must see every access and fetch individually.
+            // CLINT and PLIC accesses are decoded by the core, not by the
+            // bus reads and writes these windows replay.
+            || self.decodes_core_mmio()
             || self.triggers.armed()
             || self.waiting_for_interrupt
             || (self.mstatus & (1 << 3)) != 0
@@ -664,6 +1071,9 @@ impl RiscV {
     fn try_store_spin_window(&mut self, bus: &mut dyn Bus, budget: u32) -> u32 {
         if budget < 6
             // An armed trigger must see every access and fetch individually.
+            // CLINT and PLIC accesses are decoded by the core, not by the
+            // bus reads and writes these windows replay.
+            || self.decodes_core_mmio()
             || self.triggers.armed()
             || self.waiting_for_interrupt
             || (self.mstatus & (1 << 3)) != 0
@@ -781,6 +1191,7 @@ impl RiscV {
     fn invalidate_fetch_window(&mut self) {
         self.fetch_len = 0;
         self.fetch_refill_failed_base = None;
+        self.block_cache.invalidate();
     }
 
     fn read_reg(&self, n: u8) -> u32 {
@@ -806,6 +1217,12 @@ impl RiscV {
             // ROM. The observed writes discard the old values; any silicon
             // side effects are not modeled.
             0x800 | 0x801 if self.core_profile == RiscVCoreProfile::Esp32C3 => 0,
+            // WCH QingKe V2 INTSYSCR (CH32V003/V005/V006 are the RV32E chips):
+            // the vendor startup writes HWSTKEN|INESTEN before `mret` to main.
+            // With a PFIC attached, HWSTKEN drives the hardware prologue and
+            // INESTEN is stored only. Without one it reads as zero.
+            0x804 if self.pfic.is_some() => self.intsyscr,
+            0x804 if self.core_profile == RiscVCoreProfile::Rv32e => 0,
             // This emulator exposes one hart, whose architectural ID is zero.
             0xF14 => 0,
             // Debug trigger module (hardware breakpoints / watchpoints).
@@ -829,6 +1246,8 @@ impl RiscV {
             // CSR_PMAADDR0=0xBD0 (riscv/csr.h). esp_cpu_configure_invalid_regions
             // on C6 writes these during early init; side effects are not modelled.
             0xBC0..=0xBDF if self.core_profile == RiscVCoreProfile::Esp32C3 => 0,
+            // QingKe V4 CORECFGR: see `RiscVCoreProfile::QingkeV4`.
+            0xBC0 if self.core_profile == RiscVCoreProfile::QingkeV4 => self.corecfgr,
             // Timer CSR stubs (Standard RISC-V shadow non-privileged? No, these are machine mode)
             0xB00 => (self.mtime & 0xFFFFFFFF) as u32,
             0xB80 => (self.mtime >> 32) as u32,
@@ -849,7 +1268,9 @@ impl RiscV {
             0xC00
                 if matches!(
                     self.core_profile,
-                    RiscVCoreProfile::StandardRv32 | RiscVCoreProfile::Rv32e
+                    RiscVCoreProfile::StandardRv32
+                        | RiscVCoreProfile::Rv32e
+                        | RiscVCoreProfile::QingkeV4
                 ) =>
             {
                 (self.mtime & 0xFFFFFFFF) as u32
@@ -857,7 +1278,9 @@ impl RiscV {
             0xC80
                 if matches!(
                     self.core_profile,
-                    RiscVCoreProfile::StandardRv32 | RiscVCoreProfile::Rv32e
+                    RiscVCoreProfile::StandardRv32
+                        | RiscVCoreProfile::Rv32e
+                        | RiscVCoreProfile::QingkeV4
                 ) =>
             {
                 (self.mtime >> 32) as u32
@@ -872,6 +1295,9 @@ impl RiscV {
             0x000 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             // See read_csr: accept the ROM-init writes and discard their values.
             0x800 | 0x801 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
+            // See read_csr: QingKe V2 INTSYSCR (HWSTKEN, INESTEN).
+            0x804 if self.pfic.is_some() => self.intsyscr = val & 0x3,
+            0x804 if self.core_profile == RiscVCoreProfile::Rv32e => {}
             0x7A0..=0x7A5 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
                 return self.triggers.write_csr(csr, val)
             }
@@ -879,7 +1305,11 @@ impl RiscV {
             // See read_csr: medeleg/mideleg RAZ/WI on Esp32C3 profile.
             0x302 | 0x303 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             0x304 => self.mie = val,
-            0x344 => self.mip = val,
+            0x344 => {
+                // MEIP is read-only: the PLIC drives it.
+                self.mip = val;
+                self.refresh_meip();
+            }
             0x305 => self.mtvec = val,
             0x340 => self.mscratch = val,
             0x341 => self.mepc = val,
@@ -889,6 +1319,7 @@ impl RiscV {
             0x3A0..=0x3A3 | 0x3B0..=0x3BF => {}
             // See read_csr: accept PMA cfg/addr writes as no-ops.
             0xBC0..=0xBDF if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
+            0xBC0 if self.core_profile == RiscVCoreProfile::QingkeV4 => self.corecfgr = val,
             0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             _ => return false,
         }
@@ -924,6 +1355,20 @@ impl RiscV {
                     self.mtvec, self.x[1], self.x[2], self.x[10]
                 );
             }
+        }
+        if let Some(pfic) = self.pfic.as_mut() {
+            // QingKe HPE: with HWSTKEN the hardware saves the caller-saved
+            // registers on entry and `mret` restores them, so vendor
+            // `WCH-Interrupt-fast` handlers save nothing themselves.
+            let saved = (self.intsyscr & INTSYSCR_HWSTKEN != 0).then(|| {
+                let mut saved = [0; 16];
+                for (slot, &r) in saved.iter_mut().zip(self.core_profile.hpe_regs()) {
+                    *slot = self.x[r];
+                }
+                saved
+            });
+            let irq = (cause & 0x8000_0000 != 0).then_some(cause & 0x7FFF_FFFF);
+            pfic.frames.push(PficFrame { irq, saved });
         }
         self.mepc = epc;
         self.mcause = cause;
@@ -994,6 +1439,618 @@ impl RiscV {
     }
 }
 
+#[inline]
+fn pending_schedule_deadline(_bus: &dyn Bus) -> Option<u64> {
+    #[cfg(feature = "event-scheduler")]
+    {
+        if _bus.has_pending_schedule() {
+            return _bus.earliest_pending_deadline();
+        }
+    }
+    None
+}
+
+impl RiscV {
+    /// Would a compiled or cached block that retires `n` instructions from the
+    /// current state step *across* an interrupt the interpreter would have
+    /// taken mid-block? If so the caller interprets the stretch instead, so
+    /// the trap lands at exactly the instruction the interpreter would trap on.
+    ///
+    /// The interpreter's interrupt check ([`RiscV::step`] tail) fires only
+    /// when global `mstatus.MIE` is set. Within one `Machine::run` batch the
+    /// external IRQ lines are stable (peripherals tick only *between* batches),
+    /// so the sole source that can *become* pending mid-block is the internal
+    /// CLINT timer: the block advances `mtime` by exactly `n`, so if that
+    /// crosses `mtimecmp` (with the timer unmasked in `mie`) the MTIP edge —
+    /// and its trap — must be observed inside the block.
+    fn block_would_cross_irq(&self, bus: &dyn Bus, n: u32) -> bool {
+        // Interrupts globally disabled: no trap is taken regardless.
+        if (self.mstatus & (1 << 3)) == 0 {
+            return false;
+        }
+        // Something is already pending (or an external line is asserted): the
+        // interpreter would trap within one instruction. Do not batch past it.
+        if (self.mip & self.mie) != 0 || bus.external_irq_lines() != 0 || self.pfic_ready() {
+            return true;
+        }
+        // Internal timer edge inside the block's mtime span.
+        let timer_unmasked = (self.mie & (1 << 7)) != 0;
+        timer_unmasked && self.cycles_until_mtip().is_some_and(|c| c <= u64::from(n))
+    }
+
+    /// Execute one or more cached decoded basic blocks via [`Rv32BlockCache`]
+    /// (MIT design adapted from `mikroverk/esp32sim` EX265), returning the
+    /// number of instructions retired (`0` if the current PC is not eligible
+    /// for block execution and should fall back to [`Self::step`]).
+    fn try_step_cached_blocks(
+        &mut self,
+        bus: &mut dyn Bus,
+        max_count: u32,
+        exact_clock: bool,
+        batch_start: u64,
+        already_retired: u32,
+    ) -> SimResult<u32> {
+        use super::riscv_block_cache::{
+            FLAG_HAS_MEM, FLAG_HAS_STORE, FLAG_SELF_LOOP, FLAG_VERIFY_ENTRY, MAX_BLOCK_LEN,
+        };
+
+        if max_count == 0 || self.waiting_for_interrupt || self.triggers.armed() {
+            return Ok(0);
+        }
+
+        // Fast guard against cycle-accurate buses and active debug watches.
+        if !bus.block_cache_eligible() {
+            return Ok(0);
+        }
+
+        let mut total_retired: u32 = 0;
+
+        loop {
+            let remaining = max_count - total_retired;
+            if remaining == 0 {
+                break;
+            }
+            if exact_clock {
+                if let Some(dl) = pending_schedule_deadline(bus) {
+                    let now = batch_start.wrapping_add(u64::from(already_retired + total_retired));
+                    if dl <= now {
+                        break;
+                    }
+                }
+            }
+
+            let pc = self.pc;
+            let meta = if let Some(m) = self.block_cache.lookup(pc) {
+                // Re-verify synthetic base-zero flash entry word so debugger
+                // host-patching tests see patched words immediately.
+                if (m.flags & FLAG_VERIFY_ENTRY) != 0
+                    && bus.read_flash_entry_word(pc as u64) != Some(m.entry_word)
+                {
+                    self.block_cache.invalidate();
+                    break;
+                }
+                m
+            } else {
+                // Compile a fresh decoded block from side-effect-free code
+                // memory. Warm the fetch window first so spin/poll fast paths
+                // (`try_spin_window`) also see the live window bytes.
+                if bus.check_fetch_permission(pc as u64) != crate::FetchPermission::Allowed {
+                    break;
+                }
+                self.refill_fetch_window(bus, pc);
+                let Some((code_bytes, writable_code, verify_entry)) =
+                    bus.read_block_cache_code(pc as u64, MAX_BLOCK_LEN * 4)
+                else {
+                    break;
+                };
+
+                // Clamp `code_bytes` before any 256-byte window whose fetch
+                // permission is not `Allowed` (preserves PMS violation traps).
+                let mut allowed_len = code_bytes.len();
+                let start_win = pc & !0xFF;
+                let end_pc = pc.wrapping_add(allowed_len as u32);
+                let mut win = start_win.wrapping_add(0x100);
+                while win > start_win && win < end_pc {
+                    if bus.check_fetch_permission(win as u64) != crate::FetchPermission::Allowed {
+                        allowed_len = (win - pc) as usize;
+                        break;
+                    }
+                    win = win.wrapping_add(0x100);
+                }
+
+                let Some(m) = self.block_cache.compile_block(
+                    pc,
+                    &code_bytes[..allowed_len],
+                    self.core_profile,
+                    writable_code,
+                    verify_entry,
+                ) else {
+                    break;
+                };
+                m
+            };
+
+            let block_len = meta.len as u32;
+            if block_len > remaining {
+                break;
+            }
+            if self.block_would_cross_irq(bus, block_len) {
+                break;
+            }
+            if exact_clock {
+                if let Some(dl) = pending_schedule_deadline(bus) {
+                    let now = batch_start.wrapping_add(u64::from(already_retired + total_retired));
+                    if dl < now.saturating_add(u64::from(block_len)) {
+                        break;
+                    }
+                }
+            }
+
+            let has_mem = (meta.flags & FLAG_HAS_MEM) != 0;
+            let has_store = (meta.flags & FLAG_HAS_STORE) != 0;
+            let is_self_loop = (meta.flags & FLAG_SELF_LOOP) != 0;
+
+            // Temporarily move `block_cache` out or copy the tiny block slice
+            // (<= 32 steps) onto the stack so `self` is free for `load`/`store`.
+            let mut local_steps = [super::riscv_block_cache::DecodedStep {
+                inst: Instruction::Fence,
+                pc: 0,
+                next_pc: 0,
+            }; MAX_BLOCK_LEN];
+            local_steps[..meta.len].copy_from_slice(self.block_cache.steps(meta));
+            let steps = &local_steps[..meta.len];
+
+            // Self-loop tight execution (from `mikroverk/esp32sim` EX265):
+            // repeat the decoded block without re-indexing the cache table
+            // while it jumps back to `meta.tag_pc`, budget permits, and no
+            // interrupt deadline is crossed.
+            let mut streak_retired: u32 = 0;
+            loop {
+                let mut next_pc = meta.tag_pc;
+                let mut broke_early = false;
+                for (idx, step) in steps.iter().enumerate() {
+                    self.pc = step.pc;
+                    next_pc = step.next_pc;
+
+                    if exact_clock && has_mem {
+                        bus.publish_cycle(batch_start.wrapping_add(u64::from(
+                            already_retired + total_retired + streak_retired + idx as u32,
+                        )));
+                    }
+
+                    match step.inst {
+                        Instruction::Lui { rd, imm } => self.write_reg(rd, imm),
+                        Instruction::Auipc { rd, imm } => {
+                            self.write_reg(rd, step.pc.wrapping_add(imm));
+                        }
+                        Instruction::Addi { rd, rs1, imm } => {
+                            let val = self.read_reg(rs1).wrapping_add(imm as u32);
+                            self.write_reg(rd, val);
+                        }
+                        Instruction::Slti { rd, rs1, imm } => {
+                            let val = u32::from((self.read_reg(rs1) as i32) < imm);
+                            self.write_reg(rd, val);
+                        }
+                        Instruction::Sltiu { rd, rs1, imm } => {
+                            let val = u32::from(self.read_reg(rs1) < imm as u32);
+                            self.write_reg(rd, val);
+                        }
+                        Instruction::Xori { rd, rs1, imm } => {
+                            self.write_reg(rd, self.read_reg(rs1) ^ (imm as u32));
+                        }
+                        Instruction::Ori { rd, rs1, imm } => {
+                            self.write_reg(rd, self.read_reg(rs1) | (imm as u32));
+                        }
+                        Instruction::Andi { rd, rs1, imm } => {
+                            self.write_reg(rd, self.read_reg(rs1) & (imm as u32));
+                        }
+                        Instruction::Slli { rd, rs1, shamt } => {
+                            self.write_reg(rd, self.read_reg(rs1) << (shamt & 0x1F));
+                        }
+                        Instruction::Srli { rd, rs1, shamt } => {
+                            self.write_reg(rd, self.read_reg(rs1) >> (shamt & 0x1F));
+                        }
+                        Instruction::Srai { rd, rs1, shamt } => {
+                            self.write_reg(
+                                rd,
+                                ((self.read_reg(rs1) as i32) >> (shamt & 0x1F)) as u32,
+                            );
+                        }
+                        Instruction::Add { rd, rs1, rs2 } => {
+                            self.write_reg(rd, self.read_reg(rs1).wrapping_add(self.read_reg(rs2)));
+                        }
+                        Instruction::Sub { rd, rs1, rs2 } => {
+                            self.write_reg(rd, self.read_reg(rs1).wrapping_sub(self.read_reg(rs2)));
+                        }
+                        Instruction::Sll { rd, rs1, rs2 } => {
+                            let shamt = self.read_reg(rs2) & 0x1F;
+                            self.write_reg(rd, self.read_reg(rs1) << shamt);
+                        }
+                        Instruction::Slt { rd, rs1, rs2 } => {
+                            let val = u32::from(
+                                (self.read_reg(rs1) as i32) < (self.read_reg(rs2) as i32),
+                            );
+                            self.write_reg(rd, val);
+                        }
+                        Instruction::Sltu { rd, rs1, rs2 } => {
+                            let val = u32::from(self.read_reg(rs1) < self.read_reg(rs2));
+                            self.write_reg(rd, val);
+                        }
+                        Instruction::Xor { rd, rs1, rs2 } => {
+                            self.write_reg(rd, self.read_reg(rs1) ^ self.read_reg(rs2));
+                        }
+                        Instruction::Srl { rd, rs1, rs2 } => {
+                            let shamt = self.read_reg(rs2) & 0x1F;
+                            self.write_reg(rd, self.read_reg(rs1) >> shamt);
+                        }
+                        Instruction::Sra { rd, rs1, rs2 } => {
+                            let shamt = self.read_reg(rs2) & 0x1F;
+                            self.write_reg(rd, ((self.read_reg(rs1) as i32) >> shamt) as u32);
+                        }
+                        Instruction::Or { rd, rs1, rs2 } => {
+                            self.write_reg(rd, self.read_reg(rs1) | self.read_reg(rs2));
+                        }
+                        Instruction::And { rd, rs1, rs2 } => {
+                            self.write_reg(rd, self.read_reg(rs1) & self.read_reg(rs2));
+                        }
+                        Instruction::Fence => {}
+                        Instruction::Mul { rd, rs1, rs2 } => {
+                            self.write_reg(rd, self.read_reg(rs1).wrapping_mul(self.read_reg(rs2)));
+                        }
+                        Instruction::Mulh { rd, rs1, rs2 } => {
+                            let a = self.read_reg(rs1) as i32 as i64;
+                            let b = self.read_reg(rs2) as i32 as i64;
+                            self.write_reg(rd, ((a.wrapping_mul(b)) >> 32) as u32);
+                        }
+                        Instruction::Mulhsu { rd, rs1, rs2 } => {
+                            let a = self.read_reg(rs1) as i32 as i64 as u64;
+                            let b = self.read_reg(rs2) as u64;
+                            self.write_reg(rd, ((a.wrapping_mul(b)) >> 32) as u32);
+                        }
+                        Instruction::Mulhu { rd, rs1, rs2 } => {
+                            let a = self.read_reg(rs1) as u64;
+                            let b = self.read_reg(rs2) as u64;
+                            self.write_reg(rd, ((a.wrapping_mul(b)) >> 32) as u32);
+                        }
+                        Instruction::Div { rd, rs1, rs2 } => {
+                            let dividend = self.read_reg(rs1) as i32;
+                            let divisor = self.read_reg(rs2) as i32;
+                            let res = if divisor == 0 {
+                                -1
+                            } else if dividend == i32::MIN && divisor == -1 {
+                                dividend
+                            } else {
+                                dividend / divisor
+                            };
+                            self.write_reg(rd, res as u32);
+                        }
+                        Instruction::Divu { rd, rs1, rs2 } => {
+                            let res = self
+                                .read_reg(rs1)
+                                .checked_div(self.read_reg(rs2))
+                                .unwrap_or(u32::MAX);
+                            self.write_reg(rd, res);
+                        }
+                        Instruction::Rem { rd, rs1, rs2 } => {
+                            let dividend = self.read_reg(rs1) as i32;
+                            let divisor = self.read_reg(rs2) as i32;
+                            let res = if divisor == 0 {
+                                dividend
+                            } else if dividend == i32::MIN && divisor == -1 {
+                                0
+                            } else {
+                                dividend % divisor
+                            };
+                            self.write_reg(rd, res as u32);
+                        }
+                        Instruction::Remu { rd, rs1, rs2 } => {
+                            let dividend = self.read_reg(rs1);
+                            let divisor = self.read_reg(rs2);
+                            let res = if divisor == 0 {
+                                dividend
+                            } else {
+                                dividend % divisor
+                            };
+                            self.write_reg(rd, res);
+                        }
+                        Instruction::CAddi { rd, imm } => {
+                            if rd != 0 {
+                                let res = self.read_reg(rd).wrapping_add(imm as u32);
+                                self.write_reg(rd, res);
+                            }
+                        }
+                        Instruction::CLi { rd, imm } => {
+                            if rd != 0 {
+                                self.write_reg(rd, imm as u32);
+                            }
+                        }
+                        Instruction::CMv { rd, rs2 } => {
+                            if rd != 0 {
+                                let val = self.read_reg(rs2);
+                                self.write_reg(rd, val);
+                            }
+                        }
+                        Instruction::CAddi16sp { imm } => {
+                            let sp = self.read_reg(2);
+                            self.write_reg(2, sp.wrapping_add(imm as u32));
+                        }
+                        Instruction::CAddi4spn { rd, imm } => {
+                            let sp = self.read_reg(2);
+                            self.write_reg(rd, sp.wrapping_add(imm));
+                        }
+                        Instruction::CSli { rd, shamt } => {
+                            if rd != 0 {
+                                let res = self.read_reg(rd).wrapping_shl(u32::from(shamt));
+                                self.write_reg(rd, res);
+                            }
+                        }
+                        Instruction::Lb { rd, rs1, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm as u32);
+                            match self.load(bus, addr, 1) {
+                                Ok(v) => self.write_reg(rd, (v as u8 as i8) as i32 as u32),
+                                Err(e) => {
+                                    self.update_mtime_after_elapsed_cycles(u64::from(
+                                        streak_retired + idx as u32,
+                                    ));
+                                    return Err(e);
+                                }
+                            }
+                        }
+                        Instruction::Lh { rd, rs1, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm as u32);
+                            match self.load(bus, addr, 2) {
+                                Ok(v) => self.write_reg(rd, (v as u16 as i16) as i32 as u32),
+                                Err(e) => {
+                                    self.update_mtime_after_elapsed_cycles(u64::from(
+                                        streak_retired + idx as u32,
+                                    ));
+                                    return Err(e);
+                                }
+                            }
+                        }
+                        Instruction::Lw { rd, rs1, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm as u32);
+                            match self.load(bus, addr, 4) {
+                                Ok(v) => self.write_reg(rd, v),
+                                Err(e) => {
+                                    self.update_mtime_after_elapsed_cycles(u64::from(
+                                        streak_retired + idx as u32,
+                                    ));
+                                    return Err(e);
+                                }
+                            }
+                        }
+                        Instruction::Lbu { rd, rs1, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm as u32);
+                            match self.load(bus, addr, 1) {
+                                Ok(v) => self.write_reg(rd, v),
+                                Err(e) => {
+                                    self.update_mtime_after_elapsed_cycles(u64::from(
+                                        streak_retired + idx as u32,
+                                    ));
+                                    return Err(e);
+                                }
+                            }
+                        }
+                        Instruction::Lhu { rd, rs1, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm as u32);
+                            match self.load(bus, addr, 2) {
+                                Ok(v) => self.write_reg(rd, v),
+                                Err(e) => {
+                                    self.update_mtime_after_elapsed_cycles(u64::from(
+                                        streak_retired + idx as u32,
+                                    ));
+                                    return Err(e);
+                                }
+                            }
+                        }
+                        Instruction::CLw { rd, rs1, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm);
+                            match self.load(bus, addr, 4) {
+                                Ok(v) => self.write_reg(rd, v),
+                                Err(e) => {
+                                    self.update_mtime_after_elapsed_cycles(u64::from(
+                                        streak_retired + idx as u32,
+                                    ));
+                                    return Err(e);
+                                }
+                            }
+                        }
+                        Instruction::CLwsp { rd, imm } => {
+                            let addr = self.read_reg(2).wrapping_add(imm);
+                            match self.load(bus, addr, 4) {
+                                Ok(v) => self.write_reg(rd, v),
+                                Err(e) => {
+                                    self.update_mtime_after_elapsed_cycles(u64::from(
+                                        streak_retired + idx as u32,
+                                    ));
+                                    return Err(e);
+                                }
+                            }
+                        }
+                        Instruction::Sb { rs1, rs2, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm as u32);
+                            let val = self.read_reg(rs2);
+                            if let Err(e) = self.store(bus, addr, 1, val) {
+                                self.update_mtime_after_elapsed_cycles(u64::from(
+                                    streak_retired + idx as u32,
+                                ));
+                                return Err(e);
+                            }
+                            self.invalidate_fetch_if_store_overlaps(addr, 1);
+                            self.reservation = None;
+                            if exact_clock && pending_schedule_deadline(bus).is_some() {
+                                self.pc = next_pc;
+                                streak_retired += idx as u32 + 1;
+                                broke_early = true;
+                                break;
+                            }
+                        }
+                        Instruction::Sh { rs1, rs2, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm as u32);
+                            let val = self.read_reg(rs2);
+                            if let Err(e) = self.store(bus, addr, 2, val) {
+                                self.update_mtime_after_elapsed_cycles(u64::from(
+                                    streak_retired + idx as u32,
+                                ));
+                                return Err(e);
+                            }
+                            self.invalidate_fetch_if_store_overlaps(addr, 2);
+                            self.reservation = None;
+                            if exact_clock && pending_schedule_deadline(bus).is_some() {
+                                self.pc = next_pc;
+                                streak_retired += idx as u32 + 1;
+                                broke_early = true;
+                                break;
+                            }
+                        }
+                        Instruction::Sw { rs1, rs2, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm as u32);
+                            let val = self.read_reg(rs2);
+                            if let Err(e) = self.store(bus, addr, 4, val) {
+                                self.update_mtime_after_elapsed_cycles(u64::from(
+                                    streak_retired + idx as u32,
+                                ));
+                                return Err(e);
+                            }
+                            self.invalidate_fetch_if_store_overlaps(addr, 4);
+                            self.reservation = None;
+                            if exact_clock && pending_schedule_deadline(bus).is_some() {
+                                self.pc = next_pc;
+                                streak_retired += idx as u32 + 1;
+                                broke_early = true;
+                                break;
+                            }
+                        }
+                        Instruction::CSw { rs2, rs1, imm } => {
+                            let addr = self.read_reg(rs1).wrapping_add(imm);
+                            let val = self.read_reg(rs2);
+                            if let Err(e) = self.store(bus, addr, 4, val) {
+                                self.update_mtime_after_elapsed_cycles(u64::from(
+                                    streak_retired + idx as u32,
+                                ));
+                                return Err(e);
+                            }
+                            self.invalidate_fetch_if_store_overlaps(addr, 4);
+                            self.reservation = None;
+                            if exact_clock && pending_schedule_deadline(bus).is_some() {
+                                self.pc = next_pc;
+                                streak_retired += idx as u32 + 1;
+                                broke_early = true;
+                                break;
+                            }
+                        }
+                        Instruction::CSwsp { rs2, imm } => {
+                            let addr = self.read_reg(2).wrapping_add(imm);
+                            let val = self.read_reg(rs2);
+                            if let Err(e) = self.store(bus, addr, 4, val) {
+                                self.update_mtime_after_elapsed_cycles(u64::from(
+                                    streak_retired + idx as u32,
+                                ));
+                                return Err(e);
+                            }
+                            self.invalidate_fetch_if_store_overlaps(addr, 4);
+                            self.reservation = None;
+                            if exact_clock && pending_schedule_deadline(bus).is_some() {
+                                self.pc = next_pc;
+                                streak_retired += idx as u32 + 1;
+                                broke_early = true;
+                                break;
+                            }
+                        }
+                        Instruction::Jal { rd, imm } => {
+                            let target = step.pc.wrapping_add(imm as u32);
+                            self.write_reg(rd, step.next_pc);
+                            next_pc = target;
+                        }
+                        Instruction::Jalr { rd, rs1, imm } => {
+                            let target = self.read_reg(rs1).wrapping_add(imm as u32) & !1;
+                            self.write_reg(rd, step.next_pc);
+                            next_pc = target;
+                        }
+                        Instruction::Beq { rs1, rs2, imm } => {
+                            if self.read_reg(rs1) == self.read_reg(rs2) {
+                                next_pc = step.pc.wrapping_add(imm as u32);
+                            }
+                        }
+                        Instruction::Bne { rs1, rs2, imm } => {
+                            if self.read_reg(rs1) != self.read_reg(rs2) {
+                                next_pc = step.pc.wrapping_add(imm as u32);
+                            }
+                        }
+                        Instruction::Blt { rs1, rs2, imm } => {
+                            if (self.read_reg(rs1) as i32) < (self.read_reg(rs2) as i32) {
+                                next_pc = step.pc.wrapping_add(imm as u32);
+                            }
+                        }
+                        Instruction::Bge { rs1, rs2, imm } => {
+                            if (self.read_reg(rs1) as i32) >= (self.read_reg(rs2) as i32) {
+                                next_pc = step.pc.wrapping_add(imm as u32);
+                            }
+                        }
+                        Instruction::Bltu { rs1, rs2, imm } => {
+                            if self.read_reg(rs1) < self.read_reg(rs2) {
+                                next_pc = step.pc.wrapping_add(imm as u32);
+                            }
+                        }
+                        Instruction::Bgeu { rs1, rs2, imm } => {
+                            if self.read_reg(rs1) >= self.read_reg(rs2) {
+                                next_pc = step.pc.wrapping_add(imm as u32);
+                            }
+                        }
+                        Instruction::CJr { rs1 } => {
+                            next_pc = self.read_reg(rs1) & !1;
+                        }
+                        Instruction::CJalr { rs1 } => {
+                            let target = self.read_reg(rs1) & !1;
+                            self.write_reg(1, step.pc.wrapping_add(2));
+                            next_pc = target;
+                        }
+                        Instruction::CJ { imm } => {
+                            next_pc = step.pc.wrapping_add(imm as u32);
+                        }
+                        Instruction::CBeqz { rs1, imm } => {
+                            if self.read_reg(rs1) == 0 {
+                                next_pc = step.pc.wrapping_add(imm as u32);
+                            }
+                        }
+                        Instruction::CBnez { rs1, imm } => {
+                            if self.read_reg(rs1) != 0 {
+                                next_pc = step.pc.wrapping_add(imm as u32);
+                            }
+                        }
+                        _ => unreachable!("unsupported instruction in Rv32BlockCache"),
+                    }
+                }
+
+                if !broke_early {
+                    self.pc = next_pc;
+                    streak_retired += block_len;
+                }
+
+                // Stay inside the decoded self-loop if the branch jumped back
+                // to `meta.tag_pc` and no store/deadline/IRQ forces an exit.
+                if !broke_early
+                    && is_self_loop
+                    && !has_store
+                    && next_pc == meta.tag_pc
+                    && (max_count - total_retired - streak_retired) >= block_len
+                    && !self.block_would_cross_irq(bus, streak_retired + block_len)
+                    && !(exact_clock && pending_schedule_deadline(bus).is_some())
+                {
+                    continue;
+                }
+                break;
+            }
+
+            self.update_mtime_after_elapsed_cycles(u64::from(streak_retired));
+            total_retired += streak_retired;
+        }
+
+        Ok(total_retired)
+    }
+}
+
 /// Chunk H: RV32IMC wasm-JIT dispatch helpers for `Machine<RiscV>`.
 ///
 /// These drive the [`RiscvJitEngine`](crate::cpu::jit_framework::riscv::RiscvJitEngine)
@@ -1011,7 +2068,9 @@ impl RiscV {
     /// this checks the two rails that do NOT clamp the batch: per-instruction
     /// observers and push-mode logic taps.
     fn jit_gate_allows(&self, bus: &dyn Bus, observers: &[Arc<dyn SimulationObserver>]) -> bool {
-        if !observers.is_empty() {
+        // Compiled blocks access memory through the bus; they would miss the
+        // core-decoded CLINT and PLIC windows.
+        if !observers.is_empty() || self.decodes_core_mmio() {
             return false;
         }
         if bus.logic_tap().is_some_and(|t| t.push_armed()) {
@@ -1047,35 +2106,6 @@ impl RiscV {
             }
         }
         true
-    }
-
-    /// Would a compiled block that retires `n` instructions from the current
-    /// state step *across* an interrupt the interpreter would have taken
-    /// mid-block? If so the caller interprets the stretch instead, so the
-    /// trap lands at exactly the instruction the interpreter would trap on.
-    ///
-    /// The interpreter's interrupt check ([`RiscV::step`] tail) fires only
-    /// when global `mstatus.MIE` is set. Within one `Machine::run` batch the
-    /// external IRQ lines are stable (peripherals tick only *between* batches),
-    /// so the sole source that can *become* pending mid-block is the internal
-    /// CLINT timer: the block advances `mtime` by exactly `n`, so if that
-    /// crosses `mtimecmp` (with the timer unmasked in `mie`) the MTIP edge —
-    /// and its trap — must be observed inside the block.
-    fn block_would_cross_irq(&self, bus: &dyn Bus, n: u32) -> bool {
-        // Interrupts globally disabled: no trap is taken regardless.
-        if (self.mstatus & (1 << 3)) == 0 {
-            return false;
-        }
-        // Something is already pending (or an external line is asserted): the
-        // interpreter would trap within one instruction. Do not batch past it.
-        if (self.mip & self.mie) != 0 || bus.external_irq_lines() != 0 {
-            return true;
-        }
-        // Internal timer edge inside the block's mtime span.
-        let timer_unmasked = (self.mie & (1 << 7)) != 0;
-        timer_unmasked
-            && self.mtime < self.mtimecmp
-            && self.mtimecmp <= self.mtime.wrapping_add(n as u64)
     }
 
     /// Drive one batch through the JIT engine, returning the true retired
@@ -1121,6 +2151,13 @@ impl RiscV {
         let exact_clock = cfg!(feature = "event-scheduler") && config.peripheral_tick_interval > 1;
         let batch_start = if exact_clock { bus.current_cycle() } else { 0 };
 
+        let flush_jit_ram = |engine: &mut crate::cpu::jit_framework::riscv::RiscvJitEngine,
+                             bus: &mut dyn Bus| {
+            if let Some(ram) = bus.ram_data_mut() {
+                engine.flush_ram(ram);
+            }
+        };
+
         let mut retired: u32 = 0;
         while retired < max_count {
             if exact_clock {
@@ -1140,6 +2177,7 @@ impl RiscV {
                         || self.triggers.armed()
                         || self.block_would_cross_irq(bus, n);
                     if must_interpret {
+                        flush_jit_ram(engine, bus);
                         self.step(bus, observers, config)?;
                         engine.note_interpreted();
                         retired += 1;
@@ -1147,7 +2185,7 @@ impl RiscV {
                         bus.as_any_mut().and_then(|a| a.downcast_mut::<SystemBus>())
                     {
                         let (actual_n, next_pc, clear_reservation, needs_interp) =
-                            engine.run_ready(pc, &mut self.x, &mut sb.ram.data);
+                            engine.run_ready_batched(pc, &mut self.x, &mut sb.ram.data);
                         if clear_reservation {
                             self.reservation = None;
                         }
@@ -1165,6 +2203,7 @@ impl RiscV {
                         // Entry-instruction memory fault: nothing retired and
                         // the PC did not move — interpret one for progress.
                         if actual_n == 0 && needs_interp {
+                            flush_jit_ram(engine, bus);
                             self.step(bus, observers, config)?;
                             engine.note_interpreted();
                             retired += 1;
@@ -1172,12 +2211,14 @@ impl RiscV {
                     } else {
                         // Not a `SystemBus` (never happens in production): fall
                         // back to the interpreter for this instruction.
+                        flush_jit_ram(engine, bus);
                         self.step(bus, observers, config)?;
                         engine.note_interpreted();
                         retired += 1;
                     }
                 }
                 Lookup::Interpret { promote } => {
+                    flush_jit_ram(engine, bus);
                     if promote {
                         if let Some(sb) = bus.as_any().and_then(|a| a.downcast_ref::<SystemBus>()) {
                             engine.try_compile_from_bus(pc, sb);
@@ -1194,19 +2235,21 @@ impl RiscV {
                 && self.waiting_for_interrupt
                 && self.idle_fast_forward_budget(bus).is_some()
             {
+                flush_jit_ram(engine, bus);
                 return Ok(retired);
             }
             // Mirror the interpreter's Gap #1 deadline clamp (see `step_batch`).
-            #[cfg(feature = "event-scheduler")]
-            if config.peripheral_tick_interval > 1 && bus.has_pending_schedule() {
-                if let Some(dl) = bus.earliest_pending_deadline() {
+            if config.peripheral_tick_interval > 1 {
+                if let Some(dl) = pending_schedule_deadline(bus) {
                     let max_ret = dl.saturating_sub(batch_start);
                     if (retired as u64) >= max_ret {
+                        flush_jit_ram(engine, bus);
                         return Ok(retired);
                     }
                 }
             }
         }
+        flush_jit_ram(engine, bus);
         Ok(retired)
     }
 
@@ -1262,8 +2305,18 @@ impl Cpu for RiscV {
         let (instruction, inst_len) = if let Some(entry) = cached {
             (entry.instruction, entry.inst_len as u32)
         } else {
-            let instruction = decode_rv32(opcode);
+            let mut instruction = decode_rv32(opcode);
             let inst_len = if (opcode & 0x3) == 0x3 { 4 } else { 2 };
+            // QingKe V2 (the RV32E chips) also runs WCH's XW compressed
+            // byte/halfword loads and stores; see `decode_qingke_xw`.
+            if inst_len == 2
+                && self.core_profile == RiscVCoreProfile::Rv32e
+                && matches!(instruction, Instruction::Unknown(_))
+            {
+                if let Some(xw) = decode_qingke_xw(opcode as u16) {
+                    instruction = xw;
+                }
+            }
             if _config.decode_cache_enabled {
                 self.decode_cache[cache_idx] = Some(RiscVDecodeCacheEntry {
                     tag: self.pc,
@@ -1358,47 +2411,47 @@ impl Cpu for RiscV {
             }
             Instruction::Lb { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u8(addr as u64)? as i8;
+                let val = self.load(bus, addr, 1)? as u8 as i8;
                 self.write_reg(rd, val as i32 as u32);
             }
             Instruction::Lh { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u16(addr as u64)? as i16;
+                let val = self.load(bus, addr, 2)? as u16 as i16;
                 self.write_reg(rd, val as i32 as u32);
             }
             Instruction::Lw { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u32(addr as u64)?;
+                let val = self.load(bus, addr, 4)?;
                 self.write_reg(rd, val);
             }
             Instruction::Lbu { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u8(addr as u64)?;
-                self.write_reg(rd, val as u32);
+                let val = self.load(bus, addr, 1)?;
+                self.write_reg(rd, val);
             }
             Instruction::Lhu { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u16(addr as u64)?;
-                self.write_reg(rd, val as u32);
+                let val = self.load(bus, addr, 2)?;
+                self.write_reg(rd, val);
             }
             Instruction::Sb { rs1, rs2, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = self.read_reg(rs2) as u8;
-                bus.write_u8(addr as u64, val)?;
+                self.store(bus, addr, 1, u32::from(val))?;
                 self.invalidate_fetch_if_store_overlaps(addr, 1);
                 self.reservation = None;
             }
             Instruction::Sh { rs1, rs2, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = self.read_reg(rs2) as u16;
-                bus.write_u16(addr as u64, val)?;
+                self.store(bus, addr, 2, u32::from(val))?;
                 self.invalidate_fetch_if_store_overlaps(addr, 2);
                 self.reservation = None;
             }
             Instruction::Sw { rs1, rs2, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = self.read_reg(rs2);
-                bus.write_u32(addr as u64, val)?;
+                self.store(bus, addr, 4, val)?;
                 self.invalidate_fetch_if_store_overlaps(addr, 4);
                 self.reservation = None;
             }
@@ -1523,6 +2576,13 @@ impl Cpu for RiscV {
                 // Return from trap. Per the privileged spec:
                 //   MIE <- MPIE, MPIE <- 1 (privilege <- MPP, but we stay M-mode).
                 self.pc = self.mepc;
+                if let Some(frame) = self.pfic.as_mut().and_then(QingKePfic::complete) {
+                    if let Some(saved) = frame.saved {
+                        for (&r, v) in self.core_profile.hpe_regs().iter().zip(saved) {
+                            self.x[r] = v;
+                        }
+                    }
+                }
                 let mpie = (self.mstatus >> 7) & 1;
                 self.mstatus &= !(1 << 3); // clear MIE
                 self.mstatus |= mpie << 3; // MIE <- MPIE
@@ -1690,27 +2750,27 @@ impl Cpu for RiscV {
             }
             Instruction::CLw { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm);
-                let val = bus.read_u32(addr as u64)?;
+                let val = self.load(bus, addr, 4)?;
                 self.write_reg(rd, val);
             }
             Instruction::CSw { rs2, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm);
                 let val = self.read_reg(rs2);
-                bus.write_u32(addr as u64, val)?;
+                self.store(bus, addr, 4, val)?;
                 self.invalidate_fetch_if_store_overlaps(addr, 4);
                 self.reservation = None;
             }
             Instruction::CLwsp { rd, imm } => {
                 let sp = self.read_reg(2);
                 let addr = sp.wrapping_add(imm);
-                let val = bus.read_u32(addr as u64)?;
+                let val = self.load(bus, addr, 4)?;
                 self.write_reg(rd, val);
             }
             Instruction::CSwsp { rs2, imm } => {
                 let sp = self.read_reg(2);
                 let addr = sp.wrapping_add(imm);
                 let val = self.read_reg(rs2);
-                bus.write_u32(addr as u64, val)?;
+                self.store(bus, addr, 4, val)?;
                 self.invalidate_fetch_if_store_overlaps(addr, 4);
                 self.reservation = None;
             }
@@ -1861,6 +2921,19 @@ impl Cpu for RiscV {
         // asserted sources through the interrupt matrix. OR them into the local
         // mip view so a line stays asserted only while its source does.
         if (self.mstatus & (1 << 3)) != 0 {
+            if let Some(irq) = self.pfic.as_ref().and_then(QingKePfic::next_irq) {
+                if !observers.is_empty() {
+                    crate::emit_trace_event(
+                        observers,
+                        labwired_hw_trace::TraceEvent::InstructionRetired {
+                            pc: retired_pc,
+                            opcode,
+                        },
+                    );
+                }
+                // As below: mepc is the next instruction.
+                return self.enter_pfic_interrupt(bus, irq, next_pc);
+            }
             // Standard machine sources are masked by `mie`; ESP32-C3 external
             // lines arrive already gated (enable + priority/threshold) by the
             // bus, so they bypass `mie` (which the C3 firmware leaves at 0).
@@ -2024,6 +3097,7 @@ impl Cpu for RiscV {
         // view. Once the loop head is reached the fast path consumes the rest
         // of the batch; non-poll code pays only three cold decode probes.
         let mut masked_poll_probes = 3u8;
+        let block_cache_ok = config.decode_cache_enabled && observers.is_empty() && tap.is_none();
         while i < limit {
             if i != 0 && masked_poll_probes != 0 && limit - i >= 4 {
                 masked_poll_probes -= 1;
@@ -2033,6 +3107,26 @@ impl Cpu for RiscV {
                     i += retired;
                     if exact_clock {
                         bus.publish_cycle(batch_start + u64::from(i - 1));
+                    }
+                    continue;
+                }
+            }
+            if block_cache_ok && limit - i >= 2 {
+                let retired =
+                    self.try_step_cached_blocks(bus, limit - i, exact_clock, batch_start, i)?;
+                if retired != 0 {
+                    i += retired;
+                    if exact_clock {
+                        bus.publish_cycle(batch_start + u64::from(i - 1));
+                        if let Some(dl) = pending_schedule_deadline(bus) {
+                            let max_ret = dl.saturating_sub(batch_start);
+                            if (i as u64) >= max_ret {
+                                return Ok(i);
+                            }
+                            if max_ret < u32::MAX as u64 {
+                                limit = limit.min(max_ret as u32);
+                            }
+                        }
                     }
                     continue;
                 }
@@ -2056,9 +3150,8 @@ impl Cpu for RiscV {
             if tap.as_ref().is_some_and(|t| t.batch_stop_hit()) {
                 return Ok(i);
             }
-            #[cfg(feature = "event-scheduler")]
-            if exact_clock && bus.has_pending_schedule() {
-                if let Some(dl) = bus.earliest_pending_deadline() {
+            if exact_clock {
+                if let Some(dl) = pending_schedule_deadline(bus) {
                     // After `i` instructions, total_cycles will be batch_start+i.
                     // Do not advance total_cycles past `dl` before drain enqueues.
                     let max_ret = dl.saturating_sub(batch_start);
@@ -2083,27 +3176,33 @@ impl Cpu for RiscV {
     fn set_sp(&mut self, val: u32) {
         self.write_reg(2, val); // x2 is SP
     }
-    fn set_exception_pending(&mut self, _exception_num: u32) {
-        // For RISC-V Machine mode, external interrupts are routed to MEIP (bit 11).
-        // The specific 'exception_num' (IRQ) would be tracked by a PLIC.
-        // Since we don't have a PLIC yet, we pend a generic external interrupt.
-        self.mip |= 1 << 11;
+    fn set_exception_pending(&mut self, exception_num: u32) {
+        // Without an NVIC the bus forwards a peripheral's raw IRQ number,
+        // which on a chip with a PFIC is its interrupt number and on a chip
+        // with a PLIC is its source ID. Without either the
+        // line pends a generic, sticky machine external interrupt.
+        if let Some(pfic) = self.pfic.as_mut() {
+            pfic.raise(exception_num);
+        } else if let Some(plic) = self.plic.as_mut() {
+            plic.raise(exception_num);
+            self.refresh_meip();
+        } else {
+            self.mip |= 1 << 11;
+        }
     }
 
     fn idle_fast_forward_budget(&self, bus: &dyn Bus) -> Option<u64> {
         if !self.waiting_for_interrupt {
             return None;
         }
-        if ((self.mip & self.mie) | bus.external_irq_lines()) != 0 {
+        if ((self.mip & self.mie) | bus.external_irq_lines()) != 0 || self.pfic_ready() {
             return None;
         }
-        if self.mtimecmp == u64::MAX {
-            return Some(u64::MAX);
+        match self.cycles_until_mtip()? {
+            u64::MAX => Some(u64::MAX),
+            0 | 1 => None,
+            n => Some(n - 1),
         }
-        if self.mtime + 1 >= self.mtimecmp {
-            return None;
-        }
-        Some(self.mtimecmp - self.mtime - 1)
     }
 
     fn fast_forward_idle_cycles(&mut self, cycles: u64) {

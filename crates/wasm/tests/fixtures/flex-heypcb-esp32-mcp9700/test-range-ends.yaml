@@ -1,0 +1,37 @@
+# `labwired test --script test-range-ends.yaml`. The ends of the MCP9700
+# extended range and one fractional temperature. The test bench sets
+# -40, 0, 125 and 25.37 °C. V_out is 100, 500, 1750 and 753 mV (753.7
+# truncates to whole mV), so the firmware prints -40.0, 0.0, 125.0 and 25.3.
+# The indicator goes on at 125 °C and off at 25.3 °C.
+# `loop` returns (10,000 + T in tenths of °C) x 10 + LED.
+# All expected values were calculated before the first run.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: sensor_mv }, { port: user_led_drive }] }
+  - set: { port: ambient_c, value: -40 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 0 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 125 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 25.37 }
+  - call: { export: loop }
+limits:
+  max_steps: 1000000
+  max_time_ns: 10000000000
+assertions:
+  - entry_result: { equals: 102530 }
+  - entry_result: { equals: 96000, step: 2 }
+  - entry_result: { equals: 100000, step: 4 }
+  - entry_result: { equals: 112501, step: 6 }
+  - analog_window: { port: sensor_mv, min: 100, max: 1750 }
+  - analog_sample: { port: sensor_mv, at_ns: 2001000000, min: 1750, max: 1750 }
+  - analog_sample: { port: sensor_mv, at_ns: 3001000000, min: 753, max: 753 }
+  - digital_edges: { port: user_led_drive, times_ns: [2001000000, 3001000000] }
+  - port_value: { port: user_led_state, equals: 0 }
+  - final_time_ns: { equals: 4000000000 }
+  - console_contains: "T=-40.0 C\nT=0.0 C\nT=125.0 C ALARM\nT=25.3 C\n"

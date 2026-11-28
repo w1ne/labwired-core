@@ -202,5 +202,5 @@ AVR firmware runs through its system manifest, which is what `test --script` doe
 | `configs/systems/arduino-uno.yaml` | Board manifest |
 | `examples/arduino-uno-blinky` | Blink and Serial smoke, board docs pack, images |
 | `examples/arduino-uno-io` | Button on D2, LED on D7, potentiometer on A0 |
-| `crates/core/tests/avr_uno_io.rs` | Drives each port from outside and checks what the sketch prints |
+| `crates/core/tests/avr/avr_uno_io.rs` | Drives each port from outside and checks what the sketch prints |
 | [Arduino Nano](../../configs/systems/arduino-nano.yaml) | Same chip, TQFP package |

@@ -60,8 +60,13 @@ pub(crate) enum Op {
     Step(u32),
     StepSingle,
     StepBatch(u32),
+    StepBatchWithWorkLimit(u32, u32),
     StepEsp32Aids(u32),
+    StepExternalMechanical(u64, u32),
+    ObserveExternalMechanical,
+    ApplyExternalMechanical(labwired_core::bus::ExternalMechanicalFrame),
     FeedUart(Vec<u8>),
+    FeedUartNamed(String, Vec<u8>),
     FeedRtt(Vec<u8>),
     WriteRttDown(Vec<u8>),
     WriteSemihosting(Vec<u8>),
@@ -101,7 +106,12 @@ impl Op {
     fn is_step(&self) -> bool {
         matches!(
             self,
-            Op::Step(_) | Op::StepSingle | Op::StepBatch(_) | Op::StepEsp32Aids(_)
+            Op::Step(_)
+                | Op::StepSingle
+                | Op::StepBatch(_)
+                | Op::StepBatchWithWorkLimit(_, _)
+                | Op::StepEsp32Aids(_)
+                | Op::StepExternalMechanical(_, _)
         )
     }
 }
@@ -227,11 +237,23 @@ impl WasmSimulator {
             Op::Step(n) => self.step(*n),
             Op::StepSingle => self.step_single(),
             Op::StepBatch(n) => self.step_batch(*n).map(|_| ()),
+            Op::StepBatchWithWorkLimit(cycles, work) => self
+                .step_batch_with_work_limit_recorded(*cycles, *work)
+                .map(|_| ())
+                .map_err(crate::cosim::AdvanceFailure::into_js),
             Op::StepEsp32Aids(n) => self.step_with_esp32_aids(*n),
+            Op::StepExternalMechanical(target, fuel) => self
+                .step_external_mechanical_to(*target as f64, *fuel)
+                .map(|_| ()),
+            Op::ObserveExternalMechanical => self.get_external_mechanical_interval().map(|_| ()),
+            Op::ApplyExternalMechanical(frame) => self
+                .apply_external_mechanical_frame_s(frame)
+                .map_err(|error| JsValue::from_str(&error)),
             Op::FeedUart(b) => {
                 self.feed_uart_input(b);
                 Ok(())
             }
+            Op::FeedUartNamed(name, b) => self.feed_uart_input_named(name, b).map(|_| ()),
             Op::FeedRtt(b) => self.feed_rtt_input(b),
             Op::WriteRttDown(b) => self.write_rtt_down(b).map(|_| ()),
             Op::WriteSemihosting(b) => self.write_semihosting_input(b),
@@ -705,6 +727,118 @@ mod tests {
         .unwrap()
     }
 
+    #[test]
+    fn uart_input_named_replay_preserves_port_and_payload() {
+        let mut sim = ring();
+        assert_eq!(sim.feed_uart_input_named("uart30", b"selected").unwrap(), 8);
+        let journal = sim.tools.borrow().journal.clone();
+        assert_eq!(
+            journal,
+            vec![(Op::FeedUartNamed("uart30".into(), b"selected".to_vec()), 1)]
+        );
+        let mut rebuilt = sim.rebuild_s(&journal, None).unwrap();
+        let bus = &mut rebuilt.machine.as_mut().unwrap().bus;
+        let selected = bus.attach_uart_rx_source_named("uart30").unwrap();
+        let other = bus.attach_uart_rx_source_named("uart20").unwrap();
+        assert_eq!(
+            selected.lock().unwrap().iter().copied().collect::<Vec<_>>(),
+            b"selected"
+        );
+        assert!(other.lock().unwrap().is_empty());
+        assert_eq!(rebuilt.tools.borrow().journal, journal);
+    }
+
+    #[test]
+    fn lab_air_only_disables_replay_when_a_device_joins_it() {
+        let sys = root().join("examples/demo-blinky/system.yaml");
+        let system_yaml = std::fs::read_to_string(&sys).unwrap();
+        let manifest: labwired_config::SystemManifest = serde_yaml::from_str(&system_yaml).unwrap();
+        let chip_yaml =
+            std::fs::read_to_string(sys.parent().unwrap().join(&manifest.chip)).unwrap();
+        let firmware = std::fs::read(root().join("tests/fixtures/stm32f103-blinky.elf")).unwrap();
+        let mut blinky = WasmSimulator::new_from_config_parts(Rc::new(CtorInputs {
+            system_yaml,
+            chip_yaml,
+            firmware,
+            blobs: HashMap::new(),
+        }))
+        .unwrap();
+        let air = crate::AirBus::new();
+        blinky.attach_lab_air("blinky", &air);
+        assert_eq!(
+            blinky.snapshot_refusal(),
+            None,
+            "a chip without a radio or modem did not join air"
+        );
+        let saved: serde_json::Value =
+            serde_json::from_str(&blinky.snapshot_save_s(None).unwrap()).unwrap();
+        blinky.step_batch(100).unwrap();
+        blinky
+            .snapshot_restore_s(saved["id"].as_u64().unwrap() as u32)
+            .unwrap();
+        assert_eq!(blinky.machine_s().unwrap().total_cycles, 0);
+
+        let sys = root().join("examples/nrf52840-rtt-lab/system.yaml");
+        let system_yaml = std::fs::read_to_string(&sys).unwrap();
+        let manifest: labwired_config::SystemManifest = serde_yaml::from_str(&system_yaml).unwrap();
+        let chip_yaml =
+            std::fs::read_to_string(sys.parent().unwrap().join(&manifest.chip)).unwrap();
+        let firmware = std::fs::read(root().join("tests/fixtures/nrf52840-demo.elf")).unwrap();
+        let mut radio = WasmSimulator::new_from_config_parts(Rc::new(CtorInputs {
+            system_yaml,
+            chip_yaml,
+            firmware,
+            blobs: HashMap::new(),
+        }))
+        .unwrap();
+        let radio_saved: serde_json::Value =
+            serde_json::from_str(&radio.snapshot_save_s(None).unwrap()).unwrap();
+        radio.attach_lab_air("ring", &air);
+        assert!(radio
+            .snapshot_refusal()
+            .unwrap()
+            .contains("shared radio air bus"));
+        assert!(radio.snapshot_save_s(None).is_err());
+        assert!(radio
+            .snapshot_restore_s(radio_saved["id"].as_u64().unwrap() as u32)
+            .is_err());
+
+        let sys = root().join("examples/quectel-bg770a-lab/system.yaml");
+        let system_yaml = std::fs::read_to_string(&sys).unwrap();
+        let manifest: labwired_config::SystemManifest = serde_yaml::from_str(&system_yaml).unwrap();
+        let chip_yaml =
+            std::fs::read_to_string(sys.parent().unwrap().join(&manifest.chip)).unwrap();
+        let firmware = std::fs::read(root().join("tests/fixtures/stm32f103-blinky.elf")).unwrap();
+        let mut cellular = WasmSimulator::new_from_config_parts(Rc::new(CtorInputs {
+            system_yaml,
+            chip_yaml,
+            firmware,
+            blobs: HashMap::new(),
+        }))
+        .unwrap();
+        cellular.attach_lab_air("cellular", &air);
+        assert!(cellular
+            .snapshot_refusal()
+            .unwrap()
+            .contains("shared radio air bus"));
+        assert!(cellular.snapshot_save_s(None).is_err());
+
+        for device in [
+            Box::new(labwired_core::peripherals::virtual_ble::VirtualBle::new_default())
+                as Box<dyn labwired_core::peripheral::Peripheral>,
+            Box::new(labwired_core::peripherals::esp32c3::bt::Esp32c3Bt::new()),
+        ] {
+            let mut bus = labwired_core::bus::SystemBus::new();
+            bus.add_peripheral("ble", 0x1000, 0x1000, None, device);
+            assert!(bus.attach_lab_air(
+                "ble",
+                air.nrf.clone(),
+                air.ble.clone(),
+                air.cellular.clone()
+            ));
+        }
+    }
+
     /// Everything a user can observe: cycles, registers, RAM (the digest) and
     /// the console printed since the last drain.
     fn trace(sim: &WasmSimulator) -> (u64, u64, Vec<u8>) {
@@ -774,6 +908,48 @@ mod tests {
         sim.snapshot_restore_s(saved["id"].as_u64().unwrap() as u32)
             .unwrap();
         assert_eq!(sim.machine_s().unwrap().total_cycles, 5_000);
+    }
+
+    #[test]
+    fn work_limited_steps_preserve_limits_and_replay_without_js_serialization() {
+        let mut sim = ring();
+        for (cycles, work) in [(50_000, 250), (90_000, 1000), (90_000, 1000)] {
+            let report = sim
+                .step_batch_with_work_limit_recorded(cycles, work)
+                .unwrap_or_else(|_| panic!("bounded step failed"));
+            assert!(report.executed_cycles > 0);
+            assert!(report.work_limit_reached);
+        }
+        let expected_journal = vec![
+            (Op::StepBatchWithWorkLimit(50_000, 250), 1),
+            (Op::StepBatchWithWorkLimit(90_000, 1000), 2),
+        ];
+        assert_eq!(sim.tools.borrow().journal, expected_journal);
+        let expected_digest = sim.digest_s().unwrap();
+        let saved: serde_json::Value =
+            serde_json::from_str(&sim.snapshot_save_s(None).unwrap()).unwrap();
+        sim.step_batch(1000).unwrap();
+        sim.snapshot_restore_s(saved["id"].as_u64().unwrap() as u32)
+            .unwrap();
+        assert_eq!(sim.digest_s().unwrap(), expected_digest);
+        assert_eq!(sim.tools.borrow().journal, expected_journal);
+    }
+
+    #[test]
+    fn work_limited_step_keeps_breakpoint_stops_distinct_from_budget_yields() {
+        let mut probe = ring();
+        let initial_pc = probe.machine_s().unwrap().cpu.get_pc();
+        probe.step_single().unwrap();
+        let breakpoint = probe.machine_s().unwrap().cpu.get_pc();
+        assert_ne!(breakpoint, initial_pc);
+        let mut sim = ring();
+        sim.machine.as_mut().unwrap().add_breakpoint(breakpoint);
+        let report = sim
+            .step_batch_with_work_limit_recorded(50_000, 1000)
+            .unwrap_or_else(|_| panic!("bounded step failed"));
+        assert!(report.executed_cycles > 0);
+        assert!(!report.work_limit_reached);
+        assert_eq!(sim.machine_s().unwrap().cpu.get_pc(), breakpoint);
     }
 
     /// A later snapshot still restores after an earlier one rolled the run

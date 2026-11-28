@@ -1,0 +1,1157 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+//
+// This software is released under the MIT License.
+// See the LICENSE file in the project root for full license information.
+
+//! nRF52840 silicon checks shared by the Renode-onboarding smokes: the chip
+//! row (`renode_smoke.rs`) and the nRF52840 DK board row
+//! (`nrf52840dk_smoke.rs`) run the same eight blocks — see `renode_smoke.rs`
+//! for what each one asserts. Bit n of the returned word is block n.
+#![allow(dead_code)]
+
+use core::ptr::{read_volatile, write_volatile};
+
+pub const UART0: u32 = 0x4000_2000;
+pub const UART_TASKS_STARTTX: u32 = UART0 + 0x008;
+pub const UART_EVENTS_ENDTX: u32 = UART0 + 0x120;
+pub const UART_ENABLE: u32 = UART0 + 0x500;
+pub const UART_TXD_PTR: u32 = UART0 + 0x544;
+pub const UART_TXD_MAXCNT: u32 = UART0 + 0x548;
+
+pub const FICR_INFO_PART: u32 = 0x1000_0100;
+pub const NVMC_READY: u32 = 0x4001_E400;
+
+pub const CLOCK: u32 = 0x4000_0000;
+pub const CLK_TASKS_HFCLKSTART: u32 = CLOCK;
+pub const CLK_TASKS_LFCLKSTART: u32 = CLOCK + 0x008;
+pub const CLK_EVENTS_HFCLKSTARTED: u32 = CLOCK + 0x100;
+pub const CLK_EVENTS_LFCLKSTARTED: u32 = CLOCK + 0x104;
+pub const CLK_HFCLKSTAT: u32 = CLOCK + 0x40C;
+pub const CLK_LFCLKSTAT: u32 = CLOCK + 0x418;
+pub const CLK_LFCLKSRC: u32 = CLOCK + 0x518;
+
+pub const GPIO0: u32 = 0x5000_0000;
+pub const GPIO_OUT: u32 = GPIO0 + 0x504;
+pub const GPIO_OUTSET: u32 = GPIO0 + 0x508;
+pub const GPIO_OUTCLR: u32 = GPIO0 + 0x50C;
+pub const GPIO_IN: u32 = GPIO0 + 0x510;
+pub const GPIO_PIN_CNF: u32 = GPIO0 + 0x700;
+pub const LED0: u32 = 13;
+pub const GPIOTE_PIN: u32 = 14;
+
+pub const GPIOTE: u32 = 0x4000_6000;
+pub const GPIOTE_TASKS_OUT0: u32 = GPIOTE;
+pub const GPIOTE_CONFIG0: u32 = GPIOTE + 0x510;
+
+pub const TIMER0: u32 = 0x4000_8000;
+pub const TIM_TASKS_START: u32 = TIMER0;
+pub const TIM_TASKS_STOP: u32 = TIMER0 + 0x004;
+pub const TIM_TASKS_CLEAR: u32 = TIMER0 + 0x00C;
+pub const TIM_TASKS_CAPTURE1: u32 = TIMER0 + 0x044;
+pub const TIM_EVENTS_COMPARE0: u32 = TIMER0 + 0x140;
+pub const TIM_MODE: u32 = TIMER0 + 0x504;
+pub const TIM_BITMODE: u32 = TIMER0 + 0x508;
+pub const TIM_PRESCALER: u32 = TIMER0 + 0x510;
+pub const TIM_CC0: u32 = TIMER0 + 0x540;
+pub const TIM_CC1: u32 = TIMER0 + 0x544;
+
+pub const RTC0: u32 = 0x4000_B000;
+pub const RTC_TASKS_START: u32 = RTC0;
+pub const RTC_TASKS_STOP: u32 = RTC0 + 0x004;
+pub const RTC_EVENTS_COMPARE0: u32 = RTC0 + 0x140;
+pub const RTC_COUNTER: u32 = RTC0 + 0x504;
+pub const RTC_PRESCALER: u32 = RTC0 + 0x508;
+pub const RTC_EVTENSET: u32 = RTC0 + 0x344;
+pub const RTC_EVTENCLR: u32 = RTC0 + 0x348;
+pub const RTC_CC0: u32 = RTC0 + 0x540;
+
+pub const RNG: u32 = 0x4000_D000;
+pub const RNG_TASKS_START: u32 = RNG;
+pub const RNG_TASKS_STOP: u32 = RNG + 0x004;
+pub const RNG_EVENTS_VALRDY: u32 = RNG + 0x100;
+pub const RNG_VALUE: u32 = RNG + 0x508;
+
+pub const EGU0: u32 = 0x4001_4000;
+pub const EGU1: u32 = 0x4001_5000;
+pub const EGU_TASKS_TRIGGER0: u32 = 0x000;
+pub const EGU_EVENTS_TRIGGERED0: u32 = 0x100;
+
+pub const PPI: u32 = 0x4001_F000;
+pub const PPI_CHENSET: u32 = PPI + 0x504;
+pub const PPI_CHENCLR: u32 = PPI + 0x508;
+pub const PPI_CH0_EEP: u32 = PPI + 0x510;
+pub const PPI_CH0_TEP: u32 = PPI + 0x514;
+
+pub const SAADC: u32 = 0x4000_7000;
+pub const SAADC_RESULT: u32 = 0x2000_1000;
+
+pub const RESULT: u32 = 0x2003_FF00;
+pub const SPIN: u32 = 200_000;
+
+const SCB_ICSR: u32 = 0xE000_ED04;
+const SCB_VTOR: u32 = 0xE000_ED08;
+const SCB_SHPR3: u32 = 0xE000_ED20;
+const SYSTICK_CSR: u32 = 0xE000_E010;
+const SYSTICK_RVR: u32 = 0xE000_E014;
+const SYSTICK_CVR: u32 = 0xE000_E018;
+const ICSR_PENDSTSET: u32 = 1 << 26;
+const ICSR_PENDSTCLR: u32 = 1 << 25;
+const ICSR_PENDSVSET: u32 = 1 << 28;
+const ICSR_PENDSVCLR: u32 = 1 << 27;
+const TEST_VECTOR_TABLE: u32 = 0x2000_0080;
+const TAILCHAIN_RECORD: u32 = 0x2000_0100;
+const THREAD_R0: u32 = 0x5448_5244;
+const SYSTICK_R0: u32 = 0x5359_5354;
+
+static mut TX: [u8; 64] = [0; 64];
+
+pub fn rd(addr: u32) -> u32 {
+    unsafe { read_volatile(addr as *const u32) }
+}
+
+pub fn wr(addr: u32, value: u32) {
+    unsafe { write_volatile(addr as *mut u32, value) }
+}
+
+/// Poll `addr` until it reads non-zero; false on timeout.
+pub fn wait_set(addr: u32) -> bool {
+    for _ in 0..SPIN {
+        if rd(addr) != 0 {
+            return true;
+        }
+    }
+    false
+}
+
+/// A few bus reads so a task's queued pad drive lands before the next read.
+pub fn settle() {
+    for _ in 0..16 {
+        let _ = rd(NVMC_READY);
+    }
+}
+
+pub struct Line {
+    len: usize,
+}
+
+impl Line {
+    pub fn new() -> Self {
+        Line { len: 0 }
+    }
+
+    pub fn s(&mut self, s: &[u8]) -> &mut Self {
+        for &b in s {
+            if self.len < 63 {
+                unsafe { (*core::ptr::addr_of_mut!(TX))[self.len] = b };
+                self.len += 1;
+            }
+        }
+        self
+    }
+
+    pub fn hex(&mut self, v: u32, digits: u32) -> &mut Self {
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        for i in (0..digits).rev() {
+            self.s(&[HEX[((v >> (i * 4)) & 0xF) as usize]]);
+        }
+        self
+    }
+
+    pub fn ok(&mut self, pass: bool) -> &mut Self {
+        self.s(if pass { b" ok" } else { b" FAIL" })
+    }
+
+    /// EasyDMA reads the line from RAM, as the UARTE data path requires.
+    pub fn send(&mut self) {
+        self.s(b"\n");
+        wr(UART_EVENTS_ENDTX, 0);
+        wr(UART_TXD_PTR, core::ptr::addr_of!(TX) as u32);
+        wr(UART_TXD_MAXCNT, self.len as u32);
+        wr(UART_TASKS_STARTTX, 1);
+        while rd(UART_EVENTS_ENDTX) == 0 {}
+        self.len = 0;
+    }
+}
+
+pub fn chip_checks(l: &mut Line) -> u32 {
+    let mut summary = 0u32;
+    // FICR / NVMC.
+    let part = rd(FICR_INFO_PART);
+    let ready = rd(NVMC_READY);
+    let pass = part == 0x52840 && ready & 1 == 1;
+    l.s(b"ficr part=")
+        .hex(part, 5)
+        .s(b" nvmc ready=")
+        .hex(ready, 1)
+        .ok(pass)
+        .send();
+    summary |= pass as u32;
+
+    // CLOCK: HFXO, then LFXO.
+    wr(CLK_EVENTS_HFCLKSTARTED, 0);
+    wr(CLK_TASKS_HFCLKSTART, 1);
+    let hf_ev = wait_set(CLK_EVENTS_HFCLKSTARTED);
+    let hfstat = rd(CLK_HFCLKSTAT);
+    wr(CLK_LFCLKSRC, 1);
+    wr(CLK_EVENTS_LFCLKSTARTED, 0);
+    wr(CLK_TASKS_LFCLKSTART, 1);
+    let lf_ev = wait_set(CLK_EVENTS_LFCLKSTARTED);
+    let lfstat = rd(CLK_LFCLKSTAT);
+    // HFCLKSTAT: SRC=Xtal (bit 0), STATE=Running (bit 16). LFCLKSTAT: SRC=Xtal (1), STATE (bit 16).
+    let pass = hf_ev && lf_ev && hfstat == 0x0001_0001 && lfstat == 0x0001_0001;
+    l.s(b"clock hfstat=")
+        .hex(hfstat, 8)
+        .s(b" lfstat=")
+        .hex(lfstat, 8)
+        .ok(pass)
+        .send();
+    summary |= (pass as u32) << 1;
+
+    // GPIO: P0.13 output with the input buffer connected (PIN_CNF DIR=1, INPUT=0).
+    wr(GPIO_PIN_CNF + LED0 * 4, 1);
+    wr(GPIO_OUTSET, 1 << LED0);
+    let out_hi = rd(GPIO_OUT) & (1 << LED0);
+    let in_hi = rd(GPIO_IN) & (1 << LED0);
+    wr(GPIO_OUTCLR, 1 << LED0);
+    let out_lo = rd(GPIO_OUT) & (1 << LED0);
+    let in_lo = rd(GPIO_IN) & (1 << LED0);
+    let pass = out_hi != 0 && in_hi != 0 && out_lo == 0 && in_lo == 0;
+    l.s(b"gpio p0.13 in=")
+        .hex(in_hi, 8)
+        .s(b"/")
+        .hex(in_lo, 8)
+        .ok(pass)
+        .send();
+    summary |= (pass as u32) << 2;
+
+    // GPIOTE: task mode (3), PSEL=14, POLARITY=Toggle (3), OUTINIT=low.
+    // PIN_CNF = 1: GPIO output (OUT = 0), input buffer connected so IN shows
+    // the pad. GPIOTE owns the pin while in task mode, whatever DIR/OUT say.
+    wr(GPIO_OUTCLR, 1 << GPIOTE_PIN);
+    wr(GPIO_PIN_CNF + GPIOTE_PIN * 4, 1);
+    wr(GPIOTE_CONFIG0, 3 | (GPIOTE_PIN << 8) | (3 << 16));
+    let latch = rd(GPIO_OUT) & (1 << GPIOTE_PIN);
+    wr(GPIOTE_TASKS_OUT0, 1);
+    settle();
+    let t1 = rd(GPIO_IN) & (1 << GPIOTE_PIN);
+    wr(GPIOTE_TASKS_OUT0, 1);
+    settle();
+    let t2 = rd(GPIO_IN) & (1 << GPIOTE_PIN);
+    let pass = t1 != 0 && t2 == 0 && latch == rd(GPIO_OUT) & (1 << GPIOTE_PIN);
+    l.s(b"gpiote out0 p0.14 in=")
+        .hex(t1 >> GPIOTE_PIN, 1)
+        .hex(t2 >> GPIOTE_PIN, 1)
+        .s(b" out=")
+        .hex(latch >> GPIOTE_PIN, 1)
+        .ok(pass)
+        .send();
+    summary |= (pass as u32) << 3;
+    wr(GPIOTE_CONFIG0, 0);
+
+    // TIMER0: 32-bit timer at 1 MHz, CC[0]=50 compare, CAPTURE[1], CLEAR.
+    wr(TIM_MODE, 0);
+    wr(TIM_BITMODE, 3);
+    wr(TIM_PRESCALER, 4);
+    wr(TIM_CC0, 50);
+    wr(TIM_EVENTS_COMPARE0, 0);
+    wr(TIM_TASKS_CLEAR, 1);
+    wr(TIM_TASKS_START, 1);
+    let cmp = wait_set(TIM_EVENTS_COMPARE0);
+    wr(TIM_TASKS_CAPTURE1, 1);
+    let cap = rd(TIM_CC1);
+    wr(TIM_TASKS_STOP, 1);
+    wr(TIM_TASKS_CLEAR, 1);
+    wr(TIM_TASKS_CAPTURE1, 1);
+    let cleared = rd(TIM_CC1);
+    let pass = cmp && cap >= 50 && cleared == 0 && rd(TIM_PRESCALER) == 4;
+    l.s(b"timer0 cmp=")
+        .hex(cmp as u32, 1)
+        .s(b" cap>=50 ")
+        .hex((cap >= 50) as u32, 1)
+        .s(b" clear=")
+        .hex(cleared, 8)
+        .ok(pass)
+        .send();
+
+    // TIMER0 base clock against the CPU clock: PRESCALER=0 counts the 16 MHz
+    // base clock, SysTick (CLKSOURCE=1) counts the 64 MHz core clock, so over
+    // one busy loop SysTick must advance 4x TIMER0 (accept 3x..5x). A TIMER
+    // that counts CPU cycles gives 1x.
+    wr(TIM_PRESCALER, 0);
+    wr(TIM_TASKS_CLEAR, 1);
+    wr(SYSTICK_CSR, 0);
+    wr(SYSTICK_RVR, 0x00FF_FFFF);
+    wr(SYSTICK_CVR, 0);
+    wr(SYSTICK_CSR, 0b101);
+    wr(TIM_TASKS_START, 1);
+    let sys0 = rd(SYSTICK_CVR);
+    for _ in 0..2000u32 {
+        let _ = rd(NVMC_READY);
+    }
+    wr(TIM_TASKS_CAPTURE1, 1);
+    let sys1 = rd(SYSTICK_CVR);
+    let tim = rd(TIM_CC1);
+    wr(TIM_TASKS_STOP, 1);
+    wr(SYSTICK_CSR, 0);
+    wr(TIM_PRESCALER, 4);
+    let sys = sys0.wrapping_sub(sys1) & 0x00FF_FFFF;
+    let clk_ok = tim > 0 && sys >= 3 * tim && sys <= 5 * tim;
+    l.s(b"timer0 clk sys=")
+        .hex(sys, 6)
+        .s(b" tim=")
+        .hex(tim, 6)
+        .ok(clk_ok)
+        .send();
+    summary |= ((pass && clk_ok) as u32) << 4;
+
+    // RTC0 off the LFCLK started above: PRESCALER=0, CC[0]=4.
+    wr(RTC_PRESCALER, 0);
+    wr(RTC_CC0, 4);
+    wr(RTC_EVTENSET, 1 << 16);
+    wr(RTC_EVENTS_COMPARE0, 0);
+    wr(RTC_TASKS_START, 1);
+    let rtc_cmp = wait_set(RTC_EVENTS_COMPARE0);
+    let count = rd(RTC_COUNTER);
+    wr(RTC_TASKS_STOP, 1);
+    wr(RTC_EVTENCLR, 1 << 16);
+    let pass = rtc_cmp && count >= 4;
+    l.s(b"rtc0 cmp=")
+        .hex(rtc_cmp as u32, 1)
+        .s(b" counter>=4 ")
+        .hex((count >= 4) as u32, 1)
+        .ok(pass)
+        .send();
+    summary |= (pass as u32) << 5;
+
+    // RNG: two samples.
+    wr(RNG_EVENTS_VALRDY, 0);
+    wr(RNG_TASKS_START, 1);
+    let v1 = wait_set(RNG_EVENTS_VALRDY);
+    let a = rd(RNG_VALUE);
+    wr(RNG_EVENTS_VALRDY, 0);
+    let v2 = wait_set(RNG_EVENTS_VALRDY);
+    let b = rd(RNG_VALUE);
+    wr(RNG_TASKS_STOP, 1);
+    let pass = v1 && v2 && a <= 0xFF && b <= 0xFF;
+    l.s(b"rng valrdy=")
+        .hex(v1 as u32, 1)
+        .hex(v2 as u32, 1)
+        .s(b" bytes<=ff")
+        .ok(pass)
+        .send();
+    summary |= (pass as u32) << 6;
+
+    // PPI CH0: EGU0 EVENTS_TRIGGERED[0] -> EGU1 TASKS_TRIGGER[0].
+    wr(PPI_CH0_EEP, EGU0 + EGU_EVENTS_TRIGGERED0);
+    wr(PPI_CH0_TEP, EGU1 + EGU_TASKS_TRIGGER0);
+    wr(EGU1 + EGU_EVENTS_TRIGGERED0, 0);
+    wr(PPI_CHENCLR, 1);
+    wr(EGU0 + EGU_TASKS_TRIGGER0, 1);
+    for _ in 0..100 {
+        let _ = rd(EGU0 + EGU_EVENTS_TRIGGERED0);
+    }
+    let off = rd(EGU1 + EGU_EVENTS_TRIGGERED0);
+    wr(EGU0 + EGU_EVENTS_TRIGGERED0, 0);
+    wr(PPI_CHENSET, 1);
+    wr(EGU0 + EGU_TASKS_TRIGGER0, 1);
+    let on = wait_set(EGU1 + EGU_EVENTS_TRIGGERED0);
+    wr(PPI_CHENCLR, 1);
+    let pass = off == 0 && on;
+    l.s(b"ppi egu0->egu1 off=")
+        .hex(off, 1)
+        .s(b" on=")
+        .hex(on as u32, 1)
+        .ok(pass)
+        .send();
+    summary |= (pass as u32) << 7;
+
+    summary
+}
+
+pub const TEMP: u32 = 0x4000_C000;
+pub const TEMP_TASKS_START: u32 = TEMP;
+pub const TEMP_TASKS_STOP: u32 = TEMP + 0x004;
+pub const TEMP_EVENTS_DATARDY: u32 = TEMP + 0x100;
+pub const TEMP_TEMP: u32 = TEMP + 0x508;
+
+pub const ECB: u32 = 0x4000_E000;
+pub const ECB_TASKS_STARTECB: u32 = ECB;
+pub const ECB_EVENTS_ENDECB: u32 = ECB + 0x100;
+pub const ECB_EVENTS_ERRORECB: u32 = ECB + 0x104;
+pub const ECB_ECBDATAPTR: u32 = ECB + 0x504;
+
+/// ECBDATAPTR block: key[16], cleartext[16], ciphertext[16] (PS v1.7 §6.5).
+#[repr(C, align(4))]
+struct EcbData([u8; 48]);
+static mut ECB_DATA: EcbData = EcbData([0; 48]);
+
+/// TEMP: TASKS_START -> EVENTS_DATARDY, then TEMP holds a signed value in
+/// 0.25 degC steps (PS v1.7 §6.32). The range check is the chip's operating
+/// range, -40..85 degC; the UART line prints the raw value the model gives.
+pub fn check_temp(l: &mut Line) -> bool {
+    wr(TEMP_EVENTS_DATARDY, 0);
+    let idle = rd(TEMP_EVENTS_DATARDY) == 0;
+    wr(TEMP_TASKS_START, 1);
+    let ready = wait_set(TEMP_EVENTS_DATARDY);
+    let raw = rd(TEMP_TEMP) as i32;
+    wr(TEMP_TASKS_STOP, 1);
+    wr(TEMP_EVENTS_DATARDY, 0);
+    let pass = idle && ready && (-160..=340).contains(&raw);
+    l.s(b"temp datardy=")
+        .hex(ready as u32, 1)
+        .s(b" raw=")
+        .hex(raw as u32, 8)
+        .ok(pass)
+        .send();
+    pass
+}
+
+/// ECB: AES-128 known-answer test from FIPS-197 Appendix C.1 through the
+/// EasyDMA data block. key = 000102..0f, plaintext = 00112233..ff,
+/// ciphertext = 69c4e0d86a7b0430d8cdb78070b4c55a.
+pub fn check_ecb_fips197(l: &mut Line) -> bool {
+    const CT: [u8; 16] = [
+        0x69, 0xc4, 0xe0, 0xd8, 0x6a, 0x7b, 0x04, 0x30, 0xd8, 0xcd, 0xb7, 0x80, 0x70, 0xb4, 0xc5,
+        0x5a,
+    ];
+    let data = core::ptr::addr_of_mut!(ECB_DATA) as *mut u8;
+    for i in 0..16u8 {
+        unsafe {
+            write_volatile(data.add(i as usize), i);
+            write_volatile(data.add(16 + i as usize), i * 0x11);
+            write_volatile(data.add(32 + i as usize), 0);
+        }
+    }
+    wr(ECB_EVENTS_ENDECB, 0);
+    wr(ECB_EVENTS_ERRORECB, 0);
+    wr(ECB_ECBDATAPTR, data as u32);
+    wr(ECB_TASKS_STARTECB, 1);
+    let ended = wait_set(ECB_EVENTS_ENDECB);
+    let error = rd(ECB_EVENTS_ERRORECB);
+    let mut ct = [0u8; 16];
+    for (i, b) in ct.iter_mut().enumerate() {
+        *b = unsafe { read_volatile(data.add(32 + i)) };
+    }
+    let be = |b: &[u8]| u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
+    let pass = ended && error == 0 && ct == CT;
+    l.s(b"ecb fips197 ct=")
+        .hex(be(&ct[0..4]), 8)
+        .s(b"..")
+        .hex(be(&ct[12..16]), 8)
+        .s(b" end=")
+        .hex(ended as u32, 1)
+        .ok(pass)
+        .send();
+    wr(ECB_EVENTS_ENDECB, 0);
+    pass
+}
+
+pub const TWIM0: u32 = 0x4000_3000;
+pub const TWIM_TASKS_STARTRX: u32 = TWIM0;
+pub const TWIM_TASKS_STARTTX: u32 = TWIM0 + 0x008;
+pub const TWIM_TASKS_STOP: u32 = TWIM0 + 0x014;
+pub const TWIM_EVENTS_STOPPED: u32 = TWIM0 + 0x104;
+pub const TWIM_EVENTS_ERROR: u32 = TWIM0 + 0x124;
+pub const TWIM_EVENTS_LASTRX: u32 = TWIM0 + 0x15C;
+pub const TWIM_EVENTS_LASTTX: u32 = TWIM0 + 0x160;
+pub const TWIM_SHORTS: u32 = TWIM0 + 0x200;
+pub const TWIM_ERRORSRC: u32 = TWIM0 + 0x4C4;
+pub const TWIM_ENABLE: u32 = TWIM0 + 0x500;
+pub const TWIM_PSEL_SCL: u32 = TWIM0 + 0x508;
+pub const TWIM_PSEL_SDA: u32 = TWIM0 + 0x50C;
+pub const TWIM_FREQUENCY: u32 = TWIM0 + 0x524;
+pub const TWIM_RXD_PTR: u32 = TWIM0 + 0x534;
+pub const TWIM_RXD_MAXCNT: u32 = TWIM0 + 0x538;
+pub const TWIM_RXD_AMOUNT: u32 = TWIM0 + 0x53C;
+pub const TWIM_TXD_PTR: u32 = TWIM0 + 0x544;
+pub const TWIM_TXD_MAXCNT: u32 = TWIM0 + 0x548;
+pub const TWIM_TXD_AMOUNT: u32 = TWIM0 + 0x54C;
+pub const TWIM_ADDRESS: u32 = TWIM0 + 0x588;
+const TWIM_SHORT_LASTTX_STARTRX: u32 = 1 << 7;
+const TWIM_SHORT_LASTTX_STOP: u32 = 1 << 9;
+const TWIM_SHORT_LASTRX_STOP: u32 = 1 << 12;
+const TWIM_ERRORSRC_ANACK: u32 = 1 << 1;
+/// TMP102 at its ADD0 = GND address; 0x49 has no device on the bus.
+const TMP102_ADDR: u32 = 0x48;
+const ABSENT_ADDR: u32 = 0x49;
+
+#[repr(C, align(4))]
+struct TwimBuf([u8; 4]);
+static mut TWIM_TX: TwimBuf = TwimBuf([0; 4]);
+static mut TWIM_RX: TwimBuf = TwimBuf([0; 4]);
+
+/// One TWIM0 transaction through EasyDMA: write `tx`, then (if `rx_len` > 0)
+/// a repeated START and read `rx_len` bytes, then STOP via SHORTS. Returns
+/// (stopped, TXD.AMOUNT, RXD.AMOUNT, first two RX bytes big-endian).
+fn twim_xfer(addr: u32, tx: &[u8], rx_len: u32) -> (bool, u32, u32, u32) {
+    let txb = core::ptr::addr_of_mut!(TWIM_TX) as *mut u8;
+    let rxb = core::ptr::addr_of_mut!(TWIM_RX) as *mut u8;
+    for (i, b) in tx.iter().enumerate() {
+        unsafe { write_volatile(txb.add(i), *b) };
+    }
+    for i in 0..4 {
+        unsafe { write_volatile(rxb.add(i), 0) };
+    }
+    for ev in [
+        TWIM_EVENTS_STOPPED,
+        TWIM_EVENTS_ERROR,
+        TWIM_EVENTS_LASTRX,
+        TWIM_EVENTS_LASTTX,
+    ] {
+        wr(ev, 0);
+    }
+    wr(TWIM_ADDRESS, addr);
+    wr(TWIM_TXD_PTR, txb as u32);
+    wr(TWIM_TXD_MAXCNT, tx.len() as u32);
+    wr(TWIM_RXD_PTR, rxb as u32);
+    wr(TWIM_RXD_MAXCNT, rx_len);
+    wr(
+        TWIM_SHORTS,
+        if rx_len > 0 {
+            TWIM_SHORT_LASTTX_STARTRX | TWIM_SHORT_LASTRX_STOP
+        } else {
+            TWIM_SHORT_LASTTX_STOP
+        },
+    );
+    wr(TWIM_TASKS_STARTTX, 1);
+    let stopped = wait_set(TWIM_EVENTS_STOPPED);
+    let word = unsafe { u32::from(read_volatile(rxb)) << 8 | u32::from(read_volatile(rxb.add(1))) };
+    (stopped, rd(TWIM_TXD_AMOUNT), rd(TWIM_RXD_AMOUNT), word)
+}
+
+/// TWIM0 (PS v1.7 §6.31) against the TMP102 test fixture on `twi0`:
+///   * write CONFIG = 0xFFFF; the TMP102 write mask (SBOS397I Tables
+///     6-10/6-11) keeps R1:R0 = 11, AL = 1 and D3:D0 = 0, so it reads back
+///     0xFFF0 through a write + repeated-START read;
+///   * the first TEMP read is the 25.0 degC reset value 0x1900;
+///   * an address with no device sets EVENTS_ERROR and ERRORSRC.ANACK, which
+///     is write-1-to-clear.
+/// P0.26/P0.27 are the nRF52840 DK's Arduino SCL/SDA pads; no other block
+/// uses them.
+pub fn check_twim0_tmp102(l: &mut Line) -> bool {
+    wr(TWIM_ENABLE, 0);
+    wr(TWIM_PSEL_SCL, 26);
+    wr(TWIM_PSEL_SDA, 27);
+    wr(TWIM_FREQUENCY, 0x0640_0000); // K400
+    wr(TWIM_ENABLE, 6);
+
+    let (w_stop, w_tx, _, _) = twim_xfer(TMP102_ADDR, &[0x01, 0xFF, 0xFF], 0);
+    let (c_stop, c_tx, c_rx, cfg) = twim_xfer(TMP102_ADDR, &[0x01], 2);
+    let (t_stop, _, t_rx, temp) = twim_xfer(TMP102_ADDR, &[0x00], 2);
+    let clean = rd(TWIM_ERRORSRC) == 0;
+
+    // Absent address with LASTTX_STOP armed: no data byte starts, so silicon
+    // fires no LASTTX, runs no shortcut and holds the bus until the firmware
+    // triggers STOP itself, as nrfx does on ERROR.
+    for ev in [TWIM_EVENTS_STOPPED, TWIM_EVENTS_ERROR, TWIM_EVENTS_LASTTX] {
+        wr(ev, 0);
+    }
+    wr(TWIM_SHORTS, TWIM_SHORT_LASTTX_STOP);
+    wr(TWIM_ADDRESS, ABSENT_ADDR);
+    wr(TWIM_TXD_MAXCNT, 1);
+    wr(TWIM_TASKS_STARTTX, 1);
+    let error = wait_set(TWIM_EVENTS_ERROR);
+    let anack = rd(TWIM_ERRORSRC) & TWIM_ERRORSRC_ANACK != 0;
+    let held =
+        rd(TWIM_EVENTS_LASTTX) == 0 && rd(TWIM_TXD_AMOUNT) == 0 && rd(TWIM_EVENTS_STOPPED) == 0;
+    wr(TWIM_SHORTS, 0);
+    wr(TWIM_TASKS_STOP, 1);
+    let n_stop = wait_set(TWIM_EVENTS_STOPPED);
+    wr(TWIM_ERRORSRC, TWIM_ERRORSRC_ANACK);
+    let cleared = rd(TWIM_ERRORSRC) == 0;
+    wr(TWIM_ENABLE, 0);
+
+    let pass = w_stop
+        && w_tx == 3
+        && c_stop
+        && c_tx == 1
+        && c_rx == 2
+        && cfg == 0xFFF0
+        && t_stop
+        && t_rx == 2
+        && temp == 0x1900
+        && clean
+        && error
+        && anack
+        && held
+        && n_stop
+        && cleared;
+    l.s(b"twim0 tmp102 cfg=")
+        .hex(cfg, 4)
+        .s(b" temp=")
+        .hex(temp, 4)
+        .s(b" anack=")
+        .hex((error && anack) as u32, 1)
+        .s(b" held=")
+        .hex(held as u32, 1)
+        .s(b" w1c=")
+        .hex(cleared as u32, 1)
+        .ok(pass)
+        .send();
+    pass
+}
+
+pub const PWM0: u32 = 0x4001_C000;
+pub const PWM_TASKS_STOP: u32 = PWM0 + 0x004;
+pub const PWM_TASKS_SEQSTART0: u32 = PWM0 + 0x008;
+pub const PWM_EVENTS_STOPPED: u32 = PWM0 + 0x104;
+pub const PWM_EVENTS_SEQEND0: u32 = PWM0 + 0x110;
+pub const PWM_ENABLE: u32 = PWM0 + 0x500;
+pub const PWM_MODE: u32 = PWM0 + 0x504;
+pub const PWM_COUNTERTOP: u32 = PWM0 + 0x508;
+pub const PWM_PRESCALER: u32 = PWM0 + 0x50C;
+pub const PWM_DECODER: u32 = PWM0 + 0x510;
+pub const PWM_LOOP: u32 = PWM0 + 0x514;
+pub const PWM_SEQ0_PTR: u32 = PWM0 + 0x520;
+pub const PWM_SEQ0_CNT: u32 = PWM0 + 0x524;
+pub const PWM_SEQ0_REFRESH: u32 = PWM0 + 0x528;
+pub const PWM_SEQ0_ENDDELAY: u32 = PWM0 + 0x52C;
+pub const PWM_PSEL_OUT0: u32 = PWM0 + 0x560;
+/// Free on the bare chip row: no other block drives P0.15.
+pub const PWM_PIN: u32 = 15;
+const PWM_SAMPLES: u32 = 8000;
+
+#[repr(C, align(4))]
+struct PwmSeq([u16; 2]);
+static mut PWM_SEQ: PwmSeq = PwmSeq([0; 2]);
+
+/// PWM0 (PS v1.7 §6.17) on P0.15: MODE Up, PWM_CLK 16 MHz, COUNTERTOP 400
+/// (25 us period), one Common step 0x8000 | 100 read through EasyDMA.
+/// POLARITY bit 15 set starts each period high and falls at COMP, so the pad
+/// is high 100/400 = 25% of the time. GPIO IN samples the pad 8000 times
+/// (many periods); the duty must be 20..30% with at least 10 rising edges.
+/// After TASKS_STOP the pad falls back to the GPIO OUT latch (0).
+/// Returns (pass, high samples, rising edges).
+pub fn check_pwm0_duty(l: &mut Line) -> (bool, u32, u32) {
+    let bit = 1 << PWM_PIN;
+    wr(GPIO_OUTCLR, bit);
+    wr(GPIO_PIN_CNF + PWM_PIN * 4, 1);
+    let seq = core::ptr::addr_of_mut!(PWM_SEQ) as *mut u16;
+    unsafe { write_volatile(seq, 0x8000 | 100) };
+    wr(PWM_PSEL_OUT0, PWM_PIN);
+    wr(PWM_ENABLE, 1);
+    wr(PWM_MODE, 0);
+    wr(PWM_PRESCALER, 0);
+    wr(PWM_COUNTERTOP, 400);
+    wr(PWM_DECODER, 0);
+    wr(PWM_LOOP, 0);
+    wr(PWM_SEQ0_PTR, seq as u32);
+    wr(PWM_SEQ0_CNT, 1);
+    wr(PWM_SEQ0_REFRESH, 0);
+    wr(PWM_SEQ0_ENDDELAY, 0);
+    wr(PWM_EVENTS_SEQEND0, 0);
+    wr(PWM_EVENTS_STOPPED, 0);
+    wr(PWM_TASKS_SEQSTART0, 1);
+    let seqend = wait_set(PWM_EVENTS_SEQEND0);
+
+    let mut high = 0u32;
+    let mut rises = 0u32;
+    let mut last = rd(GPIO_IN) & bit;
+    // Branch-free, so every sample costs the same cycles and the sample
+    // count is proportional to time: a longer "high" path under-counts high.
+    for _ in 0..PWM_SAMPLES {
+        let v = rd(GPIO_IN) & bit;
+        high += v >> PWM_PIN;
+        rises += (v & !last) >> PWM_PIN;
+        last = v;
+    }
+
+    wr(PWM_TASKS_STOP, 1);
+    let stopped = wait_set(PWM_EVENTS_STOPPED);
+    settle();
+    let idle = rd(GPIO_IN) & bit;
+    wr(PWM_ENABLE, 0);
+    wr(PWM_PSEL_OUT0, 0xFFFF_FFFF);
+
+    let duty_ok = high * 10 >= PWM_SAMPLES * 2 && high * 10 <= PWM_SAMPLES * 3;
+    let pass = seqend && duty_ok && rises >= 10 && stopped && idle == 0;
+    l.s(b"pwm0 p0.15 seqend=")
+        .hex(seqend as u32, 1)
+        .s(b" duty=")
+        .hex(duty_ok as u32, 1)
+        .s(b" rises=")
+        .hex((rises >= 10) as u32, 1)
+        .s(b" stop=")
+        .hex(stopped as u32, 1)
+        .s(b" idle=")
+        .hex(idle, 1)
+        .ok(pass)
+        .send();
+    (pass, high, rises)
+}
+
+const NVIC_ISPR0: u32 = 0xE000_E200;
+const NVIC_ISPR1: u32 = 0xE000_E204;
+const NVIC_ICPR0: u32 = 0xE000_E280;
+const NVIC_ICPR1: u32 = 0xE000_E284;
+/// NVIC lines 28..35: PWM0, PDM, 30 and 31 (no IRQ), MWU, PWM1, PWM2, SPIM2.
+const PWM_IRQ_WINDOW: u32 = 0xFF;
+
+/// NVIC pending bits for lines 28..35, bit 0 = line 28.
+fn pwm_window_pending() -> u32 {
+    ((rd(NVIC_ISPR0) >> 28) | (rd(NVIC_ISPR1) << 4)) & PWM_IRQ_WINDOW
+}
+
+/// PWM1 and PWM2 (PS v1.7 §6.17.5 INTEN) raise their own NVIC lines, 33 and
+/// 34 (instantiation table, ch. 4.3; nrf52840.svd). The lines stay disabled
+/// in NVIC, so only ISPR shows the routing. With INTEN.SEQEND0 set, a
+/// one-step sequence must pend exactly the instance's line within 28..35,
+/// and clearing EVENTS_SEQEND0 must drop it (level line). Returns pass; the
+/// line prints both pending windows (expected 20 and 40).
+pub fn check_pwm_irq_lines(l: &mut Line) -> bool {
+    let seq = core::ptr::addr_of_mut!(PWM_SEQ) as *mut u16;
+    unsafe { write_volatile(seq, 0x8000 | 100) };
+    let mut pass = true;
+    let mut windows = [0u32; 2];
+    for (n, (base, irq)) in [(0x4002_1000u32, 33u32), (0x4002_2000, 34)]
+        .into_iter()
+        .enumerate()
+    {
+        wr(NVIC_ICPR0, 0xF000_0000);
+        wr(NVIC_ICPR1, 0xF);
+        wr(base + 0x500, 1); // ENABLE
+        wr(base + 0x508, 400); // COUNTERTOP
+        wr(base + 0x520, seq as u32); // SEQ[0].PTR
+        wr(base + 0x524, 1); // SEQ[0].CNT
+        wr(base + 0x110, 0); // EVENTS_SEQEND0
+        wr(base + 0x304, 1 << 4); // INTENSET.SEQEND0
+        wr(base + 0x008, 1); // TASKS_SEQSTART0
+        let seqend = wait_set(base + 0x110);
+        windows[n] = pwm_window_pending();
+        wr(base + 0x110, 0);
+        settle();
+        let dropped = pwm_window_pending() & (1 << (irq - 28)) == 0;
+        wr(base + 0x308, 0xFFFF_FFFF); // INTENCLR
+        wr(base + 0x004, 1); // TASKS_STOP
+        let stopped = wait_set(base + 0x104);
+        for ev in (0x104..=0x11C).step_by(4) {
+            wr(base + ev, 0);
+        }
+        wr(base + 0x500, 0);
+        wr(NVIC_ICPR0, 0xF000_0000);
+        wr(NVIC_ICPR1, 0xF);
+        pass &= seqend && windows[n] == 1 << (irq - 28) && dropped && stopped;
+    }
+    l.s(b"pwm irq lines 28..35 pwm1=")
+        .hex(windows[0], 2)
+        .s(b" pwm2=")
+        .hex(windows[1], 2)
+        .ok(pass)
+        .send();
+    pass
+}
+
+/// Convert the held 1.65 V input on AIN3 into one 12-bit EasyDMA sample.
+/// CONFIG=0 selects single-ended, gain 1/6 and the 600 mV internal reference:
+/// floor(1650 mV * (1/6) * 4096 / 600 mV) = 1877 (0x755).
+pub fn check_saadc_ain3(l: &mut Line) -> bool {
+    // CH[0]: AIN3 is PSELP=4; PSELN is ignored in single-ended mode.
+    wr(SAADC + 0x510, 4);
+    wr(SAADC + 0x514, 0);
+    wr(SAADC + 0x518, 0);
+    wr(SAADC + 0x5F0, 2); // 12-bit resolution
+    wr(SAADC + 0x62C, SAADC_RESULT);
+    wr(SAADC + 0x630, 1);
+    for event in [0x100, 0x104, 0x108, 0x10C] {
+        wr(SAADC + event, 0);
+    }
+    wr(SAADC + 0x500, 1); // ENABLE
+    wr(SAADC, 1); // TASKS_START
+    let started = rd(SAADC + 0x100) == 1;
+    wr(SAADC + 0x004, 1); // TASKS_SAMPLE
+    let ended = wait_set(SAADC + 0x104);
+    let amount = rd(SAADC + 0x634);
+    let sample = rd(SAADC_RESULT) & 0xFFFF;
+    let done = rd(SAADC + 0x108) == 1;
+    let pass = started && ended && amount == 1 && sample == 0x755 && done;
+    l.s(b"saadc ain3=")
+        .hex(sample, 8)
+        .s(b" amount=")
+        .hex(amount, 1)
+        .s(b" end=")
+        .hex(ended as u32, 1)
+        .ok(pass)
+        .send();
+    wr(SAADC + 0x008, 1); // TASKS_STOP
+    wr(SAADC + 0x500, 0);
+    pass
+}
+
+/// Pend the lower-priority PendSV exception from SysTick and prove the M4
+/// tail-chains by checking the reused exception frame and live handler R0.
+pub fn check_systick_pendsv_tailchain(l: &mut Line) -> bool {
+    let prior_vtor = rd(SCB_VTOR);
+    let prior_shpr3 = rd(SCB_SHPR3);
+    let test_shpr3 = (prior_shpr3 & !0xFFFF_0000) | (0x80 << 24) | (0xC0 << 16);
+    let prior_primask: u32;
+
+    unsafe {
+        core::arch::asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+
+    wr(SYSTICK_CSR, 0);
+    wr(SCB_ICSR, ICSR_PENDSTCLR | ICSR_PENDSVCLR);
+    for word in 0..16 {
+        wr(TEST_VECTOR_TABLE + word * 4, 0);
+    }
+    wr(
+        TEST_VECTOR_TABLE + 14 * 4,
+        (nrf_pendsv_tailchain_handler as *const () as usize as u32) | 1,
+    );
+    wr(
+        TEST_VECTOR_TABLE + 15 * 4,
+        (nrf_systick_tailchain_handler as *const () as usize as u32) | 1,
+    );
+    wr(SCB_VTOR, TEST_VECTOR_TABLE);
+    wr(SCB_SHPR3, test_shpr3);
+    for word in 0..12 {
+        wr(TAILCHAIN_RECORD + word * 4, 0);
+    }
+
+    unsafe {
+        core::arch::asm!(
+            "dsb",
+            "isb",
+            "msr PRIMASK, {primask}",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+    if prior_primask == 0 {
+        unsafe { nrf_pend_systick_with_thread_r0() };
+    }
+
+    for _ in 0..100_000 {
+        if rd(TAILCHAIN_RECORD + 44) == 1 {
+            break;
+        }
+        unsafe { core::arch::asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let parent_ipsr = rd(TAILCHAIN_RECORD);
+    let parent_icsr_before = rd(TAILCHAIN_RECORD + 4);
+    let parent_icsr_after = rd(TAILCHAIN_RECORD + 8);
+    let parent_msp = rd(TAILCHAIN_RECORD + 12);
+    let parent_exc_return = rd(TAILCHAIN_RECORD + 16);
+    let thread_r0 = rd(TAILCHAIN_RECORD + 20);
+    let child_ipsr = rd(TAILCHAIN_RECORD + 24);
+    let child_msp = rd(TAILCHAIN_RECORD + 28);
+    let child_exc_return = rd(TAILCHAIN_RECORD + 32);
+    let child_r0 = rd(TAILCHAIN_RECORD + 36);
+    let child_icsr = rd(TAILCHAIN_RECORD + 40);
+    let child_hit = rd(TAILCHAIN_RECORD + 44) == 1;
+    let priority_configured = rd(SCB_SHPR3) & 0xFFFF_0000 == test_shpr3 & 0xFFFF_0000;
+    let thread_ipsr: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {ipsr}, IPSR",
+            ipsr = out(reg) thread_ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+
+    let masked_primask: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) masked_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+    wr(SYSTICK_CSR, 0);
+    wr(SCB_ICSR, ICSR_PENDSTCLR | ICSR_PENDSVCLR);
+    wr(SCB_VTOR, prior_vtor);
+    wr(SCB_SHPR3, prior_shpr3);
+    unsafe {
+        core::arch::asm!(
+            "dsb",
+            "isb",
+            "msr PRIMASK, {primask}",
+            primask = in(reg) masked_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    let deferred = parent_ipsr == 15
+        && parent_icsr_before & 0x1FF == 15
+        && parent_icsr_after & 0x1FF == 15
+        && parent_icsr_after & ICSR_PENDSVSET != 0;
+    let frame_reused = parent_msp == child_msp
+        && parent_exc_return == 0xFFFF_FFF9
+        && child_exc_return == parent_exc_return;
+    let r0_live = thread_r0 == THREAD_R0 && child_r0 == SYSTICK_R0 && child_r0 != thread_r0;
+    let child_is_pendsv = child_hit
+        && child_ipsr == 14
+        && child_icsr & 0x1FF == 14
+        && child_icsr & ICSR_PENDSVSET == 0;
+    let cleanup = rd(SCB_VTOR) == prior_vtor
+        && rd(SCB_SHPR3) == prior_shpr3
+        && rd(SCB_ICSR) & (ICSR_PENDSTSET | ICSR_PENDSVSET) == 0;
+    let ok = prior_primask == 0
+        && deferred
+        && frame_reused
+        && r0_live
+        && child_is_pendsv
+        && priority_configured
+        && thread_ipsr == 0
+        && cleanup;
+
+    l.s(b"systick-pendsv frame=")
+        .s(if frame_reused { b"1" } else { b"0" })
+        .s(b" r0=")
+        .s(if r0_live { b"1" } else { b"0" })
+        .s(b" pending=")
+        .s(if child_is_pendsv { b"1" } else { b"0" })
+        .s(b" priority=")
+        .s(if priority_configured { b"1" } else { b"0" })
+        .ok(ok)
+        .send();
+    ok
+}
+
+/// Return a known Thread-mode R0 after software-pending SysTick.
+#[unsafe(naked)]
+unsafe extern "C" fn nrf_pend_systick_with_thread_r0() {
+    core::arch::naked_asm!(
+        "ldr r0, ={thread_r0}",
+        "ldr r1, ={icsr}",
+        "movs r2, #1",
+        "lsls r2, r2, #26",
+        "str r2, [r1]",
+        "bx lr",
+        thread_r0 = const THREAD_R0,
+        icsr = const SCB_ICSR,
+    );
+}
+
+/// Pend lower-priority PendSV while SysTick is active, then leave a marker in
+/// R0 for the tail-chained handler.
+#[unsafe(naked)]
+unsafe extern "C" fn nrf_systick_tailchain_handler() {
+    core::arch::naked_asm!(
+        "mov r3, r0",
+        "ldr r0, ={record}",
+        "str r3, [r0, #20]",
+        "mrs r3, ipsr",
+        "str r3, [r0, #0]",
+        "mrs r3, msp",
+        "str r3, [r0, #12]",
+        "mov r3, lr",
+        "str r3, [r0, #16]",
+        "ldr r1, ={icsr}",
+        "ldr r2, [r1]",
+        "str r2, [r0, #4]",
+        "movs r2, #1",
+        "lsls r2, r2, #28",
+        "str r2, [r1]",
+        "ldr r2, [r1]",
+        "str r2, [r0, #8]",
+        "ldr r0, ={systick_r0}",
+        "bx lr",
+        record = const TAILCHAIN_RECORD,
+        icsr = const SCB_ICSR,
+        systick_r0 = const SYSTICK_R0,
+    );
+}
+
+/// Capture the PendSV exception state before returning to Thread mode.
+#[unsafe(naked)]
+unsafe extern "C" fn nrf_pendsv_tailchain_handler() {
+    core::arch::naked_asm!(
+        "mov r2, r0",
+        "mrs r3, ipsr",
+        "ldr r0, ={record}",
+        "str r3, [r0, #24]",
+        "mrs r3, msp",
+        "str r3, [r0, #28]",
+        "mov r3, lr",
+        "str r3, [r0, #32]",
+        "str r2, [r0, #36]",
+        "ldr r3, ={icsr}",
+        "ldr r3, [r3]",
+        "str r3, [r0, #40]",
+        "movs r3, #1",
+        "str r3, [r0, #44]",
+        "bx lr",
+        record = const TAILCHAIN_RECORD,
+        icsr = const SCB_ICSR,
+    );
+}
+
+/// Nordic's P1 block base (PS v1.7 §6.9.2). Its registers start at 0x804 —
+/// inside P0's 4 KB page, after P0's PIN_CNF[31] at 0x5000077C.
+pub const GPIO1: u32 = 0x5000_0300;
+pub const P1_OUT: u32 = GPIO1 + 0x504;
+pub const P1_OUTSET: u32 = GPIO1 + 0x508;
+pub const P1_OUTCLR: u32 = GPIO1 + 0x50C;
+pub const P1_IN: u32 = GPIO1 + 0x510;
+pub const P1_PIN_CNF: u32 = GPIO1 + 0x700;
+/// P1.1 driven output, P1.2 pulled-up input, P1.3 GPIOTE task pin.
+pub const P1_OUT_PIN: u32 = 1;
+pub const P1_PULL_PIN: u32 = 2;
+pub const P1_GPIOTE_PIN: u32 = 3;
+
+/// GPIO P1 at its silicon addresses (0x50000300 block): OUTSET/OUTCLR on P1.1
+/// read back through OUT and IN, PIN_CNF PULL=Up on input P1.2 reads IN = 1,
+/// and GPIOTE CONFIG[0] PORT=1 toggles P1.3 at the pad. P0's OUT and
+/// PIN_CNF[31] (0x5000077C, the last P0 word before P1) must not change.
+/// Returns pass; the line prints P1 IN while high and P0 OUT.
+pub fn check_gpio_p1(l: &mut Line) -> bool {
+    let p0_cnf31 = GPIO_PIN_CNF + 31 * 4;
+    wr(p0_cnf31, 2);
+    let p0_out_before = rd(GPIO_OUT);
+
+    let out_bit = 1 << P1_OUT_PIN;
+    wr(P1_PIN_CNF + P1_OUT_PIN * 4, 1);
+    wr(P1_OUTSET, out_bit);
+    let out_hi = rd(P1_OUT) & out_bit;
+    let in_hi = rd(P1_IN);
+    wr(P1_OUTCLR, out_bit);
+    let out_lo = rd(P1_OUT) & out_bit;
+    let in_lo = rd(P1_IN) & out_bit;
+    let drive_ok = out_hi != 0 && in_hi & out_bit != 0 && out_lo == 0 && in_lo == 0;
+
+    // DIR=0, INPUT=connect, PULL=Up (3 << 2).
+    let pull_bit = 1 << P1_PULL_PIN;
+    wr(P1_PIN_CNF + P1_PULL_PIN * 4, 3 << 2);
+    settle();
+    let pull_ok = rd(P1_IN) & pull_bit != 0;
+
+    // GPIOTE task mode (3), PSEL=3, PORT=1 (bit 13), POLARITY=Toggle.
+    let te_bit = 1 << P1_GPIOTE_PIN;
+    wr(P1_PIN_CNF + P1_GPIOTE_PIN * 4, 1);
+    wr(
+        GPIOTE_CONFIG0,
+        3 | (P1_GPIOTE_PIN << 8) | (1 << 13) | (3 << 16),
+    );
+    wr(GPIOTE_TASKS_OUT0, 1);
+    settle();
+    let t1 = rd(P1_IN) & te_bit;
+    wr(GPIOTE_TASKS_OUT0, 1);
+    settle();
+    let t2 = rd(P1_IN) & te_bit;
+    wr(GPIOTE_CONFIG0, 0);
+    let gpiote_ok = t1 != 0 && t2 == 0;
+
+    let p0_out = rd(GPIO_OUT);
+    let p0_ok = p0_out == p0_out_before && rd(p0_cnf31) == 2;
+    let pass = drive_ok && pull_ok && gpiote_ok && p0_ok;
+    l.s(b"gpio p1 in=")
+        .hex(in_hi & (out_bit | pull_bit), 2)
+        .s(b" drive=")
+        .hex(drive_ok as u32, 1)
+        .s(b" pull=")
+        .hex(pull_ok as u32, 1)
+        .s(b" gpiote=")
+        .hex(gpiote_ok as u32, 1)
+        .s(b" p0=")
+        .hex(p0_ok as u32, 1)
+        .ok(pass)
+        .send();
+    pass
+}
+
+pub const SPIM3: u32 = 0x4002_F000;
+const SPIM3_IRQ: u32 = 47;
+/// SPIM3 pads on the bare chip row; no other block uses them. P0.20 is the
+/// MAX31855 fixture's chip select (`configs/systems/onboarding/nrf52840.yaml`).
+const SPIM3_SCK: u32 = 19;
+const SPIM3_CSN: u32 = 20;
+const SPIM3_MOSI: u32 = 22;
+const SPIM3_MISO: u32 = 23;
+/// MAX31855 power-on frame: 25 degC hot junction (100 << 18) and 22 degC
+/// internal (352 << 4), no fault bits.
+const MAX31855_FRAME: u32 = 0x0190_1600;
+
+#[repr(C, align(4))]
+struct SpimRx([u8; 4]);
+static mut SPIM3_RX: SpimRx = SpimRx([0; 4]);
+
+/// One 4-byte RX-only SPIM3 transfer; returns (END seen, RXD.AMOUNT, frame).
+fn spim3_read_frame() -> (bool, u32, u32) {
+    let rx = core::ptr::addr_of_mut!(SPIM3_RX) as *mut u8;
+    for i in 0..4 {
+        unsafe { write_volatile(rx.add(i), 0) };
+    }
+    wr(SPIM3 + 0x118, 0); // EVENTS_END
+    wr(SPIM3 + 0x534, rx as u32); // RXD.PTR
+    wr(SPIM3 + 0x538, 4); // RXD.MAXCNT
+    wr(SPIM3 + 0x548, 0); // TXD.MAXCNT: MOSI carries ORC
+    wr(SPIM3 + 0x010, 1); // TASKS_START
+    let end = wait_set(SPIM3 + 0x118);
+    let b = |i| u32::from(unsafe { read_volatile(rx.add(i)) });
+    (
+        end,
+        rd(SPIM3 + 0x53C),
+        b(0) << 24 | b(1) << 16 | b(2) << 8 | b(3),
+    )
+}
+
+/// SPIM3 (PS v1.x §6.25) at 0x4002F000 with the hardware chip select on
+/// P0.20 (PSEL.CSN, CSNPOL active low). P0.20 is also a GPIO output held
+/// high, as nrfx sets the idle level, so only SPIM3's own CSN can select the
+/// MAX31855 there. Two reads must each return the full power-on frame (CSN
+/// rises between them, so the second one is reframed), the GPIO OUT latch
+/// must stay high, and INTEN.END must pend NVIC line 47. Before, the bare
+/// chip row had no SPIM3, and the model honoured PSEL.CSN on nRF54L only.
+pub fn check_spim3_hw_csn(l: &mut Line) -> bool {
+    wr(GPIO_PIN_CNF + 4 * SPIM3_CSN, 3); // output, input buffer connected
+    wr(GPIO_OUTSET, 1 << SPIM3_CSN);
+    wr(SPIM3 + 0x508, SPIM3_SCK);
+    wr(SPIM3 + 0x50C, SPIM3_MOSI);
+    wr(SPIM3 + 0x510, SPIM3_MISO);
+    wr(SPIM3 + 0x514, SPIM3_CSN); // PSEL.CSN
+    wr(SPIM3 + 0x568, 0); // CSNPOL active low
+    wr(SPIM3 + 0x524, 0x8000_0000); // FREQUENCY M8
+    wr(SPIM3 + 0x554, 0); // CONFIG mode 0, MSB first
+    wr(SPIM3 + 0x500, 7); // ENABLE = SPIM
+    let csn_ok = rd(SPIM3 + 0x514) == SPIM3_CSN;
+
+    let (end1, amount1, frame1) = spim3_read_frame();
+    wr(NVIC_ICPR1, 1 << (SPIM3_IRQ - 32));
+    wr(SPIM3 + 0x304, 1 << 6); // INTENSET.END
+    let (end2, amount2, frame2) = spim3_read_frame();
+    settle();
+    let irq = rd(NVIC_ISPR1) & (1 << (SPIM3_IRQ - 32)) != 0;
+    wr(SPIM3 + 0x308, 0xFFFF_FFFF); // INTENCLR
+    let gpio_high = rd(GPIO_OUT) & (1 << SPIM3_CSN) != 0;
+
+    for ev in [0x104, 0x110, 0x118, 0x120] {
+        wr(SPIM3 + ev, 0);
+    }
+    wr(SPIM3 + 0x500, 0);
+    for psel in [0x508, 0x50C, 0x510, 0x514] {
+        wr(SPIM3 + psel, 0xFFFF_FFFF);
+    }
+    wr(NVIC_ICPR1, 1 << (SPIM3_IRQ - 32));
+
+    let pass = csn_ok
+        && end1
+        && end2
+        && amount1 == 4
+        && amount2 == 4
+        && frame1 == MAX31855_FRAME
+        && frame2 == MAX31855_FRAME
+        && gpio_high
+        && irq;
+    l.s(b"spim3 csn max31855=")
+        .hex(frame1, 8)
+        .s(b"/")
+        .hex(frame2, 8)
+        .s(b" n=")
+        .hex(amount1 + amount2, 1)
+        .s(b" gpio=")
+        .hex(gpio_high as u32, 1)
+        .s(b" irq47=")
+        .hex(irq as u32, 1)
+        .ok(pass)
+        .send();
+    pass
+}

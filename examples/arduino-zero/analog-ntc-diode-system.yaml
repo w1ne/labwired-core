@@ -1,0 +1,63 @@
+# Generic Beta NTC, Shockley diode and resistor-divider netlists drive three
+# ARDUINO ZERO analog inputs through the ATSAMD21G18A descriptor's pad map.
+#
+# No netlist names the board, the ADC, or a channel: each one solves its own
+# circuit and publishes a probe voltage to `board.analog.<pad>_volts`. The
+# descriptor's `analog_pins:` maps PA2 -> adc/AIN0 (Arduino A0), PA4 ->
+# adc/AIN4 and PA6 -> adc/AIN6, so the same decks that run on the STM32, WCH,
+# nRF52, micro:bit, AVR, Renesas RA and RP2040 boards run here unchanged at the
+# Zero's 3.3 V VDDANA.
+#
+# PA2/PA4/PA6 are deliberately away from PB8/PB9, which are SERCOM4 SDA/SCL on
+# the pin-compatible Nano 33 IoT, so both profiles can run all three decks.
+name: "arduino-zero-analog"
+chip: "../../configs/chips/atsamd21g18a.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.pa2_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 3.3
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.pa4_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF
+        .model DREF D(IS=2.52n N=1.752 RS=0.568)
+      probes:
+        v_diode: "v(sense)"
+      vdd: 3.3
+  # A plain divider on a third pad and a third AIN proves the map is a table,
+  # not one lucky channel: PA6 is AIN6, not a neighbour of AIN0/AIN4.
+  - id: "pa6_divider"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_pa6: "board.analog.pa6_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rtop vcc sense 10k
+        Rbottom sense 0 4.7k
+      probes:
+        v_pa6: "v(sense)"
+      vdd: 3.3

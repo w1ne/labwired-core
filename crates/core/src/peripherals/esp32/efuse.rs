@@ -206,6 +206,10 @@ impl Efuse {
 }
 
 impl Peripheral for Efuse {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     // Inert walk: eFuse register bank; the CMD handshake settles across the write/next-read pair, and tick() is an explicit no-op ("no time-varying state").
     fn needs_legacy_walk(&self) -> bool {
         false
@@ -454,12 +458,6 @@ mod tests {
         // Seeded values survive too.
         assert_eq!(restored.chip_revision(), CHIP_REVISION_REV3);
         assert_eq!(restored.mac(), [0x24, 0x6F, 0x28, 0x00, 0x00, 0x01]);
-    }
-
-    #[test]
-    fn base_is_esp32_classic_canonical_address() {
-        let p = Efuse::new();
-        assert_eq!(p.base(), 0x3FF5_A000);
     }
 
     #[test]

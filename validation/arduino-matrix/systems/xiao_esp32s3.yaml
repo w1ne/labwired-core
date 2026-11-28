@@ -1,0 +1,31 @@
+# Arduino matrix system — Seeed Studio XIAO ESP32S3.
+# INA219 on the XIAO's Wire pins (D4 = GPIO5 SDA, D5 = GPIO6 SCL) and
+# MAX31855 on its SPI pins (D8 = GPIO7 SCK, D9 = GPIO8 MISO, D10 = GPIO9 MOSI).
+name: "arduino-matrix-xiao-esp32s3"
+chip: "../../../configs/chips/esp32s3.yaml"
+external_devices:
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c0"
+    route: { sda: "GPIO5", scl: "GPIO6" }
+    config:
+      i2c_address: 0x40
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi2_s3"
+    config:
+      cs_pin: "GPIO44"
+  # L5: a potentiometer wiper on A0 (D0 = GPIO1 = ADC1_CH0). It starts
+  # centred, so the SENS oneshot converts 1650 mV against 3.3 V: 2047.
+  - id: "pot_a0"
+    type: "potentiometer"
+    connection: "sens_s3"
+    config:
+      channel: 0
+board_io:
+  - id: "user_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 21
+    signal: "output"
+    active_high: false

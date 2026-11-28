@@ -1,34 +1,45 @@
-# Validation Report: egis_et171
+# Renode onboarding evidence: egis_et171
 
-**Architecture:** RISC-V.
+The imported board descriptor remains `verified: false`. Renode defines an
+Andes D25F core with `rv32gc_xandes`, SRAM at `0x00000000` (384 KiB), a 64 KiB
+ROM at `0x70000000`, flash at `0x80000000` (1 MiB), and an NS16550 `uart0` at
+`0xF0200020` with `wideRegisters: true` in its
+[ET171 platform file](https://github.com/renode/renode/blob/master/platforms/cpus/egis_et171.repl).
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Structural Check Passed (structural-ok)
+## Measured run
 
-```json
-{
-  "system_manifest": true,
-  "chip_descriptor": true,
-  "flash_base_present": true,
-  "ram_base_present": true
-}
-```
+- Status: **booted and smoke-passing**.
+- Firmware: `firmware-andes-ae350-n25-smoke --features et171-uart`, RV32IM,
+  100,000 instructions (shared with the AE350 N25 smoke; only the UART base
+  and banner differ).
+- Stop reason: `max_steps` after all checks completed.
+- Assertions: the RV32IM MUL result, the idle LSR (0x60, THRE|TEMT), the
+  LCR/DLAB divisor readback (DLL 0x41, DLM 0x01, LCR 0x03), the firmware pass
+  word, the polled UART banner `ET171 uart0 ok`, and the stop reason (6/6
+  passed).
+- Evidence: [`docs/coverage/renode-onboarding/metrics/egis_et171/`](../coverage/renode-onboarding/metrics/egis_et171/)
+  (build/run logs, UART output, JUnit, result, and snapshot) and the generated
+  [Renode onboarding scoreboard](../coverage/renode-onboarding-scoreboard.md).
 
+The earlier CPU/SRAM-only measurement (2026-11-06 configuration, zero
+peripheral accesses) is preserved at
+`docs/coverage/renode-onboarding/attempt-history/egis_et171/2026-11-08-before-uart0-smoke/`.
+A negative control with `uart0` removed fails 1/6 with a memory access
+violation at the LCR (0xF020002C):
+`docs/coverage/renode-onboarding/attempt-history/egis_et171/2026-11-08-uart0-negative-control/`.
 
-## Hardware Coverage Report
+## Profile boundary
 
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `mtimer` | `0xe6000000` | `riscvmachinetimer` |
-| `uart0` | `0xf0200020` | `ns16550` |
-| `pit0` | `0xf0400000` | `andesatcpit100` |
-| `gpio0` | `0xf0700000` | `andesatcgpio100` |
-| `watchdog` | `0xf0500000` | `andesatcwdt200_watchdog` |
-| `spi0` | `0xf0b00000` | `andesatcspi200` |
-| `spi1` | `0xf0f00000` | `andesatcspi200` |
-| `rtc0` | `0xf0600000` | `andesatcrtc100` |
-| `syscon` | `0xf0100000` | `egiset171_aosmu` |
-| `smu2` | `0xf0e00000` | `egiset171_smu2` |
-| `crypto` | `0xe8000000` | `egiset171_crypto` |
+The LabWired onboarding profile selects the generic `rv32im` CPU path,
+384 KiB of SRAM, the sourced 1 MiB flash window, and `uart0`. `uart0` uses
+this engine's 4-byte-stride 16550 register map (`dw_apb_uart` profile); that
+selects a register layout and does not claim a Synopsys DesignWare UART.
 
-**Total Peripherals:** 11
+Not claimed: Renode's reset-vector/ROM flow (the smoke loads the ELF
+directly), the D25F's Xandes, compressed, atomic, or floating-point
+extensions, the PLICs and machine timer, UART interrupts, FIFOs and baud
+timing, and the imported PIT, GPIO, watchdog, SPI, RTC, AOSMU/SMU2
+system-control, and crypto blocks. Simulation assumes an ideal VDD rail;
+power-on and brown-out behavior were not exercised. This is repository CLI
+simulation evidence, not hardware confirmation or a silicon-wide peripheral
+claim.

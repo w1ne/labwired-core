@@ -1,0 +1,233 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+// SPDX-License-Identifier: MIT
+
+//! Pulls that live outside the GPIO block reach the pad.
+//!
+//! Kinetis keeps a pad's pull in `PORTx_PCRn`, Renesas RA in `PmnPFS`, i.MX
+//! RT in the IOMUXC `SW_PAD_CTL_PAD_*` registers. Firmware writes those, not
+//! the GPIO port, so the in-tree chips name the block on the port
+//! (`pad_control`) and the bus hands the decoded pull over after each write.
+//! Each case below boots the real chip yaml, writes the pull the way vendor
+//! code does, and checks the three places it must show: the input register
+//! firmware reads, `driver().pull` (what a world `gpio_net` counts), and a
+//! push-captured own-drive channel.
+
+use labwired_config::{ChipDescriptor, SystemManifest};
+use labwired_core::bus::SystemBus;
+use labwired_core::pins::{External, Pull};
+use labwired_core::Bus;
+use std::path::{Path, PathBuf};
+
+fn root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+fn bus(chip_file: &str) -> SystemBus {
+    let chip = ChipDescriptor::from_file(root().join("configs/chips").join(chip_file)).unwrap();
+    let manifest: SystemManifest = serde_yaml::from_str(&format!(
+        "name: pad-control\nchip: {chip_file}\nexternal_devices: []\nboard_io: []\n"
+    ))
+    .unwrap();
+    let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    bus.set_clock_gating_bypass(true);
+    bus
+}
+
+/// Input register bit, `driver().pull`, and what the outside can still do.
+fn assert_pad(bus: &mut SystemBus, port: &str, pin: u8, pull: Pull, what: &str) {
+    let idx = bus.find_peripheral_index_by_name(port).unwrap();
+    let pins = bus.peripherals[idx].dev.pins().unwrap();
+    assert_eq!(
+        pins.driver(pin).map(|d| d.pull),
+        Some(pull),
+        "{what}: driver().pull"
+    );
+    if let Some(rail) = pull.level() {
+        assert_eq!(pins.input(pin), Some(rail), "{what}: input register");
+        // The outside wins over the weak pull, and releasing hands it back.
+        let change = bus
+            .set_pad_external(idx, pin, External::Level(!rail))
+            .unwrap();
+        assert_eq!(change.after, !rail, "{what}: driven against the pull");
+        let change = bus.set_pad_external(idx, pin, External::Released).unwrap();
+        assert_eq!(change.after, rail, "{what}: released to the pull");
+    }
+}
+
+#[test]
+fn kinetis_portc_pcr_pulls_reach_gpioc() {
+    let mut bus = bus("mkw41z4.yaml");
+    // KW41Z reset: PCR MUX = 0 (disabled), no pull anywhere on GPIOC.
+    assert_pad(&mut bus, "gpioc", 1, Pull::None, "reset");
+    // PORTC_PCR1 = MUX 1 (GPIO) | PE | PS: pull-up.
+    bus.write_u32(0x4004_B000 + 4, 0x0000_0103).unwrap();
+    assert_pad(&mut bus, "gpioc", 1, Pull::Up, "PE|PS");
+    // PS clear: pull-down.
+    bus.write_u32(0x4004_B000 + 4, 0x0000_0102).unwrap();
+    assert_pad(&mut bus, "gpioc", 1, Pull::Down, "PE");
+    // MUX back to 0: the pin is disabled and the pull does not act.
+    bus.write_u32(0x4004_B000 + 4, 0x0000_0003).unwrap();
+    assert_pad(&mut bus, "gpioc", 1, Pull::None, "MUX 0");
+}
+
+#[test]
+fn ra_pfs_pcr_pull_up_reaches_the_port() {
+    let mut bus = bus("ra4m1.yaml");
+    const PFS: u64 = 0x4004_0800;
+    const P111PFS: u64 = PFS + 0x40 + 4 * 11;
+    // Write-protected out of reset: the PCR store is dropped.
+    bus.write_u32(P111PFS, 1 << 4).unwrap();
+    assert_pad(&mut bus, "port1", 11, Pull::None, "PWPR locked");
+    // R_BSP_PinAccessEnable, then the pull-up.
+    bus.write_u8(PFS + 0x503, 0x00).unwrap();
+    bus.write_u8(PFS + 0x503, 0x40).unwrap();
+    bus.write_u32(P111PFS, 1 << 4).unwrap();
+    assert_pad(&mut bus, "port1", 11, Pull::Up, "PCR");
+    // Port 3 has its own PFS row: P111 does not leak into P311.
+    assert_pad(&mut bus, "port3", 11, Pull::None, "other port");
+    bus.write_u32(P111PFS, 0).unwrap();
+    assert_pad(&mut bus, "port1", 11, Pull::None, "PCR cleared");
+}
+
+#[test]
+fn imxrt_iomuxc_pad_ctl_pulls_reach_gpio2() {
+    let mut bus = bus("imxrt1064.yaml");
+    // SW_PAD_CTL_PAD_GPIO_B0_03 (GPIO2_IO03, Teensy 4 D13).
+    const PAD: u64 = 0x401F_8000 + 0x32C + 4 * 3;
+    // The reset value selects the keeper (PUE = 0): no pull.
+    bus.write_u32(PAD, 0x0000_10B0).unwrap();
+    assert_pad(&mut bus, "gpio2", 3, Pull::None, "keeper");
+    // PKE | PUE | PUS = 10 (100k up).
+    bus.write_u32(PAD, 0x0000_B0B0).unwrap();
+    assert_pad(&mut bus, "gpio2", 3, Pull::Up, "100k up");
+    // PUS = 00: 100k down.
+    bus.write_u32(PAD, 0x0000_30B0).unwrap();
+    assert_pad(&mut bus, "gpio2", 3, Pull::Down, "100k down");
+    // A neighbouring pad register moves only its own pin.
+    assert_pad(&mut bus, "gpio2", 4, Pull::None, "GPIO2_IO04");
+}
+
+/// RP2040 keeps a pad's pulls in PADS_BANK0 `GPIOn` (datasheet 2.19.6.3):
+/// PUE (bit 3) / PDE (bit 2); both set is the bus keeper, not a pull. The SIO
+/// owns the pad's `GPIO_IN`, so the pull has to reach it. pico-sdk
+/// `gpio_set_pulls` (Arduino `pinMode(pin, INPUT_PULLUP)`) writes the word
+/// through the `+0x1000` XOR alias, which the bus resolves to the base word.
+#[test]
+fn rp2040_pads_bank0_pulls_reach_the_sio() {
+    for chip in ["rp2040.yaml", "rp2040-feather.yaml"] {
+        let mut bus = bus(chip);
+        const GPIO10: u64 = 0x4001_C000 + 4 + 4 * 10;
+        // Reset 0x56: IE | DRIVE 4 mA | PDE | SCHMITT, so pulled down.
+        assert_eq!(bus.read_u32(GPIO10).unwrap(), 0x56, "{chip}: reset");
+        assert_pad(&mut bus, "sio", 10, Pull::Down, "reset PDE");
+        // gpio_set_pulls(10, true, false): hw_write_masked via the XOR alias.
+        let cur = bus.read_u32(GPIO10).unwrap();
+        let want = (cur & !0b1100) | 0b1000;
+        bus.write_u32(GPIO10 + 0x1000, (cur ^ want) & 0b1100)
+            .unwrap();
+        assert_eq!(bus.read_u32(GPIO10).unwrap(), 0x5A, "{chip}: PUE written");
+        assert_pad(&mut bus, "sio", 10, Pull::Up, "PUE");
+        // Both set: the bus keeper, which is no pull resistor.
+        bus.write_u32(GPIO10, 0x5E).unwrap();
+        assert_pad(&mut bus, "sio", 10, Pull::None, "keeper");
+        // A neighbouring pad keeps its reset pull-down.
+        assert_pad(&mut bus, "sio", 11, Pull::Down, "GPIO11");
+    }
+}
+
+/// RP2350 PADS_BANK0 has the same PUE/PDE bits; its reset word also sets ISO
+/// (bit 8), which latches the pad's output, not its pulls.
+#[test]
+fn rp2350_pads_bank0_pulls_reach_the_sio() {
+    let mut bus = bus("rp2350.yaml");
+    const GPIO10: u64 = 0x4003_8000 + 4 + 4 * 10;
+    assert_eq!(bus.read_u32(GPIO10).unwrap(), 0x116, "reset");
+    assert_pad(&mut bus, "sio", 10, Pull::Down, "reset PDE");
+    bus.write_u32(GPIO10, 0x5A).unwrap();
+    assert_pad(&mut bus, "sio", 10, Pull::Up, "PUE");
+}
+
+/// A pull written in the pad-control block is a pad change: a probe on the
+/// chip's own drive sees it as it happens (push capture), not only at the
+/// next GPIO register write.
+#[test]
+fn a_pad_control_write_is_push_captured() {
+    use labwired_core::logic_capture::{LogicSource, PadState};
+    use labwired_core::system::cortex_m::configure_cortex_m;
+    use labwired_core::{DebugControl, Machine};
+    let mut bus = bus("imxrt1064.yaml");
+    let (cpu, _nvic) = configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    let gpio2 = machine.bus.find_peripheral_index_by_name("gpio2").unwrap();
+    machine.logic_watch(&[Some(LogicSource::driver(gpio2, 3))]);
+    assert!(!machine.logic_poll_active(), "push capture armed");
+    // A `b .` in RAM keeps the core busy so the run drains the tap.
+    machine.bus.write_u16(0x2001_0000, 0xE7FE).unwrap();
+    machine.cpu.pc = 0x2001_0000;
+    machine.run(Some(2)).unwrap();
+    machine
+        .bus
+        .write_u32(0x401F_8000 + 0x32C + 4 * 3, 0x0000_B0B0)
+        .unwrap();
+    machine.run(Some(2)).unwrap();
+    let states = machine.logic_read_states(0).edges;
+    assert!(
+        states
+            .iter()
+            .any(|e| e.ch == 0 && e.state == PadState::WeakHigh),
+        "the pull-up was pushed: {states:?}"
+    );
+}
+
+/// RA `PmnPFS` PDR/PODR are the port's `PCNTR1` flip-flops: Zephyr's RA GPIO
+/// driver (gpio_renesas_ra_ioport.c, `pinctrl_configure_pins`) makes a pin an
+/// output by storing PDR (and PODR for `GPIO_OUTPUT_INIT_HIGH`) in `PmnPFS`,
+/// then toggles it through the 16-bit `PCNTR1.PODR` half.
+#[test]
+fn ra_pfs_pdr_podr_are_the_port_output_flip_flops() {
+    use labwired_core::pins::Out;
+    let mut bus = bus("r7fa8m1ah.yaml");
+    const PFS: u64 = 0x4040_0800;
+    const P600PFS: u64 = PFS + 0x40 * 6;
+    const PORT6: u64 = 0x4040_00C0;
+    let port6 = bus.find_peripheral_index_by_name("port6").unwrap();
+    let out = |bus: &SystemBus, pin| {
+        bus.peripherals[port6]
+            .dev
+            .pins()
+            .unwrap()
+            .driver(pin)
+            .unwrap()
+            .out
+    };
+    // Write-protected: a refused PDR|PODR store does not move the pad.
+    bus.write_u32(P600PFS, 0b101).unwrap();
+    assert_eq!(bus.read_u32(PORT6).unwrap(), 0, "PWPRS locked");
+    assert_eq!(out(&bus, 0), Out::Off);
+    // R_BSP_PinAccessEnable (secure build: PWPRS).
+    bus.write_u8(PFS + 0x514, 0x00).unwrap();
+    bus.write_u8(PFS + 0x514, 0x40).unwrap();
+    // PDR | PODR: an output driving high, seen in PCNTR1 and on the pad.
+    bus.write_u32(P600PFS, 0b101).unwrap();
+    assert_eq!(bus.read_u32(PORT6).unwrap(), 0x0001_0001);
+    assert_eq!(out(&bus, 0), Out::High);
+    // gpio_pin_toggle_dt: PCNTR1.PODR (16-bit, +2) ^= BIT(0).
+    let podr = bus.read_u16(PORT6 + 2).unwrap();
+    bus.write_u16(PORT6 + 2, podr ^ 1).unwrap();
+    assert_eq!(out(&bus, 0), Out::Low);
+    // PmnPFS_BY (+3) aliases bits 7:0: PDR alone keeps the output, low.
+    bus.write_u8(P600PFS + 3, 0b100).unwrap();
+    assert_eq!(bus.read_u32(PORT6).unwrap(), 0x0000_0001);
+    // A store to the upper bytes (PSEL, +0 byte 3 lane) leaves PDR/PODR.
+    bus.write_u8(P600PFS + 1, 0x00).unwrap();
+    assert_eq!(bus.read_u32(PORT6).unwrap(), 0x0000_0001, "upper byte");
+    // PDR clear: back to an input. Only P600 moved.
+    bus.write_u32(P600PFS, 0).unwrap();
+    assert_eq!(bus.read_u32(PORT6).unwrap(), 0);
+    assert_eq!(out(&bus, 0), Out::Off);
+    bus.write_u32(P600PFS + 4, 0b101).unwrap();
+    assert_eq!(bus.read_u32(PORT6).unwrap(), 0x0002_0002, "P601");
+    let port5 = bus.find_peripheral_index_by_name("port5").unwrap();
+    assert_eq!(bus.read_u32(bus.peripherals[port5].base).unwrap(), 0);
+}

@@ -7,9 +7,10 @@
 #include <Arduino.h>
 
 #ifndef LW_PWM_PIN
-  // Nucleo-G474RE LED is PA5 = DAC1_OUT2 — analogWrite prefers DAC and the
-  // twin has no DAC window → memory_violation. Use TIM2_CH1 PA0.
-#  if defined(ARDUINO_NUCLEO_G474RE) || defined(ARDUINO_NUCLEO_G474RE_P)
+  // Nucleo-G474RE/G431RB LED is PA5 = DAC1_OUT2 — analogWrite prefers DAC and
+  // the twin has no DAC window → memory_violation. Use TIM2_CH1 PA0.
+#  if defined(ARDUINO_NUCLEO_G474RE) || defined(ARDUINO_NUCLEO_G474RE_P) || \
+      defined(ARDUINO_NUCLEO_G431RB)
 #    define LW_PWM_PIN PA0
 #  elif defined(ARDUINO_NUCLEO_G071RB)
 // NUCLEO-G071RB LD4 is PA5 = DAC1_OUT2 too, and the twin models DAC1, so
@@ -28,10 +29,15 @@
 // PinMap_TIM, so analogWrite would fall back to digitalWrite. Use TIM2_CH1
 // on PA0.
 #    define LW_PWM_PIN PA0
-#  elif defined(STM32H563xx)
-// NUCLEO-H563ZI LD1 is PB0, whose PinMap_TIM entry is TIM1_CH2N, a
-// complementary output the twin's timer does not generate. Use TIM2_CH1 on
-// PA0.
+#  elif defined(STM32H563xx) || defined(STM32H723xx) || defined(STM32H753xx) || \
+      defined(ARDUINO_NUCLEO_F767ZI)
+// NUCLEO-H563ZI / NUCLEO-H723ZG / NUCLEO-H753ZI / NUCLEO-F767ZI LD1 is PB0, whose PinMap_TIM entry is
+// TIM1_CH2N, a complementary output the twin's timer does not generate. Use
+// TIM2_CH1 on PA0.
+#    define LW_PWM_PIN PA0
+#  elif defined(ARDUINO_NUCLEO_F446RE)
+// NUCLEO-F446RE LD2 is PA5 = DAC_OUT2 too; stock analogWrite would take the
+// DAC path (not modelled). Use TIM2_CH1 on PA0 (AF1).
 #    define LW_PWM_PIN PA0
 #  elif defined(ARDUINO_BLACKPILL_F411CE)
 // WeAct Black Pill LED is PC13, which has no timer channel on F411, so
@@ -50,11 +56,30 @@
 // Blue Pill LED is PC13, which has no timer channel on F103, so analogWrite
 // would fall back to digitalWrite. Use TIM2_CH1 on PA0 (no remap).
 #    define LW_PWM_PIN PA0
+#  elif defined(ARDUINO_NUCLEO_F103RB)
+// NUCLEO-F103RB LD2 is PA5, which has no timer channel on F103 either
+// (SPI1_SCK / ADC12_IN5 only). Use TIM2_CH1 on PA0 (no remap).
+#    define LW_PWM_PIN PA0
 #  elif defined(ARDUINO_ARCH_AVR) && defined(__AVR_ATmega328P__)
 // Uno/Nano LED_BUILTIN is D13 = PB5, which has no timer output on the
 // ATmega328P, so analogWrite(13, 128) is digitalWrite(HIGH). Use D9 = PB1 =
 // OC1A (Timer1, phase-correct 8-bit, 16 MHz / 64 / 510 = 490 Hz).
 #    define LW_PWM_PIN 9
+#  elif defined(ARDUINO_ESP32S2_DEV)
+// Saola-1 / DevKitM-1: LED_BUILTIN is the WS2812's virtual pin 64
+// (SOC_GPIO_PIN_COUNT + 18), and stock analogWrite ignores pins
+// >= SOC_GPIO_PIN_COUNT. Use a plain header GPIO so LEDC really runs.
+#    define LW_PWM_PIN 2
+#  elif defined(__AVR_ATmega32U4__)
+// Leonardo LED_BUILTIN is D13 = PC7 = OC4A, the 10-bit high-speed Timer4,
+// which the twin does not model. Use D9 = PB5 = OC1A (Timer1, phase-correct
+// 8-bit, 16 MHz / 64 / 510 = 490 Hz), the same unit the Uno row drives.
+#    define LW_PWM_PIN 9
+#  elif defined(ARDUINO_SAMD_NANO_33_IOT)
+// Nano 33 IoT LED_BUILTIN is D13 = PA17, which the variant lists without a
+// timer (it is the SPI clock), so analogWrite(13, 128) is digitalWrite(HIGH).
+// Use D5 = PA05 = TCC0/WO1 (PMUX E).
+#    define LW_PWM_PIN 5
 #  elif defined(LED_BUILTIN)
 #    define LW_PWM_PIN LED_BUILTIN
 #  elif defined(ARDUINO_ARCH_ESP32)
@@ -68,9 +93,19 @@
 
 static void logBegin() {
   Serial.begin(115200);
-#if defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)
+#if defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED) || \
+    defined(ARDUINO_SAMD_NANO_33_IOT) || \
+    defined(ARDUINO_ARDUINO_NANO33BLE) || \
+    ((defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)) && \
+     defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE)
   // arduino-pico (Pico 2): Serial is native USB CDC and drops writes until
   // the host opens the port (DTR), on silicon and on the twin alike.
+  // ESP32-S2/S3 with ARDUINO_USB_MODE=0 (Arduino Nano ESP32): Serial is
+  // TinyUSB CDC on USB-OTG, which drops writes until DTR the same way.
+  // ArduinoCore-samd on the Nano 33 IoT: Serial is SerialUSB, native USB CDC,
+  // and operator bool() is false until the host raises DTR.
+  // ArduinoCore-mbed on the Nano 33 BLE: Serial is USB CDC on the nRF52840
+  // USBD and drops writes until the host raises DTR.
   while (!Serial) delay(1);
 #endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)

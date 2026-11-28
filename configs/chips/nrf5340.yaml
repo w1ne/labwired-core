@@ -16,8 +16,8 @@
 #   aliases and is not this profile.
 # - Peripheral bases cross-checked against tests/fixtures/real_world/nrf5340.svd
 #   (NordicSemiconductor/nrfx v3.12.0, mdk/nrf5340_application.svd).
-# - IRQ numbers are the DT `interrupts` cell (UARTE0=8, CLOCK=5, TIMER0..2=15..17,
-#   RTC0=20, RTC1=21).
+# - IRQ numbers are the DT `interrupts` cell (UARTE0=8, CLOCK=5, GPIOTE0=13,
+#   TIMER0..2=15..17, RTC0=20, RTC1=21).
 #
 # Boot path this profile is built to satisfy (unmodified Zephyr v3.7 hello_world):
 #   reset -> SystemInit/soc trims -> clock_control (HFCLK/LFCLK start+poll) ->
@@ -27,8 +27,9 @@
 # nRF52 (crates/core/src/peripherals/nrf52/); their register offsets match the
 # nRF5340 application core, so they are reused verbatim — only the base address
 # differs. Pure trim/config blocks the boot ROM/soc-init poke but never poll for
-# a settled value (DCNF, SPU, OSCILLATORS/REGULATORS, CTRL-AP, GPIOTE) are mapped
-# as benign stub windows so a write/readback never faults the bus.
+# a settled value (DCNF, SPU, OSCILLATORS/REGULATORS, CTRL-AP) are mapped as
+# benign stub windows so a write/readback never faults the bus. GPIOTE0 uses the
+# shared Nordic task/event model and latches its selected task output in GPIOx.IN.
 name: "nrf5340"
 arch: "arm"
 core: "cortex-m33"
@@ -111,6 +112,12 @@ peripherals:
     size: "4KB"
     irq: 15
     config:
+      # TIMER base clock is PCLK16M, not the 128 MHz application core. Without
+      # this key the model counts one tick per CPU cycle and runs 8x fast.
+      peripheral_hz: 16000000
+      # nRF5340 TIMER0..2 each have 6 capture/compare channels (MDK
+      # `TIMER0_CC_NUM 6`; the vendored SVD lists TASKS_CAPTURE0..5).
+      num_cc: 6
       debug_schema: "../peripherals/nrf5340/timer0_s.yaml"
   - id: "timer1"
     type: "nrf52840_timer"
@@ -118,6 +125,8 @@ peripherals:
     size: "4KB"
     irq: 16
     config:
+      peripheral_hz: 16000000
+      num_cc: 6
       debug_schema: "../peripherals/nrf5340/timer1_s.yaml"
   - id: "timer2"
     type: "nrf52840_timer"
@@ -125,6 +134,8 @@ peripherals:
     size: "4KB"
     irq: 17
     config:
+      peripheral_hz: 16000000
+      num_cc: 6
       debug_schema: "../peripherals/nrf5340/timer2_s.yaml"
 
   # GPIO P0/P1 — the nRF5340 GPIO block sits at 0x5084_2500, far from the rest
@@ -224,9 +235,10 @@ peripherals:
     config:
       debug_schema: "../peripherals/nrf5340/ctrlap_s.yaml"
   - id: "gpiote0"
-    type: "nrf5340_gpiote_stub"
+    type: "nrf52_gpiote"
     base_address: 0x5000d000
     size: "4KB"
+    irq: 13
     config:
       debug_schema: "../peripherals/nrf5340/gpiote0_s.yaml"
   # DPPIC channel-enable subset. UARTE implements its own configured
@@ -238,17 +250,16 @@ peripherals:
     config:
       debug_schema: "../peripherals/nrf5340/dppic_s.yaml"
   # FICR — factory info / analog trims at 0x00FF0000 (NOT in the 0x5000_0000
-  # block). Zephyr's soc-init copies a trim block out of here; the values are
-  # oscillator/radio calibration that the UART console path does not depend on,
-  # so a zero-returning window is faithful to the boot path while keeping the bus
-  # violation-free. Promote to real FICR reset values if a future firmware needs
-  # the device ID or a specific trim.
+  # block). Serve the vendor SVD register file. INFO.PART, CODEPAGESIZE,
+  # CODESIZE, and DEVICETYPE use the SVD reset values; per-device identity and
+  # unspecified package/RAM/FLASH variants remain erased rather than invented.
+  # The TRIMCNF table also reads erased, so no oscillator/radio trim is claimed.
   - id: "ficr"
-    type: "nrf5340_ficr_stub"
+    type: "declarative"
     base_address: 0x00FF0000
     size: "4KB"
     config:
-      debug_schema: "../peripherals/nrf5340/ficr_s.yaml"
+      path: "../peripherals/nrf5340/ficr_s.yaml"
   # UICR — user info config at 0x00FF8000. Read during soc-init (e.g. approtect /
   # reg-out config); unprovisioned reads as 0 here, which the boot path accepts.
   - id: "uicr"

@@ -8,8 +8,10 @@
 #   P1.03 / P1.10         — D0/TX and D1/RX, UARTE0 (`Serial1`)
 #   P0.14 / P0.15         — SDA1 / SCL1 (TWI0, the onboard LSM9DS1 IMU)
 #
-# The onboard LSM9DS1 IMU and the USB CDC (`Serial`) are not modelled; the
-# modelled console is UARTE0 (the board's `Serial1` pins).
+# This manifest is the bare-metal smoke: the console is UARTE0 (the board's
+# `Serial1` pins) and no cable is in the USB port. The onboard LSM9DS1 IMU is
+# not modelled. A stock Arduino sketch (`Serial` on USB CDC, image at 0x10000)
+# runs on `arduino-nano-33-ble-bme280.yaml`.
 name: "arduino-nano-33-ble"
 chip: "../chips/nrf52840.yaml"
 debug_uart: "uart0"

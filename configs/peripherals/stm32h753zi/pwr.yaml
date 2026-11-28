@@ -1,0 +1,383 @@
+peripheral: PWR
+version: 0.1.0
+registers:
+- id: CR1
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 4026580992
+  fields:
+  - name: LPDS
+    bit_range:
+    - 0
+    - 0
+    description: Low-power Deepsleep with SVOS3 (SVOS4 and SVOS5 always use low-power, regardless of the setting of this bit)
+  - name: PVDE
+    bit_range:
+    - 4
+    - 4
+    description: Programmable voltage detector enable
+  - name: PLS
+    bit_range:
+    - 7
+    - 5
+    description: 'Programmable voltage detector level selection These bits select the voltage threshold detected by the PVD. Note: Refer to Section Electrical characteristics of the product datasheet for more details.'
+  - name: DBP
+    bit_range:
+    - 8
+    - 8
+    description: Disable backup domain write protection In reset state, the RCC_BDCR register, the RTC registers (including the backup registers), BREN and MOEN bits in PWR_CR2 register, are protected against parasitic write access. This bit must be set to enable write access to these registers.
+  - name: FLPS
+    bit_range:
+    - 9
+    - 9
+    description: Flash low-power mode in DStop mode This bit allows to obtain the best trade-off between low-power consumption and restart time when exiting from DStop mode. When it is set, the Flash memory enters low-power mode when D1 domain is in DStop mode.
+  - name: SVOS
+    bit_range:
+    - 15
+    - 14
+    description: System Stop mode voltage scaling selection These bits control the VCORE voltage level in system Stop mode, to obtain the best trade-off between power consumption and performance.
+  - name: AVDEN
+    bit_range:
+    - 16
+    - 16
+    description: Peripheral voltage monitor on VDDA enable
+  - name: ALS
+    bit_range:
+    - 18
+    - 17
+    description: Analog voltage detector level selection These bits select the voltage threshold detected by the AVD.
+  side_effects: null
+- id: CSR1
+  address_offset: 4
+  size: 32
+  access: READ_ONLY
+  reset_value: 16384
+  fields:
+  - name: PVDO
+    bit_range:
+    - 4
+    - 4
+    description: 'Programmable voltage detect output This bit is set and cleared by hardware. It is valid only if the PVD has been enabled by the PVDE bit. Note: since the PVD is disabled in Standby mode, this bit is equal to 0 after Standby or reset until the PVDE bit is set.'
+  - name: ACTVOSRDY
+    bit_range:
+    - 13
+    - 13
+    description: Voltage levels ready bit for currently used VOS and SDLEVEL This bit is set to 1 by hardware when the voltage regulator and the SD converter are both disabled and Bypass mode is selected in PWR control register 3 (PWR_CR3).
+  - name: ACTVOS
+    bit_range:
+    - 15
+    - 14
+    description: VOS currently applied for VCORE voltage scaling selection. These bits reflect the last VOS value applied to the PMU.
+  - name: AVDO
+    bit_range:
+    - 16
+    - 16
+    description: 'Analog voltage detector output on VDDA This bit is set and cleared by hardware. It is valid only if AVD on VDDA is enabled by the AVDEN bit. Note: Since the AVD is disabled in Standby mode, this bit is equal to 0 after Standby or reset until the AVDEN bit is set.'
+  side_effects: null
+- id: CR2
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BREN
+    bit_range:
+    - 0
+    - 0
+    description: Backup regulator enable When set, the Backup regulator (used to maintain the backup RAM content in Standby and VBAT modes) is enabled. If BREN is reset, the backup regulator is switched off. The backup RAM can still be used in Run and Stop modes. However, its content will be lost in Standby and VBAT modes. If BREN is set, the application must wait till the Backup Regulator Ready flag (BRRDY) is set to indicate that the data written into the SRAM will be maintained in Standby and VBAT modes.
+  - name: MONEN
+    bit_range:
+    - 4
+    - 4
+    description: VBAT and temperature monitoring enable When set, the VBAT supply and temperature monitoring is enabled.
+  - name: BRRDY
+    bit_range:
+    - 16
+    - 16
+    description: Backup regulator ready This bit is set by hardware to indicate that the Backup regulator is ready.
+  - name: VBATL
+    bit_range:
+    - 20
+    - 20
+    description: VBAT level monitoring versus low threshold
+  - name: VBATH
+    bit_range:
+    - 21
+    - 21
+    description: VBAT level monitoring versus high threshold
+  - name: TEMPL
+    bit_range:
+    - 22
+    - 22
+    description: Temperature level monitoring versus low threshold
+  - name: TEMPH
+    bit_range:
+    - 23
+    - 23
+    description: Temperature level monitoring versus high threshold
+  side_effects: null
+- id: CR3
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 6
+  fields:
+  - name: BYPASS
+    bit_range:
+    - 0
+    - 0
+    description: Power management unit bypass
+  - name: LDOEN
+    bit_range:
+    - 1
+    - 1
+    description: Low drop-out regulator enable
+  - name: SCUEN
+    bit_range:
+    - 2
+    - 2
+    description: SD converter Enable
+  - name: VBE
+    bit_range:
+    - 8
+    - 8
+    description: VBAT charging enable
+  - name: VBRS
+    bit_range:
+    - 9
+    - 9
+    description: VBAT charging resistor selection
+  - name: USB33DEN
+    bit_range:
+    - 24
+    - 24
+    description: VDD33USB voltage level detector enable.
+  - name: USBREGEN
+    bit_range:
+    - 25
+    - 25
+    description: USB regulator enable.
+  - name: USB33RDY
+    bit_range:
+    - 26
+    - 26
+    description: USB supply ready.
+  side_effects: null
+- id: CPUCR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PDDS_D1
+    bit_range:
+    - 0
+    - 0
+    description: D1 domain Power Down Deepsleep selection. This bit allows CPU1 to define the Deepsleep mode for D1 domain.
+  - name: PDDS_D2
+    bit_range:
+    - 1
+    - 1
+    description: D2 domain Power Down Deepsleep. This bit allows CPU1 to define the Deepsleep mode for D2 domain.
+  - name: PDDS_D3
+    bit_range:
+    - 2
+    - 2
+    description: System D3 domain Power Down Deepsleep. This bit allows CPU1 to define the Deepsleep mode for System D3 domain.
+  - name: STOPF
+    bit_range:
+    - 5
+    - 5
+    description: STOP flag This bit is set by hardware and cleared only by any reset or by setting the CPU1 CSSF bit.
+  - name: SBF
+    bit_range:
+    - 6
+    - 6
+    description: System Standby flag This bit is set by hardware and cleared only by a POR (Power-on Reset) or by setting the CPU1 CSSF bit
+  - name: SBF_D1
+    bit_range:
+    - 7
+    - 7
+    description: D1 domain DStandby flag This bit is set by hardware and cleared by any system reset or by setting the CPU1 CSSF bit. Once set, this bit can be cleared only when the D1 domain is no longer in DStandby mode.
+  - name: SBF_D2
+    bit_range:
+    - 8
+    - 8
+    description: D2 domain DStandby flag This bit is set by hardware and cleared by any system reset or by setting the CPU1 CSSF bit. Once set, this bit can be cleared only when the D2 domain is no longer in DStandby mode.
+  - name: CSSF
+    bit_range:
+    - 9
+    - 9
+    description: Clear D1 domain CPU1 Standby, Stop and HOLD flags (always read as 0) This bit is cleared to 0 by hardware.
+  - name: RUN_D3
+    bit_range:
+    - 11
+    - 11
+    description: Keep system D3 domain in Run mode regardless of the CPU sub-systems modes
+  side_effects: null
+- id: D3CR
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 16384
+  fields:
+  - name: VOSRDY
+    bit_range:
+    - 13
+    - 13
+    description: VOS Ready bit for VCORE voltage scaling output selection. This bit is set to 1 by hardware when Bypass mode is selected in PWR control register 3 (PWR_CR3).
+  - name: VOS
+    bit_range:
+    - 15
+    - 14
+    description: 'Voltage scaling selection according to performance These bits control the VCORE voltage level and allow to obtains the best trade-off between power consumption and performance: When increasing the performance, the voltage scaling shall be changed before increasing the system frequency. When decreasing performance, the system frequency shall first be decreased before changing the voltage scaling.'
+  side_effects: null
+- id: WKUPCR
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WKUPC
+    bit_range:
+    - 5
+    - 0
+    description: Clear Wakeup pin flag for WKUP. These bits are always read as 0.
+  side_effects: null
+- id: WKUPFR
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WKUPF1
+    bit_range:
+    - 0
+    - 0
+    description: Wakeup pin WKUPF flag. This bit is set by hardware and cleared only by a Reset pin or by setting the WKUPCn+1 bit in the PWR wakeup clear register (PWR_WKUPCR).
+  - name: WKUPF2
+    bit_range:
+    - 1
+    - 1
+    description: Wakeup pin WKUPF flag. This bit is set by hardware and cleared only by a Reset pin or by setting the WKUPCn+1 bit in the PWR wakeup clear register (PWR_WKUPCR).
+  - name: WKUPF3
+    bit_range:
+    - 2
+    - 2
+    description: Wakeup pin WKUPF flag. This bit is set by hardware and cleared only by a Reset pin or by setting the WKUPCn+1 bit in the PWR wakeup clear register (PWR_WKUPCR).
+  - name: WKUPF4
+    bit_range:
+    - 3
+    - 3
+    description: Wakeup pin WKUPF flag. This bit is set by hardware and cleared only by a Reset pin or by setting the WKUPCn+1 bit in the PWR wakeup clear register (PWR_WKUPCR).
+  - name: WKUPF5
+    bit_range:
+    - 4
+    - 4
+    description: Wakeup pin WKUPF flag. This bit is set by hardware and cleared only by a Reset pin or by setting the WKUPCn+1 bit in the PWR wakeup clear register (PWR_WKUPCR).
+  - name: WKUPF6
+    bit_range:
+    - 5
+    - 5
+    description: Wakeup pin WKUPF flag. This bit is set by hardware and cleared only by a Reset pin or by setting the WKUPCn+1 bit in the PWR wakeup clear register (PWR_WKUPCR).
+  side_effects: null
+- id: WKUPEPR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WKUPEN1
+    bit_range:
+    - 0
+    - 0
+    description: 'Enable Wakeup Pin WKUPn+1 Each bit is set and cleared by software. Note: An additional wakeup event is detected if WKUPn+1 pin is enabled (by setting the WKUPENn+1 bit) when WKUPn+1 pin level is already high when WKUPPn+1 selects rising edge, or low when WKUPPn+1 selects falling edge.'
+  - name: WKUPEN2
+    bit_range:
+    - 1
+    - 1
+    description: 'Enable Wakeup Pin WKUPn+1 Each bit is set and cleared by software. Note: An additional wakeup event is detected if WKUPn+1 pin is enabled (by setting the WKUPENn+1 bit) when WKUPn+1 pin level is already high when WKUPPn+1 selects rising edge, or low when WKUPPn+1 selects falling edge.'
+  - name: WKUPEN3
+    bit_range:
+    - 2
+    - 2
+    description: 'Enable Wakeup Pin WKUPn+1 Each bit is set and cleared by software. Note: An additional wakeup event is detected if WKUPn+1 pin is enabled (by setting the WKUPENn+1 bit) when WKUPn+1 pin level is already high when WKUPPn+1 selects rising edge, or low when WKUPPn+1 selects falling edge.'
+  - name: WKUPEN4
+    bit_range:
+    - 3
+    - 3
+    description: 'Enable Wakeup Pin WKUPn+1 Each bit is set and cleared by software. Note: An additional wakeup event is detected if WKUPn+1 pin is enabled (by setting the WKUPENn+1 bit) when WKUPn+1 pin level is already high when WKUPPn+1 selects rising edge, or low when WKUPPn+1 selects falling edge.'
+  - name: WKUPEN5
+    bit_range:
+    - 4
+    - 4
+    description: 'Enable Wakeup Pin WKUPn+1 Each bit is set and cleared by software. Note: An additional wakeup event is detected if WKUPn+1 pin is enabled (by setting the WKUPENn+1 bit) when WKUPn+1 pin level is already high when WKUPPn+1 selects rising edge, or low when WKUPPn+1 selects falling edge.'
+  - name: WKUPEN6
+    bit_range:
+    - 5
+    - 5
+    description: 'Enable Wakeup Pin WKUPn+1 Each bit is set and cleared by software. Note: An additional wakeup event is detected if WKUPn+1 pin is enabled (by setting the WKUPENn+1 bit) when WKUPn+1 pin level is already high when WKUPPn+1 selects rising edge, or low when WKUPPn+1 selects falling edge.'
+  - name: WKUPP1
+    bit_range:
+    - 8
+    - 8
+    description: Wakeup pin polarity bit for WKUPn-7 These bits define the polarity used for event detection on WKUPn-7 external wakeup pin.
+  - name: WKUPP2
+    bit_range:
+    - 9
+    - 9
+    description: Wakeup pin polarity bit for WKUPn-7 These bits define the polarity used for event detection on WKUPn-7 external wakeup pin.
+  - name: WKUPP3
+    bit_range:
+    - 10
+    - 10
+    description: Wakeup pin polarity bit for WKUPn-7 These bits define the polarity used for event detection on WKUPn-7 external wakeup pin.
+  - name: WKUPP4
+    bit_range:
+    - 11
+    - 11
+    description: Wakeup pin polarity bit for WKUPn-7 These bits define the polarity used for event detection on WKUPn-7 external wakeup pin.
+  - name: WKUPP5
+    bit_range:
+    - 12
+    - 12
+    description: Wakeup pin polarity bit for WKUPn-7 These bits define the polarity used for event detection on WKUPn-7 external wakeup pin.
+  - name: WKUPP6
+    bit_range:
+    - 13
+    - 13
+    description: Wakeup pin polarity bit for WKUPn-7 These bits define the polarity used for event detection on WKUPn-7 external wakeup pin.
+  - name: WKUPPUPD1
+    bit_range:
+    - 17
+    - 16
+    description: Wakeup pin pull configuration
+  - name: WKUPPUPD2
+    bit_range:
+    - 19
+    - 18
+    description: Wakeup pin pull configuration
+  - name: WKUPPUPD3
+    bit_range:
+    - 21
+    - 20
+    description: Wakeup pin pull configuration
+  - name: WKUPPUPD4
+    bit_range:
+    - 23
+    - 22
+    description: Wakeup pin pull configuration
+  - name: WKUPPUPD5
+    bit_range:
+    - 25
+    - 24
+    description: Wakeup pin pull configuration
+  - name: WKUPPUPD6
+    bit_range:
+    - 27
+    - 26
+    description: Wakeup pin pull configuration for WKUP(truncate(n/2)-7) These bits define the I/O pad pull configuration used when WKUPEN(truncate(n/2)-7) = 1. The associated GPIO port pull configuration shall be set to the same value or to 00. The Wakeup pin pull configuration is kept in Standby mode.
+  side_effects: null
+interrupts: null
+timing: null

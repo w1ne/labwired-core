@@ -67,6 +67,12 @@ fn default_region_image_path(env: &str) -> Option<PathBuf> {
         // Arduino-ESP32 3.x calls ROM routines from its first instructions
         // (`esp_rom_get_reset_reason` at step 21), so a zero window wedges.
         "LABWIRED_ESP32C6_ROM" => "roms/esp32c6/esp32c6_rom.bin",
+        // Flattened esp32c2_rev200_rom.elf (roms/esp32c2/README.md). esp-hal
+        // links memcpy and the regi2c clock helpers to ROM addresses.
+        "LABWIRED_ESP32C2_ROM" => "roms/esp32c2/esp32c2_rom.bin",
+        "LABWIRED_ESP32S2_ROM" => "roms/esp32s2/esp32s2_rom.bin",
+        "LABWIRED_ESP32S2_DROM" => "roms/esp32s2/esp32s2_drom.bin",
+        "LABWIRED_ESP32S2_ROM_DATA" => "roms/esp32s2/esp32s2_rom_data.bin",
         // Same image as `embedded_region_image`; kept so an operator can
         // still point the env var at a replacement file. Bare-metal ELFs
         // that need the Cortex-M flash boot alias at 0 (PIO onboarding) set
@@ -98,6 +104,17 @@ pub fn merged_peripheral_configs(
     let mut merged = chip.peripherals.clone();
     for manifest_cfg in &manifest.peripherals {
         if let Some(existing) = merged.iter_mut().find(|p| p.id == manifest_cfg.id) {
+            // A different `type` replaces the model: the board decides which
+            // role a multi-role block plays (a SERCOM is the USART, the SPI
+            // or the I2C controller the firmware makes it). The chip's
+            // `config` and `irq` belong to the model it named (models differ
+            // in the lines they take), so neither carries over; the window
+            // (base, size) does unless given.
+            if manifest_cfg.r#type != existing.r#type {
+                existing.r#type = manifest_cfg.r#type.clone();
+                existing.config.clear();
+                existing.irq = None;
+            }
             for (key, value) in &manifest_cfg.config {
                 existing.config.insert(key.clone(), value.clone());
             }
@@ -115,6 +132,35 @@ pub fn merged_peripheral_configs(
         }
     }
     merged
+}
+
+/// The board's `memory_overrides:`. One key is read: `reset_vector_offset`,
+/// the offset from the flash base of the vector table reset enters, for a
+/// board whose resident bootloader hands over to an application image (the
+/// Arduino Nano 33 BLE's sits at 0x10000). It replaces
+/// [`ChipDescriptor::reset_vector_offset`]. Any other key is ignored with a
+/// warning, as before this key existed: manifests in the field carry keys
+/// such as `flash` that the engine never read.
+fn manifest_reset_vector_offset(manifest: &SystemManifest) -> anyhow::Result<Option<u64>> {
+    let mut offset = None;
+    for (key, value) in &manifest.memory_overrides {
+        if key != "reset_vector_offset" {
+            tracing::warn!(
+                "memory_overrides: key `{key}` is not read by the engine (known: reset_vector_offset)"
+            );
+            continue;
+        }
+        let text = value.trim().replace('_', "");
+        let parsed = match text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
+            Some(hex) => u64::from_str_radix(hex, 16),
+            None => text.parse(),
+        };
+        offset =
+            Some(parsed.map_err(|e| {
+                anyhow::anyhow!("memory_overrides.reset_vector_offset `{value}`: {e}")
+            })?);
+    }
+    Ok(offset)
 }
 
 impl SystemBus {
@@ -199,6 +245,21 @@ impl SystemBus {
         self.io_voltage_v = chip.io_voltage_v;
         self.gpio_input_thresholds = chip.gpio_input_thresholds;
         self.reset_input = crate::reset_input::ResetInputState::new(chip.reset_input.clone());
+    }
+
+    /// Load the descriptor's pad -> ADC channel table (`analog_pins:` plus
+    /// `adc` pin functions), the map `board.analog.<pad>_volts` routes
+    /// resolve through. `from_config` calls it; a builder that registers its
+    /// peripheral bank programmatically (the ESP32 and ESP32-S3 Xtensa paths)
+    /// must call it too, or every analog pad route on that machine fails with
+    /// `NoAdcChannel` even though the descriptor publishes the pad.
+    pub fn attach_chip_analog_pins(&mut self, chip: &ChipDescriptor) {
+        for (label, adc) in &chip.analog_pin_table() {
+            self.analog_pin_map.insert(
+                label.to_ascii_uppercase(),
+                (adc.peripheral.clone(), adc.channel),
+            );
+        }
     }
 
     pub fn from_config(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<Self> {
@@ -418,6 +479,7 @@ impl SystemBus {
         }
 
         let mut bus = Self {
+            native_code_identity: crate::bus::construct::next_native_code_identity(),
             flash_thunks: std::collections::HashMap::new(),
             flash: LinearMemory::new_erased(flash_size as usize, chip.flash.base),
             memory_policy: crate::bus::memory_policy::MemoryPolicyState::for_chip(chip),
@@ -440,8 +502,14 @@ impl SystemBus {
             // at the 4 MHz MSI reset rate and says so in its manifest.
             cpu_hz: manifest.cpu_hz.unwrap_or(chip.cpu_hz),
             riscv_profile: crate::cpu::RiscVCoreProfile::for_chip(chip),
+            riscv_clint: crate::cpu::riscv::Rv32Clint::for_chip(chip),
+            riscv_plic: crate::cpu::riscv::Rv32Clint::plic_for_chip(chip),
+            riscv_pfic: crate::cpu::qingke_pfic::QingKePfic::for_chip(chip),
             bit_band_enabled: Self::chip_has_bit_band(chip),
-            reset_vector_offset: chip.reset_vector_offset,
+            armv6m: Self::chip_is_armv6m(chip),
+            armv8m_baseline: Self::chip_is_armv8m_baseline(chip),
+            reset_vector_offset: manifest_reset_vector_offset(manifest)?
+                .unwrap_or(chip.reset_vector_offset),
             flash_boot_alias: chip.flash_boot_alias,
             atomic_register_aliases: chip.atomic_register_aliases,
             rp2350_dcp: chip
@@ -470,6 +538,8 @@ impl SystemBus {
             legacy_tick_indices: Vec::new(),
             bus_tick_indices: Vec::new(),
             scheduler_driver_indices: Vec::new(),
+            irq_input_receiver_indices: Vec::new(),
+            exti_line_driver_indices: Vec::new(),
             matrix_source_scratch: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_route: Cell::new(None),
@@ -481,8 +551,10 @@ impl SystemBus {
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            parked_level_events: Vec::new(),
             freerunning_timer_poll_mmio: Cell::new(0),
             timer_poll_carry: Cell::new(0),
+            timer_poll_sites: Cell::new([None; 8]),
             side_effecting_mmio: Cell::new(0),
             batch_stop: Default::default(),
             memory_reads: Cell::new(0),
@@ -491,18 +563,24 @@ impl SystemBus {
             poll_streak: Cell::new((u32::MAX, 0, 0, 0)),
             legacy_walk_disabled: false,
             legacy_walk_pinned_on: false,
+            max_peripheral_tick_interval: manifest.max_peripheral_tick_interval,
             legacy_tick_candidate_mask: Vec::new(),
             legacy_tick_peer_write_indices: Vec::new(),
             resident_tick_interval_override: None,
             gpio_devices: Vec::new(),
             device_pin_pads: Vec::new(),
+            device_output_observers: Vec::new(),
             device_open_drain_nets: Default::default(),
             observed: Vec::new(),
             motors: Vec::new(),
+            live_numeric: None,
             ina219_senses: Vec::new(),
             motor_cycle_anchor: 0,
+            external_mechanical_frontier: None,
+            external_mechanical_inputs: Vec::new(),
             analog_inputs: Vec::new(),
             analog_muxes: Vec::new(),
+            spi_cs_watches: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
@@ -514,9 +592,10 @@ impl SystemBus {
             pms_write_bypass: false,
             esp32c3_pms_armed: false,
             flash_models_ops: false,
-            nordic_gpio_service: false,
+            gpio_edge_observers: false,
             timer_capture_wired: false,
             wire_inputs_live: false,
+            pad_watch_live: false,
             resident_scheduling_disabled: false,
             flash_error_flags_idx: None,
             u5_program_gate_idx: None,
@@ -541,19 +620,14 @@ impl SystemBus {
             bus.pin_map
                 .insert(label.to_ascii_uppercase(), (loc.gpio.clone(), loc.bit));
         }
-        for (label, adc) in &chip.analog_pins {
-            bus.analog_pin_map.insert(
-                label.to_ascii_uppercase(),
-                (adc.peripheral.clone(), adc.channel),
-            );
-        }
+        bus.attach_chip_analog_pins(chip);
         bus.attach_chip_io_levels(chip);
         bus.supply = crate::power::SupplySupervisor::new(chip.supply_monitor.clone());
 
         let merged_peripherals = merged_peripheral_configs(chip, manifest);
 
         // External-device ids already attached by a chip-specific I²C path
-        // (the `i2c` / `esp32c3_i2c` arms below). The generic external-device
+        // (the `i2c` / Espressif I²C arms below). The generic external-device
         // loop must NOT re-process these — otherwise a device that the bus
         // loader correctly attached as an I²C slave would also fall through to
         // the generic `_ =>` arm and emit a spurious "Unsupported external
@@ -620,8 +694,17 @@ impl SystemBus {
             // out). Try them first; unmigrated families fall through to the match.
             let family_dev = plugin_dev
                 .or_else(|| crate::peripherals::esp32s3::factory::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32c2::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c3::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c6::factory::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32c5::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32c61::try_build(&canonical_type, p_cfg))
+                // C5/C61 have richer board GPIO adapters for the I2C matrix
+                // routes used by their sensor profiles. Keep the shared
+                // data/enable/input-only heads as a later fallback.
+                .or_else(|| crate::peripherals::esp32_gpio_head::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32h2::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32p4::try_build(&canonical_type, p_cfg))
                 // ESP32-classic was missing from this chain. Its factory has
                 // always existed with all 14 `esp32_*` types, but only the
                 // Xtensa builder called it, so a plain `from_config` bus --
@@ -727,6 +810,8 @@ impl SystemBus {
                     | "stm32f7_i2c"
                     | "efm32ggi2ccontroller"
                     | "esp32c3_i2c"
+                    | "esp32c5_i2c"
+                    | "esp32c61_i2c"
                     | "imxrt_lpi2c"
             ) {
                 let controller: Box<dyn Peripheral> = if canonical_type == "imxrt_lpi2c" {
@@ -737,6 +822,26 @@ impl SystemBus {
                         .and_then(|v| v.as_u64())
                         .unwrap_or(crate::peripherals::imxrt::lpi2c::DEFAULT_LPI2C_CLK_HZ);
                     Box::new(crate::peripherals::imxrt::lpi2c::ImxrtLpi2c::new(clk))
+                } else if canonical_type == "esp32c5_i2c" {
+                    let src = p_cfg
+                        .irq
+                        .unwrap_or(crate::peripherals::esp32c3::i2c::C5_I2C0_INTR_SOURCE_ID);
+                    Box::new(
+                        crate::peripherals::esp32c3::i2c::Esp32c3I2c::with_cpu_clock_and_intr(
+                            240_000_000,
+                            src,
+                        ),
+                    )
+                } else if canonical_type == "esp32c61_i2c" {
+                    // C61's I2C command-list register head matches the C3/C5
+                    // engine; the source and HP-core pacing are C61-specific.
+                    let src = p_cfg.irq.unwrap_or(45);
+                    Box::new(
+                        crate::peripherals::esp32c3::i2c::Esp32c3I2c::with_cpu_clock_and_intr(
+                            160_000_000,
+                            src,
+                        ),
+                    )
                 } else if canonical_type == "esp32c3_i2c" {
                     // ESP32-C3/C6 behavioral I²C0 controller (command-list
                     // engine); both RISC-V chips reach it through this config
@@ -854,6 +959,14 @@ impl SystemBus {
                             .set_full_featured(full)
                             .set_stm32_lpuart(stm32_lpuart)
                             .set_u5_features(u5_features);
+                    // AVR: `cpu_console: false` marks a USART the CPU does not
+                    // write to its console (the mega's USART1..3); its window
+                    // then carries the host TX capture itself.
+                    if matches!(layout, crate::peripherals::uart::UartRegisterLayout::Avr)
+                        && p_cfg.config.get("cpu_console").and_then(|v| v.as_bool()) == Some(false)
+                    {
+                        uart = uart.with_avr_host_sink(true);
+                    }
                     // Renesas SCI_B and classic SCI: `elc_event` is the
                     // channel's RXI event (TXI/TEI follow); the events reach
                     // the NVIC through the RA ICU. `clock_hz` is the rate the
@@ -871,6 +984,10 @@ impl SystemBus {
                         uart = uart.set_sci_events(event as u32, sci_clock, sci_baud);
                     } else if let Some(vector) = get("rxi_vector") {
                         uart = uart.set_sci_vectors(vector as u32, sci_clock, sci_baud);
+                    }
+                    // Which datasheet pad table routes TX (`pad_map: wch_x035`).
+                    if let Some(pad_map) = p_cfg.config.get("pad_map").and_then(|v| v.as_str()) {
+                        uart = uart.set_pad_map(pad_map)?;
                     }
                     if matches!(layout, crate::peripherals::uart::UartRegisterLayout::Custom) {
                         // Vendor-neutral YAML map. `tx_offset` is required;
@@ -1051,8 +1168,7 @@ impl SystemBus {
                     }
                     Box::new(uart)
                 }
-                "gpio" | "stm32_gpioport" | "stm32f4_gpio" | "efmgpioport" | "npcx_gpio"
-                | "imxrt_gpio" => {
+                "gpio" | "stm32_gpioport" | "stm32f4_gpio" | "efmgpioport" | "imxrt_gpio" => {
                     // Deterministic, type-driven layout resolution. The bare
                     // vendor-neutral `gpio` type MUST name a profile; it is never
                     // silently defaulted onto STM32F1 (which would move the ODR
@@ -1069,12 +1185,29 @@ impl SystemBus {
                         .get("reg_offset")
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0);
-                    // For nRF52 ports, an optional `num_pins` config key caps the
-                    // valid-pin range (e.g. 16 for nRF52840 P1 which has P1.0–P1.15).
-                    // Writes outside that range are discarded; reads return 0.
-                    let port = if layout == GpioRegisterLayout::Nrf52
+                    // Optional package-specific pin counts cap GPIO families whose
+                    // registers are wider than the bonded pads. Writes to absent
+                    // pins are discarded and pad access rejects them.
+                    let port = if layout == GpioRegisterLayout::Efr32s2
+                        && p_cfg.config.contains_key("num_pins")
+                    {
+                        let num_pins = p_cfg
+                            .config
+                            .get("num_pins")
+                            .and_then(|v| v.as_u64())
+                            .filter(|n| (1..=16).contains(n))
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "GPIO peripheral '{}': efr32s2 `num_pins` must be in 1..=16",
+                                    p_cfg.id
+                                )
+                            })? as u8;
+                        crate::peripherals::gpio::GpioPort::new_efr32s2(num_pins)
+                            .with_window_offset(window_offset)
+                    } else if layout == GpioRegisterLayout::Nrf52
                         || layout == GpioRegisterLayout::Nrf54l
                     {
+                        // nRF52/54 ports use this for widths such as nRF52840 P1 = 16.
                         let num_pins: u32 = p_cfg
                             .config
                             .get("num_pins")
@@ -1107,9 +1240,41 @@ impl SystemBus {
                             cfg_u32("reset_seccfgr"),
                         )
                         .with_window_offset(window_offset)
+                    } else if layout == GpioRegisterLayout::Cmsdk
+                        && p_cfg.config.contains_key("reset_altfunc")
+                    {
+                        // CMSDK ports whose pads reset to their peripheral
+                        // function (ALTFUNC reset value from the chip yaml).
+                        let reset = p_cfg
+                            .config
+                            .get("reset_altfunc")
+                            .and_then(|v| v.as_u64())
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "GPIO peripheral '{}': `reset_altfunc` must be an integer",
+                                    p_cfg.id
+                                )
+                            })?;
+                        crate::peripherals::gpio::GpioPort::new_cmsdk(reset as u32)
+                            .with_window_offset(window_offset)
                     } else {
                         crate::peripherals::gpio::GpioPort::new_with_layout(layout)
                             .with_window_offset(window_offset)
+                    };
+                    let port = if p_cfg
+                        .config
+                        .get("reset_registers")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        anyhow::ensure!(
+                            layout == GpioRegisterLayout::Stm32V2,
+                            "GPIO '{}': reset_registers currently requires the common V2 subset",
+                            p_cfg.id
+                        );
+                        port.with_v2_register_reset()
+                    } else {
+                        port
                     };
                     // RA4/RA6 PORT: 16-bit PCNTRn aliases with the halves
                     // swapped (FSP R7FA6M5BH.h; see `RaPortGpio`).
@@ -1417,10 +1582,15 @@ impl SystemBus {
         // wires it there too; this keeps the declarative path honest if the
         // peripheral is ever declared.)
         bus.wire_esp32s3_pad_controls();
-        // ESP32-C3: share the I²C0 bit engine's live SDA/SCL line levels with
-        // the C3 GPIO model so matrix-routed pads carry the real waveform.
+        bus.wire_shared_adc_banks();
+        // ESP32-C3/C5: share the I²C0 bit engine's live SDA/SCL line levels
+        // with the GPIO model so matrix-routed pads carry the real waveform.
         // No-op for every other chip.
         bus.wire_esp32c3_i2c_pads();
+        // ESP32-P4 HP I2C0 uses GPIO-matrix selectors 68/69 on GPIO7/8.
+        // Share those pad selections with the command-list engine so attached
+        // devices only acknowledge the route configured by firmware.
+        bus.wire_esp32p4_i2c_pads();
         // And GP-SPI2's SCK/MOSI/CS plus each UART's TX, so those buses are
         // measurable on the C3 too rather than reading as a flat line. MISO/RX
         // are deliberately unbound — nothing drives them.
@@ -1447,6 +1617,8 @@ impl SystemBus {
         bus.wire_esp32_uart_pads();
         // …and its LEDC outputs (signals 71..86).
         bus.wire_esp32_ledc_pads();
+        // Matrix output wires published through capabilities (S2 RMT).
+        bus.wire_matrix_output_lines();
         // RP2040: bind I²C wires to the pads IO_BANK0's FUNCSEL can route them to.
         bus.wire_rp2040_i2c_pads();
         // Same for the RP2040 UARTs' TX/RX, so serial output is a waveform on
@@ -1479,6 +1651,8 @@ impl SystemBus {
         bus.wire_stm32_timer_output_pads();
         // SAMD51 TC waveform outputs onto their PMUX-E pads (samd51_tc only).
         bus.wire_samd51_tc_output_pads();
+        // SAMD21 TCC WO[x] onto their PMUX-E/F pads (samd21_tcc only).
+        bus.wire_samd21_tcc_output_pads();
         // RA GPT GTIOCnA/B onto the pads the chip YAML names (PSEL 00011).
         bus.wire_ra_gpt_output_pads();
         // Board wires from an analog output (a DAC pin) to an ADC input.
@@ -1534,17 +1708,20 @@ impl SystemBus {
             bus.attach_private_lab_air(node);
         }
 
-        // U5: the RCC backup domain (BDCR) is write-protected until
-        // PWR_DBPR.DBP is set. The bus is the only place that knows both
-        // models, so one shared flag links them.
-        if let (Some(rcc_i), Some(pwr_i)) = (
-            bus.find_peripheral_index_by_name("rcc"),
-            bus.find_peripheral_index_by_name("pwr"),
-        ) {
+        // The backup domain is write-protected until the power controller's
+        // DBP bit is set: the U5 RCC BDCR (PWR_DBPR.DBP) and the F1 BKP data
+        // registers (PWR_CR.DBP). The bus is the only place that knows the
+        // models, so one shared flag links them. PWR is bound last so the
+        // flag starts at its DBP reset value.
+        if let Some(pwr_i) = bus.find_peripheral_index_by_name("pwr") {
             let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-            bus.peripherals[rcc_i]
-                .dev
-                .bind_backup_domain_write_enable(flag.clone());
+            for name in ["rcc", "bkp"] {
+                if let Some(i) = bus.find_peripheral_index_by_name(name) {
+                    bus.peripherals[i]
+                        .dev
+                        .bind_backup_domain_write_enable(flag.clone());
+                }
+            }
             bus.peripherals[pwr_i]
                 .dev
                 .bind_backup_domain_write_enable(flag);
@@ -1636,7 +1813,7 @@ impl SystemBus {
         }
     }
 
-    /// Install a GPIO edge observer on ESP32 / ESP32-S3 GPIO models when present.
+    /// Install a GPIO edge observer on supported ESP32-family GPIO models.
     ///
     /// Public so kits (`Transport::GpioGroup`) and hand arms share one choke
     /// point — the same path `AttachCtx::install_gpio_observer` uses.
@@ -1645,27 +1822,31 @@ impl SystemBus {
     where
         T: crate::peripherals::device::GpioObserver + 'static,
     {
+        let observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver> = observer;
         if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
-            let any = bus.peripherals[idx].dev.as_any_mut();
-            if let Some(gpio) =
-                any.and_then(|a| a.downcast_mut::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>())
-            {
-                gpio.add_observer(observer);
-                return true;
-            }
-        }
-        // Classic ESP32 GPIO (separate type).
-        if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
-            if let Some(gpio) = bus.peripherals[idx]
+            if bus.peripherals[idx]
                 .dev
-                .as_any_mut()
-                .and_then(|a| a.downcast_mut::<crate::peripherals::esp32::gpio::Esp32Gpio>())
+                .register_esp_gpio_observer(observer.clone())
             {
-                gpio.add_observer(observer);
                 return true;
             }
         }
-        false
+        // STM32 has one GPIO peripheral per port. STEP/DIR observers watch
+        // the actual output latch transitions (including atomic BSRR writes).
+        let mut installed = false;
+        for port in b'A'..=b'P' {
+            let name = format!("gpio{}", (port as char).to_ascii_lowercase());
+            let Some(idx) = bus.find_peripheral_index_by_name(&name) else {
+                continue;
+            };
+            let clock = bus.cycle_clock.clone();
+            installed |= bus.peripherals[idx].dev.register_stm32_gpio_observer(
+                port - b'A',
+                observer.clone(),
+                clock,
+            );
+        }
+        installed
     }
 
     #[allow(dead_code)] // residual GPIO helpers kept for CAN/tester arms that may re-use them
@@ -1706,6 +1887,94 @@ impl SystemBus {
             .or_else(|| ext.config.get(alt_key))
             .and_then(|v| v.as_str())?;
         Self::parse_esp32s3_gpio_pin(label).or_else(|| Self::parse_esp32_gpio_pin(label))
+    }
+}
+
+#[cfg(test)]
+mod manifest_peripheral_merge_tests {
+    use super::*;
+
+    /// A manifest entry with the chip's `type` patches it; one with another
+    /// `type` replaces the model and inherits neither `config` nor `irq`.
+    #[test]
+    fn a_different_type_replaces_the_model_and_drops_the_chip_config() {
+        let chip: ChipDescriptor = serde_yaml::from_str(
+            r#"
+name: "test-merge"
+arch: "arm"
+flash: { base: 0x0, size: "1KB" }
+ram: { base: 0x20000000, size: "1KB" }
+peripherals:
+  - { id: "sercom1", type: "sam_sercom_usart", base_address: 0x42000C00, size: "64B", irq: 10 }
+  - id: "sercom4"
+    type: "sam_sercom_spi"
+    base_address: 0x42001800
+    size: "64B"
+    config: { sck_bit: 11, dopo: 1 }
+"#,
+        )
+        .expect("parse chip");
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "test-merge-system"
+chip: "test-merge"
+peripherals:
+  - { id: "sercom1", type: "sam_sercom_spi", base_address: 0, config: { sck_bit: 17 } }
+  - { id: "sercom4", type: "sam_sercom_spi", base_address: 0, config: { dopo: 0 } }
+"#,
+        )
+        .expect("parse manifest");
+        let merged = merged_peripheral_configs(&chip, &manifest);
+        let by_id = |id: &str| merged.iter().find(|p| p.id == id).unwrap();
+
+        let sercom1 = by_id("sercom1");
+        assert_eq!(sercom1.r#type, "sam_sercom_spi");
+        assert_eq!(sercom1.base_address, 0x42000C00, "window kept");
+        assert_eq!(sercom1.irq, None, "the IRQ went with the old model");
+        assert_eq!(sercom1.config.len(), 1);
+        assert_eq!(sercom1.config["sck_bit"].as_u64(), Some(17));
+
+        let sercom4 = by_id("sercom4");
+        assert_eq!(
+            sercom4.config["sck_bit"].as_u64(),
+            Some(11),
+            "same type merges"
+        );
+        assert_eq!(sercom4.config["dopo"].as_u64(), Some(0));
+    }
+}
+
+#[cfg(test)]
+mod manifest_memory_override_tests {
+    use super::*;
+
+    fn manifest(overrides: &str) -> SystemManifest {
+        serde_yaml::from_str(&format!(
+            "name: t\nchip: nrf52840\nmemory_overrides: {overrides}\n"
+        ))
+        .expect("parse manifest")
+    }
+
+    /// The board's vector-table offset replaces the chip's and must be a
+    /// number. A key the engine does not read changes nothing.
+    #[test]
+    fn reset_vector_offset_is_the_one_key_read_and_must_parse() {
+        let offset = |o: &str| manifest_reset_vector_offset(&manifest(o));
+        assert_eq!(offset("{}").unwrap(), None);
+        assert_eq!(
+            offset("{ reset_vector_offset: \"0x10000\" }").unwrap(),
+            Some(0x10000)
+        );
+        assert_eq!(
+            offset("{ reset_vector_offset: \"8_192\" }").unwrap(),
+            Some(8192)
+        );
+        assert_eq!(offset("{ flash: \"2MB\" }").unwrap(), None);
+        assert_eq!(
+            offset("{ flash: \"2MB\", reset_vector_offset: \"0x4000\" }").unwrap(),
+            Some(0x4000)
+        );
+        assert!(offset("{ reset_vector_offset: \"top\" }").is_err());
     }
 }
 

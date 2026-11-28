@@ -25,6 +25,10 @@
 //!   depend on `labwired-loader`); the S3 fast boot parses its own ELF.
 //! * Console attaches honour `BuildOptions::echo_uart_stdout` on the heard
 //!   console; the unheard console never echoes.
+//! * An Xtensa chip that is not an Espressif part
+//!   ([`labwired_config::ChipDescriptor::is_espressif_xtensa`], e.g. the imported
+//!   Renode sample controller) gets none of the ESP32 memory map:
+//!   its bus comes from its own descriptor and the core starts at the ELF entry.
 
 use super::{BootMode, BuildRequest, BuiltMachine, FirmwareSource, UartWires};
 use crate::boot::esp32s3_rom::RomImages;
@@ -40,7 +44,17 @@ pub(super) fn build(
     req: BuildRequest<'_>,
     plugins: &[&dyn crate::plugin::ChipPlugin],
 ) -> anyhow::Result<BuiltMachine> {
-    if req.chip.is_esp32s3() {
+    if !req.chip.is_espressif_xtensa() {
+        return build_generic(&req, plugins);
+    }
+    if req.chip.is_esp32s2() {
+        match (&req.firmware, req.boot) {
+            (FirmwareSource::Elf(elf), BootMode::FastBoot) => build_esp32s2(&req, elf, plugins),
+            _ => Err(anyhow!(
+                "not supported: ESP32-S2 currently boots ELF firmware only; merged flash-image and mask-ROM boot are not modelled"
+            )),
+        }
+    } else if req.chip.is_esp32s3() {
         match (&req.firmware, req.boot) {
             (FirmwareSource::Elf(elf), BootMode::FastBoot) => build_esp32s3(&req, elf, plugins),
             (FirmwareSource::FlashImage { image, symbols }, BootMode::RomBoot) => {
@@ -67,6 +81,99 @@ pub(super) fn build(
     }
 }
 
+/// A non-Espressif Xtensa core: bus from the chip descriptor, one core, PC at
+/// the ELF entry. No ROM, no second core, no seeded stack — the firmware's own
+/// reset code sets `a1`, as it must on a part whose reset vector is its code.
+fn build_generic(
+    req: &BuildRequest<'_>,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<BuiltMachine> {
+    let firmware = match (&req.firmware, req.boot) {
+        (FirmwareSource::Elf(elf), BootMode::FastBoot) => *elf,
+        _ => {
+            return Err(anyhow!(
+                "not supported: Xtensa chip '{}' boots only from an ELF \
+                 (FirmwareSource::Elf with BootMode::FastBoot)",
+                req.chip.name
+            ))
+        }
+    };
+    let mut bus = SystemBus::from_config_with_plugins(req.chip, req.system, plugins)
+        .map_err(|e| anyhow!("Bus config error: {e:#}"))?;
+    let console = ConsoleCapture::for_manifest(req.system);
+    bus.attach_host_console_echo(
+        console.tapped(),
+        console.heard_sink(),
+        req.options.echo_uart_stdout,
+    )
+    .map_err(|e| anyhow!(e))?;
+    let rx = super::wire_host_streams(&mut bus, &req.options)?;
+
+    let image = parse_elf_image(firmware).map_err(|e| anyhow!("Loader Error: {e:#}"))?;
+    if image.arch != crate::Arch::XtensaLx7 {
+        return Err(anyhow!(
+            "firmware architecture {:?} is incompatible with Xtensa chip '{}'",
+            image.arch,
+            req.chip.name
+        ));
+    }
+    let boxed: Box<dyn Cpu> = Box::new(crate::cpu::XtensaLx7::new());
+    let mut machine = Machine::new(boxed, bus);
+    machine
+        .load_firmware(&image)
+        .map_err(|e| anyhow!("Simulation Error: {e}"))?;
+    machine.cpu.set_pc(image.entry_point as u32);
+    Ok(built(machine, console, rx, req.system, firmware.to_vec()))
+}
+
+/// Narrow ESP32-S2 fast boot. The board profiles currently model the on-chip
+/// UART and the memory windows needed by a directly loaded ELF; this does not
+/// emulate the S2 mask ROM, flash cache/MMU, Wi-Fi, USB or GPIO matrix.
+fn build_esp32s2(
+    req: &BuildRequest<'_>,
+    firmware: &[u8],
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<BuiltMachine> {
+    let manifest = req.system;
+    let mut bus = SystemBus::from_config_with_plugins(req.chip, manifest, plugins)?;
+    // ESP32-S2 has no Cortex-M bit-band aperture. Its memory and UART windows
+    // are already supplied by the chip descriptor.
+    bus.bit_band_enabled = false;
+
+    let console = ConsoleCapture::for_manifest(manifest);
+    let uart_sink = console.heard_sink();
+    bus.attach_host_console_echo(console.tapped(), uart_sink, req.options.echo_uart_stdout)
+        .map_err(|e| anyhow!(e))?;
+    let uart_rx_bufs = super::wire_host_streams(&mut bus, &req.options)?;
+    bus.refresh_peripheral_index();
+
+    let program_image = parse_elf_image(firmware).map_err(|e| anyhow!("Loader Error: {e:#}"))?;
+    let stack_top = req
+        .chip
+        .ram
+        .base
+        .checked_add(req.chip.ram.size)
+        .and_then(|top| top.checked_sub(16))
+        .and_then(|top| u32::try_from(top).ok())
+        .ok_or_else(|| anyhow!("ESP32-S2 RAM range cannot provide a 32-bit stack"))?;
+
+    let cpu: Box<dyn Cpu> = Box::new(crate::cpu::XtensaLx7::new());
+    let mut machine = Machine::new(cpu, bus);
+    machine
+        .load_firmware(&program_image)
+        .map_err(|e| anyhow!("Simulation Error: {e}"))?;
+    machine.cpu.set_pc(program_image.entry_point as u32);
+    machine.cpu.set_sp(stack_top);
+
+    Ok(built(
+        machine,
+        console,
+        uart_rx_bufs,
+        manifest,
+        firmware.to_vec(),
+    ))
+}
+
 /// `new_from_config_xtensa_esp32`: ESP32-classic (Xtensa LX6).
 /// `configure_xtensa_esp32` adds IRAM / DRAM / flash XIP / ROM / UART0; the
 /// manifest's external devices attach through the core helper because this path
@@ -82,8 +189,10 @@ fn build_esp32(
     crate::peripherals::esp_xtensa_common::rom_thunks::reset_esp32_session_state();
 
     let mut bus = SystemBus::new();
+    bus.cpu_hz = manifest.cpu_hz.unwrap_or(req.chip.cpu_hz);
     let cpu = crate::system::xtensa::configure_xtensa_esp32(&mut bus);
     bus.attach_chip_io_levels(req.chip);
+    bus.attach_chip_analog_pins(req.chip);
     bus.attach_plugin_peripherals(req.chip, manifest, plugins)?;
 
     // A classic ESP32 has NO USB peripheral: its devkit's CP210x sits on UART0
@@ -179,6 +288,7 @@ fn build_esp32s3_flash(
             "ESP32-S3 flash boot needs the real boot ROM, but the injected images did not resolve"
         ));
     }
+    bus.attach_chip_analog_pins(chip);
     bus.attach_plugin_peripherals(chip, manifest, plugins)?;
     let mut cpu = wiring.cpu;
     // The ROM and the app install the window overflow/underflow vectors and
@@ -248,6 +358,7 @@ fn build_esp32s3(
     };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
     bus.attach_chip_io_levels(chip);
+    bus.attach_chip_analog_pins(chip);
     bus.attach_plugin_peripherals(chip, manifest, plugins)?;
     let mut cpu = wiring.cpu;
 

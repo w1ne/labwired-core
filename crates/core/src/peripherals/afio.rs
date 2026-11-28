@@ -7,9 +7,24 @@
 use crate::{Peripheral, SimResult};
 use std::any::Any;
 
+/// Which AFIO register file the block implements.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AfioLayout {
+    /// STM32F1: EVCR, MAPR, EXTICR1..4 (four 4-bit line fields each), MAPR2.
+    #[default]
+    Stm32F1,
+    /// WCH CH32V00x (ch32v00x.h `AFIO_TypeDef`): RESERVED0, PCFR1 at 0x04 and
+    /// one EXTICR at 0x08 holding a 2-bit port select per line 0..7
+    /// (`GPIO_EXTILineConfig`: A = 0, C = 2, D = 3). PCFR1 is kept as written;
+    /// its remap bits do not move pads in this model.
+    WchV00x,
+}
+
 /// STM32F1 Alternate Function I/O (AFIO)
 #[derive(Debug, Default, serde::Serialize)]
 pub struct Afio {
+    pub layout: AfioLayout,
     pub evcr: u32,
     pub mapr: u32,
     pub exticr: [u32; 4], // EXTICR1, EXTICR2, EXTICR3, EXTICR4
@@ -21,8 +36,21 @@ impl Afio {
         Self::default()
     }
 
+    pub fn new_with_layout(layout: AfioLayout) -> Self {
+        Self {
+            layout,
+            ..Self::default()
+        }
+    }
+
     /// Returns the GPIO port index (0=A, 1=B, etc.) for a given EXTI line (0-15)
     pub fn get_exti_mapping(&self, line: u8) -> u8 {
+        if self.layout == AfioLayout::WchV00x {
+            if line >= 8 {
+                return 0;
+            }
+            return ((self.exticr[0] >> (u32::from(line) * 2)) & 0x3) as u8;
+        }
         if line >= 16 {
             return 0;
         }
@@ -32,6 +60,16 @@ impl Afio {
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
+        if self.layout == AfioLayout::WchV00x {
+            return match offset {
+                0x04 => self.mapr,
+                0x08 => self.exticr[0],
+                _ => {
+                    crate::census_reg!("afio:WchV00x", offset, "read");
+                    0
+                }
+            };
+        }
         match offset {
             0x00 => self.evcr,
             0x04 => self.mapr,
@@ -48,6 +86,17 @@ impl Afio {
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
+        if self.layout == AfioLayout::WchV00x {
+            match offset {
+                0x04 => self.mapr = value,
+                // Eight 2-bit fields in [15:0].
+                0x08 => self.exticr[0] = value & 0xFFFF,
+                _ => {
+                    crate::census_reg!("afio:WchV00x", offset, "write");
+                }
+            }
+            return;
+        }
         // Writable masks silicon-confirmed on the bench F103 via the address
         // sweep (stm32f1_mmio_diff). AFIO is an F1-only peripheral (F4+ use
         // SYSCFG) and F103 is the only F1 chip, so these are exact, not gated.
@@ -94,9 +143,13 @@ impl Peripheral for Afio {
         Ok(())
     }
 
-    /// AFIO_EXTICRx is the F1's EXTI line-source mux.
+    /// AFIO_EXTICRx is the F1's (and CH32V00x's) EXTI line-source mux.
     fn exti_line_source(&self, line: u8) -> Option<u8> {
-        (line < 16).then(|| self.get_exti_mapping(line))
+        let lines = match self.layout {
+            AfioLayout::Stm32F1 => 16,
+            AfioLayout::WchV00x => 8,
+        };
+        (line < lines).then(|| self.get_exti_mapping(line))
     }
 
     fn needs_legacy_walk(&self) -> bool {
@@ -123,7 +176,7 @@ impl Peripheral for Afio {
 
 #[cfg(test)]
 mod tests {
-    use super::Afio;
+    use super::{Afio, AfioLayout};
     use crate::Peripheral;
 
     fn rd32(a: &Afio, off: u64) -> u32 {
@@ -170,5 +223,20 @@ mod tests {
         assert_eq!(a.exti_line_source(5), Some(2));
         assert_eq!(a.exti_line_source(4), Some(0), "reset: port A");
         assert_eq!(a.exti_line_source(16), None);
+    }
+
+    #[test]
+    fn wch_v00x_exticr_holds_two_bits_per_line() {
+        // GPIO_EXTILineConfig(GPIO_PortSourceGPIOD, GPIO_PinSource3) and
+        // (GPIO_PortSourceGPIOC, GPIO_PinSource7).
+        let mut a = Afio::new_with_layout(AfioLayout::WchV00x);
+        a.write_u32(0x08, (3 << 6) | (2 << 14)).unwrap();
+        assert_eq!(a.exti_line_source(3), Some(3), "PD3");
+        assert_eq!(a.exti_line_source(7), Some(2), "PC7");
+        assert_eq!(a.exti_line_source(0), Some(0), "reset: port A");
+        assert_eq!(a.exti_line_source(8), None, "8 GPIO lines");
+        a.write_u32(0x08, 0xFFFF_FFFF).unwrap();
+        assert_eq!(rd32(&a, 0x08), 0xFFFF);
+        assert_eq!(rd32(&a, 0x0C), 0, "no EXTICR2 on V00x");
     }
 }

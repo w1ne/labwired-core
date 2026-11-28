@@ -1650,3 +1650,244 @@ fn nrf54l_spim_prescaler_resets_to_0x40() {
         "PSEL.SCK resets DISCONNECTED"
     );
 }
+
+/// Classic STM32 SPI: the line is TXE&TXEIE | RXNE&RXNEIE (RM0008 §25.3.11).
+/// RXNEIE alone raises it when a slave's frame lands in DR — before, only a
+/// gpio-net master did, so a slave on `external_devices` never interrupted.
+#[test]
+fn rxneie_raises_the_line_when_a_slave_frame_lands() {
+    fn frame_irq(cr2: u8) -> bool {
+        let mut spi = Spi::new();
+        spi.push_device(Box::new(Capture { rx: Vec::new() }));
+        spi.write(0x00, 0x44).unwrap(); // MSTR | SPE
+        spi.write(0x04, cr2).unwrap();
+        spi.write(0x0C, 0xA5).unwrap();
+        let mut irq = false;
+        for _ in 0..1_000_000 {
+            if !spi.transfer_active() {
+                break;
+            }
+            irq |= spi.tick_elapsed(8).irq;
+        }
+        assert_ne!(spi.read(0x08).unwrap() & 0x01, 0, "RXNE");
+        irq
+    }
+    assert!(!frame_irq(0), "no enable, no line");
+    assert!(frame_irq(1 << 6), "RXNEIE");
+}
+
+#[test]
+fn stm32_irq_level_tracks_enabled_transmit_and_receive_status() {
+    let mut spi = Spi::new_with_layout(SpiRegisterLayout::Stm32);
+    assert_eq!(spi.irq_line_level(), Some(false));
+    spi.write(0x04, 1 << 7).unwrap(); // TXEIE, transmitter starts empty
+    assert_eq!(spi.irq_line_level(), Some(true));
+    spi.write(0x04, 1 << 6).unwrap(); // RXNEIE, no received data yet
+    assert_eq!(spi.irq_line_level(), Some(false));
+    spi.write(0x00, 0x40).unwrap(); // SPI enable
+    spi.write(0x0c, 0x5a).unwrap();
+    run_engine(&mut spi);
+    assert_eq!(spi.irq_line_level(), Some(true));
+    spi.read(0x0c).unwrap();
+    assert_eq!(spi.irq_line_level(), Some(false));
+}
+
+#[test]
+fn stm32_fifo_irq_tracks_rx_threshold_and_deasserts_on_read() {
+    let mut spi = fifo_master(&[0x5a]);
+    spi.write(0x00, 0x44).unwrap(); // SPE | MSTR
+    spi.write_u16(0x04, 0x1740).unwrap(); // DS=8, FRXTH, RXNEIE
+    assert_eq!(spi.irq_line_level(), Some(false));
+    spi.write(0x0c, 0xa5).unwrap();
+    run_engine(&mut spi);
+    assert_eq!(spi.irq_line_level(), Some(true));
+    assert!(spi.reads_can_deassert_irq());
+    assert_eq!(spi.read(0x0c).unwrap(), 0x5a);
+    assert_eq!(spi.irq_line_level(), Some(false));
+}
+
+// ── nRF52840 SPIM3 hardware CSN / D/CX (fast path) ────────────────────────
+
+/// Logs select, release and each byte (with the D/C level it moved under);
+/// answers every byte with 0xA5.
+#[derive(Clone)]
+struct CsnProbe {
+    cs: String,
+    active_high: bool,
+    dc: std::sync::Arc<std::sync::Mutex<bool>>,
+    log: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+}
+impl CsnProbe {
+    fn new(cs: &str) -> Self {
+        Self {
+            cs: cs.to_string(),
+            active_high: false,
+            // 'D' until a controller drives D/C.
+            dc: std::sync::Arc::new(std::sync::Mutex::new(true)),
+            log: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
+        }
+    }
+    fn log(&self) -> Vec<String> {
+        self.log.lock().unwrap().clone()
+    }
+}
+impl SpiDevice for CsnProbe {
+    fn transfer(&mut self, mosi: u8) -> u8 {
+        let dc = if *self.dc.lock().unwrap() { 'D' } else { 'C' };
+        self.log.lock().unwrap().push(format!("{dc}{mosi:02x}"));
+        0xA5
+    }
+    fn cs_pin(&self) -> &str {
+        &self.cs
+    }
+    fn cs_active_high(&self) -> bool {
+        self.active_high
+    }
+    fn cs_select(&mut self) {
+        self.log.lock().unwrap().push("select".into());
+    }
+    fn cs_release(&mut self) {
+        self.log.lock().unwrap().push("release".into());
+    }
+    fn set_dc_level(&mut self, level: bool) {
+        *self.dc.lock().unwrap() = level;
+    }
+}
+
+const SPIM3_TX: u64 = 0x2000_0000;
+const SPIM3_RX: u64 = 0x2000_0100;
+
+/// SPIM3 (`nrf52_hw_select`) or SPIM0-2 with `PSEL.CSN` = P0.20 and a
+/// two-byte exchange armed. Nothing drives any GPIO chip select.
+fn spim3(hw_select: bool, bus: &mut FlatRamBus, devices: &[&CsnProbe]) -> Spi {
+    let mut spi = Spi::new_with_layout(SpiRegisterLayout::Nrf52Spim);
+    spi.nrf52_hw_select = hw_select;
+    for dev in devices {
+        spi.push_device(Box::new((*dev).clone()));
+    }
+    bus.write_slice(SPIM3_TX, &[0x11, 0x22]);
+    nrf_write_u32(&mut spi, 0x500, 7); // ENABLE = SPIM
+    nrf_write_u32(&mut spi, 0x514, 20); // PSEL.CSN = P0.20
+    nrf_write_u32(&mut spi, 0x544, SPIM3_TX as u32);
+    nrf_write_u32(&mut spi, 0x548, 2);
+    nrf_write_u32(&mut spi, 0x534, SPIM3_RX as u32);
+    nrf_write_u32(&mut spi, 0x538, 2);
+    spi
+}
+
+fn spim3_run(spi: &mut Spi, bus: &mut FlatRamBus) {
+    nrf_write_u32(spi, 0x010, 1); // TASKS_START
+    spi.tick_with_bus(bus);
+}
+
+/// SPIM3 asserts CSN on the `PSEL.CSN` pad itself: the device wired there is
+/// selected for the transfer and released after it. A device on another pad
+/// keeps its GPIO chip select, which nothing drives, so it sees nothing.
+#[test]
+fn nrf52_spim3_hardware_csn_selects_only_the_device_on_its_pad() {
+    let mut bus = FlatRamBus::new();
+    let on_csn = CsnProbe::new("P0.20");
+    let other = CsnProbe::new("P0.21");
+    let mut spi = spim3(true, &mut bus, &[&on_csn, &other]);
+    spim3_run(&mut spi, &mut bus);
+    assert_eq!(on_csn.log(), ["select", "D11", "D22", "release"]);
+    assert!(other.log().is_empty(), "P0.21 is not the CSN pad");
+    assert_eq!(bus.read_slice(SPIM3_RX, 2), [0xA5, 0xA5]);
+}
+
+/// NEGATIVE CONTROL — SPIM0-2 have no hardware chip select (PS v1.x
+/// §6.25.7 is SPIM3 only), so `PSEL.CSN` there selects nothing.
+#[test]
+fn nrf52_spim_without_hw_select_ignores_psel_csn() {
+    let mut bus = FlatRamBus::new();
+    let dev = CsnProbe::new("P0.20");
+    let mut spi = spim3(false, &mut bus, &[&dev]);
+    spim3_run(&mut spi, &mut bus);
+    assert!(dev.log().is_empty());
+    assert_eq!(bus.read_slice(SPIM3_RX, 2), [0, 0]);
+}
+
+/// CSNPOL = 1 drives CSN high for the transfer: an active-low device on the
+/// pad is deselected, an active-high one is selected.
+#[test]
+fn nrf52_spim3_csnpol_selects_by_the_device_active_level() {
+    let mut bus = FlatRamBus::new();
+    let low = CsnProbe::new("P0.20");
+    let mut spi = spim3(true, &mut bus, &[&low]);
+    nrf_write_u32(&mut spi, 0x568, 1); // CSNPOL = active high
+    spim3_run(&mut spi, &mut bus);
+    assert!(low.log().is_empty());
+
+    let mut bus = FlatRamBus::new();
+    let mut high = CsnProbe::new("p0_20");
+    high.active_high = true;
+    let mut spi = spim3(true, &mut bus, &[&high]);
+    nrf_write_u32(&mut spi, 0x568, 1);
+    spim3_run(&mut spi, &mut bus);
+    assert_eq!(high.log(), ["select", "D11", "D22", "release"]);
+}
+
+/// A device the firmware already selected through GPIO is not selected a
+/// second time by the hardware CSN, and stays selected after the transfer.
+#[test]
+fn nrf52_spim3_hardware_csn_leaves_a_gpio_selected_device_alone() {
+    let mut bus = FlatRamBus::new();
+    bus.gpio.insert("P0.20".into(), false); // GPIO OUT drives the pad low
+    let dev = CsnProbe::new("P0.20");
+    let mut spi = spim3(true, &mut bus, &[&dev]);
+    spim3_run(&mut spi, &mut bus);
+    assert_eq!(dev.log(), ["select", "D11", "D22"]);
+}
+
+/// SPIM3 PSELDCX: D/CX low for the first DCXCNT bytes; DCXCNT = 0xF makes
+/// every byte a command byte (PS v1.x §6.25.7).
+#[test]
+fn nrf52_spim3_drives_dcx_for_dcxcnt_bytes() {
+    for (dcxcnt, want) in [
+        (1, ["C11", "D22"]),
+        (0, ["D11", "D22"]),
+        (0xF, ["C11", "C22"]),
+    ] {
+        let mut bus = FlatRamBus::new();
+        let dev = CsnProbe::new("P0.20");
+        let mut spi = spim3(true, &mut bus, &[&dev]);
+        nrf_write_u32(&mut spi, 0x56C, 21); // PSELDCX = P0.21
+        nrf_write_u32(&mut spi, 0x570, dcxcnt);
+        spim3_run(&mut spi, &mut bus);
+        assert_eq!(dev.log()[1..3], want, "DCXCNT = {dcxcnt:#x}");
+    }
+}
+
+/// The scheduled EasyDMA completion pends the SPIM's own line when INTEN
+/// enables END (it lands outside any MMIO write, so nothing else would), and
+/// the level follows EVENTS_END and INTEN afterwards.
+#[test]
+fn nrf52_spim_easydma_event_pends_its_irq_and_level_follows_inten() {
+    use crate::Peripheral;
+    let mut bus = FlatRamBus::new();
+    let mut spi = spim3(true, &mut bus, &[]);
+    assert_eq!(spi.irq_line_level(), Some(false));
+    nrf_write_u32(&mut spi, 0x304, 1 << 6); // INTENSET.END
+    nrf_write_u32(&mut spi, 0x010, 1); // TASKS_START
+    let [(_, token)] = spi.take_scheduled_events()[..] else {
+        panic!("TASKS_START arms one wake");
+    };
+    let mut sched = crate::sched::EventScheduler::new();
+    let result = spi.on_event(token, &mut sched, &mut bus);
+    assert!(
+        result.raise_own_irq,
+        "END with INTEN.END must pend the line"
+    );
+    assert_eq!(spi.irq_line_level(), Some(true));
+    nrf_write_u32(&mut spi, 0x118, 0); // EVENTS_END = 0
+    assert_eq!(spi.irq_line_level(), Some(false), "END cleared");
+
+    // INTEN off: the same completion pends nothing.
+    nrf_write_u32(&mut spi, 0x308, 0xFFFF_FFFF);
+    nrf_write_u32(&mut spi, 0x010, 1);
+    let [(_, token)] = spi.take_scheduled_events()[..] else {
+        panic!("TASKS_START arms one wake");
+    };
+    assert!(!spi.on_event(token, &mut sched, &mut bus).raise_own_irq);
+    assert_eq!(spi.irq_line_level(), Some(false), "END set, INTEN off");
+}

@@ -2,6 +2,10 @@ name: Prospective Timer owned-adapter adversary builds
 on:
   pull_request:
     paths: ['scripts/samd-real-timer-adversaries/**', '.github/workflows/samd-real-timer-adversary-build.yml']
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 jobs:
@@ -38,6 +42,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
+          retention-days: 2
           name: prospective-timer-owned-adapter-mutants
           path: |
             ${{ runner.temp }}/timer-positive/source-before.json

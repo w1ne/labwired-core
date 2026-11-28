@@ -5,7 +5,7 @@
 // End-to-end test for the nokia5110-invaders-lab: the same firmware ELF that
 // flashes to a real NUCLEO-L476RG + Nokia 5110 + HC-SR04 must, in the
 // simulator, (a) drive the PCD8544 framebuffer via the bus D/C-pin keystone
-// and (b) move the player ship as the host-controlled HC-SR04 distance
+// and (b) move the paddle as the host-controlled HC-SR04 distance
 // changes — proving both new peripheral models work through real firmware.
 
 use labwired_config::{ChipDescriptor, SystemManifest};
@@ -56,14 +56,23 @@ fn build_machine(elf: &Path) -> Cm {
     build_machine_with(elf, None)
 }
 
-/// Build the invaders machine, optionally overriding the manifest's
+/// Build the Breakout machine, optionally overriding the manifest's
 /// `walk_deleted` field (`None` keeps the yaml's explicit `Some(true)`).
 fn build_machine_with(elf: &Path, walk_deleted: Option<Option<bool>>) -> Cm {
+    build_machine_variant(elf, walk_deleted, true)
+}
+
+fn build_machine_variant(elf: &Path, walk_deleted: Option<Option<bool>>, sensor: bool) -> Cm {
     let system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../examples/nokia5110-invaders-lab/system.yaml");
     let mut manifest = SystemManifest::from_file(&system_path).expect("load manifest");
     if let Some(wd) = walk_deleted {
         manifest.walk_deleted = wd;
+    }
+    if !sensor {
+        manifest
+            .external_devices
+            .retain(|device| device.id != "dist");
     }
     let chip_path = system_path.parent().unwrap().join(&manifest.chip);
     let chip = ChipDescriptor::from_file(&chip_path).expect("load chip");
@@ -91,9 +100,9 @@ fn framebuffer(machine: &Cm) -> Vec<u8> {
         .to_vec()
 }
 
-/// Left-most column of the player ship (bank 5 holds the ship rows).
-fn ship_left(fb: &[u8]) -> Option<usize> {
-    (0..W).find(|&x| fb[5 * W + x] != 0)
+/// Left-most full-height paddle column. Ignore the two-pixel ball in bank 5.
+fn paddle_left(fb: &[u8]) -> Option<usize> {
+    (0..W).find(|&x| fb[5 * W + x] & 0xE0 == 0xE0)
 }
 
 fn step_frames(machine: &mut Cm, steps: u64) {
@@ -102,37 +111,12 @@ fn step_frames(machine: &mut Cm, steps: u64) {
     }
 }
 
-/// Dump the sim's PCD8544 panel framebuffer (what the modeled panel received
-/// over SPI) as little-endian 32-bit words, in the same layout `mdw` prints,
-/// so it can be diffed byte-for-byte against a capture read off real silicon
-/// (the firmware's static FB at 0x20000000). Proves the sim's SPI+D/C path
-/// delivers exactly the bytes the firmware emits.
-#[test]
-#[ignore = "prints the sim splash framebuffer for HW diff"]
-fn dump_splash_framebuffer() {
-    let elf = ensure_firmware_built();
-    let mut machine = build_machine(&elf);
-    // Step into the splash hold (after init + render + the 504-byte push,
-    // well before the 8M-cycle delay ends).
-    step_frames(&mut machine, 800_000);
-    let fb = framebuffer(&machine);
-    assert_eq!(fb.len(), 504);
-    for (i, chunk) in fb.chunks(4).enumerate() {
-        let w = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
-        print!("{w:08x} ");
-        if i % 8 == 7 {
-            println!();
-        }
-    }
-    println!();
-}
-
 // Builds the firmware and steps several million cycles in the sim (~90 s), so
 // it's gated behind --ignored rather than run in the default suite. Requires
 // the example to be a workspace member (examples/nokia5110-invaders-lab):
 //   cargo test -p labwired-core --test e2e_nokia5110_invaders -- --ignored --nocapture
 #[test]
-#[ignore = "slow: builds + runs the Space Invaders firmware in-sim"]
+#[ignore = "slow: builds + runs the Breakout firmware in-sim"]
 fn firmware_draws_and_ship_tracks_distance() {
     let elf = ensure_firmware_built();
     let mut machine = build_machine(&elf);
@@ -148,7 +132,7 @@ fn firmware_draws_and_ship_tracks_distance() {
         fb_near.iter().any(|&b| b != 0),
         "firmware should have drawn something to the Nokia framebuffer"
     );
-    let near = ship_left(&fb_near).expect("ship visible (near)");
+    let near = paddle_left(&fb_near).expect("ship visible (near)");
 
     // Far target → long echo → ship to the left edge.
     machine
@@ -157,8 +141,9 @@ fn firmware_draws_and_ship_tracks_distance() {
         .expect("set ultrasonic distance");
     step_frames(&mut machine, 4_000_000);
     let fb_far = framebuffer(&machine);
-    let far = ship_left(&fb_far).expect("ship visible (far)");
+    let far = paddle_left(&fb_far).expect("ship visible (far)");
 
+    println!("NOKIA_DISTANCE near_cm=8 near_x={near} far_cm=300 far_x={far}");
     assert!(
         far < near,
         "ship should move left as the target moves away: near_x={near}, far_x={far}"
@@ -179,15 +164,16 @@ fn firmware_draws_and_ship_tracks_distance() {
 /// and when the constant moved to 512 the gate went on asserting a number
 /// nothing ships, undetected because the test is `#[ignore]`d.
 #[test]
-#[ignore = "slow: builds + runs the Space Invaders firmware in-sim"]
+#[ignore = "slow: builds + runs the Breakout firmware in-sim"]
 fn splash_framebuffer_matches_across_tick_intervals() {
     let elf = ensure_firmware_built();
     let fb_at = |interval: u32| {
         let mut machine = build_machine(&elf);
         machine.config.peripheral_tick_interval = interval;
         machine.bus.config.peripheral_tick_interval = interval;
-        // Into the splash hold via the batched run loop (see
-        // dump_splash_framebuffer for the budget rationale).
+        // Into the splash hold via the batched run loop: 800k cycles is past
+        // init + render + the 504-byte push, well before the 8M-cycle delay
+        // ends.
         while machine.total_cycles < 800_000 {
             let remaining = (800_000 - machine.total_cycles).min(u32::MAX as u64) as u32;
             machine.run(Some(remaining)).expect("run");
@@ -235,7 +221,7 @@ fn splash_framebuffer_matches_across_tick_intervals() {
 /// on demanding a number nothing ships. Nobody noticed because the test is
 /// `#[ignore]`d, so only `--include-ignored` ever runs it.
 #[test]
-#[ignore = "slow: builds + runs the Space Invaders firmware in-sim"]
+#[ignore = "slow: builds + runs the Breakout firmware in-sim"]
 fn derived_and_explicit_walk_flag_are_output_identical() {
     let elf = ensure_firmware_built();
 
@@ -253,7 +239,7 @@ fn derived_and_explicit_walk_flag_are_output_identical() {
     if cfg!(feature = "event-scheduler") {
         assert_eq!(
             walk_deleted.bus.max_safe_tick_interval(),
-            RECOMMENDED_TICK_INTERVAL
+            RECOMMENDED_TICK_INTERVAL.min(32)
         );
         assert_eq!(
             walk_kept.bus.max_safe_tick_interval(),
@@ -298,7 +284,7 @@ fn derived_and_explicit_walk_flag_are_output_identical() {
 }
 
 #[test]
-#[ignore = "slow: builds + runs the Space Invaders firmware in-sim"]
+#[ignore = "slow: builds + runs the Breakout firmware in-sim"]
 fn firmware_tracks_minimum_hcsr04_distance() {
     let elf = ensure_firmware_built();
     let mut machine = build_machine(&elf);
@@ -311,7 +297,7 @@ fn firmware_tracks_minimum_hcsr04_distance() {
         .set_input(Some("dist"), "distance", 2.0)
         .expect("set ultrasonic distance");
     step_frames(&mut machine, 4_000_000);
-    let min = ship_left(&framebuffer(&machine)).expect("ship visible (minimum distance)");
+    let min = paddle_left(&framebuffer(&machine)).expect("paddle visible (minimum distance)");
 
     assert!(
         min >= 56,
@@ -323,10 +309,72 @@ fn firmware_tracks_minimum_hcsr04_distance() {
         .set_input(Some("dist"), "distance", 200.0)
         .expect("set ultrasonic distance");
     step_frames(&mut machine, 4_000_000);
-    let far = ship_left(&framebuffer(&machine)).expect("ship visible (far distance)");
+    let far = paddle_left(&framebuffer(&machine)).expect("paddle visible (far distance)");
 
+    println!("NOKIA_MINIMUM near_cm=2 near_x={min} far_cm=200 far_x={far}");
     assert!(
         far <= 8,
         "200 cm should move the paddle to the left edge: min_x={min}, far_x={far}"
     );
+}
+
+/// The physical input's divider holds the disconnected input low. A stuck
+/// high line must also time out, without blocking the display/game forever.
+#[test]
+#[ignore = "slow: runs missing and stuck-high sensor scenarios"]
+fn missing_or_stuck_sensor_keeps_game_running_and_paddle_centered() {
+    let elf = ensure_firmware_built();
+    for high in [false, true] {
+        let mut machine = build_machine_variant(&elf, None, false);
+        let gpio = machine.bus.find_peripheral_index_by_name("gpiob").unwrap();
+        assert!(machine.bus.peripherals[gpio].dev.set_gpio_input(10, high));
+        step_frames(&mut machine, 4_000_000);
+        let first = framebuffer(&machine);
+        let x = paddle_left(&first).expect("paddle visible after sensor timeout");
+        assert!(
+            (33..=34).contains(&x),
+            "timeout should center paddle, got {x}"
+        );
+        step_frames(&mut machine, 1_000_000);
+        let later = framebuffer(&machine);
+        assert_ne!(first, later, "the ball/game must keep moving after timeout");
+        println!("NOKIA_TIMEOUT echo_high={high} paddle_x={x} game_progressed=true");
+    }
+}
+
+/// Run the distance contract through the real batched browser execution path.
+/// The minimum physical pulse must not disappear at the shipping tick interval.
+#[test]
+#[ignore = "slow: runs distance vectors at shipping peripheral tick interval"]
+fn distance_tracking_at_shipping_tick_interval() {
+    let elf = ensure_firmware_built();
+    let mut machine = build_machine(&elf);
+    machine.config.peripheral_tick_interval = RECOMMENDED_TICK_INTERVAL;
+    machine.bus.config.peripheral_tick_interval = RECOMMENDED_TICK_INTERVAL;
+    assert_eq!(
+        machine.max_safe_tick_interval(),
+        RECOMMENDED_TICK_INTERVAL.min(32)
+    );
+    // Leave the public config at the larger shipping request deliberately.
+    // The actual advance boundary must cap it, not only the recommendation.
+    for (cm, min_x, max_x) in [(2.0, 56, 68), (200.0, 0, 8), (30.0, 29, 39), (8.0, 56, 68)] {
+        machine.bus.set_input(Some("dist"), "distance", cm).unwrap();
+        let until = machine.total_cycles + 8_000_000;
+        while machine.total_cycles < until {
+            machine
+                .run(Some((until - machine.total_cycles) as u32))
+                .unwrap();
+        }
+        let effective = machine.config.peripheral_tick_interval;
+        assert_eq!(effective, RECOMMENDED_TICK_INTERVAL.min(32));
+        assert_eq!(machine.bus.config.peripheral_tick_interval, effective);
+        let x = paddle_left(&framebuffer(&machine)).expect("paddle visible");
+        assert!(
+            (min_x..=max_x).contains(&x),
+            "distance={cm} cm paddle_x={x}"
+        );
+        println!(
+            "NOKIA_BATCHED requested={RECOMMENDED_TICK_INTERVAL} effective={effective} distance_cm={cm} paddle_x={x}"
+        );
+    }
 }

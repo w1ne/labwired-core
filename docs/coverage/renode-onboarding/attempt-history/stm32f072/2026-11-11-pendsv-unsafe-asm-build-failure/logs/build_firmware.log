@@ -1,0 +1,31 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+   Compiling firmware-stm32f072-smoke v0.1.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-stm32f072-smoke)
+error[E0133]: use of inline assembly is unsafe and requires unsafe function or block
+    --> crates/firmware-stm32f072-smoke/src/main.rs:1501:5
+     |
+1501 | /     asm!(
+1502 | |         "mrs {primask}, PRIMASK",
+1503 | |         "cpsid i",
+1504 | |         primask = out(reg) prior_primask,
+1505 | |         options(nomem, nostack, preserves_flags),
+1506 | |     );
+     | |_____^ use of inline assembly
+     |
+     = note: inline assembly is entirely unchecked and can cause undefined behavior
+
+For more information about this error, try `rustc --explain E0133`.
+error: could not compile `firmware-stm32f072-smoke` (bin "firmware-stm32f072-smoke") due to 1 previous error

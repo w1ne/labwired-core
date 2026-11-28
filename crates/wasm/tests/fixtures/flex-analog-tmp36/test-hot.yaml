@@ -1,0 +1,18 @@
+# `labwired test --script test-hot.yaml`. 125 °C, the upper end of the modeled range.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+entry:
+  export: run
+  args:
+    - { port: temperature_c }
+    - { port: temperature_mv }
+    - { number: 125 }
+limits:
+  max_steps: 100000
+  max_time_ns: 10000
+assertions:
+  - entry_result: { equals: 1750 }
+  - port_value: { port: temperature_mv, equals: 1750 }

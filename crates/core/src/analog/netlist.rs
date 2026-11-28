@@ -15,7 +15,7 @@
 //!
 //! | Element | Line |
 //! |---|---|
-//! | Resistor | `R<name> n1 n2 <value> [beta=<K> [tnom=<°C>] [temp=<°C>]]` |
+//! | Resistor | `R<name> n1 n2 <value> [beta=<K> [tnom=<°C>] [temp=<°C>]] [tc1=<1/°C> [tc2=<1/°C²>] [tnom=<°C>] [temp=<°C>]` |
 //! | Capacitor | `C<name> n1 n2 <value> [ic=<v>]` |
 //! | Inductor | `L<name> n1 n2 <value> [ic=<i>]` |
 //! | Mutual inductance | `K<name> L<name1> L<name2> <k>` |
@@ -23,6 +23,7 @@
 //! | Current source | `I<name> n+ n- <source>` |
 //! | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` or `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0\|1] ron=<r> roff=<r>` |
 //! | Voltage switch | `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] [signed=0|1] ron=<r> roff=<r>` |
+//! | ngspice switch | `S<name> n1 n2 nc+ nc- <model>` with `.model <model> SW(VT= VH= RON= ROFF=)` |
 //! | Diode | `D<name> n+ n- <model>` |
 //! | BJT | `Q<name> nc nb ne <model>` |
 //! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]` |
@@ -57,6 +58,12 @@
 //! carries a function is driven by the clock, so it cannot also be a routed
 //! input — [`super::adapter`] rejects a manifest that wires one.
 //!
+//! A resistor can use either an NTC `beta` law or the instance coefficients
+//! `tc1`/`tc2`, not both. The polynomial form is
+//! `R = Rnom · (1 + TC1·ΔT + TC2·ΔT²)`; `tnom` and `temp` default to 27 °C for
+//! that form. The temperature is imposed externally; self-heating is not
+//! modelled.
+//!
 //! ## Models
 //!
 //! `.model <name> D|NPN|PNP|NMOS|PMOS|NJF|PJF (<param>=<value> ...)` declares a model
@@ -74,7 +81,7 @@
 //! `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`,
 //! MOSFET bulk junction depletion capacitance `CBD`/`CBS` with shared
 //! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
-//! `AD`/`AS`/`PD`/`PS`, temperature coefficients, and most terminal
+//! `AD`/`AS`/`PD`/`PS`, semiconductor temperature coefficients, and most terminal
 //! resistances, …) are **accepted
 //! and ignored rather than rejected**. OPAMP and COMP `IBIAS`/`IOS` model the
 //! average and signed difference of DC currents at the two input pins; `RIN`
@@ -304,6 +311,31 @@ pub struct NtcModel {
     pub temperature_celsius: f64,
 }
 
+/// Polynomial temperature coefficients on a resistor instance.
+///
+/// The resistor value is `Rnom · (1 + TC1·ΔT + TC2·ΔT²)`, where `ΔT` is the
+/// instance temperature minus the parameter measurement temperature. This is
+/// an externally specified temperature; the resistor does not self-heat.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ResistorTemperatureModel {
+    /// First-order coefficient, per °C.
+    pub tc1: f64,
+    /// Second-order coefficient, per °C².
+    pub tc2: f64,
+    /// Parameter measurement temperature, in °C.
+    pub nominal_temperature_celsius: f64,
+    /// Instance temperature, in °C.
+    pub temperature_celsius: f64,
+}
+
+impl ResistorTemperatureModel {
+    /// Resistance at `temperature_celsius`, in ohms.
+    pub fn resistance_ohms(self, nominal_ohms: f64) -> f64 {
+        let delta = self.temperature_celsius - self.nominal_temperature_celsius;
+        nominal_ohms * (1.0 + self.tc1 * delta + self.tc2 * delta * delta)
+    }
+}
+
 impl NtcModel {
     /// Resistance at `temperature_celsius`, in ohms.
     pub fn resistance_ohms(self, r25_ohms: f64) -> f64 {
@@ -313,7 +345,7 @@ impl NtcModel {
     }
 }
 
-/// `R<name> n1 n2 <ohms> [beta=<K> [tnom=<°C>] [temp=<°C>]]`.
+/// `R<name> n1 n2 <ohms>` with optional NTC or `tc1=`/`tc2=` temperature data.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Resistor {
     /// Element name as written, e.g. `R1`.
@@ -322,18 +354,24 @@ pub struct Resistor {
     pub a: NodeRef,
     /// Second terminal.
     pub b: NodeRef,
-    /// Fixed resistance, or NTC resistance at `ntc.nominal_temperature_celsius`.
+    /// Fixed resistance, or nominal resistance for either temperature model.
     pub ohms: f64,
     /// Optional external-temperature Beta model.
     pub ntc: Option<NtcModel>,
+    /// Optional first- and second-order temperature coefficient model.
+    pub temperature_coefficients: Option<ResistorTemperatureModel>,
 }
 
 impl Resistor {
     /// Resistance at the model's current external temperature, in ohms.
     pub fn resistance_ohms(&self) -> f64 {
-        self.ntc
-            .map(|ntc| ntc.resistance_ohms(self.ohms))
-            .unwrap_or(self.ohms)
+        if let Some(ntc) = self.ntc {
+            ntc.resistance_ohms(self.ohms)
+        } else if let Some(model) = self.temperature_coefficients {
+            model.resistance_ohms(self.ohms)
+        } else {
+            self.ohms
+        }
     }
 }
 
@@ -487,6 +525,83 @@ impl Waveform {
     /// True when a routed input may drive this source.
     pub fn is_constant(&self) -> bool {
         matches!(self, Self::Dc(_))
+    }
+
+    /// True when this waveform's slope changes somewhere in `(from, to]`.
+    ///
+    /// The solver carries the reactive elements' derivative from the previous
+    /// step. That derivative is still consistent across a step of a smooth
+    /// waveform, but not across a corner: a pulse edge, or the moment a
+    /// delayed sine starts. [`Solver::advance`](super::mna::Solver) restarts
+    /// trapezoidal integration with backward Euler on the step that ends at
+    /// the corner (see the `mna` module docs). A waveform that merely changes
+    /// value every step is not a corner.
+    ///
+    /// The step is half open, `(from, to]`, so a corner exactly on a step
+    /// boundary restarts the step that arrives at it, and the next step
+    /// resumes trapezoidal from the consistent state backward Euler leaves.
+    /// That is the breakpoint rule SPICE uses.
+    ///
+    /// A pulse whose two levels are equal, and a sine of zero amplitude, are
+    /// constant and have no corners.
+    pub fn has_corner_between(&self, from: f64, to: f64) -> bool {
+        if !matches!(from.partial_cmp(&to), Some(std::cmp::Ordering::Less)) {
+            return false;
+        }
+        match *self {
+            Self::Dc(_) => false,
+            Self::Sin {
+                amplitude, delay, ..
+            } => amplitude != 0.0 && from < delay && to >= delay,
+            Self::Pulse {
+                v1,
+                v2,
+                delay,
+                rise,
+                fall,
+                width,
+                period,
+            } => {
+                if v1 == v2 {
+                    return false;
+                }
+                // A pulse with zero rise, width and fall never leaves `v1`
+                // according to `at`, yet the wrap counts below still report a
+                // corner each period. That over-reports by one backward-Euler
+                // step per period, which changes no value and is harmless.
+                // The phase arithmetic must match `at` exactly: a corner is a
+                // segment boundary of the waveform `at` evaluates, so deriving
+                // the corner from different arithmetic can miss an edge that
+                // sits within one rounding step of `to`.
+                if from < delay {
+                    return to >= delay;
+                }
+                let (from_cycles, from_phase) = Self::pulse_phase(from, delay, period);
+                let (to_cycles, to_phase) = Self::pulse_phase(to, delay, period);
+                if from_cycles != to_cycles {
+                    return true;
+                }
+                // Segment boundaries inside one period: the end of the rise,
+                // the end of the top and the end of the fall. The start of the
+                // rise is phase 0, which only `from` or a wrap can reach here.
+                [rise, rise + width, rise + width + fall]
+                    .iter()
+                    .any(|&corner| from_phase < corner && corner <= to_phase)
+            }
+        }
+    }
+
+    /// Splits `t` into whole periods after `delay` and the phase inside the
+    /// period, using the same arithmetic as [`Self::at`].
+    fn pulse_phase(t: f64, delay: f64, period: f64) -> (f64, f64) {
+        let mut phase = t - delay;
+        if period > 0.0 && phase >= period {
+            let cycles = libm::floor(phase / period);
+            phase -= cycles * period;
+            (cycles, phase)
+        } else {
+            (0.0, phase)
+        }
     }
 }
 
@@ -1249,7 +1364,9 @@ pub struct MosModel {
 pub struct JfetModel {
     /// N-channel or P-channel.
     pub polarity: Polarity,
-    /// Pinch-off voltage `VTO`, volts (negative for NJF, positive for PJF).
+    /// Pinch-off voltage `VTO`, volts, in the channel's own frame as SPICE
+    /// writes it: negative for a depletion device of **either** polarity, so a
+    /// vendor `PJF` card means the same thing here and in ngspice.
     pub vto: f64,
     /// Transconductance parameter `BETA`, A/V².
     pub beta: f64,
@@ -1279,7 +1396,7 @@ impl JfetModel {
     fn defaults(polarity: Polarity) -> Self {
         Self {
             polarity,
-            vto: if polarity == Polarity::N { -2.0 } else { 2.0 },
+            vto: -2.0,
             beta: 1e-4,
             lambda: 0.0,
             b: 1.0,
@@ -1330,6 +1447,35 @@ impl MosModel {
     }
 }
 
+/// Resolved parameters of a `.model <name> SW(...)` card.
+///
+/// Defaults are ngspice's. ngspice closes the switch when the signed control
+/// voltage rises above `VT + VH` and opens it when the voltage falls below
+/// `VT − VH`, so `VH` is half the hysteresis band, not the dropout.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SwitchModel {
+    /// Threshold voltage, `VT`.
+    pub vt: f64,
+    /// Half-width of the hysteresis band, `VH`.
+    pub vh: f64,
+    /// Closed resistance, `RON`.
+    pub ron: f64,
+    /// Open resistance, `ROFF`.
+    pub roff: f64,
+}
+
+impl Default for SwitchModel {
+    fn default() -> Self {
+        Self {
+            vt: 0.0,
+            vh: 0.0,
+            ron: 1.0,
+            // ngspice's default is `1 / GMIN` with its default GMIN of 1e-12.
+            roff: 1e12,
+        }
+    }
+}
+
 /// One `.model` card, before it is attached to an element.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModelCard {
@@ -1347,6 +1493,8 @@ pub enum ModelCard {
     Comparator(ComparatorModel),
     /// An `LDO`, `LDOADJ` or `BUCK` card (this engine's types).
     Regulator(RegulatorModel),
+    /// An `SW` card, ngspice's voltage-controlled switch.
+    Switch(SwitchModel),
 }
 
 impl ModelCard {
@@ -1361,6 +1509,7 @@ impl ModelCard {
                 RegulatorKind::Buck => "BUCK",
             },
             Self::Diode(_) => "D",
+            Self::Switch(_) => "SW",
             Self::Bjt(model) => match model.polarity {
                 Polarity::N => "NPN",
                 Polarity::P => "PNP",
@@ -1922,12 +2071,26 @@ pub struct VoltageSwitchControl {
     pub neg: NodeRef,
     /// Closing threshold in volts (`|V|` rising through `vt`).
     pub vt: f64,
-    /// Hysteresis in volts; the opening threshold is `vt − vh` (clamped at 0).
+    /// Hysteresis in volts; the opening threshold is `vt − vh` (clamped at 0 unless `signed`).
     pub vh: f64,
     /// When true, the contact is the complement (NC) of the NO threshold rule.
     pub invert: bool,
     /// Sense V(pos)-V(neg) instead of its magnitude (logic/UVLO). Default false.
     pub signed: bool,
+    /// ngspice `SW` comparisons: close only above `vt`, open only below
+    /// `vt − vh`, and hold the last state on either edge. The inline form
+    /// closes at `vt` itself and opens at the dropout itself. Only the
+    /// normally-open rule reads it; an `SW` card never sets `invert`.
+    pub strict: bool,
+    /// Contact state the operating point starts from: ngspice's `ON`
+    /// keyword. Inside the hysteresis band the switch keeps it; outside the
+    /// band the control decides, as in ngspice. Default false (open).
+    pub initially_closed: bool,
+    /// Opening threshold taken straight from an `SW` card as `VT − VH`.
+    /// `vt − vh` rebuilt from the stored `VT + VH` and `2·VH` can miss that
+    /// value by an ulp, which moves ngspice's inclusive lower edge. `None`
+    /// for the inline form, which derives its dropout from `vt − vh`.
+    pub dropout: Option<f64>,
 }
 
 /// `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` — an ideal switch whose control is a
@@ -2259,6 +2422,8 @@ struct PendingDevice {
     as_: Option<f64>,
     pd: Option<f64>,
     ps: Option<f64>,
+    /// ngspice `S ... ON`: the switch starts closed.
+    switch_on: bool,
 }
 
 /// A K line held until all its L elements have been parsed.
@@ -2368,42 +2533,56 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     return Err(ctx.parse_err("expected `R<name> n1 n2 <value>`"));
                 }
                 let ohms = ctx.value(rest[2], "resistance")?;
-                if ohms == 0.0 {
-                    return Err(ctx.parse_err("resistance must be non-zero"));
+                if !ohms.is_finite() || ohms == 0.0 {
+                    return Err(ctx.parse_err("resistance must be finite and non-zero"));
                 }
                 let mut beta = None;
-                let mut nominal_temperature_celsius = 25.0;
-                let mut temperature_celsius = 25.0;
+                let mut nominal_temperature_celsius = None;
+                let mut temperature_celsius = None;
+                let mut tc1 = None;
+                let mut tc2 = None;
                 let mut has_temperature_parameter = false;
                 for token in &rest[3..] {
                     let (key, value) = token.split_once('=').ok_or_else(|| {
-                        ctx.parse_err("NTC resistor options must be `beta=`, `tnom=` or `temp=`")
+                        ctx.parse_err(
+                            "resistor options must be `beta=`, `tc1=`, `tc2=`, `tnom=` or `temp=`",
+                        )
                     })?;
                     let parsed = ctx.value(value, key)?;
                     match key.to_ascii_lowercase().as_str() {
                         "beta" => beta = Some(parsed),
+                        "tc1" => tc1 = Some(parsed),
+                        "tc2" => tc2 = Some(parsed),
                         "tnom" => {
-                            nominal_temperature_celsius = parsed;
+                            nominal_temperature_celsius = Some(parsed);
                             has_temperature_parameter = true;
                         }
                         "temp" => {
-                            temperature_celsius = parsed;
+                            temperature_celsius = Some(parsed);
                             has_temperature_parameter = true;
                         }
                         other => {
                             return Err(ctx.parse_err(format!(
-                                "unknown resistor parameter `{other}`; expected `beta`, `tnom` or `temp`"
+                                "unknown resistor parameter `{other}`; expected `beta`, `tc1`, `tc2`, `tnom` or `temp`"
                             )))
                         }
                     }
                 }
-                if beta.is_none() && has_temperature_parameter {
-                    return Err(ctx.parse_err("`tnom` and `temp` require an NTC `beta`"));
+                let has_temperature_coefficients = tc1.is_some() || tc2.is_some();
+                if beta.is_some() && has_temperature_coefficients {
+                    return Err(ctx.parse_err("an NTC `beta` model cannot also use `tc1` or `tc2`"));
+                }
+                if beta.is_none() && !has_temperature_coefficients && has_temperature_parameter {
+                    return Err(ctx.parse_err(
+                        "`tnom` and `temp` require an NTC `beta` or resistor `tc1`/`tc2`",
+                    ));
                 }
                 let ntc = if let Some(beta) = beta {
                     if beta <= 0.0 || ohms <= 0.0 {
                         return Err(ctx.parse_err("an NTC resistor needs `beta > 0` and `r25 > 0`"));
                     }
+                    let nominal_temperature_celsius = nominal_temperature_celsius.unwrap_or(25.0);
+                    let temperature_celsius = temperature_celsius.unwrap_or(25.0);
                     if nominal_temperature_celsius <= -273.15 || temperature_celsius <= -273.15 {
                         return Err(ctx.parse_err("NTC temperatures must be above absolute zero"));
                     }
@@ -2412,13 +2591,53 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         nominal_temperature_celsius,
                         temperature_celsius,
                     };
-                    if !model.resistance_ohms(ohms).is_finite() {
-                        return Err(ctx.parse_err("NTC parameters produce a non-finite resistance"));
+                    let resistance = model.resistance_ohms(ohms);
+                    if !resistance.is_finite()
+                        || resistance <= 0.0
+                        || !resistance.recip().is_finite()
+                    {
+                        return Err(ctx.parse_err("NTC parameters must produce positive finite resistance with finite conductance"));
                     }
                     Some(model)
                 } else {
                     None
                 };
+                let temperature_coefficients = if has_temperature_coefficients {
+                    let tc1 = tc1.unwrap_or(0.0);
+                    let tc2 = tc2.unwrap_or(0.0);
+                    let nominal_temperature_celsius = nominal_temperature_celsius.unwrap_or(27.0);
+                    let temperature_celsius = temperature_celsius.unwrap_or(27.0);
+                    if !tc1.is_finite() || !tc2.is_finite() {
+                        return Err(ctx.parse_err("resistor `tc1` and `tc2` must be finite"));
+                    }
+                    if nominal_temperature_celsius <= -273.15 || temperature_celsius <= -273.15 {
+                        return Err(
+                            ctx.parse_err("resistor temperatures must be above absolute zero")
+                        );
+                    }
+                    let model = ResistorTemperatureModel {
+                        tc1,
+                        tc2,
+                        nominal_temperature_celsius,
+                        temperature_celsius,
+                    };
+                    let resistance = model.resistance_ohms(ohms);
+                    if !resistance.is_finite()
+                        || resistance <= 0.0
+                        || !resistance.recip().is_finite()
+                    {
+                        return Err(ctx.parse_err(
+                            "resistor temperature coefficients must produce a finite positive resistance with finite conductance",
+                        ));
+                    }
+                    Some(model)
+                } else {
+                    None
+                };
+                if ntc.is_none() && temperature_coefficients.is_none() && !ohms.recip().is_finite()
+                {
+                    return Err(ctx.parse_err("resistance must have finite conductance"));
+                }
                 let a = circuit.intern(rest[0]);
                 let b = circuit.intern(rest[1]);
                 circuit.resistors.push(Resistor {
@@ -2427,6 +2646,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     b,
                     ohms,
                     ntc,
+                    temperature_coefficients,
                 });
             }
             'C' => {
@@ -2602,6 +2822,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     as_,
                     pd,
                     ps,
+                    switch_on: false,
                 });
             }
             'E' | 'G' => {
@@ -2707,12 +2928,50 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     as_: None,
                     pd: None,
                     ps: None,
+                    switch_on: false,
                 });
             }
             'S' => {
                 let digital = "S<name> n1 n2 <ctrl> ron=<r> roff=<r>";
                 let voltage = "S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] [signed=0|1] ron=<r> roff=<r>";
                 let rest = &tokens[1..];
+                // ngspice's own form, `S<name> n1 n2 nc+ nc- <model> [ON|OFF]`,
+                // carries its thresholds on a `.model SW` card that may come
+                // later. `OFF` is ngspice's default initial state.
+                let initial_state = match rest.get(5).map(|token| token.to_ascii_uppercase()) {
+                    None => Some(false),
+                    Some(keyword) if keyword == "OFF" => Some(false),
+                    Some(keyword) if keyword == "ON" => Some(true),
+                    Some(_) => None,
+                };
+                let positional = rest.iter().all(|token| !token.contains('='));
+                if rest.len() == 6 && positional && initial_state.is_none() {
+                    return Err(ctx.parse_err(format!(
+                        "switch initial state `{}` must be ON or OFF",
+                        rest[5]
+                    )));
+                }
+                if let (5 | 6, true, Some(switch_on)) = (rest.len(), positional, initial_state) {
+                    let nodes = rest[..4].iter().map(|name| circuit.intern(name)).collect();
+                    pending.push(PendingDevice {
+                        line: ctx.number,
+                        text: line.to_string(),
+                        letter,
+                        name: head.to_string(),
+                        nodes,
+                        model_name: rest[4].to_string(),
+                        width: None,
+                        length: None,
+                        nrd: None,
+                        nrs: None,
+                        ad: None,
+                        as_: None,
+                        pd: None,
+                        ps: None,
+                        switch_on,
+                    });
+                    continue;
+                }
                 let voltage_form = rest.iter().any(|token| {
                     token
                         .split_once('=')
@@ -2789,6 +3048,9 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                             vh,
                             invert,
                             signed,
+                            strict: false,
+                            initially_closed: false,
+                            dropout: None,
                         }),
                     });
                 } else {
@@ -3439,6 +3701,46 @@ fn bind_models(
                     model,
                 });
             }
+            'S' => {
+                let ModelCard::Switch(model) = card else {
+                    return Err(wrong_kind("S"));
+                };
+                if !(model.ron.is_finite()
+                    && model.ron > 0.0
+                    && model.roff.is_finite()
+                    && model.roff > 0.0)
+                {
+                    return Err(ctx.parse_err("a switch model needs RON > 0 and ROFF > 0"));
+                }
+                if !model.vt.is_finite() || !model.vh.is_finite() {
+                    return Err(ctx.parse_err("a switch model needs finite VT and VH"));
+                }
+                if model.vh < 0.0 {
+                    return Err(ctx.unsupported());
+                }
+                // ngspice's band `VT ± VH` on the signed voltage is this
+                // engine's signed switch closing at `VT + VH` with a dropout
+                // of `2·VH` below it.
+                circuit.switches.push(Switch {
+                    name: device.name,
+                    a: device.nodes[0],
+                    b: device.nodes[1],
+                    ctrl: String::new(),
+                    ron: model.ron,
+                    roff: model.roff,
+                    voltage: Some(VoltageSwitchControl {
+                        pos: device.nodes[2],
+                        neg: device.nodes[3],
+                        vt: model.vt + model.vh,
+                        vh: 2.0 * model.vh,
+                        invert: false,
+                        signed: true,
+                        strict: true,
+                        initially_closed: device.switch_on,
+                        dropout: Some(model.vt - model.vh),
+                    }),
+                });
+            }
             _ => unreachable!("device letter filtered above"),
         }
     }
@@ -3582,10 +3884,11 @@ fn parse_model(
         "LDO" => ModelCard::Regulator(RegulatorModel::defaults(RegulatorKind::Linear)),
         "LDOADJ" => ModelCard::Regulator(RegulatorModel::defaults(RegulatorKind::LinearAdjustable)),
         "BUCK" => ModelCard::Regulator(RegulatorModel::defaults(RegulatorKind::Buck)),
+        "SW" => ModelCard::Switch(SwitchModel::default()),
         other => {
             return Err(ctx.parse_err(format!(
                 "`.model` type `{other}` is not one of `D`, `NPN`, `PNP`, `NMOS`, `PMOS`, `NJF`, `PJF`, \
-                 `OPAMP`, `COMP`, `LDO`, `LDOADJ`, `BUCK`"
+                 `SW`, `OPAMP`, `COMP`, `LDO`, `LDOADJ`, `BUCK`"
             )))
         }
     };
@@ -3627,6 +3930,17 @@ fn parse_model(
         let value = ctx.value(raw, param)?;
         let param = param.to_ascii_uppercase();
         match (&mut card, param.as_str()) {
+            (ModelCard::Switch(model), "VT") => model.vt = value,
+            (ModelCard::Switch(model), "VH") => model.vh = value,
+            (ModelCard::Switch(model), "RON") => model.ron = value,
+            (ModelCard::Switch(model), "ROFF") => model.roff = value,
+            // ngspice rejects an unknown `SW` parameter, and a misspelt
+            // threshold silently left at 0 V would close the switch at 0 V.
+            (ModelCard::Switch(_), other) => {
+                return Err(ctx.parse_err(format!(
+                    "switch model parameter `{other}` is not one of `VT`, `VH`, `RON`, `ROFF`"
+                )))
+            }
             (ModelCard::Diode(model), "IS") => model.is = value,
             (ModelCard::Diode(model), "N") => model.n = value,
             (ModelCard::Diode(model), "IK" | "IKF") => model.ik = value,
@@ -3887,6 +4201,7 @@ impl Lowering<'_> {
             b,
             ohms,
             ntc: None,
+            temperature_coefficients: None,
         });
     }
 

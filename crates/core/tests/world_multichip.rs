@@ -602,21 +602,21 @@ mod gpio_net_world {
         assert_eq!(text(&sinks.0), STM_LINE, "STM32 report");
     }
 
-    /// With idle fast-forward on, the sleeping AVR skips its waits and every
-    /// observable stays identical to the run that steps each idle clock.
+    /// Default GPIO worlds use the same guarded idle policy as other runners.
+    /// Every observable stays identical to explicitly stepping each idle clock.
     #[cfg(feature = "event-scheduler")]
     #[test]
-    fn idle_fast_forward_skips_the_avr_sleep_and_changes_nothing() {
+    fn default_gpio_policy_skips_the_avr_sleep_and_changes_nothing() {
         let baseline = {
             let (mut w, s) = build("env.yaml", |s| s);
+            for m in w.machines.values_mut() {
+                m.set_idle_fast_forward(false);
+            }
             run_ms(&mut w, 30);
             assert_eq!(w.machines["avr"].idle_fast_forward_cycles(), 0);
             fingerprint(&w, "stm", &s)
         };
         let (mut w, s) = build("env.yaml", |s| s);
-        for m in w.machines.values_mut() {
-            m.set_idle_fast_forward(true);
-        }
         run_ms(&mut w, 30);
         let skipped = w.machines["avr"].idle_fast_forward_cycles();
         assert_eq!(fingerprint(&w, "stm", &s), baseline);

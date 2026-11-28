@@ -1,0 +1,37 @@
+{
+  "target_id": "litex_nexys_video_vexriscv_linux",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 4000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-litex-vexriscv-linux-smoke",
+  "target_triple": "riscv32im-unknown-none-elf",
+  "script": "examples/renode-onboarding/litex_nexys_video_vexriscv_linux-smoke.yaml",
+  "system": "configs/systems/onboarding/litex_nexys_video_vexriscv_linux.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-19T17:54:44Z",
+  "finished_at_utc": "2026-11-19T17:54:47Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2383,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.44,
+    "build_firmware": 0.376,
+    "run_smoke": 1.531
+  },
+  "stages_ms": {
+    "build_cli": 440,
+    "build_firmware": 376,
+    "run_smoke": 1531
+  }
+}

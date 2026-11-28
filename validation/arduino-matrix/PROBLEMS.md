@@ -37,7 +37,8 @@ Full matrix: **16 boards × 9 sketches (L0–L8) = 144 cells** — report as
 | G474 PWM | ~~PA5 DAC fault~~ | **Fixed** — L6 uses PA0 (TIM2), not LED/DAC |
 | ESP32-S3 ADC | ~~L5 skip~~ | **Fixed** — `sar_adc_s3` programmatic model + chip yaml; `analogRead` green |
 | WBA ADC | L5 skip | ADC4 undeclared (SmartRun AHB4 clock domain not in stm32v2 RCC) |
-| CAN (no-controller chips) | L8 skip | Honest: nRF/RP2040/AVR/L0/F401/G474/WB/WBA/C3 (C3 TWAI declarative-only) |
+| CAN (no-controller chips) | L8 skip | Honest: nRF/RP2040/AVR/L0/F401/WB/WBA/C3 (C3 TWAI declarative-only) |
+| G474 FDCAN | ~~L8 skip~~ | **Fixed** 2026-11-16 — FDCAN1 on the shared `fdcan` model + SRAMCAN mirror (G0B1 pattern); evidence `evidence/nucleo-g474re/` |
 
 ## BRD2709A (Silicon Labs xG26 Explorer Kit, EFR32MG26)
 
@@ -77,7 +78,7 @@ store gates TIMER0 off and `millis()` stops.
 | Oracle depth | ~~ACK-only L3 / weak L5–L6 / TWAI STATUS cosplay~~ | **Hardened 2026-08-12** — L3 exact INA219 regs (where RX works); L5 deterministic pairs; L6 mid duty left on; L8 TWAI ID+data |
 | L3 STM32 master-RX | Partial on some cores | INA219 `start()` + RP2040 I2C START/STOP; F407 may still take ACK-only path |
 | L5 fixed-source | Many HAL paths still return 0 or DR+1 | Prefer Arduino→ADC model wiring for 3.0/3.3 → 3723; current oracle requires deterministic pairs |
-| L6 PWM edges | Not gated fleet-wide | `pwm_watch` opt-in. STM32 TIM→pad routing covers F1 (fixed map), F4 (`input_capture: stm32f4`) and G0/G4 (timer `pad_map:`): F401/F411/G071/G0B1/G474 rows are pad-proven at 1.000 kHz / 50.2 %. F407 routes but runs 2 kHz: STM32 timers tick at HCLK, no APB-prescaler timer clock (APB1 /4 on the Disco) |
+| L6 PWM edges | Not gated fleet-wide | `pwm_watch` opt-in. STM32 TIM→pad routing covers F1 (fixed map), F4 (`input_capture: stm32f4`) and G0/G4 (timer `pad_map:`): F401/F411/F446/G071/G0B1/G474 rows are pad-proven at 1.000 kHz / 50.2 %. F407 routes but runs 2 kHz: STM32 timers tick at HCLK, no APB-prescaler timer clock (APB1 /4 on the Disco) |
 | _(fleet)_ | Arduino **L0–L8** **133 pass / 11 skip / 0 fail** | Zephyr L4+; C3 TWAI model; WBA ADC |
 
 
@@ -164,3 +165,66 @@ python3 validation/arduino-matrix/run_matrix.py --boards stm32f407,nrf52832
 
 50. **arduino-pico sketch quirks (silicon behaviour, not twin bugs)** — (a) `Serial` is USB CDC and drops writes until the host asserts DTR, so the sketches `while (!Serial)` on arduino-pico only. (b) `SPI.begin()` applies a 0 Hz default without `spi_init()`, so SSE stays 0 and a bare `SPI.transfer()` blocks in `spi_write_read_blocking`. L4 calls `beginTransaction` on arduino-pico. Both are guarded `ARDUINO_ARCH_RP2040 && !ARDUINO_ARCH_MBED`, so the Mbed rp2040 row is untouched.
 
+## UNO R4 WiFi (Renesas RA4M1, `uno-r4-wifi`)
+
+Stock ArduinoCore-renesas 1.6.0 (`renesas-ra@1.9.0`). First run: L0 fell into
+empty flash. Eight of nine cells now pass; L8 (no CAN) is the only skip. What
+the first runs found, each a real model gap:
+
+| Symptom | Cause | Fixed by |
+|---------|-------|----------|
+| Reset fetched SP = `0x464C457F` ("\x7fELF") and ran off the end of flash | The sketch is linked at 0x4000 behind the DFU bootloader, and the ELF's first LOAD segment carries its own header at 0 | `reset_vector_offset: 0x4000` (the pybadge precedent) |
+| BusFault on PRCR (R_SYSTEM+0x3FE) in `SystemInit` | `ra_sysc` was a 256-byte HOCOCR/OSCSF window | `ra4_sysc`: the full R_SYSTEM file (0x700 bytes) |
+| `SystemInit` spun forever on VBTSR (+0x4B1) | FSP waits for VBTSR.VBTRVLD after setting VBTCR1.BPWSWSTP | VBTRVLD follows BPWSWSTP in the RA4 layout |
+| BusFault at 0x4005C200 in `r_adc_open_sub` | `main()` -> `analogReference()` opens a second ADC unit the RA4M1 does not have; silicon ignores it | declared stub over the reserved window |
+| `analogRead` of 2.5 V gave 127, not 511 | the core converts at ADCER.ADPRC = 3 (14-bit, ADC14 only) and shifts down; the model treated 3 as 12-bit | `adc14: true` on the RA4M1 unit |
+| L6 HardFault in `gpt_hardware_initialize` | no GPT | `ra_gpt` with `events_per_channel: 8` (the RA4M1 stride) and GTIOC2B on P102 |
+| L4 hung after `LW_L4_BOOT` (SPI0 was a 512 B stub, so SPSR.SPRF never rose) | `SPI.transfer` writes SPDR_BY and polls SPRF directly, with no FSP driver | `profile: ra_rspi` on the shared SPI model: SPI0/SPI1, SPB frame width, LSBF, BYSW, TXMD, OVRF; frames only with SPCR.SPE+MSTR |
+
+Controls: L2/L6 watching the wrong pin (P111 / P103) fail; L3 with no INA219
+prints `LW_L3_FAIL nack`; L4 with no MAX31855 prints
+`LW_L4_FAIL frame=0x00000000`, and on the old SPI stub hangs after BOOT; L0 on the old `ra_sysc` or without the reset offset
+faults. L5's oracle accepts equal samples (0/0), so it was proved separately:
+2.5 V on A0 (AN009) reads 511/511, and 127/127 without `adc14`.
+
+## Arduino Nano 33 BLE Rev2 (nRF52840, `nano-33-ble`)
+
+Stock ArduinoCore-mbed 4.6.0 (`nordicnrf52` 11.0.0). `Serial` is USB CDC, so
+no cell printed before the USB device model existed. Eight of nine cells now
+pass; L8 (no CAN) is the only skip. What the runs found:
+
+| Symptom | Cause | Fixed by |
+|---------|-------|----------|
+| Reset entered the ELF header | The sketch is linked at 0x10000, above the board's bootloader | `memory_overrides.reset_vector_offset` in the board manifest |
+| `initVariant()` waited for UARTE0 `RXTO` forever | The core stops the receiver the bootloader left running; the model started with it idle | `bootloader_rx_running: true` on `uart0` |
+| `while (!Serial)` never ended | USBD was a register file with no host | `nrf52840_usbd`: EasyDMA endpoints, the nrfx start-up sequence (anomalies 171 and 187, POWER USB events) and the scripted host |
+| BusFault at 0x40036FFF on every USB bus reset | Mbed OS `USBPhy_Nordic.cpp` clears a truncated event offset; the window decodes on silicon | declared stub over peripheral ID 54 |
+| L3 `LW_L3_FAIL nack` | Mbed OS `Wire` uses the nrfx TWI driver: TWI0 with byte registers (`ENABLE = 5`). Only TWIM (`ENABLE = 6`) was modelled | TWI master personality in the TWIM model (`twi_legacy.rs`) |
+| L5 read 0 | no input on A0 | `input_mv` on the SAADC: 1650 mV on AIN2 reads 512 |
+
+Open: **L6 is not pad-proven.** `analogWrite(LED_BUILTIN)` configures PWM0
+(COUNTERTOP 2000 at 1 MHz, `PSEL.OUT[0]` = P0.13, compare 1003) and the model
+schedules an edge every 1 ms. A matrix run with `pwm_watch: "gpio0:13"` still
+counted 2 edges, not 30. Cause: an nRF pad follows a peripheral through its
+pin claim, and the logic capture registers with the claiming wire only on a
+GPIO write. The PWM claims the pad when its sequence starts, after the last
+GPIO write, and a watch armed at reset stays on the GPIO latch. The row
+therefore runs L6 without `pwm_watch` (UART marker only). The same gap applies
+to any nRF PWM pad watched from reset.
+
+Controls: L3 with no INA219 prints `LW_L3_FAIL nack`; the BME280 example
+without a host prints nothing, and without a sensor prints
+`BME280 not found at 0x77` (`examples/arduino-nano-33-ble-bme280/controls/`).
+
+
+## NUCLEO-C031C6 (STM32C031C6, `stm32c031c6`)
+
+Stock STM32duino (`ststm32@19.7.1`, Arduino_Core_STM32 2.12). Eight of nine
+cells pass; L8 (no CAN) is the only skip. The L5 history:
+
+| Symptom | Cause | Fixed by |
+|---------|-------|----------|
+| `analogRead(A0)` returned `0 0` on every pin | ADC1 was declared with `profile: stm32l4`. The L4 block has SQRx, not CHSELR, so the C0's regular-group bitmap was never read | `profile: stm32g0` on `adc1` (RM0490 §18; the C0 and G0 ADC are the same IP). The row skipped L5 rather than pass a vacuous `0 == 0` |
+| L5 still read 0 after the layout fix | the matrix system declared no board voltage on A0 | `input_mv: { 0: 1651 }` for ADC1 channel 0 (PA0 = ADC1_IN0); 12-bit 2048, stm32duino returns 10 bits: `LW_L5_VAL 512 512` |
+
+Control: with the L4 profile the same firmware prints `LW_L5_FAIL 0 0`.

@@ -14,8 +14,8 @@ Two sources, by design:
    here: each chip's tier1 fixture is real firmware that drives those peripheral
    classes and self-reports PASS, so the matrix cannot drift from reality.
 
-2. BEYOND the rubric — functional device reads (a real driver decoding a sensor
-   over a bus), chip-specific advanced peripherals, and shims — lives in
+2. BEYOND the rubric — functional device reads and register-level firmware
+   checks, chip-specific advanced peripherals, and shims — lives in
    validation/firmware_exercise.yaml, which tier1 does not cover.
 
 A first-pass hand-authored matrix under-counted the STM32 family ~4x because it
@@ -154,8 +154,9 @@ def render(tier1: dict, ydoc: dict) -> str:
     L.append("## Beyond the rubric — functional reads, advanced peripherals, shims")
     L.append("")
     L.append(
-        "What the rubric grid does not cover: real drivers decoding a sensor/protocol "
-        "over a bus (the gold standard), chip-specific advanced peripherals, and shims "
+        "What the rubric grid does not cover: real sensor/protocol behavior over a "
+        "bus (ideally through an unmodified driver decoding sensor values), "
+        "register-level firmware checks, chip-specific advanced peripherals, and shims "
         "(hardcoded stubs or declarative register files with no engine behind them). "
         "From `validation/firmware_exercise.yaml`."
     )
@@ -175,6 +176,18 @@ def render(tier1: dict, ydoc: dict) -> str:
                 if gate not in GATE_BADGES:
                     raise ValueError(
                         f"chip {cid}: functional entry has unknown gate {gate!r}"
+                    )
+                badge = GATE_BADGES[gate]
+                L.append(f"- {f['what']} — `{f.get('fw','?')}` · {f.get('ev','')}{badge}")
+            L.append("")
+        checks = list_field(cid, c, "functional_checks")
+        if checks:
+            L.append("**Functional device/protocol checks** (register-level firmware asserts observable behavior):")
+            for f in checks:
+                gate = f.get("gate") or "none"
+                if gate not in GATE_BADGES:
+                    raise ValueError(
+                        f"chip {cid}: functional check has unknown gate {gate!r}"
                     )
                 badge = GATE_BADGES[gate]
                 L.append(f"- {f['what']} — `{f.get('fw','?')}` · {f.get('ev','')}{badge}")

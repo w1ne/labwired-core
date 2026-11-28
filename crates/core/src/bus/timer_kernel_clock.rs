@@ -18,6 +18,41 @@ pub(crate) enum Apb {
 }
 
 impl SystemBus {
+    /// After a write to the clock/reset controller, apply each newly asserted
+    /// peripheral reset to its target ([`crate::Peripheral::on_node_reset`]).
+    /// Only controllers that declare
+    /// [`crate::Peripheral::controls_peripheral_resets`] take this path.
+    pub(crate) fn sync_peripheral_reset_holds(&mut self, idx: usize) {
+        if self.rcc_idx != Some(idx) || !self.peripherals[idx].dev.controls_peripheral_resets() {
+            return;
+        }
+        for target in 0..self.peripherals.len() {
+            let Some(gate) = self.peripherals[target].clock_gate.as_ref() else {
+                continue;
+            };
+            let asserted = gate.requires.iter().any(|req| {
+                req.controller_idx == idx
+                    && self.peripherals[idx]
+                        .dev
+                        .clock_gate_reset_asserted(req.reg_offset, req.bit)
+            });
+            if asserted == gate.reset_asserted {
+                continue;
+            }
+            if let Some(gate) = self.peripherals[target].clock_gate.as_mut() {
+                gate.reset_asserted = asserted;
+            }
+            if asserted {
+                self.peripherals[target].dev.on_node_reset();
+                self.peripherals[target].ticks_remaining = 0;
+                self.collect_scheduled_events(target);
+                self.refresh_bus_tick_index(target);
+                self.refresh_legacy_tick_index(target);
+                self.reconcile_irq_levels_after_write(target);
+            }
+        }
+    }
+
     /// The divider RCC_CFGR.PPREx puts between HCLK and the APB bus `apb`, or
     /// `None` when the clock controller is not one of the STM32 families
     /// below (or there is none). The family is told apart by where its APB1
@@ -49,11 +84,52 @@ impl SystemBus {
         Some(if ppre < 4 { 1 } else { 1u64 << (ppre - 3) })
     }
 
+    /// CPU cycles per timer kernel clock cycle on the APB1 and APB2 timers of
+    /// an STM32H7 (RM0468), or `None` when the clock controller is not the H7
+    /// RCC (told apart by AHB4ENR@0xE0 and APB1LENR@0xE8).
+    ///
+    /// Unlike the families in [`Self::stm32_apb_div`], the H7 core does not
+    /// run on HCLK: D1CFGR.D1CPRE (11:8) divides SYSCLK down to the CPU clock
+    /// and D1CFGR.HPRE (3:0) divides that again to HCLK. The engine counts CPU
+    /// cycles, so HPRE is part of the answer and D1CPRE is not (it slows the
+    /// CPU and HCLK alike). D2CFGR.D2PPRE1 (6:4)
+    /// and D2PPRE2 (10:8) give PCLK1/PCLK2, and CFGR.TIMPRE (bit 15) picks the
+    /// timer multiplier: TIMxCLK = HCLK while D2PPREx is /1 or /2 (/1, /2 or
+    /// /4 with TIMPRE), else 2 x PCLKx (4 x PCLKx with TIMPRE) (RM0468
+    /// §8.5.4 "Timer clock" and §8.7.7-8.7.9).
+    ///
+    /// HPRE 0xxx divides by 1, 1000..1111 by 2, 4, 8, 16, 64, 128, 256, 512;
+    /// D2PPRE 0xx by 1, 100..111 by 2, 4, 8, 16.
+    pub(crate) fn stm32h7_timer_kernel_divs(&self) -> Option<[u32; 2]> {
+        let rcc = self.rcc_idx.and_then(|idx| self.peripherals.get(idx))?;
+        if rcc.dev.clock_gate_reg_offset("ahb4enr") != Some(0xE0)
+            || rcc.dev.clock_gate_reg_offset("apb1lenr") != Some(0xE8)
+        {
+            return None;
+        }
+        let d1cfgr = rcc.dev.read_u32(0x18).unwrap_or(0);
+        let d2cfgr = rcc.dev.read_u32(0x1C).unwrap_or(0);
+        let timpre = rcc.dev.read_u32(0x10).unwrap_or(0) & (1 << 15) != 0;
+        let hpre = d1cfgr & 0xF;
+        let cpu_per_hclk = if hpre & 0x8 == 0 {
+            1
+        } else {
+            [2, 4, 8, 16, 64, 128, 256, 512][(hpre & 0x7) as usize]
+        };
+        let multiplier = if timpre { 4 } else { 2 };
+        Some([4, 8].map(|shift| {
+            let ppre = (d2cfgr >> shift) & 0x7;
+            let apb_div = if ppre < 4 { 1 } else { 1u32 << (ppre - 3) };
+            cpu_per_hclk * (apb_div / multiplier).max(1)
+        }))
+    }
+
     /// After a store to the clock controller, re-derive every STM32 timer's
     /// kernel clock. TIMxCLK is PCLKx when the APB prescaler is 1 and 2 x
     /// PCLKx otherwise (RM0090 §7.2, RM0008 §7.2), so in HCLK cycles a timer
     /// clock lasts PPRE/2 cycles at APB /4 and slower and one cycle
-    /// otherwise. The F4 DCKCFGR.TIMPRE x4 option is not modelled.
+    /// otherwise. The F4 DCKCFGR.TIMPRE x4 option is not modelled. The H7
+    /// takes [`Self::stm32h7_timer_kernel_divs`] instead.
     ///
     /// The APB bus is read off the timer's address: every family
     /// [`Self::stm32_apb_div`] knows puts APB1 at 0x4000_0000..0x4000_FFFF
@@ -66,10 +142,13 @@ impl SystemBus {
         if self.rcc_idx != Some(idx) {
             return;
         }
-        let divs = [Apb::One, Apb::Two].map(|apb| {
-            self.stm32_apb_div(apb)
-                .map(|d| if d <= 2 { 1 } else { (d / 2) as u32 })
-        });
+        let divs = match self.stm32h7_timer_kernel_divs() {
+            Some(h7) => h7.map(Some),
+            None => [Apb::One, Apb::Two].map(|apb| {
+                self.stm32_apb_div(apb)
+                    .map(|d| if d <= 2 { 1 } else { (d / 2) as u32 })
+            }),
+        };
         if divs == [None, None] {
             return;
         }
@@ -92,6 +171,7 @@ impl SystemBus {
             }
             if p.dev.set_timer_kernel_clock_div(div) {
                 p.ticks_remaining = 0;
+                self.finish_motor_control_write(t);
                 self.collect_scheduled_events(t);
             }
         }

@@ -13,3 +13,5 @@
 
 pub mod rom_thunks;
 pub mod system_stub;
+
+pub use system_stub::{esp32s3_adc1_mv_to_raw, esp32s3_atten3_curve_fit_mv, ESP32S3_V1_CAL_VOL};

@@ -1,4 +1,4 @@
-# Build output. `cargo test -p labwired-core --test e2e_nrf52840_obd2_scanner`
+# Build output. `cargo test -p labwired-core --test e2e e2e_nrf52840_obd2_scanner::`
 # produces this directory itself; nothing in it is committed.
 #
 # These rules live HERE and not inside build/, because the Makefile's `clean`

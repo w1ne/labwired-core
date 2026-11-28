@@ -1,0 +1,9 @@
+2026-11-09T12:43:58.495156Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/lpc2294.yaml
+2026-11-09T12:43:58.513987Z  INFO labwired_loader: ELF Entry Point: 0x0
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-09T12:43:58.532977Z ERROR labwired_cli::execute: Simulation error at step 0: Simulation error: native ARM system: Trying to execute code outside RAM or ROM at 0x00000000
+2026-11-09T12:43:58.533114Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "LPC2294 checks PPPPPPPP DONE" }) (captured len=0)
+2026-11-09T12:43:58.533131Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "LPC2294_UART1_OK" }) (captured len=0)
+2026-11-09T12:43:58.533136Z ERROR labwired_cli::execute: Assertion failed: ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }) (captured len=0)
+FAIL  0/3 checks · lpc2294-arm7-uart-smoke · 0 steps · 0.00s

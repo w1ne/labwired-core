@@ -10,11 +10,13 @@ use crate::fault_verdict::{FaultCapture, FaultEntry, FaultRegs, LockupEntry, Sta
 use crate::peripherals::armv8m_mpu::{CTRL_HFNMIENA, PERM_EXEC, PERM_READ, PERM_WRITE};
 use crate::peripherals::scb::{
     ScbFaultState, CFSR_BFSR_BFARVALID, CFSR_BFSR_PRECISERR, CFSR_MMFSR_DACCVIOL,
-    CFSR_MMFSR_IACCVIOL, CFSR_MMFSR_MMARVALID, CFSR_UFSR_DIVBYZERO, CFSR_UFSR_UNDEFINSTR,
-    HFSR_FORCED, SHCSR_BUSFAULTENA, SHCSR_MEMFAULTENA, SHCSR_USGFAULTENA,
+    CFSR_MMFSR_IACCVIOL, CFSR_MMFSR_MMARVALID, CFSR_UFSR_DIVBYZERO, CFSR_UFSR_NOCP,
+    CFSR_UFSR_UNDEFINSTR, HFSR_FORCED, SHCSR_BUSFAULTENA, SHCSR_MEMFAULTENA, SHCSR_USGFAULTENA,
 };
 use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationError, SimulationObserver};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+
+const XPSR_STACK_ALIGN: u32 = 1 << 9;
 use std::sync::Arc;
 
 /// `step_execute`'s instruction match arm bodies, one method per arm, grouped
@@ -86,8 +88,36 @@ pub struct DecodeCacheEntry {
     pub cycles: u32,
 }
 
+/// Field of each register number `read_reg`/`write_reg` accept (R0-R12,
+/// SP, LR, PC, then xPSR as 16). Indexing beats the 17-way branch the
+/// match compiled to: these run several times per interpreted instruction
+/// with an operand-dependent register number.
+const REG_FIELD_OFFSETS: [usize; 17] = [
+    std::mem::offset_of!(CortexM, r0),
+    std::mem::offset_of!(CortexM, r1),
+    std::mem::offset_of!(CortexM, r2),
+    std::mem::offset_of!(CortexM, r3),
+    std::mem::offset_of!(CortexM, r4),
+    std::mem::offset_of!(CortexM, r5),
+    std::mem::offset_of!(CortexM, r6),
+    std::mem::offset_of!(CortexM, r7),
+    std::mem::offset_of!(CortexM, r8),
+    std::mem::offset_of!(CortexM, r9),
+    std::mem::offset_of!(CortexM, r10),
+    std::mem::offset_of!(CortexM, r11),
+    std::mem::offset_of!(CortexM, r12),
+    std::mem::offset_of!(CortexM, sp),
+    std::mem::offset_of!(CortexM, lr),
+    std::mem::offset_of!(CortexM, pc),
+    std::mem::offset_of!(CortexM, xpsr),
+];
+
 const T16_FAST_BLOCK_MAX: usize = 16;
-const T16_DISCOVERY_MISS_SLOTS: usize = 64;
+/// Decode-cache slots on either side of a PC whose contents can change that
+/// PC's block discovery: the backward search starts at most
+/// `T16_FAST_BLOCK_MAX - 1` halfwords behind it and each candidate scans at
+/// most that many halfwords forward.
+const T16_DISCOVERY_REACH: usize = T16_FAST_BLOCK_MAX - 1;
 
 #[derive(Debug, Clone, Copy)]
 struct T16FastBlock {
@@ -120,17 +150,15 @@ pub struct CortexM {
     /// stale — `sp` is authoritative for it until the next stack switch.
     pub msp: u32,
     pub psp: u32,
-    /// CONTROL register. Only SPSEL (bit 1) and nPRIV (bit 0) are modelled;
-    /// FPCA (bit 2) is not (no lazy FP stacking).
+    /// CONTROL register. SPSEL (bit 1), nPRIV (bit 0), and FPCA (bit 2) are
+    /// modelled when their corresponding core features are present.
     pub control: u32,
     pub lr: u32, // R14
     pub pc: u32, // R15
     pub xpsr: u32,
-    /// Pending-exception bitmask, 4x64 = exceptions 0..255. The H5-class
-    /// parts wire external interrupts past IRQ 47 (STM32H563 TIM12 = IRQ
-    /// 120 -> exception 136), which a single u64 silently dropped —
-    /// caught by foreign firmware whose time driver never ticked.
-    pub pending_exceptions: [u64; 4],
+    /// Pending-exception bitmask, 8x64 = exceptions 0..511. This covers the
+    /// ARMv8-M maximum of 496 external interrupts (exception numbers 16..511).
+    pub pending_exceptions: [u64; 8],
     pub primask: bool, // Interrupt mask (true = disabled)
     /// FAULTMASK: when set, masks every exception except NMI (it raises the
     /// effective priority to -1). Set by `CPSID f` / `MSR FAULTMASK`, cleared by
@@ -164,6 +192,17 @@ pub struct CortexM {
     /// PENDSVSET and only have it dispatch on return-to-thread — the
     /// load-bearing semantics for context switching.
     pub shpr3: Arc<AtomicU32>,
+    /// Live ICSR.PENDSTSET mirror shared with the SCB. The timer's exception
+    /// pending state lives in this CPU, while ICSR is served by the SCB.
+    pub systick_pending_live: Arc<AtomicBool>,
+    /// Live ICSR.PENDSVSET mirror shared with the SCB. Once the SCB hands
+    /// PendSV to the CPU's arbitration bitmap, ICSR must continue to report it
+    /// pending until exception entry or an explicit clear.
+    pub pendsv_pending_live: Arc<AtomicBool>,
+    /// Shared AIRCR.PRIGROUP. Priority-group bits gate preemption while
+    /// subpriority bits only order simultaneous pending exceptions. Baseline
+    /// cores report PRIGROUP as reserved and use all priority bits for groups.
+    pub priority_group: Arc<AtomicU32>,
     /// Shared NVIC state for IRQ priority lookups via IPR.
     pub nvic_state: Option<Arc<crate::peripherals::nvic::NvicState>>,
     /// Shared with SCB: AIRCR.SYSRESETREQ latched by firmware. `step_batch`
@@ -188,6 +227,8 @@ pub struct CortexM {
     /// basic 8-word frame and a CONTROL with only nPRIV/SPSEL.
     /// See [`crate::peripherals::cortex_m_fpu`].
     pub fp_ctx: Option<Arc<crate::peripherals::cortex_m_fpu::FpContextState>>,
+    /// Shared SCB.CPACR state when the chip declares an FP extension.
+    pub cpacr: Option<Arc<AtomicU32>>,
     /// Shared with an `armv8m_mpu` block: the PMSAv8 region file TT reports
     /// from. `None`: TT reports no MPU region.
     pub mpu_v8: Option<Arc<crate::peripherals::armv8m_mpu::MpuV8State>>,
@@ -222,6 +263,8 @@ pub struct CortexM {
     /// so `step_internal` raises UsageFault(DIVBYZERO). Only ever written on
     /// the error path.
     pending_div0: bool,
+    /// Set when an FP instruction is denied by CPACR (or the core has no FPU).
+    pending_nocp: bool,
     /// The first fault-handler entry (HardFault/MemManage/BusFault/UsageFault)
     /// since reset: the stacked frame and EXC_RETURN, for the fault verdict.
     /// Written once, on the exception-entry path, only for exceptions 3..=6.
@@ -245,9 +288,23 @@ pub struct CortexM {
     /// Loop-head detection and the last proven fixed-point poll loop
     /// (`poll_loop.rs`).
     poll: poll_loop::PollDetector,
-    // Bounded 1 KiB, direct-mapped (PC, generation) discovery-only memo.
+    /// `(head, device accesses)` the last time the batch loop met a poll-loop
+    /// anchor at `head`, for the four most recent heads (a loop with calls
+    /// in it has several). See [`Self::anchor_may_skip`].
+    anchor_device_marks: [(u32, u64); 4],
+    // Shape-only rejection memo, one slot per decode-cache slot. Each half
+    // holds `pc | 1` of a PC whose decoded neighbourhood was rejected:
+    // `.0` by generic block discovery, `.1` by every fixed-pattern runner
+    // (self-branch, countdown, store-spin, RAM loop). Both read only the
+    // decode-cache slots within `T16_DISCOVERY_REACH` of the PC's slot, so an
+    // insert clears exactly the memo slots that reach it (see
+    // `insert_decoded_entry`); unrelated decodes leave a rejection valid.
     // Register-dependent execution failures MUST NOT be recorded here.
-    t16_discovery_misses: [(u32, u64); T16_DISCOVERY_MISS_SLOTS],
+    t16_discovery_misses: Box<[(u32, u32); 4096]>,
+    /// Set by a fixed-pattern runner whose shape check admitted the current
+    /// PC; its refusal after that point may depend on registers or the bus,
+    /// so the PC is not memoized as a shape rejection.
+    t16_pattern_admitted: bool,
     /// Last observer-free Thumb-1 RAM loop admitted by the generic block
     /// executor. This is derived execution state, never part of a snapshot.
     t16_fast_block: Option<T16FastBlock>,
@@ -326,7 +383,7 @@ impl Default for CortexM {
             lr: 0,
             pc: 0,
             xpsr: 0x01000000, // Typical reset state (Thumb bit set)
-            pending_exceptions: [0; 4],
+            pending_exceptions: [0; 8],
             primask: false,
             faultmask: false,
             basepri: 0,
@@ -337,11 +394,15 @@ impl Default for CortexM {
             shpr1: Arc::new(AtomicU32::new(0)),
             shpr2: Arc::new(AtomicU32::new(0)),
             shpr3: Arc::new(AtomicU32::new(0)),
+            systick_pending_live: Arc::new(AtomicBool::new(false)),
+            pendsv_pending_live: Arc::new(AtomicBool::new(false)),
+            priority_group: Arc::new(AtomicU32::new(0)),
             nvic_state: None,
             sysreset_signal: None,
             debug_halt: None,
             faults: None,
             fp_ctx: None,
+            cpacr: None,
             mpu_v8: None,
             pending_data_fault: None,
             pending_mem_manage: None,
@@ -349,6 +410,7 @@ impl Default for CortexM {
             mpu_fetch_span: MpuSpanCache::default(),
             pending_undef_instruction: false,
             pending_div0: false,
+            pending_nocp: false,
             fault_entry: None,
             fault_entry_regs: FaultRegs {
                 hfsr: 0,
@@ -361,7 +423,9 @@ impl Default for CortexM {
             decode_cache: Box::new([None; 4096]),
             decode_generation: 1,
             poll: poll_loop::PollDetector::default(),
-            t16_discovery_misses: [(0, 0); T16_DISCOVERY_MISS_SLOTS],
+            anchor_device_marks: [(u32::MAX, 0); 4],
+            t16_discovery_misses: Box::new([(0, 0); 4096]),
+            t16_pattern_admitted: false,
             t16_fast_block: None,
             fpu_s: [0u32; 32],
             fpscr: 0,
@@ -660,6 +724,19 @@ impl CortexM {
         let Some(op) = self.cached_t16(self.pc) else {
             return 0;
         };
+        // The fixed-pattern runners below refuse most PCs on their decoded
+        // shape alone (four or more tagged cache reads each for every LDR,
+        // STR and ADDS). Once all of them have refused a PC's neighbourhood,
+        // only the generic block runner can still take it.
+        if self.t16_patterns_rejected(self.pc) {
+            let fast = self.run_t16_fast_block(bus, max_count);
+            #[cfg(target_arch = "wasm32")]
+            if fast == 0 {
+                return self.run_t16_cached_run(bus, max_count);
+            }
+            return fast;
+        }
+        self.t16_pattern_admitted = false;
         let mut fast = 0;
         if op & 0xf800 == 0xe000 {
             fast = self.run_t16_self_branch(max_count);
@@ -677,6 +754,11 @@ impl CortexM {
         }
         if fast == 0 && matches!(op & 0xf800, 0x3000 | 0x6000 | 0x6800 | 0xe000) {
             fast = self.run_t16_ram_fast(bus, max_count, true);
+        }
+        // A zero budget makes every runner refuse before its shape check.
+        if fast == 0 && !self.t16_pattern_admitted && max_count > 0 {
+            let slot = ((self.pc >> 1) & 0x0fff) as usize;
+            self.t16_discovery_misses[slot].1 = self.pc | 1;
         }
         if fast == 0 {
             fast = self.run_t16_fast_block(bus, max_count);
@@ -729,7 +811,7 @@ impl CortexM {
     /// next scheduler/peripheral observation point and excludes pending
     /// exceptions, debug halt, IT state, observers, and logic taps.
     #[inline(always)]
-    fn run_t16_self_branch(&self, max_count: u32) -> u32 {
+    fn run_t16_self_branch(&mut self, max_count: u32) -> u32 {
         if max_count == 0 {
             return 0;
         }
@@ -743,6 +825,7 @@ impl CortexM {
         let offset = (((i32::from(op & 0x07ff)) << 21) >> 20) as u32;
         let target = self.pc.wrapping_add(4).wrapping_add(offset);
         if target == self.pc {
+            self.t16_pattern_admitted = true;
             max_count
         } else {
             0
@@ -764,6 +847,7 @@ impl CortexM {
         if sub & 0xf8ff != 0x3801 || self.cached_t16(start.wrapping_add(2)) != Some(0xd1fd) {
             return 0;
         }
+        self.t16_pattern_admitted = true;
         let rd = ((sub >> 8) & 7) as u8;
         let initial = self.read_reg(rd);
         // Zero is NOT a zero-trip loop: SUBS wraps to u32::MAX and would
@@ -967,6 +1051,7 @@ impl CortexM {
         {
             return 0;
         }
+        self.t16_pattern_admitted = true;
 
         // Finish the partial iteration at the front of a rotated batch, then
         // coalesce complete iterations from the canonical block start.
@@ -1092,6 +1177,7 @@ impl CortexM {
         {
             return 0;
         }
+        self.t16_pattern_admitted = true;
 
         let addr = self.sp.wrapping_add(store_imm);
         // A non-Allow RAM policy must not commit through the closed-form
@@ -1668,27 +1754,41 @@ impl CortexM {
     }
 
     fn advance_decode_generation(&mut self) {
-        self.decode_generation = self.decode_generation.wrapping_add(1);
-        if self.decode_generation == 0 {
-            self.t16_discovery_misses.fill((0, 0));
-            self.decode_generation = 1;
-        }
+        self.decode_generation = self.decode_generation.wrapping_add(1).max(1);
     }
 
     fn insert_decoded_entry(&mut self, entry: DecodeCacheEntry) {
         self.advance_decode_generation();
-        self.decode_cache[((entry.tag >> 1) & 0x0fff) as usize] = Some(entry);
+        let slot = ((entry.tag >> 1) & 0x0fff) as usize;
+        self.decode_cache[slot] = Some(entry);
+        // A new entry can make discovery succeed for any PC whose window
+        // reaches this slot; forget exactly those misses. Removing an entry
+        // (store invalidation) can only turn a success into a failure, so it
+        // needs no memo update.
+        for d in 0..=2 * T16_DISCOVERY_REACH {
+            self.t16_discovery_misses[(slot + 4096 - T16_DISCOVERY_REACH + d) & 0x0fff] = (0, 0);
+        }
     }
 
     fn clear_decoded_state(&mut self) {
         self.advance_decode_generation();
         self.decode_cache.fill(None);
+        self.t16_discovery_misses.fill((0, 0));
         self.t16_fast_block = None;
     }
 
+    #[inline(always)]
+    fn t16_discovery_memoized(&self, pc: u32) -> bool {
+        self.t16_discovery_misses[((pc >> 1) & 0x0fff) as usize].0 == pc | 1
+    }
+
     fn memoize_t16_discovery_miss(&mut self) {
-        let index = ((self.pc >> 1) as usize) % T16_DISCOVERY_MISS_SLOTS;
-        self.t16_discovery_misses[index] = (self.pc, self.decode_generation);
+        self.t16_discovery_misses[((self.pc >> 1) & 0x0fff) as usize].0 = self.pc | 1;
+    }
+
+    #[inline(always)]
+    fn t16_patterns_rejected(&self, pc: u32) -> bool {
+        self.t16_discovery_misses[((pc >> 1) & 0x0fff) as usize].1 == pc | 1
     }
 
     fn run_t16_fast_block(&mut self, bus: &mut SystemBus, max_count: u32) -> u32 {
@@ -1701,8 +1801,7 @@ impl CortexM {
             // Do not copy the payload of Option::None on the common rejection
             // path. Only successful discovery materializes a block.
             self.t16_fast_block = None;
-            let miss_index = ((self.pc >> 1) as usize) % T16_DISCOVERY_MISS_SLOTS;
-            if self.t16_discovery_misses[miss_index] == (self.pc, self.decode_generation) {
+            if self.t16_discovery_memoized(self.pc) {
                 return 0;
             }
             if !self.t16_block_entry_admitted(self.pc) {
@@ -1797,6 +1896,21 @@ impl CortexM {
         self.shpr1 = shpr1;
         self.shpr2 = shpr2;
         self.shpr3 = shpr3;
+    }
+
+    /// Wire ICSR.PENDSTSET to the CPU's live SysTick pending state.
+    pub fn set_shared_systick_pending(&mut self, pending: Arc<AtomicBool>) {
+        self.systick_pending_live = pending;
+    }
+
+    /// Wire ICSR.PENDSVSET to the CPU's live PendSV pending state.
+    pub fn set_shared_pendsv_pending(&mut self, pending: Arc<AtomicBool>) {
+        self.pendsv_pending_live = pending;
+    }
+
+    /// Wire AIRCR.PRIGROUP from the shared SCB state.
+    pub fn set_shared_priority_group(&mut self, priority_group: Arc<AtomicU32>) {
+        self.priority_group = priority_group;
     }
 
     /// Wire the NVIC's shared state so `exception_priority` can read
@@ -1921,6 +2035,41 @@ impl CortexM {
         self.fp_ctx = Some(fp);
     }
 
+    /// Share the SCB.CPACR register when this chip declares an FP extension.
+    pub fn set_shared_cpacr(&mut self, cpacr: Arc<AtomicU32>) {
+        self.cpacr = Some(cpacr);
+    }
+
+    /// CP10 and CP11 must both permit the current privilege level. Reserved
+    /// access value `0b10` is treated as denied; it is not a usable grant.
+    ///
+    /// Only a chip that declares the FP extension (`cortex_m_fpu`) gets the
+    /// CPACR check. Many FPU parts (STM32L476, H563, U575, WBA52, ...) do not
+    /// declare that block, and their firmware enables CPACR through an SCB
+    /// that then has no CPACR state; denying VFP there faulted real firmware
+    /// at its first FP instruction. Such cores keep the earlier contract: VFP
+    /// executes. Known gap: an FPU-less core (M0/M3) is not faulted either.
+    #[inline]
+    fn fp_access_allowed(&self) -> bool {
+        if self.fp_ctx.is_none() {
+            return true;
+        }
+        let Some(cpacr) = self.cpacr.as_ref() else {
+            return false;
+        };
+        let value = cpacr.load(Ordering::Relaxed);
+        let cp10 = (value >> 20) & 0x3;
+        let cp11 = (value >> 22) & 0x3;
+        let privileged = self.active_exception != 0 || self.control & 1 == 0;
+        [cp10, cp11].into_iter().all(|access| {
+            if privileged {
+                access == 0b01 || access == 0b11
+            } else {
+                access == 0b11
+            }
+        })
+    }
+
     /// Give the core the Armv8-M MPU region file (see [`CortexM::mpu_v8`]).
     pub fn set_shared_mpu_v8(&mut self, mpu: Arc<crate::peripherals::armv8m_mpu::MpuV8State>) {
         self.mpu_v8 = Some(mpu);
@@ -1937,27 +2086,44 @@ impl CortexM {
     }
 
     /// The architecture's `ExecuteFPCheck`, run before every executed FP
-    /// instruction on a core with the FP extension: with FPCCR.ASPEN set, the
-    /// first FP instruction of a context sets CONTROL.FPCA and starts FPSCR's
-    /// AHP/DN/FZ/RMode from FPDSCR.
+    /// instruction on a core with the FP extension. It completes any pending
+    /// lazy context save before the instruction can change FP state; with
+    /// FPCCR.ASPEN set, the first FP instruction of a context then sets
+    /// CONTROL.FPCA and starts FPSCR's AHP/DN/FZ/RMode from FPDSCR.
     #[inline]
-    fn fp_execute_check(&mut self) {
-        if let Some(fp) = self.fp_ctx.as_ref() {
+    fn fp_execute_check<B: Bus + ?Sized>(&mut self, bus: &mut B) -> SimResult<()> {
+        if let Some(fp) = self.fp_ctx.as_ref().cloned() {
+            if fp.lspact() {
+                let fpcar = fp.fpcar();
+                for i in 0..16 {
+                    Self::bus_store(
+                        bus,
+                        fpcar.wrapping_add(4 * i as u32),
+                        AccessWidth::Word,
+                        self.fpu_s[i],
+                    )?;
+                }
+                Self::bus_store(bus, fpcar.wrapping_add(0x40), AccessWidth::Word, self.fpscr)?;
+                fp.set_lspact(false);
+            }
             if self.control & 0x4 == 0 && fp.aspen() {
                 let m = crate::peripherals::cortex_m_fpu::FPDSCR_MASK;
                 self.fpscr = (self.fpscr & !m) | (fp.fpdscr() & m);
                 self.control |= 0x4;
             }
         }
+        Ok(())
     }
 
-    /// The JIT does not run `ExecuteFPCheck`, so while a context could still
-    /// create its FP state (ASPEN set, FPCA clear) the core stays on the
-    /// interpreter.
+    /// An FP block does not run `ExecuteFPCheck`. Interpret it while access
+    /// is denied, a context needs initialization (ASPEN set, FPCA clear), or
+    /// a lazy save is pending. Integer blocks do not change FP context.
     #[cfg(feature = "jit")]
     #[inline]
-    fn fp_context_pending(&self) -> bool {
-        self.control & 0x4 == 0 && self.fp_ctx.as_ref().is_some_and(|fp| fp.aspen())
+    pub(crate) fn fp_context_pending(&self) -> bool {
+        self.fp_ctx.as_ref().is_some_and(|fp| {
+            !self.fp_access_allowed() || fp.lspact() || (self.control & 0x4 == 0 && fp.aspen())
+        })
     }
 
     /// Turn ARMv7-M fault escalation (and the SCB fault register surface) on or
@@ -1989,6 +2155,17 @@ impl CortexM {
     #[cold]
     pub(in crate::cpu::cortex_m) fn raise_div_by_zero(&mut self) -> SimResult<PcAdvance> {
         self.pending_div0 = true;
+        Err(SimulationError::ExceptionRaised {
+            cause: 6,
+            pc: self.pc,
+        })
+    }
+
+    /// Latch a NOCP UsageFault for a denied or unavailable FP instruction.
+    /// The PC stays on the coprocessor instruction so stacking identifies it.
+    #[cold]
+    fn raise_nocp(&mut self) -> SimResult<()> {
+        self.pending_nocp = true;
         Err(SimulationError::ExceptionRaised {
             cause: 6,
             pc: self.pc,
@@ -2060,28 +2237,52 @@ impl CortexM {
         }
     }
 
+    /// Convert a raw exception priority into the group priority used for
+    /// preemption and priority boosting. AIRCR.PRIGROUP assigns PRIGROUP+1
+    /// low-order bits to subpriority on ARMv7-M/ARMv8-M Mainline. ARMv6-M and
+    /// ARMv8-M Baseline have no priority grouping and use every implemented
+    /// priority bit for preemption.
+    #[inline]
+    fn group_priority(&self, priority: i32) -> i32 {
+        if !(0..=0xFF).contains(&priority)
+            || self
+                .faults
+                .as_ref()
+                .is_some_and(|faults| !faults.priority_group_supported.load(Ordering::Relaxed))
+        {
+            return priority;
+        }
+        let subpriority_bits = (self.priority_group.load(Ordering::Relaxed) & 0x7) + 1;
+        priority & !((1_i32 << subpriority_bits) - 1)
+    }
+
+    #[inline]
+    fn exception_group_priority(&self, exc: u32) -> i32 {
+        self.group_priority(self.exception_priority(exc))
+    }
+
     /// True if BASEPRI masks an exception of the given priority. A non-zero
-    /// BASEPRI masks any exception whose priority value is numerically >=
-    /// BASEPRI (equal or lower priority). NMI/HardFault (negative priority) are
-    /// never masked.
+    /// BASEPRI masks any exception whose group priority is numerically >= its
+    /// own group priority. Subpriority does not affect priority boosting.
+    /// NMI/HardFault (negative priority) are never masked.
     #[inline]
     fn masked_by_basepri(&self, prio: i32) -> bool {
-        self.basepri != 0 && prio >= self.basepri as i32
+        self.basepri != 0 && self.group_priority(prio) >= self.group_priority(self.basepri as i32)
     }
 
     /// Whether ANY exception is pending — the cheap precondition every
     /// pending-exception decision starts with.
     ///
-    /// A four-way OR rather than `self.pending_exceptions.iter().any(..)`:
+    /// An eight-way OR rather than `self.pending_exceptions.iter().any(..)`:
     /// the iterator form compiled to a real loop over the array and cost
     /// 16 Ir per retired instruction in `step_batch` alone
     /// (docs/performance/2026-09-17-bus-scheduler-pass.md). Same answer —
-    /// `w0 | w1 | w2 | w3 != 0` is true exactly when some word is non-zero —
+    /// the OR of every word is true exactly when some word is non-zero —
     /// with no branch per word.
     #[inline(always)]
     fn any_exception_pending(&self) -> bool {
-        let [w0, w1, w2, w3] = self.pending_exceptions;
-        (w0 | w1 | w2 | w3) != 0
+        let [w0, w1, w2, w3, w4, w5, w6, w7] = self.pending_exceptions;
+        (w0 | w1 | w2 | w3 | w4 | w5 | w6 | w7) != 0
     }
 
     /// Among the pending exceptions, return the one with the highest
@@ -2109,6 +2310,33 @@ impl CortexM {
         self.active_exception = exc;
         self.vectactive
             .store(exc & 0x1FF, std::sync::atomic::Ordering::Relaxed);
+        if exc >= 16 {
+            if let Some(nvic) = &self.nvic_state {
+                let irq = exc - 16;
+                let word = (irq / 32) as usize;
+                let bit = 1u32 << (irq % 32);
+                if word < nvic.iabr.len() {
+                    nvic.iabr[word].fetch_or(bit, std::sync::atomic::Ordering::SeqCst);
+                }
+            }
+        }
+    }
+
+    /// Clear the active bit for the exception that is returning. A nested
+    /// return then restores the previously active IRQ without clearing its
+    /// bit; `set_active_exception` keeps that outer activation visible.
+    fn clear_active_exception(&self) {
+        let exc = self.active_exception;
+        if exc >= 16 {
+            if let Some(nvic) = &self.nvic_state {
+                let irq = exc - 16;
+                let word = (irq / 32) as usize;
+                let bit = 1u32 << (irq % 32);
+                if word < nvic.iabr.len() {
+                    nvic.iabr[word].fetch_and(!bit, std::sync::atomic::Ordering::SeqCst);
+                }
+            }
+        }
     }
 
     fn xpsr_with_itstate(&self, xpsr: u32) -> u32 {
@@ -2141,26 +2369,20 @@ impl CortexM {
         }
     }
 
+    #[inline(always)]
     fn read_reg(&self, n: u8) -> u32 {
-        match n {
-            0 => self.r0,
-            1 => self.r1,
-            2 => self.r2,
-            3 => self.r3,
-            4 => self.r4,
-            5 => self.r5,
-            6 => self.r6,
-            7 => self.r7,
-            8 => self.r8,
-            9 => self.r9,
-            10 => self.r10,
-            11 => self.r11,
-            12 => self.r12,
-            13 => self.sp,
-            14 => self.lr,
-            15 => self.pc,
-            16 => self.xpsr,
-            _ => 0,
+        let Some(&offset) = REG_FIELD_OFFSETS.get(usize::from(n)) else {
+            return 0;
+        };
+        // SAFETY: `offset` is `offset_of!` of one of the `u32` fields named in
+        // `REG_FIELD_OFFSETS`, so the pointer is in bounds of `*self`, aligned
+        // for `u32` and derived from a reference to the whole struct.
+        unsafe {
+            std::ptr::from_ref(self)
+                .cast::<u8>()
+                .add(offset)
+                .cast::<u32>()
+                .read()
         }
     }
 
@@ -2176,26 +2398,18 @@ impl CortexM {
         }
     }
 
+    #[inline(always)]
     fn write_reg(&mut self, n: u8, val: u32) {
-        match n {
-            0 => self.r0 = val,
-            1 => self.r1 = val,
-            2 => self.r2 = val,
-            3 => self.r3 = val,
-            4 => self.r4 = val,
-            5 => self.r5 = val,
-            6 => self.r6 = val,
-            7 => self.r7 = val,
-            8 => self.r8 = val,
-            9 => self.r9 = val,
-            10 => self.r10 = val,
-            11 => self.r11 = val,
-            12 => self.r12 = val,
-            13 => self.sp = val,
-            14 => self.lr = val,
-            15 => self.pc = val,
-            16 => self.xpsr = val,
-            _ => {}
+        let Some(&offset) = REG_FIELD_OFFSETS.get(usize::from(n)) else {
+            return;
+        };
+        // SAFETY: as in `read_reg`; the pointer comes from `&mut self`.
+        unsafe {
+            std::ptr::from_mut(self)
+                .cast::<u8>()
+                .add(offset)
+                .cast::<u32>()
+                .write(val)
         }
     }
 
@@ -2296,8 +2510,8 @@ impl CortexM {
         let Some(exc) = self.highest_priority_pending() else {
             return false;
         };
-        let exc_prio = self.exception_priority(exc);
-        let active_prio = self.exception_priority(self.active_exception);
+        let exc_prio = self.exception_group_priority(exc);
+        let active_prio = self.exception_group_priority(self.active_exception);
         exc_prio < active_prio && !self.masked_by_basepri(exc_prio) && !self.faultmask_blocks(exc)
     }
 
@@ -2350,9 +2564,9 @@ impl CortexM {
                         }
                     }
                 }
-                let priority = self.exception_priority(exc);
+                let priority = self.exception_group_priority(exc);
                 if !self.masked_by_primask(exc)
-                    && priority < self.exception_priority(self.active_exception)
+                    && priority < self.exception_group_priority(self.active_exception)
                     && !self.masked_by_basepri(priority)
                     && !self.faultmask_blocks(exc)
                 {
@@ -2420,6 +2634,101 @@ impl CortexM {
         self.exception_return(lr, bus)
     }
 
+    /// Service an already-pending IRQ on exception return without unstacking
+    /// and restacking the interrupted context. Cortex-M calls this tail
+    /// chaining. The saved frame remains in place until the final handler
+    /// returns to Thread mode (or to the previously active Handler).
+    fn tail_chain_pending_irq<B: Bus + ?Sized>(
+        &mut self,
+        return_to_exception: u32,
+        exc_return: u32,
+        bus: &mut B,
+    ) -> SimResult<bool> {
+        // This path intentionally handles configurable external IRQs and the
+        // two architected deferred exceptions. Fault escalation and NMI keep
+        // using the ordinary entry path so their fault-frame bookkeeping is
+        // unchanged.
+        if !self.systick_pending_live.load(Ordering::Relaxed) {
+            self.pending_exceptions[0] &= !(1 << 15);
+        }
+        if !self.pendsv_pending_live.load(Ordering::Relaxed) {
+            self.pending_exceptions[0] &= !(1 << 14);
+        }
+
+        let return_priority = self.exception_group_priority(return_to_exception);
+        let mut best: Option<(i32, u32)> = None;
+        let pending = self.pending_exceptions;
+        for (word_idx, &word) in pending.iter().enumerate() {
+            let mut mask = word;
+            while mask != 0 {
+                let exception = word_idx as u32 * 64 + mask.trailing_zeros();
+                mask &= mask - 1;
+
+                if exception != 14 && exception != 15 && exception < 16 {
+                    continue;
+                }
+                if exception >= 16 && !bus.is_nvic_irq_pending(exception) {
+                    self.pending_exceptions[(exception / 64) as usize] &=
+                        !(1u64 << (exception % 64));
+                    continue;
+                }
+
+                let priority = self.exception_priority(exception);
+                let group_priority = self.group_priority(priority);
+                if group_priority >= return_priority
+                    || self.masked_by_primask(exception)
+                    || self.masked_by_basepri(group_priority)
+                    || self.faultmask_blocks(exception)
+                    || self.debug_masks_irq(exception)
+                {
+                    continue;
+                }
+
+                best = Some(match best {
+                    Some((best_priority, best_exception))
+                        if best_priority < priority
+                            || (best_priority == priority && best_exception < exception) =>
+                    {
+                        (best_priority, best_exception)
+                    }
+                    _ => (priority, exception),
+                });
+            }
+        }
+
+        let Some((_, exception)) = best else {
+            return Ok(false);
+        };
+        let vector_addr = self
+            .vtor
+            .load(Ordering::SeqCst)
+            .wrapping_add(exception.wrapping_mul(4));
+        let handler = Self::bus_load(bus, vector_addr, AccessWidth::Word)?;
+
+        self.pending_exceptions[(exception / 64) as usize] &= !(1u64 << (exception % 64));
+        if exception == 14 {
+            self.pendsv_pending_live.store(false, Ordering::Relaxed);
+        } else if exception == 15 {
+            self.systick_pending_live.store(false, Ordering::Relaxed);
+        }
+        bus.clear_nvic_pending(exception);
+
+        self.clear_active_exception();
+        self.set_active_exception(exception);
+        self.xpsr = (self.xpsr & !0x1FF) | (exception & 0x1FF);
+        self.it_state = 0;
+        self.it_state_restored = true;
+        self.lr = exc_return;
+        self.pc = handler & !1;
+        if self.fp_ctx.is_some() {
+            self.control &= !0x4;
+        }
+        // Exception return sets the architectural event register even when it
+        // chains directly into another handler.
+        self.event_register = true;
+        Ok(true)
+    }
+
     fn exception_return<B: Bus + ?Sized>(&mut self, exc_return: u32, bus: &mut B) -> SimResult<()> {
         // FAULTMASK is cleared automatically on exception return, except when
         // returning from NMI (exception 2).
@@ -2435,6 +2744,12 @@ impl CortexM {
         let frame_on_psp = (exc_return & 0x4) != 0;
         let frame_ptr = if frame_on_psp { self.psp } else { self.msp };
 
+        let stacked_xpsr = bus.read_u32(frame_ptr.wrapping_add(28) as u64)?;
+        let return_to_exception = stacked_xpsr & 0x1FF;
+        if self.tail_chain_pending_irq(return_to_exception, exc_return, bus)? {
+            return Ok(());
+        }
+
         self.r0 = bus.read_u32(frame_ptr as u64)?;
         self.r1 = bus.read_u32(frame_ptr.wrapping_add(4) as u64)?;
         self.r2 = bus.read_u32(frame_ptr.wrapping_add(8) as u64)?;
@@ -2442,7 +2757,13 @@ impl CortexM {
         self.r12 = bus.read_u32(frame_ptr.wrapping_add(16) as u64)?;
         self.lr = bus.read_u32(frame_ptr.wrapping_add(20) as u64)?;
         self.pc = bus.read_u32(frame_ptr.wrapping_add(24) as u64)? & !1;
-        self.xpsr = bus.read_u32(frame_ptr.wrapping_add(28) as u64)?;
+        let stack_alignment_padding = if stacked_xpsr & XPSR_STACK_ALIGN != 0 {
+            4
+        } else {
+            0
+        };
+        // xPSR[9] is metadata in the stacked frame, not a live xPSR bit.
+        self.xpsr = stacked_xpsr & !XPSR_STACK_ALIGN;
         self.it_state = Self::itstate_from_xpsr(self.xpsr);
         self.it_state_restored = true;
 
@@ -2452,11 +2773,21 @@ impl CortexM {
         let mut frame_len = 32;
         if self.fp_ctx.is_some() {
             if exc_return & 0x10 == 0 {
-                for i in 0..16 {
-                    self.fpu_s[i] =
-                        bus.read_u32(frame_ptr.wrapping_add(0x20 + 4 * i as u32) as u64)?;
+                let lazy_save_pending = self.fp_ctx.as_ref().is_some_and(|fp| fp.lspact());
+                if lazy_save_pending {
+                    // No handler FP instruction triggered the save. The live
+                    // FP registers still belong to the interrupted context,
+                    // so discard the reserved stack area without unstacking it.
+                    if let Some(fp) = self.fp_ctx.as_ref() {
+                        fp.set_lspact(false);
+                    }
+                } else {
+                    for i in 0..16 {
+                        self.fpu_s[i] =
+                            bus.read_u32(frame_ptr.wrapping_add(0x20 + 4 * i as u32) as u64)?;
+                    }
+                    self.fpscr = bus.read_u32(frame_ptr.wrapping_add(0x60) as u64)?;
                 }
-                self.fpscr = bus.read_u32(frame_ptr.wrapping_add(0x60) as u64)?;
                 frame_len = 0x68;
                 self.control |= 0x4;
             } else {
@@ -2465,7 +2796,9 @@ impl CortexM {
         }
 
         // Advance the bank the frame was popped from.
-        let new_sp = frame_ptr.wrapping_add(frame_len);
+        let new_sp = frame_ptr
+            .wrapping_add(frame_len)
+            .wrapping_add(stack_alignment_padding);
         if frame_on_psp {
             self.psp = new_sp;
         } else {
@@ -2475,6 +2808,7 @@ impl CortexM {
         // Restore active exception from stacked xPSR IPSR bits [8:0].
         // When taking an exception, we saved the previous active_exception in IPSR,
         // so restoring it here correctly handles both non-nested and nested cases.
+        self.clear_active_exception();
         self.set_active_exception(self.xpsr & 0x1FF);
 
         // On return to Thread mode, CONTROL.SPSEL takes EXC_RETURN[2].
@@ -2532,8 +2866,8 @@ impl CortexM {
         let Some(exc) = self.highest_priority_pending() else {
             return false;
         };
-        let exc_prio = self.exception_priority(exc);
-        let active_prio = self.exception_priority(self.active_exception);
+        let exc_prio = self.exception_group_priority(exc);
+        let active_prio = self.exception_group_priority(self.active_exception);
         !self.masked_by_primask(exc)
             && exc_prio < active_prio
             && !self.masked_by_basepri(exc_prio)
@@ -2670,7 +3004,7 @@ impl CortexM {
                 }
                 self.step(bus, observers, config)?;
                 engine.note_interpreted();
-            } else if self.it_state != 0 || self.waiting_for_event || self.fp_context_pending() {
+            } else if self.it_state != 0 || self.waiting_for_event {
                 self.step(bus, observers, config)?;
                 engine.note_interpreted();
             } else {
@@ -2851,6 +3185,37 @@ impl CortexM {
     }
 }
 
+impl CortexM {
+    /// Whether ending the batch at the poll-loop anchor just reached can pay
+    /// off. The anchor exists so the machine can prove the loop a fixed point
+    /// and skip it ([`Cpu::poll_loop_skip_budget`]); that proof refuses any
+    /// iteration that touches a device. When the core's previous arrival at
+    /// this same head is known and a device access happened since, the
+    /// iteration just run touched a device: the batch runs on instead of
+    /// handing the machine a window boundary and a proof that would fail. The
+    /// anchor stays set and is refused at the next batch start, like any
+    /// anchor the machine did not take, so the detector still backs off.
+    ///
+    /// Only the cost of a refused proof is saved. No clause that guards
+    /// observable behaviour depends on this break: a skip the machine does
+    /// take is exact by construction, and every deadline still ends the
+    /// window through the plan.
+    #[inline]
+    fn anchor_may_skip(&mut self, bus: &SystemBus) -> bool {
+        let accesses = bus.access_counts().2;
+        let pc = self.pc;
+        let marks = &mut self.anchor_device_marks;
+        if let Some(slot) = marks.iter_mut().find(|(head, _)| *head == pc) {
+            let quiet = slot.1 == accesses;
+            slot.1 = accesses;
+            return quiet;
+        }
+        marks.rotate_left(1);
+        marks[3] = (pc, accesses);
+        true
+    }
+}
+
 impl Cpu for CortexM {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
@@ -2893,6 +3258,10 @@ impl Cpu for CortexM {
             regs,
             entry: self.fault_entry,
             lockup: self.lockup,
+            armv6m: self
+                .faults
+                .as_ref()
+                .is_some_and(|f| f.armv6m.load(Ordering::Relaxed)),
         };
         capture.is_fault().then_some(capture)
     }
@@ -2910,7 +3279,9 @@ impl Cpu for CortexM {
     fn reset(&mut self, bus: &mut dyn Bus) -> SimResult<()> {
         self.pc = 0x0000_0000;
         self.sp = 0x2000_0000;
-        self.pending_exceptions = [0; 4];
+        self.pending_exceptions = [0; 8];
+        self.systick_pending_live.store(false, Ordering::Relaxed);
+        self.pendsv_pending_live.store(false, Ordering::Relaxed);
         // Reset is not exception return: no interrupt mask, IT block or
         // exception-return LR from the previous boot may survive. Cortex-M4
         // DUI0553A table 2-1 defines these reset values. General registers
@@ -2928,17 +3299,24 @@ impl Cpu for CortexM {
         self.event_register = false;
         if let Some(nvic) = &self.nvic_state {
             nvic.event_register.store(false, Ordering::Relaxed);
+            for active in &nvic.iabr {
+                active.store(0, Ordering::SeqCst);
+            }
         }
         self.set_active_exception(0);
         self.clear_decoded_state();
         self.fault_entry = None;
         self.fault_entry_regs = FaultRegs::default();
         self.lockup = None;
+        self.pending_nocp = false;
 
         // Out of reset the core is in Thread mode using MSP (CONTROL=0); PSP
         // is architecturally UNKNOWN — start it at 0.
         self.control = 0;
         self.psp = 0;
+        if let Some(cpacr) = &self.cpacr {
+            cpacr.store(0, Ordering::Relaxed);
+        }
 
         let vtor = self.vtor.load(Ordering::SeqCst) as u64;
         // NOT wrapped in `census_bus!`, deliberately. These two are the only
@@ -2978,7 +3356,12 @@ impl Cpu for CortexM {
         if trace_exc_enabled() {
             eprintln!("EXC pend num={} pc=0x{:08X}", exception_num, self.pc);
         }
-        if exception_num < 256 {
+        if exception_num < 512 {
+            if exception_num == 15 {
+                self.systick_pending_live.store(true, Ordering::Relaxed);
+            } else if exception_num == 14 {
+                self.pendsv_pending_live.store(true, Ordering::Relaxed);
+            }
             let word = &mut self.pending_exceptions[(exception_num / 64) as usize];
             let mask = 1u64 << (exception_num % 64);
             // External IRQ transitions are tracked in NVIC ISPR, including
@@ -3067,11 +3450,19 @@ impl Cpu for CortexM {
             }
             self.xpsr = s.xpsr;
             self.primask = s.primask;
-            self.pending_exceptions = [0; 4];
+            self.pending_exceptions = [0; 8];
             self.pending_exceptions[0] = s.pending_exceptions;
-            for (i, w) in s.pending_exceptions_hi.iter().take(3).enumerate() {
+            for (i, w) in s.pending_exceptions_hi.iter().take(7).enumerate() {
                 self.pending_exceptions[i + 1] = *w;
             }
+            self.systick_pending_live.store(
+                self.pending_exceptions[0] & (1 << 15) != 0,
+                Ordering::Relaxed,
+            );
+            self.pendsv_pending_live.store(
+                self.pending_exceptions[0] & (1 << 14) != 0,
+                Ordering::Relaxed,
+            );
             self.vtor.store(s.vtor, Ordering::Relaxed);
             self.waiting_for_event = s.waiting_for_event;
             self.event_register = s.event_register;
@@ -3257,8 +3648,8 @@ impl Cpu for CortexM {
                 // pointless if an armed SysTick freezes the run loop).
                 if executed > 0 && self.any_exception_pending() {
                     if let Some(exc) = self.highest_priority_pending() {
-                        let exc_prio = self.exception_priority(exc);
-                        let active_prio = self.exception_priority(self.active_exception);
+                        let exc_prio = self.exception_group_priority(exc);
+                        let active_prio = self.exception_group_priority(self.active_exception);
                         if !self.masked_by_primask(exc)
                             && exc_prio < active_prio
                             && !self.masked_by_basepri(exc_prio)
@@ -3353,11 +3744,13 @@ impl Cpu for CortexM {
                 }
                 // Taken branches no longer break the batch — the run loop bounds
                 // it to the next peripheral tick, so bouncing back through
-                // `Machine::run` at every branch was pure overhead. Only WFI
-                // sleep leaves the batch, so the machine can fast-forward the
-                // idle window.
+                // `Machine::run` at every branch was pure overhead. WFI sleep
+                // leaves the batch, so the machine can fast-forward the idle
+                // window, and so does a poll-loop anchor, so the machine can
+                // try to prove and skip the loop.
                 if config.idle_fast_forward_enabled
-                    && (self.idle_fast_forward_budget(sysbus).is_some() || self.poll_anchor_ready())
+                    && (self.idle_fast_forward_budget(sysbus).is_some()
+                        || (self.poll_anchor_ready() && self.anchor_may_skip(sysbus)))
                 {
                     break;
                 }
@@ -3369,8 +3762,8 @@ impl Cpu for CortexM {
                 // exception is dispatched by `step_internal`, never spun on.
                 if executed > 0 && self.any_exception_pending() {
                     if let Some(exc) = self.highest_priority_pending() {
-                        let exc_prio = self.exception_priority(exc);
-                        let active_prio = self.exception_priority(self.active_exception);
+                        let exc_prio = self.exception_group_priority(exc);
+                        let active_prio = self.exception_group_priority(self.active_exception);
                         if !self.masked_by_primask(exc)
                             && exc_prio < active_prio
                             && !self.masked_by_basepri(exc_prio)
@@ -3420,11 +3813,24 @@ impl Cpu for CortexM {
         self.poll_skip_budget(bus, limit)
     }
 
-    fn fast_forward_poll_loop(&mut self, cycles: u64) -> bool {
+    fn fast_forward_poll_loop(&mut self, cycles: u64) -> Option<u64> {
         self.poll_fast_forward(cycles)
     }
 
+    fn poll_loop_plan_stores(&self) -> bool {
+        self.poll_plan_stores()
+    }
+
+    fn stalled_loop_loads(&mut self, bus: &dyn Bus) -> Option<Vec<u64>> {
+        self.stalled_loads(bus)
+    }
+
     fn idle_fast_forward_budget(&self, _bus: &dyn Bus) -> Option<u64> {
+        // Asked after every interpreted instruction of a batch; a core that
+        // is neither in WFE nor WFI answers before the debug-state loads.
+        if !self.waiting_for_event && !self.sleeping {
+            return None;
+        }
         if self.debug_batch_break() {
             return None;
         }
@@ -3559,12 +3965,15 @@ impl CortexM {
         ];
         for pc in candidates {
             let idx = ((pc >> 1) & 0x0fff) as usize;
-            if let Some(entry) = self.decode_cache[idx] {
+            // Borrow the tag and width; copying the whole entry out of the
+            // slot costs more than the check on every store.
+            let overlaps = self.decode_cache[idx].as_ref().is_some_and(|entry| {
                 let start = entry.tag & !1;
                 let inst_end = start.wrapping_add(u32::from(entry.pc_increment));
-                if store_overlaps(start, inst_end, addr, end) {
-                    self.decode_cache[idx] = None;
-                }
+                store_overlaps(start, inst_end, addr, end)
+            });
+            if overlaps {
+                self.decode_cache[idx] = None;
             }
         }
         if let Some(block) = self.t16_fast_block {
@@ -3614,16 +4023,16 @@ impl CortexM {
     }
 
     /// ARMv7-M **execution priority** (B1.5.4 "Execution priority and priority
-    /// boosting"): the priority of the currently executing code, which an
-    /// exception must beat (numerically smaller) to be taken.
+    /// boosting"): the group priority of the currently executing code, which
+    /// an exception must beat (numerically smaller) to be taken.
     ///
-    /// It is the minimum of the active exception's priority and the three
-    /// priority-boosting registers: `FAULTMASK` boosts to -1, `PRIMASK` to 0,
-    /// and a non-zero `BASEPRI` to its own value. Thread mode with nothing
+    /// It is the minimum of the active exception's group priority and the
+    /// three priority-boosting registers: `FAULTMASK` boosts to -1, `PRIMASK`
+    /// to 0, and a non-zero `BASEPRI` to its group priority. Thread mode with nothing
     /// boosting is 256, the "lower than anything configurable" baseline the rest
     /// of this file already uses.
     fn execution_priority(&self) -> i32 {
-        let mut prio = self.exception_priority(self.active_exception);
+        let mut prio = self.exception_group_priority(self.active_exception);
         if self.faultmask {
             prio = prio.min(-1);
         }
@@ -3631,7 +4040,7 @@ impl CortexM {
             prio = prio.min(0);
         }
         if self.basepri != 0 {
-            prio = prio.min(self.basepri as i32);
+            prio = prio.min(self.group_priority(self.basepri as i32));
         }
         prio
     }
@@ -3689,7 +4098,7 @@ impl CortexM {
 
         let busfault_enabled = faults.shcsr.load(Ordering::Relaxed) & SHCSR_BUSFAULTENA != 0;
         let exec_prio = self.execution_priority();
-        let target = if busfault_enabled && self.exception_priority(5) < exec_prio {
+        let target = if busfault_enabled && self.exception_group_priority(5) < exec_prio {
             5
         } else {
             // Escalated: the HardFault handler needs to know it is standing in
@@ -3697,7 +4106,7 @@ impl CortexM {
             faults.hfsr.fetch_or(HFSR_FORCED, Ordering::Relaxed);
             3
         };
-        if self.exception_priority(target) >= exec_prio {
+        if self.exception_group_priority(target) >= exec_prio {
             return false; // LOCKUP — see the doc comment.
         }
         if trace_exc_enabled() {
@@ -3838,13 +4247,13 @@ impl CortexM {
         }
         let memfault_enabled = faults.shcsr.load(Ordering::Relaxed) & SHCSR_MEMFAULTENA != 0;
         let exec_prio = self.execution_priority();
-        let target = if memfault_enabled && self.exception_priority(4) < exec_prio {
+        let target = if memfault_enabled && self.exception_group_priority(4) < exec_prio {
             4
         } else {
             faults.hfsr.fetch_or(HFSR_FORCED, Ordering::Relaxed);
             3
         };
-        if self.exception_priority(target) >= exec_prio {
+        if self.exception_group_priority(target) >= exec_prio {
             return false; // LOCKUP
         }
         if trace_exc_enabled() {
@@ -3882,13 +4291,13 @@ impl CortexM {
 
         let usagefault_enabled = faults.shcsr.load(Ordering::Relaxed) & SHCSR_USGFAULTENA != 0;
         let exec_prio = self.execution_priority();
-        let target = if usagefault_enabled && self.exception_priority(6) < exec_prio {
+        let target = if usagefault_enabled && self.exception_group_priority(6) < exec_prio {
             6
         } else {
             faults.hfsr.fetch_or(HFSR_FORCED, Ordering::Relaxed);
             3
         };
-        if self.exception_priority(target) >= exec_prio {
+        if self.exception_group_priority(target) >= exec_prio {
             return false; // LOCKUP — see the doc comment.
         }
         if trace_exc_enabled() {
@@ -3901,6 +4310,8 @@ impl CortexM {
             crate::peripherals::scs_debug::DEMCR_VC_STATERR
         } else if ufsr_bit == CFSR_UFSR_DIVBYZERO {
             crate::peripherals::scs_debug::DEMCR_VC_CHKERR
+        } else if ufsr_bit == CFSR_UFSR_NOCP {
+            crate::peripherals::scs_debug::DEMCR_VC_NOCPERR
         } else {
             0
         };
@@ -3937,22 +4348,24 @@ impl CortexM {
                 // next step even when escalation is off.
                 let undef = std::mem::take(&mut self.pending_undef_instruction);
                 let div0 = std::mem::take(&mut self.pending_div0);
+                let nocp = std::mem::take(&mut self.pending_nocp);
                 let data = self.pending_data_fault.take();
                 let mpu = self.pending_mem_manage.take();
                 if !self.faults_enabled() {
                     return Err(e);
                 }
-                let escalated = match (data, undef, div0) {
+                let escalated = match (data, undef, div0, nocp) {
                     _ if mpu.is_some() => mpu.map(|cause| self.escalate_mem_manage(cause)),
-                    (Some(addr), _, _) => Some(self.escalate_precise_data_fault(addr)),
+                    (Some(addr), _, _, _) => Some(self.escalate_precise_data_fault(addr)),
                     // An undefined instruction escalates to UsageFault, or to
                     // HardFault when UsageFault is not enabled. Escalation
                     // failing means LOCKUP on silicon, so the `Err` stands and
                     // stops the run — which is still incomparably better than
                     // the old behaviour of advancing the PC and continuing.
-                    (None, true, _) => Some(self.escalate_usage_fault(CFSR_UFSR_UNDEFINSTR)),
-                    (None, false, true) => Some(self.escalate_usage_fault(CFSR_UFSR_DIVBYZERO)),
-                    (None, false, false) => None,
+                    (None, true, _, _) => Some(self.escalate_usage_fault(CFSR_UFSR_UNDEFINSTR)),
+                    (None, false, true, _) => Some(self.escalate_usage_fault(CFSR_UFSR_DIVBYZERO)),
+                    (None, false, false, true) => Some(self.escalate_usage_fault(CFSR_UFSR_NOCP)),
+                    (None, false, false, false) => None,
                 };
                 match escalated {
                     Some(true) => Ok(()),
@@ -4014,14 +4427,23 @@ impl CortexM {
         // behaviour-preserving by construction: with no bit set the old
         // `unwrap_or(0)` produced `exception_num == 0`, and the `&& exception_num
         // != 0` arm below already made the whole block dead.
+        // ICSR.PENDSTCLR clears a pending SysTick in the SCB. Keep the CPU's
+        // arbitration bitmap in step with that live, architecturally visible
+        // state so a cleared exception cannot still be taken from a stale bit.
+        if !self.systick_pending_live.load(Ordering::Relaxed) {
+            self.pending_exceptions[0] &= !(1 << 15);
+        }
+        if !self.pendsv_pending_live.load(Ordering::Relaxed) {
+            self.pending_exceptions[0] &= !(1 << 14);
+        }
         let exception_num = if self.any_exception_pending() {
             self.highest_priority_pending().unwrap_or(0)
         } else {
             0
         };
         if exception_num != 0 && !self.masked_by_primask(exception_num) {
-            let take_prio = self.exception_priority(exception_num);
-            let active_prio = self.exception_priority(self.active_exception);
+            let take_prio = self.exception_group_priority(exception_num);
+            let active_prio = self.exception_group_priority(self.active_exception);
             let can_take = take_prio < active_prio
                 && !self.masked_by_basepri(take_prio)
                 && !self.faultmask_blocks(exception_num)
@@ -4044,6 +4466,11 @@ impl CortexM {
                     self.exclusive_subword = None;
                     self.pending_exceptions[(exception_num / 64) as usize] &=
                         !(1u64 << (exception_num % 64));
+                    if exception_num == 15 {
+                        self.systick_pending_live.store(false, Ordering::Relaxed);
+                    } else if exception_num == 14 {
+                        self.pendsv_pending_live.store(false, Ordering::Relaxed);
+                    }
 
                     // Clear NVIC ISPR for this exception so it isn't immediately re-pended.
                     // On real ARM hardware this happens automatically when the exception is taken.
@@ -4059,12 +4486,28 @@ impl CortexM {
                     // extended one: S0-S15 and FPSCR above the basic eight.
                     let sp = self.sp;
                     let fp_frame = self.fp_ctx.is_some() && self.control & 0x4 != 0;
-                    let frame_ptr = sp.wrapping_sub(if fp_frame { 0x68 } else { 32 });
+                    let frame_len = if fp_frame { 0x68 } else { 32 };
+                    // When CCR.STKALIGN is enabled, keep exception frames
+                    // double-word aligned and record the optional word in
+                    // stacked xPSR[9]. Hand-built cores without an SCB use the
+                    // architectural reset behavior.
+                    let stkalign = self
+                        .faults
+                        .as_ref()
+                        .is_none_or(|faults| faults.ccr_stkalign.load(Ordering::Relaxed));
+                    let stack_alignment_padding = if stkalign && sp & 0x4 != 0 { 4 } else { 0 };
+                    let frame_ptr = sp
+                        .wrapping_sub(frame_len)
+                        .wrapping_sub(stack_alignment_padding);
 
                     // Save the previous active_exception in xPSR IPSR bits [8:0] so that
                     // exception_return can restore the correct nesting level.
-                    let save_xpsr =
-                        self.xpsr_with_itstate((self.xpsr & !0x1FF) | self.active_exception);
+                    let mut save_xpsr = self.xpsr_with_itstate(
+                        (self.xpsr & !(0x1FF | XPSR_STACK_ALIGN)) | self.active_exception,
+                    );
+                    if stack_alignment_padding != 0 {
+                        save_xpsr |= XPSR_STACK_ALIGN;
+                    }
 
                     // Stack: R0, R1, R2, R3, R12, LR, PC, xPSR (with previous IPSR)
                     let stacked_lr = self.lr;
@@ -4090,25 +4533,45 @@ impl CortexM {
                         AccessWidth::Word,
                         save_xpsr,
                     )?;
-                    if fp_frame {
-                        // Eager, not lazy: the S0-S15/FPSCR slots are filled
-                        // now even with FPCCR.LSPEN set (LSPACT stays 0).
-                        for i in 0..16 {
-                            Self::bus_store(
-                                bus,
-                                frame_ptr.wrapping_add(0x20 + 4 * i as u32),
-                                AccessWidth::Word,
-                                self.fpu_s[i],
-                            )?;
-                        }
+                    if stack_alignment_padding != 0 {
+                        // The padding word's value is architecturally
+                        // unspecified. Zero it so reads remain deterministic.
                         Self::bus_store(
                             bus,
-                            frame_ptr.wrapping_add(0x60),
+                            frame_ptr.wrapping_add(frame_len),
                             AccessWidth::Word,
-                            self.fpscr,
+                            0,
                         )?;
-                        if let Some(fp) = self.fp_ctx.as_ref() {
-                            fp.set_fpcar(frame_ptr.wrapping_add(0x20));
+                    }
+                    if fp_frame {
+                        let lazy_save = self.fp_ctx.as_ref().is_some_and(|fp| fp.lspen());
+                        if lazy_save {
+                            if let Some(fp) = self.fp_ctx.as_ref() {
+                                fp.set_fpcar(frame_ptr.wrapping_add(0x20));
+                                fp.set_lspact(true);
+                            }
+                        } else {
+                            // With LSPEN clear, save the extended frame during
+                            // exception entry instead of deferring it to the
+                            // handler's first FP instruction.
+                            for i in 0..16 {
+                                Self::bus_store(
+                                    bus,
+                                    frame_ptr.wrapping_add(0x20 + 4 * i as u32),
+                                    AccessWidth::Word,
+                                    self.fpu_s[i],
+                                )?;
+                            }
+                            Self::bus_store(
+                                bus,
+                                frame_ptr.wrapping_add(0x60),
+                                AccessWidth::Word,
+                                self.fpscr,
+                            )?;
+                            if let Some(fp) = self.fp_ctx.as_ref() {
+                                fp.set_fpcar(frame_ptr.wrapping_add(0x20));
+                                fp.set_lspact(false);
+                            }
                         }
                     }
 
@@ -4281,8 +4744,11 @@ impl CortexM {
                 instruction
             );
 
-            if self.fp_ctx.is_some() && instruction.is_vfp() {
-                self.fp_execute_check();
+            if instruction.is_vfp() {
+                if !self.fp_access_allowed() {
+                    return self.raise_nocp();
+                }
+                self.fp_execute_check(bus)?;
             }
 
             // Execute
@@ -5127,3 +5593,7 @@ mod t16_discovery_tests;
 #[cfg(test)]
 #[path = "cortex_m/t16_countdown_tests.rs"]
 mod t16_countdown_tests;
+
+#[cfg(all(test, feature = "jit"))]
+#[path = "cortex_m/jit_fp_context_tests.rs"]
+mod jit_fp_context_tests;

@@ -41,18 +41,20 @@ pub mod mna;
 pub mod netlist;
 pub mod trace;
 
-pub use adapter::{AnalogConfig, AnalogCosimAdapter, Probe, ThermistorConfig};
+pub use adapter::{AnalogConfig, AnalogCosimAdapter, PhotoresistorConfig, Probe, ThermistorConfig};
 pub use mna::{Integration, Solver, MAX_STEP_CUTS, MAX_UNKNOWNS};
 pub use netlist::{
     parse_netlist, parse_spice_value, AnalogError, Bjt, BjtModel, Capacitor, Cccs, Ccvs, Circuit,
     ComparatorModel, ComparatorOutput, CurrentSource, Diode, DiodeModel, Inductor, ModelCard,
     MosChannelChargeModel, MosModel, Mosfet, MutualInductor, NodeRef, NtcModel, OpAmpModel,
-    Polarity, PowerSink, RegulatorKind, RegulatorModel, Resistor, Switch, Vccs, Vcvs,
-    VoltageSource, VoltageSwitchControl, Waveform, COMPARATOR_PP_GAIN, MACRO_CLAMP_DIODE,
-    MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN, REGULATOR_LIMIT_DIODE, REGULATOR_LIMIT_GAIN,
+    Polarity, PowerSink, RegulatorKind, RegulatorModel, Resistor, ResistorTemperatureModel, Switch,
+    Vccs, Vcvs, VoltageSource, VoltageSwitchControl, Waveform, COMPARATOR_PP_GAIN,
+    MACRO_CLAMP_DIODE, MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN, REGULATOR_LIMIT_DIODE,
+    REGULATOR_LIMIT_GAIN,
 };
 pub use trace::{
-    AnalogChannel, AnalogSample, AnalogSeries, AnalogSeriesChannel, AnalogTrace, AnalogTraceBatch,
-    AnalogTraceHandle, AnalogTraceRegistry, DEFAULT_SERIES_POINTS, DEFAULT_TRACE_SAMPLES,
-    SERIES_DEADBAND_AMPS, SERIES_DEADBAND_REL, SERIES_DEADBAND_RPM, SERIES_DEADBAND_VOLTS,
+    AnalogChannel, AnalogCrossing, AnalogSample, AnalogSeries, AnalogSeriesChannel, AnalogTrace,
+    AnalogTraceBatch, AnalogTraceHandle, AnalogTraceRegistry, AnalogWindowTally,
+    DEFAULT_SERIES_POINTS, DEFAULT_TRACE_SAMPLES, SERIES_DEADBAND_AMPS, SERIES_DEADBAND_REL,
+    SERIES_DEADBAND_RPM, SERIES_DEADBAND_VOLTS,
 };

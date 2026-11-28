@@ -1,0 +1,29 @@
+# `labwired test --script test-pressure-humidity.yaml`. The test bench sets a
+# cold, humid, low-pressure ambient before the first sample. The firmware
+# compensates all three channels from the calibration it read over the bus.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - set: { port: ambient_c, value: -10 }
+  - set: { port: humidity_rh, value: 80 }
+  - set: { port: pressure_hpa, value: 900 }
+  - call: { export: setup, args: [{ bus: sensor_i2c }, { port: user_led_drive }, { number: 0x76 }] }
+  - call: { export: loop }
+  - call: { export: pressure_pa }
+  - call: { export: humidity_centi_rh }
+limits:
+  max_steps: 1000000
+  max_time_ns: 100000000
+assertions:
+  - entry_result: { equals: 8000 }
+  - entry_result: { equals: 0, step: 3 }
+  - console_contains: "T=-10.00 C P=90000 Pa H=80.00 %RH\n"
+  - entry_result: { equals: 9000, step: 4 }
+  - entry_result: { equals: 90000, step: 5 }
+  - i2c_transfers: { bus: sensor_i2c, equals: 8 }
+  - digital_edges: { port: user_led_drive, count: 0 }
+  # 504 bit times in `setup`, 102 in `loop`, then one 1 ms period.
+  - final_time_ns: { equals: 7060000 }

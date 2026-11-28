@@ -1,0 +1,7 @@
+STM32F746G-DISCO SMOKE
+rcc reset=1 gate=1 mask=1 ok
+usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 uart8=1 ok
+gpio pa=1 pb=1 reset=1 pi1=1 jk=1 ok
+led=ld1 odr=0x00000002 blink=1 lit=1 off=1 ok
+syscfg memrmp=0x00000C00 pmc=0x008700FF fields=1 cmpcr=1 ok
+exti swier masked=1 routed=1 ok

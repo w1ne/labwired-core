@@ -1,0 +1,97 @@
+# nrf54l10 application-core executable subset.
+# Nordic official product data and Zephyr dts/vendor/nordic/nrf54l10.dtsi:
+# RRAM and SRAM sizes; nrf54l_05_10_15.dtsi has shared MMIO bases.
+# Reuses ONLY UARTE20, GPIO P0/P1/P2, SysTick and TIMER10 from nRF54L15.
+# Physical silicon parity, radio, TrustZone, LF peripherals and remaining
+# SoC IP are not claimed. RRAM mapped at 0x0; secure MMIO + NS alias.
+name: nrf54l10
+arch: arm
+core: cortex-m33
+cpu_hz: 128000000
+ns_alias_offset: 268435456
+flash:
+  base: 0
+  size: 1012KB
+ram:
+  base: 536870912
+  size: 192KB
+peripherals:
+- id: uart20
+  type: nrf54l_uarte
+  base_address: 1342988288
+  size: 4KB
+  irq: 198
+  config: {}
+- id: gpio0
+  type: gpio
+  base_address: 1343266816
+  size: 768
+  config:
+    profile: nrf54l
+    num_pins: 7
+- id: gpio1
+  type: gpio
+  base_address: 1343062528
+  size: 768
+  config:
+    profile: nrf54l
+    num_pins: 17
+- id: gpio2
+  type: gpio
+  base_address: 1342505984
+  size: 768
+  config:
+    profile: nrf54l
+    num_pins: 11
+- id: systick
+  type: systick
+  base_address: 3758153744
+  size: 16B
+- id: timer10
+  type: nrf52840_timer
+  base_address: 1342722048
+  size: 4KB
+  irq: 133
+  config:
+    # TIMER10 is clocked from HFXO (32 MHz), not the 128 MHz core.
+    peripheral_hz: 32000000
+    num_cc: 8
+
+# GPIO labels for the port widths already cited above from Nordic
+# nrf54l_05_10_15.dtsi (DT ngpios): P0=7, P1=17, P2=11. Not an orderable DK.
+pins:
+  "P0.00": { gpio: gpio0, bit: 0 }
+  "P0.01": { gpio: gpio0, bit: 1 }
+  "P0.02": { gpio: gpio0, bit: 2 }
+  "P0.03": { gpio: gpio0, bit: 3 }
+  "P0.04": { gpio: gpio0, bit: 4 }
+  "P0.05": { gpio: gpio0, bit: 5 }
+  "P0.06": { gpio: gpio0, bit: 6 }
+  "P1.00": { gpio: gpio1, bit: 0 }
+  "P1.01": { gpio: gpio1, bit: 1 }
+  "P1.02": { gpio: gpio1, bit: 2 }
+  "P1.03": { gpio: gpio1, bit: 3 }
+  "P1.04": { gpio: gpio1, bit: 4 }
+  "P1.05": { gpio: gpio1, bit: 5 }
+  "P1.06": { gpio: gpio1, bit: 6 }
+  "P1.07": { gpio: gpio1, bit: 7 }
+  "P1.08": { gpio: gpio1, bit: 8 }
+  "P1.09": { gpio: gpio1, bit: 9 }
+  "P1.10": { gpio: gpio1, bit: 10 }
+  "P1.11": { gpio: gpio1, bit: 11 }
+  "P1.12": { gpio: gpio1, bit: 12 }
+  "P1.13": { gpio: gpio1, bit: 13 }
+  "P1.14": { gpio: gpio1, bit: 14 }
+  "P1.15": { gpio: gpio1, bit: 15 }
+  "P1.16": { gpio: gpio1, bit: 16 }
+  "P2.00": { gpio: gpio2, bit: 0 }
+  "P2.01": { gpio: gpio2, bit: 1 }
+  "P2.02": { gpio: gpio2, bit: 2 }
+  "P2.03": { gpio: gpio2, bit: 3 }
+  "P2.04": { gpio: gpio2, bit: 4 }
+  "P2.05": { gpio: gpio2, bit: 5 }
+  "P2.06": { gpio: gpio2, bit: 6 }
+  "P2.07": { gpio: gpio2, bit: 7 }
+  "P2.08": { gpio: gpio2, bit: 8 }
+  "P2.09": { gpio: gpio2, bit: 9 }
+  "P2.10": { gpio: gpio2, bit: 10 }

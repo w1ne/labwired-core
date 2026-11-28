@@ -82,7 +82,37 @@
 //! `ONETIME_SAMPLE` sits at 0x80 and `ARB_CTRL` at 0x38. (Some older IDF
 //! headers placed ONETIME at 0x20; we follow the current S3 map.)
 
+use crate::peripheral::SharedAdcChannelBank;
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
+use std::sync::Arc;
+
+const ESP32S3_ADC1_BANK_KEY: &str = "esp32s3_adc1";
+
+fn default_adc1_pads() -> Arc<SharedAdcChannelBank> {
+    Arc::new(SharedAdcChannelBank::new(10))
+}
+
+mod adc1_pads_serde {
+    use super::SharedAdcChannelBank;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::sync::Arc;
+
+    pub fn serialize<S: Serializer>(
+        pads: &Arc<SharedAdcChannelBank>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        pads.snapshot_fixed::<10>().serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Arc<SharedAdcChannelBank>, D::Error> {
+        let values = <[Option<u16>; 10]>::deserialize(deserializer)?;
+        let bank = SharedAdcChannelBank::new(10);
+        bank.restore_slice(&values);
+        Ok(Arc::new(bank))
+    }
+}
 
 // ---- Register offsets -----------------------------------------------------
 const CTRL: u64 = 0x00;
@@ -180,6 +210,22 @@ pub struct Esp32s3SarAdc {
     int_ena: u32,
     int_raw: u32,
 
+    /// Analog source inputs for ADC1 channels 0..9 (GPIO1..10). Unset channels
+    /// continue using the deterministic entropy fallback used by the bootloader.
+    /// Input scaling is a *nominal idealized* 0..3300 mV to 12-bit range, NOT
+    /// silicon calibration or a claim about per-channel attenuation accuracy.
+    /// Shared physical ADC1 input pad bank (channels 0..9 = GPIO1..GPIO10),
+    /// serialized under the legacy `adc1_input_mv` snapshot key. Shared with
+    /// `Esp32s3Sens` via `SystemBus::wire_esp32s3_adc_pads` so stimuli routed
+    /// to either controller are observed by both `analogRead()`/`adc_oneshot`
+    /// and digital `APB_SARADC`.
+    #[serde(
+        rename = "adc1_input_mv",
+        default = "default_adc1_pads",
+        with = "adc1_pads_serde"
+    )]
+    adc1_pads: Arc<SharedAdcChannelBank>,
+
     // --- deterministic sample source (xorshift32, seeded once) ---
     lfsr: u32,
 
@@ -234,12 +280,23 @@ impl Esp32s3SarAdc {
             int_ena: 0,
             int_raw: 0,
 
+            adc1_pads: default_adc1_pads(),
+
             // Same constant seed family as rng.rs — fixed for reproducibility.
             lfsr: 0xACE1_5EED,
 
             source_id,
 
             clock: None,
+        }
+    }
+
+    /// Bind this APB SAR-ADC controller to the shared physical ADC1 pad bank
+    /// (preserving any channels already seeded before bus wiring).
+    pub fn set_adc1_pads(&mut self, pads: Arc<SharedAdcChannelBank>) {
+        if !Arc::ptr_eq(&self.adc1_pads, &pads) {
+            pads.merge_unset_from(&self.adc1_pads);
+            self.adc1_pads = pads;
         }
     }
 
@@ -271,11 +328,19 @@ impl Esp32s3SarAdc {
         (((channel & 0xF) << 13) | (data12 & 0x0FFF)) & DATA_RESULT_MASK
     }
 
-    /// Perform a complete ADC1 one-time/forced conversion immediately:
-    /// latch a deterministic sample, set the data-valid status, and raise
-    /// the ADC1_DONE raw interrupt. Never blocks.
+    /// Perform a complete ADC1 one-time/forced conversion immediately.
+    /// When a board analog source has explicitly set this channel, converts
+    /// the injected pad voltage through [`esp32s3_adc1_mv_to_raw`] at ATTEN3
+    /// (matching [`Esp32s3Sens`] and [`EfuseStub`]'s V1 curve-fitting table).
+    /// Missing channels retain the historical deterministic fallback.
     fn complete_adc1_conversion(&mut self, channel: u32) {
-        let sample = self.next_sample_12bit();
+        let sample = self
+            .adc1_pads
+            .get_mv(channel as u8)
+            .map(|mv| {
+                u32::from(crate::peripherals::esp_xtensa_common::esp32s3_adc1_mv_to_raw(mv, 3))
+            })
+            .unwrap_or_else(|| self.next_sample_12bit());
         let packed = Self::pack_result(channel, sample);
         self.adc1_data = packed;
         self.sar1_status = packed;
@@ -421,6 +486,32 @@ impl Default for Esp32s3SarAdc {
 }
 
 impl Peripheral for Esp32s3SarAdc {
+    /// ADC1 channels 0..9 correspond to GPIO1..GPIO10. ADC2 is not exposed
+    /// through the board analog-source seam until its routing is verified.
+    fn adc_channel_count(&self) -> Option<u8> {
+        Some(10)
+    }
+
+    fn set_adc_channel_input(&mut self, channel: u8, millivolts: u16) -> bool {
+        self.adc1_pads.set_mv(channel, millivolts)
+    }
+
+    fn clear_adc_channel_input(&mut self, channel: u8) -> bool {
+        self.adc1_pads.clear(channel)
+    }
+
+    fn shared_adc_bank_key(&self) -> Option<&'static str> {
+        Some(ESP32S3_ADC1_BANK_KEY)
+    }
+
+    fn shared_adc_bank(&self) -> Option<Arc<SharedAdcChannelBank>> {
+        Some(Arc::clone(&self.adc1_pads))
+    }
+
+    fn bind_shared_adc_bank(&mut self, bank: Arc<SharedAdcChannelBank>) {
+        self.set_adc1_pads(bank);
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;
@@ -493,7 +584,12 @@ impl Peripheral for Esp32s3SarAdc {
     }
 
     fn restore(&mut self, state: serde_json::Value) -> SimResult<()> {
-        if let Ok(s) = serde_json::from_value::<Esp32s3SarAdc>(state) {
+        if let Ok(mut s) = serde_json::from_value::<Esp32s3SarAdc>(state) {
+            // Preserve the shared physical ADC1 pad bank Arc wired with
+            // `sens_s3` while restoring the snapshot's pad voltages into it.
+            let shared = Arc::clone(&self.adc1_pads);
+            shared.restore_slice(&s.adc1_pads.snapshot_fixed::<10>());
+            s.adc1_pads = shared;
             *self = s;
         }
         Ok(())
@@ -551,6 +647,116 @@ mod tests {
         assert!(data12 <= 4095, "data not 12-bit: {data12}");
         // Status register mirrors the result.
         assert_eq!(a.read_u32(SAR1_STATUS).unwrap(), result);
+    }
+
+    #[test]
+    fn adc1_voltage_source_drives_correct_channel_and_bounds() {
+        let mut adc = Esp32s3SarAdc::new(SRC);
+        assert_eq!(adc.adc_channel_count(), Some(10));
+        assert!(
+            !adc.set_adc_channel_input(10, 1500),
+            "ADC1 has only 10 channels"
+        );
+        assert!(!adc.clear_adc_channel_input(10));
+
+        for mv in [0u16, 660, 1650, 2970, 3100, 3300, 5000] {
+            let expected =
+                u32::from(crate::peripherals::esp_xtensa_common::esp32s3_adc1_mv_to_raw(mv, 3));
+            assert!(adc.set_adc_channel_input(7, mv));
+            adc.write_u32(INT_CLR, INT_ADC1_DONE).unwrap();
+            adc.write_u32(
+                ONETIME_SAMPLE,
+                ONETIME_SAMPLE1_EN | ONETIME_START | (7 << ONETIME_CHANNEL_S),
+            )
+            .unwrap();
+            let packed = adc.read_u32(SARADC1_DATA_STATUS).unwrap();
+            assert_eq!((packed >> 13) & 15, 7, "channel tag");
+            assert_eq!(packed & 0xFFF, expected, "sample at {mv} mV");
+            assert_ne!(adc.read_u32(INT_RAW).unwrap() & INT_ADC1_DONE, 0);
+            if mv <= 3200 {
+                let recovered = crate::peripherals::esp_xtensa_common::esp32s3_atten3_curve_fit_mv(
+                    (packed & 0xFFF) as u16,
+                );
+                assert!(
+                    recovered.abs_diff(mv) <= 2,
+                    "ATTEN3 curve fit round-trip at {mv} mV returned {recovered} mV"
+                );
+            } else {
+                assert_eq!(packed & 0xFFF, 4095, "saturation at {mv} mV");
+            }
+        }
+
+        // A different, unset channel must not inherit channel 7's voltage.
+        let mut reference = Esp32s3SarAdc::new(SRC);
+        let ch8 = ONETIME_SAMPLE1_EN | ONETIME_START | (8 << ONETIME_CHANNEL_S);
+        adc.write_u32(ONETIME_SAMPLE, ch8).unwrap();
+        reference.write_u32(ONETIME_SAMPLE, ch8).unwrap();
+        assert_eq!(
+            adc.read_u32(SARADC1_DATA_STATUS).unwrap(),
+            reference.read_u32(SARADC1_DATA_STATUS).unwrap()
+        );
+        assert!(adc.clear_adc_channel_input(7));
+        adc.write_u32(
+            ONETIME_SAMPLE,
+            ONETIME_SAMPLE1_EN | ONETIME_START | (7 << ONETIME_CHANNEL_S),
+        )
+        .unwrap();
+        reference
+            .write_u32(
+                ONETIME_SAMPLE,
+                ONETIME_SAMPLE1_EN | ONETIME_START | (7 << ONETIME_CHANNEL_S),
+            )
+            .unwrap();
+        assert_eq!(
+            adc.read_u32(SARADC1_DATA_STATUS).unwrap(),
+            reference.read_u32(SARADC1_DATA_STATUS).unwrap()
+        );
+    }
+
+    #[test]
+    fn adc1_board_input_snapshot_restores_voltage_and_legacy_fallback() {
+        let mut original = Esp32s3SarAdc::new(SRC);
+        assert!(original.set_adc_channel_input(1, 1650));
+        assert!(original.set_adc_channel_input(9, 3300));
+
+        // Reopening a board must restore its distinct physical stimulus
+        // inputs. A channel that is not driven must not inherit either one.
+        let saved = original.snapshot();
+        let mut restored = Esp32s3SarAdc::new(SRC);
+        restored.restore(saved).unwrap();
+        let expected_ch1 =
+            u32::from(crate::peripherals::esp_xtensa_common::esp32s3_adc1_mv_to_raw(1650, 3));
+        for (channel, expected) in [(1, expected_ch1), (9, 4095)] {
+            restored
+                .write_u32(
+                    ONETIME_SAMPLE,
+                    ONETIME_SAMPLE1_EN | ONETIME_START | (channel << ONETIME_CHANNEL_S),
+                )
+                .unwrap();
+            let packed = restored.read_u32(SARADC1_DATA_STATUS).unwrap();
+            assert_eq!((packed >> 13) & 0xF, channel);
+            assert_eq!(packed & 0xFFF, expected);
+        }
+
+        // After a source is cleared, the converter returns to the same
+        // deterministic unset-channel path as a fresh instance.
+        assert!(restored.clear_adc_channel_input(9));
+        let mut reference = Esp32s3SarAdc::new(SRC);
+        let ch9 = ONETIME_SAMPLE1_EN | ONETIME_START | (9 << ONETIME_CHANNEL_S);
+        restored.write_u32(ONETIME_SAMPLE, ch9).unwrap();
+        reference.write_u32(ONETIME_SAMPLE, ch9).unwrap();
+        assert_eq!(
+            restored.read_u32(SARADC1_DATA_STATUS).unwrap(),
+            reference.read_u32(SARADC1_DATA_STATUS).unwrap(),
+        );
+
+        // Pre-ADC-source snapshots have no adc1_input_mv field. The
+        // backward-compatible restore must not synthesize a voltage.
+        let mut legacy = Esp32s3SarAdc::new(SRC).snapshot();
+        legacy.as_object_mut().unwrap().remove("adc1_input_mv");
+        let mut from_legacy = Esp32s3SarAdc::new(SRC);
+        from_legacy.restore(legacy).unwrap();
+        assert_eq!(from_legacy.adc1_pads.snapshot_fixed::<10>(), [None; 10]);
     }
 
     #[test]

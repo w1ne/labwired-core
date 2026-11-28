@@ -6,7 +6,7 @@ on:
     paths:
       - scripts/st7735-codal-trace/**
       - .github/workflows/st7735-codal-trace.yml
-      - crates/core/tests/st7735_sam_guest.rs
+      - crates/core/tests/samd/st7735_sam_guest.rs
       - crates/core/tests/fixtures/st7735-codal-host-trace.json
   workflow_dispatch:
 
@@ -35,6 +35,7 @@ jobs:
           --fixture crates/core/tests/fixtures/st7735-codal-host-trace.json
       - uses: actions/upload-artifact@v4
         with:
+          retention-days: 2
           name: st7735-codal-host-trace
           path: ${{ runner.temp }}/st7735-codal-trace.json
           if-no-files-found: error

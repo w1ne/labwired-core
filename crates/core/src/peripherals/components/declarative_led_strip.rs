@@ -97,6 +97,32 @@ struct NrzState {
     frames_seen: VecDeque<Vec<u8>>,
     /// Keys already stored in `frames_seen` (see `frame_key`).
     frames_seen_keys: HashSet<(u16, u8, u16)>,
+    /// Every completed frame that differs from the one before it, with the
+    /// cycle it completed at, when the host asked for the history.
+    history: Option<FrameHistory>,
+}
+
+/// The timed record [`GenericLedStrip::keep_frame_history`] turns on.
+/// `frames_seen` collapses frames by a coarse key; this keeps each change.
+#[derive(Debug, Default)]
+struct FrameHistory {
+    capacity: usize,
+    frames: VecDeque<(u64, Vec<u8>)>,
+    /// Frames dropped from the front once `capacity` was reached.
+    dropped: u64,
+}
+
+impl FrameHistory {
+    fn record(&mut self, cycle: u64, flat: &[u8]) {
+        if self.frames.back().is_some_and(|(_, last)| last == flat) {
+            return;
+        }
+        if self.frames.len() == self.capacity {
+            self.frames.pop_front();
+            self.dropped += 1;
+        }
+        self.frames.push_back((cycle, flat.to_vec()));
+    }
 }
 
 /// The engine device. One per placed strip.
@@ -352,6 +378,17 @@ impl GenericLedStrip {
         }
     }
 
+    /// Record every changed frame with its completion cycle, at most
+    /// `capacity` of them (the oldest are dropped and counted). Published in
+    /// the artifact as `frame_history` and `frame_history_dropped`.
+    pub fn keep_frame_history(&mut self, capacity: usize) {
+        let mut s = self.nrz.lock().expect("led strip decode state");
+        s.history = Some(FrameHistory {
+            capacity: capacity.max(1),
+            ..FrameHistory::default()
+        });
+    }
+
     pub fn set_num_pixels(&mut self, n: usize) {
         self.num_pixels = n.max(1);
     }
@@ -536,6 +573,9 @@ impl GenericLedStrip {
                 if sim_cycle.saturating_sub(fall) >= self.reset_threshold_cycles {
                     if !s.current.is_empty() {
                         let flat = Self::flat_of(&s.current);
+                        if let Some(history) = s.history.as_mut() {
+                            history.record(fall, &flat);
+                        }
                         Self::record_frame(&mut s, flat);
                         s.latched = std::mem::take(&mut s.current);
                     }
@@ -573,6 +613,9 @@ impl GenericLedStrip {
                         });
                         if s.current.len() == self.num_pixels {
                             let flat = Self::flat_of(&s.current);
+                            if let Some(history) = s.history.as_mut() {
+                                history.record(sim_cycle, &flat);
+                            }
                             Self::record_frame(&mut s, flat);
                         }
                     }
@@ -648,6 +691,27 @@ impl GenericLedStrip {
                 })
                 .collect();
             meta.insert("frames_seen".into(), serde_json::json!(frames));
+            if let Some(history) = &s.history {
+                let frames: Vec<serde_json::Value> = history
+                    .frames
+                    .iter()
+                    .map(|(cycle, flat)| {
+                        serde_json::json!({
+                            "cycle": cycle,
+                            "lit_pixels": flat
+                                .chunks_exact(3)
+                                .filter(|c| c.iter().any(|&b| b != 0))
+                                .count(),
+                            "bytes": flat,
+                        })
+                    })
+                    .collect();
+                meta.insert("frame_history".into(), serde_json::json!(frames));
+                meta.insert(
+                    "frame_history_dropped".into(),
+                    serde_json::json!(history.dropped),
+                );
+            }
         }
         vec![crate::inspect::Artifact {
             kind: "framebuffer".to_string(),
@@ -882,7 +946,7 @@ impl PeripheralKit for DeclarativeLedStripKit {
                 let label = ctx.config_str("data_pin").unwrap_or("GPIO48").to_string();
                 let pin = ctx.parse_gpio_pin(&label).ok_or_else(|| {
                     anyhow::anyhow!(
-                        "{} '{}' data_pin '{}' could not be parsed to an ESP GPIO (0..=48)",
+                        "{} '{}' data_pin '{}' could not be resolved to a GPIO pad (ESP GPIO name, STM32 port pad, or chip-declared pin)",
                         self.descriptor.r#type,
                         ctx.device_id(),
                         label

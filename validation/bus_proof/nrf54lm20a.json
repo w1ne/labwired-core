@@ -1,0 +1,24 @@
+{
+  "id": "nrf54lm20a",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/strict_onboarding.rs",
+    "test": "test_strict_board_onboarding",
+    "signal": "the committed tests/fixtures/nrf54lm20a-snake.elf boots in-sim and UARTE20 EasyDMA reaches the capture sink; the asserted lines carry the chip's OWN geometry and map (rram=2036K ram=511K, p3@0x500D8600), all of which are wrong on the nRF54L15 profile this one would most plausibly be copied from",
+    "lane": "core-ci: cargo test -p labwired-core --test strict_onboarding (the gate EXECUTES examples/nrf54lm20a-snake/io-smoke.yaml through the CLI and fails the board if any assertion fails)"
+  },
+  "spi": {
+    "state": "proven",
+    "file": "crates/core/tests/strict_onboarding.rs",
+    "test": "test_strict_board_onboarding",
+    "signal": "SPIM22 EasyDMA drives an RM67162 AMOLED and the run is judged on the PICTURE, not the transaction: a display_region assertion requires ink in the 240x520 play area and requires the never-addressed 16-row strip below it to be EXACTLY black. Verified to discriminate -- setting DCXCNT to 0 in the firmware, so no byte is ever framed as a command, leaves every UART assertion passing and takes the play area to 0.0% inked.",
+    "lane": "core-ci: cargo test -p labwired-core --test strict_onboarding (the gate EXECUTES examples/nrf54lm20a-snake/io-smoke.yaml through the CLI and fails the board if any assertion fails)",
+    "note": "the D/C line is driven by the CONTROLLER (PSEL.DCX + DCXCNT), not a GPIO, so this also proves the nRF54L SPIM's hardware data/command path end to end."
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "TWIM21 is declared at 0x500C7000 and uses the same nrf54l_twim model the nRF54L15 smart-ring lane proves, but no nrf54lm20a manifest or firmware wires an I2C device.",
+    "lane": "none"
+  }
+}

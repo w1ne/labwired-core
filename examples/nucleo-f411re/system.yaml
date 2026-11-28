@@ -1,0 +1,7 @@
+name: "nucleo-f411re-smoke"
+chip: "../../configs/chips/stm32f411re.yaml"
+# ST-LINK VCP = USART2 PA2/PA3 (UM1724 §6.8); the console taps it only.
+debug_uart: "usart2"
+external_devices: []
+board_io:
+  - { id: "ld2_pa5", kind: "led", peripheral: "gpioa", pin: 5, signal: "output", active_high: true }

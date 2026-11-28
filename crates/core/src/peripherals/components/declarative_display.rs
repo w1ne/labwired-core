@@ -148,7 +148,7 @@ impl DcWiring {
 }
 
 /// Where the next wire byte goes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 enum Framing {
     /// No command is open. A data byte here is a stray, which is what it is on
     /// silicon too.
@@ -163,6 +163,41 @@ struct SerialColorState {
     decoder: St7735ColorDecoder,
     known: Vec<bool>,
     rejected_colmod: u64,
+}
+
+/// One closed full-plane paint, kept so a later inspect can prove how the
+/// glass changed over time. `bytes` is the oriented framebuffer (same layout
+/// as the inspect payload); it is stored for the run and only serialised when
+/// the caller asked for artifact bytes.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct LoggedFrame {
+    generation: u64,
+    t_us: u64,
+    sha256: String,
+    ink_bytes: usize,
+    /// Oriented plane, kept only when it is small enough for Acc geometry
+    /// prove (mono OLEDs). Color panels keep sha256 / t_us only — 128 frames
+    /// of RGB888 would be a silent tens-of-MB growth per panel.
+    bytes: Option<Vec<u8>>,
+}
+
+impl LoggedFrame {
+    fn to_meta(&self, include_bytes: bool) -> serde_json::Value {
+        let mut meta = serde_json::json!({
+            "generation": self.generation,
+            "t_us": self.t_us,
+            "sha256": self.sha256,
+            "ink_bytes": self.ink_bytes,
+        });
+        if include_bytes {
+            if let Some(bytes) = &self.bytes {
+                meta["bytes"] = serde_json::Value::Array(
+                    bytes.iter().copied().map(serde_json::Value::from).collect(),
+                );
+            }
+        }
+        meta
+    }
 }
 
 /// The engine device. One per placed panel.
@@ -243,9 +278,19 @@ pub struct GenericDisplay {
     /// stream (capped). An oracle can prove the glass content changed across
     /// steps from one end-of-run inspect, without mid-run samples.
     generation_history: VecDeque<u64>,
-    /// Closed paints: generation + sim time + sha256 of the oriented framebuffer.
-    /// Cap matches generation_history. Used by Acc framebuffer prove clauses.
-    frames_seen: VecDeque<serde_json::Value>,
+    /// Closed paints: generation + sim time + sha256 + the oriented framebuffer
+    /// bytes (published on inspect only when `InspectOpts.include_bytes` is
+    /// set, so summary mode stays small). Cap matches generation_history.
+    /// Used by Acc framebuffer prove clauses (blink / motion / geometry).
+    frames_seen: VecDeque<LoggedFrame>,
+    /// True when the descriptor defines an explicit `refresh` command
+    /// (e-paper panels whose glass updates only on `action.refresh`).
+    has_refresh: bool,
+    /// True once at least one write unit / pixel has landed in the currently
+    /// open `Framing::Ram` stream. Prevents empty `RAMWR` openings from
+    /// emitting a spurious frame while allowing inspect/CS-close to flush the
+    /// final rendered frame without requiring a dummy trailing command.
+    ram_stream_wrote: bool,
     /// Data bytes written since the last `note_fb_generation` for
     /// `ram.stream: always` panels. Adafruit SSD1306 chunks a display() into
     /// many short I²C transactions; we only log a frame once a full plane
@@ -274,6 +319,10 @@ pub struct GenericDisplay {
     /// I²C only: the control byte latched at the start of this transaction.
     /// `None` = the next byte IS the control byte.
     control: Option<u8>,
+    /// Strobed-nibble bus only: the E level of the previous port byte, and
+    /// the high nibble waiting for its low half with the RS it was sent on.
+    nibble_e: bool,
+    nibble_pending: Option<(u8, bool)>,
 
     glass: Option<GlassWindow>,
     elapsed_us: u64,
@@ -497,6 +546,40 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
                 bail!("a control-byte panel sits on I²C and needs a default_address");
             }
         }
+        DisplayDcSource::StrobedNibbles => {
+            let bus = spec.dc.nibble.context(
+                "dc.source strobed_nibbles needs dc.nibble (which port bit is RS, RW, E and D4)",
+            )?;
+            if spec.default_address.is_none() {
+                bail!("a strobed-nibble panel sits behind an I²C port expander and needs a default_address");
+            }
+            let data = (0..4).map(|i| bus.data_shift + i);
+            let mut bits: Vec<u8> = vec![bus.rs_bit, bus.rw_bit, bus.e_bit];
+            bits.extend(data);
+            if bits.iter().any(|b| *b > 7) {
+                bail!("dc.nibble names a port bit past bit 7 of an 8-bit expander");
+            }
+            let mut unique = bits.clone();
+            unique.sort_unstable();
+            unique.dedup();
+            if unique.len() != bits.len() {
+                bail!("dc.nibble puts two lines on one port bit");
+            }
+            if let Some(cmd) = spec.commands.iter().find(|c| c.args > 0) {
+                bail!(
+                    "command 0x{:02X} declares {} parameter bytes, but a strobed-nibble bus \
+                     carries every byte after a command as data",
+                    cmd.opcode,
+                    cmd.args
+                );
+            }
+        }
+    }
+    if spec.dc.nibble.is_some() && spec.dc.source != DisplayDcSource::StrobedNibbles {
+        bail!(
+            "dc.nibble describes a strobed-nibble bus, and dc.source is {:?}",
+            spec.dc.source
+        );
     }
 
     if !spec.addressing.modes.contains(&spec.addressing.default) {
@@ -684,6 +767,24 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
                     "artifact_meta publishes var '{var}', which is not declared — the key would \
                      read a cell nothing can write and report a constant forever"
                 );
+            }
+            continue;
+        }
+        if let Some(rows) = field.text() {
+            if rows.is_empty() {
+                bail!("artifact_meta text lists no rows");
+            }
+            for row in rows {
+                if row.len == 0
+                    || u64::from(row.offset) + u64::from(row.len) > u64::from(spec.ram.bytes)
+                {
+                    bail!(
+                        "artifact_meta text row at offset {} and {} bytes is not inside the {}-byte frame memory",
+                        row.offset,
+                        row.len,
+                        spec.ram.bytes
+                    );
+                }
             }
             continue;
         }
@@ -983,7 +1084,10 @@ impl GenericDisplay {
         let Some(spec) = descriptor.behavior.display.as_ref() else {
             return Ok(None);
         };
-        if spec.dc.source != DisplayDcSource::ControlByte {
+        if !matches!(
+            spec.dc.source,
+            DisplayDcSource::ControlByte | DisplayDcSource::StrobedNibbles
+        ) {
             return Ok(None);
         }
         let default = spec.default_address.unwrap_or(0);
@@ -1022,6 +1126,10 @@ impl GenericDisplay {
             known: vec![false; width * height],
             rejected_colmod: 0,
         });
+        let has_refresh = spec
+            .commands
+            .iter()
+            .any(|c| c.actions.iter().any(|a| a.refresh));
         let mut dev = Self {
             by_opcode,
             width,
@@ -1063,6 +1171,8 @@ impl GenericDisplay {
             refresh_generation: 0,
             generation_history: VecDeque::new(),
             frames_seen: VecDeque::new(),
+            has_refresh,
+            ram_stream_wrote: false,
             ram_bytes_since_note: 0,
             last_logged_generation: None,
             framing: Framing::Idle,
@@ -1076,6 +1186,8 @@ impl GenericDisplay {
             plane: 0,
             ram_remaining: None,
             control: None,
+            nibble_e: false,
+            nibble_pending: None,
             glass: None,
             elapsed_us: 0,
             spec,
@@ -1199,6 +1311,7 @@ impl GenericDisplay {
                     // Neither release nor an unknown wire resumes fragments
                     // clocked before the reset-state transition.
                     self.framing = Framing::Idle;
+                    self.ram_stream_wrote = false;
                     self.param_have = 0;
                     self.param_want = 0;
                     self.pending_idx = None;
@@ -1248,6 +1361,7 @@ impl GenericDisplay {
         }
         self.reset_window();
         self.framing = Framing::Idle;
+        self.ram_stream_wrote = false;
         self.param_have = 0;
         self.param_want = 0;
         self.pending_idx = None;
@@ -1536,6 +1650,7 @@ impl GenericDisplay {
                 self.unit_have = 0;
                 self.ram_remaining = (self.spec.ram.stream == DisplayRamStream::WindowCounted)
                     .then(|| self.window_units());
+                self.ram_stream_wrote = false;
                 self.framing = Framing::Ram;
             }
             if let Some(on) = action.display_on {
@@ -1590,6 +1705,7 @@ impl GenericDisplay {
     fn command_byte(&mut self, byte: u8) {
         if self.framing == Framing::Ram {
             self.note_fb_generation();
+            self.ram_stream_wrote = false;
         }
         // Parameters of a command opened on the COMMAND stream (I²C control-byte
         // framing) arrive here, ahead of any opcode decode — the controller is
@@ -1694,6 +1810,37 @@ impl GenericDisplay {
         }
     }
 
+    /// One port byte of a strobed-nibble bus. The controller latches RS, RW
+    /// and the data nibble on the falling edge of E; a byte that does not end
+    /// an E pulse moves no data. Nibbles pair high-then-low on one RS. A
+    /// nibble on a different RS than the pending half drops that half: RS
+    /// cannot change inside one byte, so the pending half was an orphan. The
+    /// 4-bit init sequence (single nibbles 3, 3, 3, 2) pairs into 0x33 and
+    /// 0x32, both function sets, and leaves nothing pending.
+    fn port_byte(&mut self, port: u8) {
+        let bus = self.spec.dc.nibble.expect("validated strobed-nibble bus");
+        let bit = |n: u8| port >> n & 1 == 1;
+        let e = bit(bus.e_bit);
+        let falling = self.nibble_e && !e;
+        self.nibble_e = e;
+        if !falling || bit(bus.rw_bit) {
+            return;
+        }
+        let rs = bit(bus.rs_bit);
+        let nibble = (port >> bus.data_shift) & 0x0F;
+        match self.nibble_pending.take() {
+            Some((high, pending_rs)) if pending_rs == rs => {
+                let byte = (high << 4) | nibble;
+                if rs {
+                    self.data_byte(byte);
+                } else {
+                    self.command_byte(byte);
+                }
+            }
+            _ => self.nibble_pending = Some((nibble, rs)),
+        }
+    }
+
     /// True when command PARAMETERS ride the data line — the 4-wire SPI panel,
     /// whose D/C pad goes high for a command's arguments as much as for pixels.
     fn args_on_data_stream(&self) -> bool {
@@ -1727,6 +1874,7 @@ impl GenericDisplay {
                 };
                 self.ram[index * 3..index * 3 + 3].copy_from_slice(&channels);
             }
+            self.ram_stream_wrote = true;
             self.advance();
             return;
         }
@@ -1737,6 +1885,7 @@ impl GenericDisplay {
         }
         self.unit_have = 0;
         self.commit_unit();
+        self.ram_stream_wrote = true;
         self.advance();
         // `window_counted`: the controller accepts exactly the window and then
         // the stream is shut. Running past it would wrap the counters back to
@@ -1746,6 +1895,7 @@ impl GenericDisplay {
             if *left == 0 {
                 self.ram_remaining = None;
                 self.framing = Framing::Idle;
+                self.ram_stream_wrote = false;
                 self.note_fb_generation();
             }
         }
@@ -1890,6 +2040,26 @@ impl GenericDisplay {
         Some(known)
     }
 
+    fn make_logged_frame(&self, fb: Vec<u8>, gen: u64) -> LoggedFrame {
+        let sha = {
+            use sha2::{Digest, Sha256};
+            let dig = Sha256::digest(&fb);
+            dig.iter().map(|b| format!("{b:02x}")).collect::<String>()
+        };
+        // A 128x64 1-bpp plane is 1024 bytes; 128 of those is fine. A
+        // 170x320 RGB888 plane is ~160 KiB, and 128 of those would be ~20 MiB
+        // per panel. Keep the plane only when Acc geometry can reasonably
+        // use it.
+        const FRAME_BYTES_KEEP: usize = 4096;
+        LoggedFrame {
+            generation: gen,
+            t_us: self.elapsed_us,
+            sha256: sha,
+            ink_bytes: fb.iter().filter(|&&b| b != 0).count(),
+            bytes: (fb.len() <= FRAME_BYTES_KEEP).then_some(fb),
+        }
+    }
+
     /// Record the current framebuffer hash when a RAMWR (or equivalent) stream
     /// has closed and the picture differs from the last logged one.
     fn note_fb_generation(&mut self) {
@@ -1908,17 +2078,8 @@ impl GenericDisplay {
         if self.frames_seen.len() >= CAP {
             self.frames_seen.pop_front();
         }
-        let sha = {
-            use sha2::{Digest, Sha256};
-            let dig = Sha256::digest(&fb);
-            dig.iter().map(|b| format!("{b:02x}")).collect::<String>()
-        };
-        self.frames_seen.push_back(serde_json::json!({
-            "generation": gen,
-            "t_us": self.elapsed_us,
-            "sha256": sha,
-            "ink_bytes": fb.iter().filter(|&&b| b != 0).count(),
-        }));
+        let frame = self.make_logged_frame(fb, gen);
+        self.frames_seen.push_back(frame);
     }
 
     fn build_artifacts(
@@ -1958,10 +2119,30 @@ impl GenericDisplay {
             history.push(generation);
         }
         meta.insert("generation_history".into(), serde_json::json!(history));
-        meta.insert(
-            "frames_seen".into(),
-            serde_json::Value::Array(self.frames_seen.iter().cloned().collect()),
-        );
+        let mut frames_seen: Vec<serde_json::Value> = self
+            .frames_seen
+            .iter()
+            .map(|frame| frame.to_meta(opts.include_bytes))
+            .collect();
+        // A `ram.stream: command` panel (GC9A01, ILI9341, ST7789, ST7735, ...)
+        // leaves its final `RAMWR` stream open when firmware stops sending
+        // commands after the last pixel write. Surface that live frame in
+        // `frames_seen` just as `generation_history` already includes it,
+        // without requiring a dummy trailing command (such as NORON 0x13).
+        if self.spec.ram.stream == DisplayRamStream::Command
+            && !self.has_refresh
+            && self.framing == Framing::Ram
+            && self.ram_stream_wrote
+        {
+            let fb_gen = crate::inspect::artifact_generation(&fb);
+            if self.last_logged_generation != Some(fb_gen) {
+                frames_seen.push(
+                    self.make_logged_frame(fb.clone(), fb_gen)
+                        .to_meta(opts.include_bytes),
+                );
+            }
+        }
+        meta.insert("frames_seen".into(), serde_json::Value::Array(frames_seen));
         // Which panel this is. Two panels can hold the same picture (three
         // OLEDs at 0x3C behind a TCA9548A drawing one splash), and a consumer
         // that tells evidence apart by its contents would merge them into one.
@@ -2021,6 +2202,26 @@ impl GenericDisplay {
                 };
                 let n = bytes.map_or(0, |b| b.iter().filter(|&&x| x != blank).count());
                 meta.insert(field.key().to_string(), serde_json::json!(n));
+                continue;
+            }
+            if let Some(rows) = field.text() {
+                let lines: Vec<String> = rows
+                    .iter()
+                    .map(|row| {
+                        let start = row.offset as usize;
+                        self.ram[start..start + row.len as usize]
+                            .iter()
+                            .map(|&b| {
+                                if (0x20..0x7F).contains(&b) {
+                                    b as char
+                                } else {
+                                    '?'
+                                }
+                            })
+                            .collect()
+                    })
+                    .collect();
+                meta.insert(field.key().to_string(), serde_json::json!(lines));
                 continue;
             }
             if let Some(var) = field.var() {
@@ -2194,6 +2395,14 @@ struct SerialColorSnapshot {
 // ─── I²C door (control-byte framing) ───────────────────────────────────────
 
 impl I2cDevice for GenericDisplay {
+    fn runtime_snapshot(&self) -> Option<Vec<u8>> {
+        self.capture_i2c_runtime_state()
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> crate::SimResult<()> {
+        self.restore_i2c_runtime_state(bytes)
+    }
+
     fn address(&self) -> u8 {
         self.address
     }
@@ -2218,8 +2427,16 @@ impl I2cDevice for GenericDisplay {
         self.control = None;
     }
 
+    // A strobed-nibble panel's I²C transactions belong to its port expander:
+    // the controller never sees a START or a STOP, only E edges, so neither
+    // may close its RAM stream.
+
     fn write(&mut self, data: u8) {
         if !self.powered {
+            return;
+        }
+        if self.spec.dc.source == DisplayDcSource::StrobedNibbles {
+            self.port_byte(data);
             return;
         }
         let Some(control) = self.control else {
@@ -2234,12 +2451,16 @@ impl I2cDevice for GenericDisplay {
     }
 
     fn stop(&mut self) {
+        if self.spec.dc.source == DisplayDcSource::StrobedNibbles {
+            return;
+        }
         // `ram.stream: always` paints are logged from `data_byte` once a full
         // plane has been written (chunked I²C STOPs must not each count as a
         // frame). Windowed RAM streams still close on STOP.
         if self.spec.ram.stream != DisplayRamStream::Always && self.framing == Framing::Ram {
             self.note_fb_generation();
             self.framing = Framing::Idle;
+            self.ram_stream_wrote = false;
         }
         self.control = None;
     }
@@ -2292,7 +2513,11 @@ impl SpiDevice for GenericDisplay {
         if self.spec.cs_select == DisplayCsSelect::KeepsStream {
             return;
         }
+        if self.framing == Framing::Ram && self.ram_stream_wrote && !self.has_refresh {
+            self.note_fb_generation();
+        }
         self.framing = Framing::Idle;
+        self.ram_stream_wrote = false;
         self.param_want = 0;
         self.param_have = 0;
         self.unit_have = 0;
@@ -2479,7 +2704,9 @@ fn owned_metadata(descriptor: &DeviceDescriptor) -> KitMetadata {
             .collect::<Vec<_>>(),
     );
     let (transport, category) = match spec.dc.source {
-        DisplayDcSource::ControlByte => (Transport::I2c, Category::I2c),
+        DisplayDcSource::ControlByte | DisplayDcSource::StrobedNibbles => {
+            (Transport::I2c, Category::I2c)
+        }
         DisplayDcSource::Pin | DisplayDcSource::HwDcx => (Transport::Spi, Category::Spi),
     };
     KitMetadata {
@@ -2503,7 +2730,7 @@ impl PeripheralKit for DeclarativeDisplayKit {
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
         let spec = self.spec();
         match spec.dc.source {
-            DisplayDcSource::ControlByte => {
+            DisplayDcSource::ControlByte | DisplayDcSource::StrobedNibbles => {
                 let address = ctx.i2c_address_or(spec.default_address.unwrap_or(0))?;
                 let mut dev = GenericDisplay::from_descriptor_i2c(&self.descriptor, Some(address))?
                     .context("a control-byte panel always has an I²C model")?;
@@ -4168,3 +4395,6 @@ mod tests {
         assert_eq!((panel.col_end, panel.row_end), (479, 319));
     }
 }
+
+#[path = "declarative_display_snapshot.rs"]
+mod runtime_snapshot;

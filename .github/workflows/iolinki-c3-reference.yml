@@ -1,19 +1,34 @@
 name: ESP32-C3 IO-Link firmware prerequisite
 on:
   pull_request:
+    # Lean PR gate (2026-11-13): on pull requests this lane runs only when
+    # its own files change. Shared engine paths (crates/core, crates/cli,
+    # Cargo.*) trigger it in the daily schedule instead.
     paths:
-      - 'crates/core/**'
-      - 'crates/config/**'
-      - 'crates/loader/**'
       - 'configs/chips/esp32c3.yaml'
       - '.github/workflows/iolinki-c3-reference.yml'
   push:
     branches: [main]
+    paths:
+      - 'configs/chips/esp32c3.yaml'
+      - '.github/workflows/iolinki-c3-reference.yml'
+  # Shared-engine regressions (crates/core, crates/cli, crates/config, Cargo.*)
+  # are caught daily instead of on every main push: this lane cost ~9 runner-min
+  # per push, ~31 pushes/day, and the PR lane already skips it for engine edits.
+  schedule:
+    - cron: "50 2 * * *"
   workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 jobs:
   c3-esp-idf-firmware-wake:
+    # Cron runs are gated to this repository (a fork would mail failures to a
+    # maintainer here about a run they cannot see).
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -54,10 +69,11 @@ jobs:
         env:
           IOLINKI_C3_ELF: ${{ github.workspace }}/.iolinki/examples/esp32_l6362a/.pio/build/esp32c3/firmware.elf
         run: |
-          cargo test -p labwired-core --test c3_gpio_interrupts --test c3_reference_firmware -- --include-ignored
-          cargo test -p labwired-core --features event-scheduler --test c3_gpio_interrupts --test c3_reference_firmware -- --include-ignored
+          cargo test -p labwired-core --test esp -- --include-ignored c3_gpio_interrupts:: c3_reference_firmware::
+          cargo test -p labwired-core --features event-scheduler --test esp -- --include-ignored c3_gpio_interrupts:: c3_reference_firmware::
       - uses: actions/upload-artifact@v4
         with:
+          retention-days: 1
           name: iolinki-c3-esp-idf-firmware-prerequisite
           if-no-files-found: error
           include-hidden-files: true

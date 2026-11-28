@@ -20,7 +20,6 @@ use crate::WasmSimulator;
 use labwired_config::{CosimAdapter, CosimModelConfig, SystemManifest};
 use labwired_core::cosim::{CosimAdvanceError, CosimSession};
 use labwired_core::{AdvanceReport, AdvanceRequest, SimulationError};
-use std::path::Path;
 use wasm_bindgen::prelude::*;
 
 /// Why a browser build refuses `adapter: external_process`.
@@ -92,7 +91,10 @@ pub(crate) fn check_browser_models(
             {
                 Some(NETLIST_FILE_IN_BROWSER)
             }
-            CosimAdapter::Analog | CosimAdapter::Mock | CosimAdapter::Fmi => None,
+            CosimAdapter::Analog
+            | CosimAdapter::Behavior
+            | CosimAdapter::Mock
+            | CosimAdapter::Fmi => None,
         };
         if let Some(refusal) = refusal {
             return Err(format!("co-sim model '{}': {refusal}", model.id));
@@ -137,10 +139,16 @@ impl WasmSimulator {
         }
     }
     pub(crate) fn runtime_snapshot_refusal(&self) -> Option<&'static str> {
+        if self
+            .machine
+            .as_ref()
+            .is_some_and(|m| m.bus.has_external_mechanical_shafts())
+        {
+            return Some("external mechanical state requires complete frame-journal replay");
+        }
         self.cosim
             .as_ref()
-            .filter(|session| session.has_ngspice())
-            .map(|_| "runtime snapshots cannot capture or restore externally hosted ngspice state")
+            .and_then(|session| session.runtime_snapshot_refusal())
     }
     /// Set a co-simulation signal from outside the engine: a canvas touch pad
     /// sends `('ui.<partId>.pressed', 1)` on press and `0` on release.
@@ -202,17 +210,7 @@ impl WasmSimulator {
         // No base directory: the checks above leave no model that reads a path.
         let Some(session) =
             CosimSession::new_with_factory(&manifest.cosim_models, &machine.bus, |config| {
-                if config.adapter == CosimAdapter::Ngspice {
-                    let callback = callback.ok_or_else(|| {
-                        SimulationError::Other(format!(
-                            "co-sim model {} needs an ngspice callback",
-                            config.id
-                        ))
-                    })?;
-                    Ok(crate::ngspice::adapter(config, callback))
-                } else {
-                    labwired_core::cosim::build_cosim_adapter_with_base(config, Path::new("."))
-                }
+                crate::ngspice::browser_adapter(config, callback)
             })
             .map_err(|e| format!("co-sim: failed to start the declared models: {e}"))?
         else {
@@ -246,6 +244,29 @@ impl WasmSimulator {
     /// fails at apply time is reported once and the run continues, as in
     /// `labwired test`; a model that fails ends the call with an error.
     pub(crate) fn advance_machine(
+        &mut self,
+        request: AdvanceRequest,
+    ) -> Result<AdvanceReport, AdvanceFailure> {
+        self.ensure_uncoupled_stepping()?;
+        self.advance_machine_at_mechanical_frontier(request)
+    }
+
+    pub(crate) fn ensure_uncoupled_stepping(&self) -> Result<(), AdvanceFailure> {
+        if self
+            .machine
+            .as_ref()
+            .is_some_and(|m| m.bus.has_external_mechanical_shafts())
+        {
+            return Err(AdvanceFailure::Cosim(
+                "external mechanical shafts require step_external_mechanical_to and atomic feedback".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// The external mechanical entry point preflights strict timing before
+    /// using this shared executor; ordinary calls pass through the guard above.
+    pub(crate) fn advance_machine_at_mechanical_frontier(
         &mut self,
         request: AdvanceRequest,
     ) -> Result<AdvanceReport, AdvanceFailure> {

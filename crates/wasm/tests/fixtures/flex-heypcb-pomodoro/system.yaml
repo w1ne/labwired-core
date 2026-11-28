@@ -1,0 +1,43 @@
+# Source-grounded, logic-level slice of HeyPCB Pomodoro Pal.
+# See README.md for the immutable KiCad source pin and uncovered board scope.
+schema_version: 1
+name: heypcb-pomodoro-u1-pd6-led-pair
+assumptions:
+  - This is a newly authored portable WebAssembly behavior program; it does not execute the pinned CH32V003 HEX.
+  - U1.PD6 and the two green LEDs are represented by one declarative digital behavior model at 1 us boundaries.
+  - Each LED output reports logic state only; resistor current and the shared return path are not modeled.
+unsupported_checks:
+  - Original CH32V003 firmware execution, target instruction fidelity, and MCU peripheral fidelity.
+  - LED current, optical output, resistor behavior, shared-return behavior, and electrical power behavior.
+  - Buzzer behavior, complete-board integration, and physical hardware behavior.
+ports:
+  - { name: u1_pd6, signal: source.U1.PD6, access: write, kind: bool, initial: 0 }
+  - { name: d1_state, signal: source.D1.logic_state, access: read, kind: bool }
+  - { name: d2_state, signal: source.D2.logic_state, access: read, kind: bool }
+cosim_models:
+  - id: source-pd6-green-indicators
+    adapter: behavior
+    step_ns: 1000
+    inputs: { drive: source.U1.PD6 }
+    outputs:
+      d1: source.D1.logic_state
+      d2: source.D2.logic_state
+    config:
+      behavior:
+        primitive: gpio_device
+        states: [off, on]
+        outputs: [d1, d2]
+        pin_defaults: { d1: false, d2: false }
+        rules:
+          - on: { input: drive }
+            when: 'input(drive) != 0'
+            do:
+              - { goto: on }
+              - { pin: d1, level: 1 }
+              - { pin: d2, level: 1 }
+          - on: { input: drive }
+            when: 'input(drive) == 0'
+            do:
+              - { goto: off }
+              - { pin: d1, level: 0 }
+              - { pin: d2, level: 0 }

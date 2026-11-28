@@ -7,6 +7,7 @@
 use crate::pins::{External, InputChange, PadDriver, PinPort};
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 use labwired_config::PeripheralDescriptor;
+use sha2::{Digest, Sha256};
 use std::any::Any;
 
 use std::cell::RefCell;
@@ -23,11 +24,31 @@ struct InflightEvent {
 
 /// A bit held at a fixed level by a `stuck_at_bit` fault. Applied to every read
 /// so the CPU always observes the stuck level regardless of writes.
-#[derive(Debug)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct StuckBit {
     byte_offset: u64,
     bit_in_byte: u8,
     level: u8,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct GenericRuntimeSnapshot {
+    version: u8,
+    descriptor_key: [u8; 32],
+    data: Vec<u8>,
+    /// Static hook index and remaining delay; action/IRQ come from the checked
+    /// descriptor. TimingAction's YAML decoder is not a bincode decoder.
+    inflight: Vec<(u32, u64)>,
+    stuck_bits: Vec<StuckBit>,
+    ext_mask: u32,
+    reset_values: Vec<u32>,
+}
+
+fn periodic_interval(hook: &labwired_config::TimingDescriptor) -> Option<u64> {
+    match &hook.trigger {
+        labwired_config::TimingTrigger::Periodic { period_cycles } => Some(*period_cycles),
+        _ => None,
+    }
 }
 
 /// A generic peripheral implementation that uses a `PeripheralDescriptor` to define its
@@ -40,6 +61,9 @@ const NO_REG: u32 = u32::MAX;
 #[derive(Debug)]
 pub struct GenericPeripheral {
     descriptor: PeripheralDescriptor,
+    /// Identity of the construction-time topology, before runtime fault
+    /// injection can change a register's reset value.
+    descriptor_key: [u8; 32],
     data: RefCell<Vec<u8>>,
     /// O(1) offset->register resolution, built once in [`GenericPeripheral::new`].
     ///
@@ -68,6 +92,10 @@ impl GenericPeripheral {
     /// The backing memory is automatically sized to accommodate the highest register offset,
     /// and all registers are initialized to their specified `reset_value`.
     pub fn new(descriptor: PeripheralDescriptor) -> Self {
+        let descriptor_key = Sha256::digest(
+            bincode::serialize(&descriptor).expect("serialize declarative descriptor"),
+        )
+        .into();
         let mut max_addr = 0;
         for reg in &descriptor.registers {
             let end_addr = reg.address_offset + (reg.size as u64 / 8);
@@ -114,6 +142,7 @@ impl GenericPeripheral {
 
         let p = Self {
             descriptor,
+            descriptor_key,
             data: RefCell::new(data),
             reg_at_byte,
             inflight_events: RefCell::new(Vec::new()),
@@ -771,6 +800,106 @@ impl Peripheral for GenericPeripheral {
         })
     }
 
+    fn runtime_snapshot(&self) -> Vec<u8> {
+        let hooks = self.descriptor.timing.as_deref().unwrap_or(&[]);
+        let inflight = self
+            .inflight_events
+            .borrow()
+            .iter()
+            .map(|event| {
+                let index = hooks
+                    .iter()
+                    .position(|hook| {
+                        hook.id == event.id
+                            && hook.action == event.action
+                            && hook.interrupt == event.interrupt
+                            && periodic_interval(hook) == event.periodic_interval
+                            && event.delay_remaining
+                                <= event.periodic_interval.unwrap_or(hook.delay_cycles)
+                    })
+                    .expect("an inflight declarative event belongs to its descriptor");
+                (index as u32, event.delay_remaining)
+            })
+            .collect();
+        bincode::serialize(&GenericRuntimeSnapshot {
+            version: 1,
+            descriptor_key: self.descriptor_key,
+            data: self.data.borrow().clone(),
+            inflight,
+            stuck_bits: self.stuck_bits.borrow().clone(),
+            ext_mask: self.ext_mask,
+            reset_values: self
+                .descriptor
+                .registers
+                .iter()
+                .map(|reg| reg.reset_value)
+                .collect(),
+        })
+        .expect("serialize declarative runtime snapshot")
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> SimResult<()> {
+        use bincode::Options;
+        // Older snapshots carried no register-bank state. Keep boot-before-init
+        // snapshots loadable; a nonempty payload must pass every check below.
+        if bytes.is_empty() {
+            return Ok(());
+        }
+        let invalid = |reason: &str| {
+            crate::SimulationError::NotImplemented(format!("GenericPeripheral snapshot: {reason}"))
+        };
+        let snapshot: GenericRuntimeSnapshot = bincode::DefaultOptions::new()
+            .with_fixint_encoding()
+            .reject_trailing_bytes()
+            .deserialize(bytes)
+            .map_err(|error| invalid(&format!("decode failed: {error}")))?;
+        if snapshot.version != 1
+            || snapshot.descriptor_key != self.descriptor_key
+            || snapshot.data.len() != self.data.borrow().len()
+            || snapshot.reset_values.len() != self.descriptor.registers.len()
+        {
+            return Err(invalid("schema or register topology mismatch"));
+        }
+        if snapshot.stuck_bits.iter().any(|bit| {
+            self.reg_index_at(bit.byte_offset).is_none() || bit.bit_in_byte >= 8 || bit.level > 1
+        }) || (snapshot.ext_mask != 0 && self.gpio_reg_offset("IN").is_none())
+        {
+            return Err(invalid("invalid pin or fault state"));
+        }
+        let hooks = self.descriptor.timing.as_deref().unwrap_or(&[]);
+        let mut events = Vec::with_capacity(snapshot.inflight.len());
+        for (index, delay_remaining) in snapshot.inflight {
+            let hook = hooks
+                .get(index as usize)
+                .ok_or_else(|| invalid("unknown timing hook"))?;
+            let interval = periodic_interval(hook);
+            if delay_remaining > interval.unwrap_or(hook.delay_cycles) {
+                return Err(invalid("invalid remaining event delay"));
+            }
+            events.push(InflightEvent {
+                id: hook.id.clone(),
+                delay_remaining,
+                action: hook.action.clone(),
+                interrupt: hook.interrupt.clone(),
+                periodic_interval: interval,
+            });
+        }
+        // Validate the entire payload before replacing any live state.
+        *self.data.get_mut() = snapshot.data;
+        *self.inflight_events.get_mut() = events;
+        *self.stuck_bits.get_mut() = snapshot.stuck_bits;
+        self.ext_mask = snapshot.ext_mask;
+        for (reg, reset_value) in self
+            .descriptor
+            .registers
+            .iter_mut()
+            .zip(snapshot.reset_values)
+        {
+            reg.reset_value = reset_value;
+        }
+        Ok(())
+    }
+
     fn read_gpio_input(&self, pin: u8) -> Option<bool> {
         if pin >= 32 {
             return None;
@@ -873,6 +1002,191 @@ mod tests {
             interrupts: None,
             timing: None,
         }
+    }
+
+    #[test]
+    fn runtime_snapshot_restores_esp32c3_interrupt_register_bank() {
+        let descriptor = PeripheralDescriptor::from_yaml(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../configs/peripherals/esp32c3/interrupt_core0.yaml"
+        )))
+        .unwrap();
+        let mut original = GenericPeripheral::new(descriptor.clone());
+        // The OLED firmware routes SYSTIMER targets 0/2 to CPU lines 4/2,
+        // then enables/prioritizes those lines and sets threshold 1.
+        let registers = [
+            (0x94, 4),
+            (0x9c, 2),
+            (0x104, 117_442_204),
+            (0x108, 1 << 24),
+            (0x11c, 1),
+            (0x124, 1),
+            (0x194, 1),
+        ];
+        for (offset, value) in registers {
+            original.write_u32(offset, value).unwrap();
+        }
+        let bytes = original.runtime_snapshot();
+        assert!(!bytes.is_empty());
+        let mut resumed = GenericPeripheral::new(descriptor);
+        assert_eq!(resumed.peek_u32_raw(0x104), Some(0));
+        resumed.restore_runtime_snapshot(&bytes).unwrap();
+        for (offset, value) in registers {
+            assert_eq!(
+                resumed.peek_u32_raw(offset),
+                Some(value),
+                "offset {offset:#x}"
+            );
+        }
+        assert_eq!(resumed.runtime_snapshot(), bytes);
+    }
+
+    #[test]
+    fn runtime_snapshot_preserves_timing_faults_and_external_gpio_drive() {
+        let mut descriptor = gpio_descriptor(true);
+        descriptor.interrupts = Some(std::collections::BTreeMap::from([("ready".into(), 7)]));
+        descriptor.timing = Some(vec![labwired_config::TimingDescriptor {
+            id: "write_done".into(),
+            trigger: labwired_config::TimingTrigger::Write {
+                register: "OUT".into(),
+                value: None,
+                mask: None,
+            },
+            delay_cycles: 2,
+            action: labwired_config::TimingAction::SetBits {
+                register: "IN".into(),
+                bits: 1 << 7,
+            },
+            interrupt: Some("ready".into()),
+        }]);
+        let mut original = GenericPeripheral::new(descriptor.clone());
+        assert!(original.force_register_value("OUT", 0x55));
+        assert!(original.force_stuck_bit("OUT", 4, 1));
+        original.write_u32(0x04, 0).unwrap();
+        original.write_u32(0x20, 1 << 3).unwrap();
+        assert!(original.set_gpio_input(3, true));
+        original.tick(); // Keep one pending countdown cycle at the save point.
+        let mut resumed = GenericPeripheral::new(descriptor);
+        resumed
+            .restore_runtime_snapshot(&original.runtime_snapshot())
+            .unwrap();
+        assert_eq!(resumed.get_descriptor().registers[0].reset_value, 0x55);
+        assert_eq!(resumed.read_u32(0x04).unwrap(), 1 << 4);
+        assert_eq!(
+            resumed.read_gpio_pad_drive(3),
+            Some(crate::logic_capture::PadDrive::Contention)
+        );
+        for _ in 0..3 {
+            let expected = original.tick();
+            let actual = resumed.tick();
+            assert_eq!(actual.explicit_irqs, expected.explicit_irqs);
+            assert_eq!(resumed.runtime_snapshot(), original.runtime_snapshot());
+        }
+        assert!(resumed.read_gpio_input(7).unwrap());
+    }
+
+    #[test]
+    fn runtime_snapshot_keeps_periodic_event_phase() {
+        let mut descriptor = mock_descriptor();
+        descriptor.timing = Some(vec![labwired_config::TimingDescriptor {
+            id: "periodic".into(),
+            trigger: labwired_config::TimingTrigger::Periodic { period_cycles: 3 },
+            delay_cycles: 0,
+            action: labwired_config::TimingAction::SetBits {
+                register: "REG1".into(),
+                bits: 1,
+            },
+            interrupt: None,
+        }]);
+        let mut original = GenericPeripheral::new(descriptor.clone());
+        original.write_u32(0, 0).unwrap();
+        original.tick();
+        original.tick();
+        let mut resumed = GenericPeripheral::new(descriptor);
+        resumed
+            .restore_runtime_snapshot(&original.runtime_snapshot())
+            .unwrap();
+        for _ in 0..8 {
+            original.tick();
+            resumed.tick();
+            assert_eq!(resumed.runtime_snapshot(), original.runtime_snapshot());
+        }
+    }
+
+    #[test]
+    fn runtime_snapshot_preserves_duplicate_timing_hook_ids() {
+        let mut descriptor = mock_descriptor();
+        descriptor.timing = Some(
+            [2, 4]
+                .into_iter()
+                .map(|delay_cycles| labwired_config::TimingDescriptor {
+                    id: "shared_id".into(),
+                    trigger: labwired_config::TimingTrigger::Write {
+                        register: "REG1".into(),
+                        value: None,
+                        mask: None,
+                    },
+                    delay_cycles,
+                    action: labwired_config::TimingAction::SetBits {
+                        register: "REG1".into(),
+                        bits: 1,
+                    },
+                    interrupt: None,
+                })
+                .collect(),
+        );
+        let mut original = GenericPeripheral::new(descriptor.clone());
+        original.write_u32(0, 0).unwrap();
+        let mut resumed = GenericPeripheral::new(descriptor);
+        resumed
+            .restore_runtime_snapshot(&original.runtime_snapshot())
+            .unwrap();
+        for _ in 0..6 {
+            original.tick();
+            resumed.tick();
+            assert_eq!(resumed.runtime_snapshot(), original.runtime_snapshot());
+        }
+    }
+
+    #[test]
+    fn runtime_snapshot_rejects_invalid_payloads_without_partial_restore() {
+        let mut original = GenericPeripheral::new(mock_descriptor());
+        original.write_u32(0, 0x1234).unwrap();
+        let bytes = original.runtime_snapshot();
+        let mut resumed = GenericPeripheral::new(mock_descriptor());
+        resumed.write_u32(0, 0x5678).unwrap();
+        let before = resumed.runtime_snapshot();
+        let mut snapshot: GenericRuntimeSnapshot = bincode::deserialize(&bytes).unwrap();
+        snapshot.data.pop();
+        let wrong_length = bincode::serialize(&snapshot).unwrap();
+        snapshot = bincode::deserialize(&bytes).unwrap();
+        snapshot.version = 2;
+        let wrong_version = bincode::serialize(&snapshot).unwrap();
+        snapshot = bincode::deserialize(&bytes).unwrap();
+        snapshot.inflight.push((0, 0)); // This descriptor has no timing hooks.
+        let wrong_hook = bincode::serialize(&snapshot).unwrap();
+        let mut trailing = bytes.clone();
+        trailing.push(0);
+        for invalid in [
+            &bytes[..bytes.len() - 1],
+            &wrong_length,
+            &wrong_version,
+            &wrong_hook,
+            &trailing,
+        ] {
+            assert!(resumed.restore_runtime_snapshot(invalid).is_err());
+            assert_eq!(resumed.runtime_snapshot(), before);
+        }
+        let mut wrong_topology = mock_descriptor();
+        wrong_topology.registers[0].id = "OTHER".into();
+        let mut other = GenericPeripheral::new(wrong_topology);
+        assert!(other.restore_runtime_snapshot(&bytes).is_err());
+        resumed.restore_runtime_snapshot(&[]).unwrap();
+        assert_eq!(
+            resumed.runtime_snapshot(),
+            before,
+            "legacy empty blob leaves live state alone"
+        );
     }
 
     #[test]

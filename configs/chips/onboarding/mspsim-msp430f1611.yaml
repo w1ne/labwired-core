@@ -3,16 +3,92 @@
 #
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
-
+#
+# Texas Instruments MSP430F1611 (16-bit MSP430 CPU, 48 KiB flash, 10 KiB RAM).
+# SIM-DERIVED: no MSP430F1611 bench part.
+#
+# Sources:
+#   - MSP430x1xx Family User's Guide (SLAU049): CPU, SFRs, USART, watchdog,
+#     hardware multiplier, basic clock module.
+#   - MSP430x15x/16x/161x data sheet (SLAS368): memory map, interrupt vectors.
+#   - msp430-gcc-support-files 1.212 `msp430f1611.h` / `msp430f1611.ld`:
+#     register addresses, vector numbers, memory regions.
+#
+# Core: `arch: msp430` builds the MSP430 machine family
+# (crates/core/src/cpu/msp430.rs). Interrupt line n vectors through
+# 0xFFFE - 2n: WDT = 5, USART0 RX = 6, USART0 TX = 7, USART1 RX = 12,
+# USART1 TX = 13.
+#
+# NOT modelled, and not mapped (an access is a bus error): digital I/O ports
+# P1-P6, Timer_A, Timer_B, ADC12, DAC12, DMA, I2C mode of USART0, SVS,
+# Comparator_A, the flash controller.
+# Modelled with limits (crates/core/src/peripherals/msp430.rs): the watchdog
+# counter does not run; the basic clock module is storage and no clock rate
+# follows it; USART UART mode only, immediate transmit, no receive errors;
+# every instruction takes one clock cycle.
 name: mspsim-msp430f1611
-arch: unknown
+arch: msp430
+core: msp430
+# MCLK from the DCO at its reset setting (about 800 kHz, typical). The clock
+# registers do not change it, and every instruction takes one cycle.
+cpu_hz: 800000
+# The SFRs sit at 0x0; the MSP430 has no Cortex-M style flash mirror there.
+flash_boot_alias: false
 flash:
-  base: 16384
+  # 0x4000-0xFFFF; the interrupt vectors are its last 32 bytes.
+  base: 0x4000
   size: 48KB
 ram:
-  base: 4352
+  base: 0x1100
   size: 10KB
-peripherals: []
+memory_regions:
+  # The first 2 KiB of RAM also answer at 0x0200.
+  - name: ram_mirror
+    base: 0x0200
+    size: 2KB
+    alias_of: 0x1100
+  # Information memory, segments B and A.
+  - name: infomem
+    base: 0x1000
+    size: 256B
+    erased: true
+peripherals:
+  # IE1, IE2, IFG1, IFG2, ME1, ME2. WDTIE/WDTIFG are bit 0 of IE1/IFG1,
+  # URXIE0/UTXIE0 bits 6/7; URXIE1/UTXIE1 are bits 4/5 of IE2/IFG2.
+  - id: sfr
+    type: msp430_sfr
+    base_address: 0x0000
+    size: 6B
+    config:
+      ie1_lines: [5, 0, 0, 0, 0, 0, 6, 7]
+      ie2_lines: [0, 0, 0, 0, 12, 13, 0, 0]
+  # DCOCTL, BCSCTL1, BCSCTL2.
+  - id: bcm
+    type: msp430_bcm
+    base_address: 0x0056
+    size: 3B
+  - id: usart0
+    type: msp430_usart
+    base_address: 0x0070
+    size: 8B
+    config:
+      flags: [1, 6, 7]
+      module_enable: [1, 6, 7]
+  - id: usart1
+    type: msp430_usart
+    base_address: 0x0078
+    size: 8B
+    config:
+      flags: [2, 4, 5]
+      module_enable: [2, 4, 5]
+  - id: wdt
+    type: msp430_wdt
+    base_address: 0x0120
+    size: 2B
+  - id: mpy
+    type: msp430_mpy
+    base_address: 0x0130
+    size: 16B
 provenance:
   source: mspsim
   repo: https://github.com/contiki-ng/mspsim

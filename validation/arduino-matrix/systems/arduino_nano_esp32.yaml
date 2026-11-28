@@ -1,0 +1,32 @@
+# Arduino matrix system — Arduino Nano ESP32 (ABX00092).
+# INA219 on the Nano's Wire pins (A4 = GPIO11 SDA, A5 = GPIO12 SCL) and
+# MAX31855 on its SPI pins (D13 = GPIO48 SCK, D12 = GPIO47 MISO,
+# D11 = GPIO38 MOSI), chip select D10 = GPIO21.
+name: "arduino-matrix-arduino-nano-esp32"
+chip: "../../../configs/chips/esp32s3.yaml"
+external_devices:
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c0"
+    route: { sda: "GPIO11", scl: "GPIO12" }
+    config:
+      i2c_address: 0x40
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi2_s3"
+    config:
+      cs_pin: "GPIO21"
+  # L5: a potentiometer wiper on A0 (GPIO1 = ADC1_CH0). It starts centred,
+  # so the SENS oneshot converts 1650 mV against 3.3 V: 2047.
+  - id: "pot_a0"
+    type: "potentiometer"
+    connection: "sens_s3"
+    config:
+      channel: 0
+board_io:
+  - id: "user_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 48
+    signal: "output"
+    active_high: true

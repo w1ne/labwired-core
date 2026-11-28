@@ -20,10 +20,10 @@ cpu_hz: 150_000_000
 
 flash:
   base: 0x10000000
-  # 2 MiB of external QSPI NOR (the Pico 2's W25Q16), spelled in KB because
-  # `parse_size` reads MB as 10^6 — "2MB" would be 2_000_000, 97_152 bytes
-  # short. Gated by crates/core/src/tests/chip_memory_sizes.rs.
-  size: "2048KB"
+  # 4 MiB of external QSPI NOR on the Pico 2 and Waveshare RP2350-Zero boards,
+  # spelled in KB because `parse_size` reads MB as 10^6. Gated by
+  # crates/core/src/tests/chip_memory_sizes.rs.
+  size: "4096KB"
 ram:
   base: 0x20000000
   # 520KB contiguous: 10 striped banks + the two 4KB scratch banks
@@ -56,6 +56,17 @@ coprocessors: [rp2350_dcp, rp2350_gpioc]
 # Atomic SET/CLR/XOR aliases, same scheme as RP2040 (rp2350 addressmap.h
 # REG_ALIAS_*_BITS).
 atomic_register_aliases: true
+# Analog inputs. RP2350A (the 30-GPIO QFN-60 on the Pico 2) exposes ADC0..ADC3
+# on GPIO26..GPIO29, as the RP2040 did; the extra ADC4..ADC7 inputs exist only
+# on the 48-GPIO RP2350B package (GPIO40..47), which no profile here uses.
+# ADC selects the channel through `CS.AINSEL`; the shared `rp2040_adc` model
+# implements inputs 0..3 plus the on-die temperature sensor on input 4, so only
+# the four external pads are listed.
+analog_pins:
+  GP26: { peripheral: "adc", channel: 0 }
+  GP27: { peripheral: "adc", channel: 1 }
+  GP28: { peripheral: "adc", channel: 2 }
+  GP29: { peripheral: "adc", channel: 3 }
 peripherals:
   # SYSINFO (CHIP_ID 0x30004927 = revision 3, part 0x0004, manufacturer 0x927
   # — rp2350 sysinfo.h). The pico-sdk USB errata workaround asserts the
@@ -224,12 +235,23 @@ peripherals:
   # core 1 is not modeled yet).
   # SIO with the RP2350 GPIO map (each register has a HI twin at +4, so
   # OUT_SET is 0x18 and OE is 0x30, not the RP2040's 0x14 / 0x20).
+  # PADS_BANK0 (datasheet §9.11.3): one word per pad with PUE (bit 3) / PDE
+  # (bit 2), reset 0x116 (pulled down). Inside the clk_rst window; the greatest
+  # start wins. The SIO names it as its pad_control block, so the pull firmware
+  # writes (pinMode INPUT_PULLUP, gpio_pull_up) holds a pad nothing drives.
+  - id: "pads_bank0"
+    type: "declarative"
+    base_address: 0x40038000
+    size: "4KB"
+    config:
+      path: "../peripherals/rp2350/pads_bank0.yaml"
   - id: "sio"
     type: "rp2040_sio"
     base_address: 0xD0000000
     size: "4KB"
     config:
       debug_schema: "../peripherals/rp2350/sio.yaml"
+      pad_control: "pads_bank0"
       profile: "rp2350"
   # Cortex-M33 SCS ACTLR (0xE000E008), a plain register: pico-sdk's
   # spinlock_set_extexclall() sets EXTEXCLALL during runtime init.
@@ -239,6 +261,14 @@ peripherals:
     size: "4B"
     config:
       path: "../peripherals/rp2350/actlr.yaml"
+  # CoreDebug (Armv8-M D1.2: DHCSR/DCRSR/DCRDR/DEMCR). Part of the M33 and
+  # reachable from software without a debugger: CMSIS/Betaflight set
+  # DEMCR.TRCENA before enabling the DWT cycle counter. Without a probe,
+  # software DHCSR writes are ignored (C_DEBUGEN is debugger-only).
+  - id: "scs_debug"
+    type: "cortex_m_coredebug"
+    base_address: 0xE000EDF0
+    size: "16B"
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010

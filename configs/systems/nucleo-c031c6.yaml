@@ -1,0 +1,11 @@
+# ST UM2953 Nucleo-32 board signals (NUCLEO-C031C6).
+# LD4 on PA5; USART2 TX PA2 / RX PA3 to the ST-LINK virtual COM port.
+# Bare official board profile: no Arduino-matrix sensor fixtures.
+name: "nucleo-c031c6"
+chip: "../chips/stm32c031c6.yaml"
+# ST-LINK VCP = USART2 PA2/PA3 (UM2953). Without this line every run tapped all UARTs
+# into one console, so Serial1 traffic spliced into the Serial pane.
+debug_uart: "usart2"
+external_devices: []
+board_io:
+  - { id: "ld4_pa5", kind: "led", peripheral: "gpioa", pin: 5, signal: "output", active_high: true }

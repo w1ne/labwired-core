@@ -1,0 +1,245 @@
+{
+  "analog_trace": {
+    "channels": [
+      {
+        "name": "gp2y0a21-sensor.voltage_mv",
+        "port_names": [
+          "distance_mv"
+        ],
+        "unit": "mV"
+      }
+    ],
+    "dropped": 0,
+    "samples": [
+      {
+        "cycle": 0,
+        "time_ns": 0,
+        "values": [
+          2300.0
+        ]
+      },
+      {
+        "cycle": 1,
+        "time_ns": 1000,
+        "values": [
+          2300.0
+        ]
+      },
+      {
+        "cycle": 2,
+        "time_ns": 2000,
+        "values": [
+          2300.0
+        ]
+      },
+      {
+        "cycle": 3,
+        "time_ns": 3000,
+        "values": [
+          1650.0
+        ]
+      },
+      {
+        "cycle": 4,
+        "time_ns": 4000,
+        "values": [
+          1650.0
+        ]
+      },
+      {
+        "cycle": 5,
+        "time_ns": 5000,
+        "values": [
+          1300.0
+        ]
+      },
+      {
+        "cycle": 6,
+        "time_ns": 6000,
+        "values": [
+          1300.0
+        ]
+      },
+      {
+        "cycle": 7,
+        "time_ns": 7000,
+        "values": [
+          930.0
+        ]
+      },
+      {
+        "cycle": 8,
+        "time_ns": 8000,
+        "values": [
+          930.0
+        ]
+      },
+      {
+        "cycle": 9,
+        "time_ns": 9000,
+        "values": [
+          730.0
+        ]
+      },
+      {
+        "cycle": 10,
+        "time_ns": 10000,
+        "values": [
+          730.0
+        ]
+      },
+      {
+        "cycle": 11,
+        "time_ns": 11000,
+        "values": [
+          600.0
+        ]
+      },
+      {
+        "cycle": 12,
+        "time_ns": 12000,
+        "values": [
+          600.0
+        ]
+      },
+      {
+        "cycle": 13,
+        "time_ns": 13000,
+        "values": [
+          510.0
+        ]
+      },
+      {
+        "cycle": 14,
+        "time_ns": 14000,
+        "values": [
+          510.0
+        ]
+      },
+      {
+        "cycle": 15,
+        "time_ns": 15000,
+        "values": [
+          440.0
+        ]
+      },
+      {
+        "cycle": 16,
+        "time_ns": 16000,
+        "values": [
+          440.0
+        ]
+      },
+      {
+        "cycle": 17,
+        "time_ns": 17000,
+        "values": [
+          400.0
+        ]
+      },
+      {
+        "cycle": 18,
+        "time_ns": 18000,
+        "values": [
+          400.0
+        ]
+      }
+    ],
+    "time_unit": "ns"
+  },
+  "digital_trace": {
+    "channels": [
+      {
+        "id": 0,
+        "initial": false,
+        "port_names": [
+          "near_drive"
+        ],
+        "signal": "indicator.drive"
+      },
+      {
+        "id": 1,
+        "initial": false,
+        "port_names": [
+          "near_led"
+        ],
+        "signal": "indicator.state"
+      }
+    ],
+    "dropped": 0,
+    "edges": [
+      {
+        "ch": 0,
+        "time_ns": 1000,
+        "value": 1
+      },
+      {
+        "ch": 1,
+        "time_ns": 2000,
+        "value": 1
+      },
+      {
+        "ch": 0,
+        "time_ns": 5000,
+        "value": 0
+      },
+      {
+        "ch": 1,
+        "time_ns": 6000,
+        "value": 0
+      }
+    ],
+    "time_unit": "ns"
+  },
+  "observations": [
+    {
+      "distance_mm": 100,
+      "near_led": true,
+      "sensor_mv": 2300
+    },
+    {
+      "distance_mm": 150,
+      "near_led": true,
+      "sensor_mv": 1650
+    },
+    {
+      "distance_mm": 200,
+      "near_led": false,
+      "sensor_mv": 1300
+    },
+    {
+      "distance_mm": 300,
+      "near_led": false,
+      "sensor_mv": 930
+    },
+    {
+      "distance_mm": 400,
+      "near_led": false,
+      "sensor_mv": 730
+    },
+    {
+      "distance_mm": 500,
+      "near_led": false,
+      "sensor_mv": 600
+    },
+    {
+      "distance_mm": 600,
+      "near_led": false,
+      "sensor_mv": 510
+    },
+    {
+      "distance_mm": 700,
+      "near_led": false,
+      "sensor_mv": 440
+    },
+    {
+      "distance_mm": 800,
+      "near_led": false,
+      "sensor_mv": 400
+    }
+  ],
+  "run_report": {
+    "manifest_sha256": "85d11916e036f70349086822236be4d4ad73a16e56a726069c9dd740f944a0d4"
+  },
+  "time_ns": 18000
+}

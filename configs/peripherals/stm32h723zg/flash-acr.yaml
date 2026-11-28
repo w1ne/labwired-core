@@ -1,0 +1,16 @@
+# ST RM0468 section 4.9.1 FLASH_ACR (reset 0x37). Other FLASH registers are unmodeled.
+peripheral: FLASH_ACR
+version: 0.1.0
+registers:
+  - id: ACR
+    address_offset: 0
+    size: 32
+    access: READ_WRITE
+    reset_value: 55
+    fields:
+      - name: LATENCY
+        bit_range: [3, 0]
+        description: Flash read latency configuration
+      - name: WRHIGHFREQ
+        bit_range: [5, 4]
+        description: Flash write frequency configuration

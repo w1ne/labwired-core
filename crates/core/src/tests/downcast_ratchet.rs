@@ -37,7 +37,7 @@ use std::path::{Path, PathBuf};
 /// Committed ceilings. LOWER these when a conversion lands; the test fails if
 /// you do not, so a shrink cannot go unrecorded and quietly leave headroom for
 /// the next regression.
-/// 193 → 194 / 207 → 208: `tests/esp32s3_lcd_i80_pixels.rs` reaches through
+/// 193 → 194 / 207 → 208: `tests/display/esp32s3_lcd_i80_pixels.rs` reaches through
 /// `bus.peripherals[..].dev` to the concrete `Esp32s3LcdCam` to assert that the
 /// kit binds the parallel panel to LCD_CAM and not only to the GPIO observer.
 /// That is the "a test reaching into a concrete model" case the module doc
@@ -171,12 +171,23 @@ use std::path::{Path, PathBuf};
 /// the actual configured attachment, not production per-cycle reaches. Adding
 /// a generic Peripheral method solely for these two tests would move the
 /// test instrumentation into the runtime interface without reducing coupling.
-const MAX_AS_ANY: usize = 197;
+/// 197 → 200 / 198 → 200 / 273 → 274 / 340 → 341: the ESP32-P4 board profile
+/// binds its GPIO7/8 matrix route to HP I2C0 once during bus construction.
+/// `EspGpioHead` and the shared ESP32-C3 I2C command-list model do not expose a
+/// common route-state capability yet, so this setup bridge uses three
+/// read-only reaches and one mutable reach. This is a one-time assembly path,
+/// not a per-cycle access; a reusable capability belongs in a separate
+/// peripheral-interface change.
+/// 200 → 198: two test-only `as_any()` reaches left with the per-chip C3
+/// matrix-routing files when they became rows of the shared harness.
+const MAX_AS_ANY: usize = 198;
 // GPIO schedule migration removes four concrete sensor downcasts.
-// 195 → 196: `tests/sim_input_reachability.rs` reads the ADXL345 back out of
+// 195 → 196: `tests/session/sim_input_reachability.rs` reads the ADXL345 back out of
 // `Rp2040I2c` by downcast, the same independent-witness reach every other
 // controller row in that table already pays (the walk under test cannot be
 // its own witness). Test-only; no production path gained a reach.
+// 200 → 198: the per-chip C3 matrix-routing test files folded into the shared
+// harness.
 const MAX_DOWNCAST_REF: usize = 198;
 
 /// The MUTABLE half of the same reach, counted from the day it started being
@@ -239,7 +250,7 @@ const MAX_DOWNCAST_REF: usize = 198;
 // through `Peripheral::i2c_slave_host` (it also hosts GPIO-matrix twins), so
 // `attach_i2c_slave_with_route` lost its `Esp32s3I2c` arm.
 // Raised 271 -> 272 and 336 -> 337 by the `Box<dyn Cpu>` forwarding gate
-// (`crates/core/tests/cpu_dyn_forwarding.rs`). The test calls `as_any_mut()`
+// (`crates/core/tests/bus/cpu_dyn_forwarding.rs`). The test calls `as_any_mut()`
 // and `downcast_mut::<SpyCpu>()` deliberately: that is the behaviour it pins,
 // and it is the only way to prove the boxed call reaches the concrete core
 // rather than the trait default. This is test-only verification; no production
@@ -250,19 +261,30 @@ const MAX_DOWNCAST_REF: usize = 198;
 // the C3 GPIO model must be asked whether its layout numbers LEDC signals at
 // all (the C6 reuses it and numbers 45/46 as I²C). Three chips, one set of
 // reaches, instead of three.
-// 272 → 273 / 338 → 339: the RP2040 row of `tests/sim_input_reachability.rs`
+// 272 → 273 / 338 → 339: the RP2040 row of `tests/session/sim_input_reachability.rs`
 // reads its ADXL345 back by `as_any_mut()` + `downcast_mut`, like every other
 // row's readback (see MAX_DOWNCAST_REF). Test-only.
 // 273 → 276 / 339 → 342: two test-only reaches in
-// `tests/iolink_master_config.rs` inspect the UART and its attached master,
+// `tests/gpio_logic/iolink_master_config.rs` inspect the UART and its attached master,
 // proving manifest configuration reaches the real peer. One production reach
 // in `components::tiol112::attach` obtains the STM32G0 RCC's live clock-register
 // snapshot at attachment time. The frame path reads shared atomics and never
 // downcasts. This is an explicit chip-family clock contract; a general clock
 // snapshot capability should replace the reach if another clock family needs
 // it, rather than adding an unused general trait for one binding today.
-const MAX_AS_ANY_MUT: usize = 275;
-const MAX_DOWNCAST_MUT: usize = 341;
+// 276 → 273: ESP GPIO observers now use the `Peripheral` capability, so C3
+// support shares the classic ESP32/S3 registration path without new downcasts.
+const MAX_AS_ANY_MUT: usize = 272;
+// 341 → 342 (`downcast_mut` only): `attach_uart_tx_sink` hands the console
+// sink to the i.MX RT USB1 device controller, whose bulk IN endpoint carries
+// Teensy 4.x `Serial` (USB CDC) — the same one-time attach arm the RP2040 USB
+// and ESP USB-Serial-JTAG consoles already pay. It is not a UART, so it must
+// not claim `as_uart_stream_host` (cross-links would bind to it).
+// 342 → 340: the three ESP GPIO observer downcasts moved behind the
+// `Peripheral::register_esp_gpio_observer` capability.
+// 341 → 339 (and `as_any_mut` 274 → 272): the per-chip C3 matrix-routing
+// test files folded into the shared harness.
+const MAX_DOWNCAST_MUT: usize = 339;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

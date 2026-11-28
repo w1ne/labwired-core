@@ -1,0 +1,13 @@
+First measured MSP430 run on this engine (2026-11-19T21:03Z), kept as a failed attempt.
+
+Observed: the MSP430F149 firmware booted and executed 400,000 instructions.
+UART0 printed `MSP430F149 checks PPPPZPkFzFF DONE rx=46`: checks 1-5 passed,
+checks 6 (receive interrupt in loopback), 7 (LPM0 wake) and 8 (host byte `R`)
+failed, and the last received byte was 0x46 (`F`, a result letter) instead of
+0x52 (`R`). The smoke script of that revision expected `PPPPPPPP`.
+
+The session that made this run ended before it recorded the cause. The
+passing measurement under metrics/mspsim-msp430f149/ comes from a later
+revision of the UART model, the firmware and the script (the loopback bytes
+Z, k and z are now part of the expected transmit line). The cause of the
+three failed checks in this attempt is not established.

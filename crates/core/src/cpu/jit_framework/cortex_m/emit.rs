@@ -66,6 +66,8 @@ pub type RamWindow = (u32, u32);
 pub struct MemBinding {
     pub ram_len: usize,
     pub has_store: bool,
+    /// The block needs the core's live FP access and context checks.
+    pub has_vfp: bool,
 }
 
 pub fn is_alu_emittable(inst: &Instruction) -> bool {
@@ -277,6 +279,7 @@ pub fn emit_block(pc: Pc, code: &CodeView<'_>, window: Option<RamWindow>) -> Opt
         Some(MemBinding {
             ram_len: len,
             has_store: body.has_store,
+            has_vfp: body.has_vfp,
         })
     } else {
         None

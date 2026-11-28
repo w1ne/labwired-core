@@ -1,0 +1,261 @@
+peripheral: SENSITIVE
+version: 0.1.0
+registers:
+- id: ROM_TABLE_LOCK
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ROM_TABLE_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: Need add description
+  side_effects: null
+- id: ROM_TABLE
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ROM_TABLE
+    bit_range:
+    - 31
+    - 0
+    description: Need add description
+  side_effects: null
+- id: APB_PERIPHERAL_ACCESS_0
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APB_PERIPHERAL_ACCESS_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: Need add description
+  side_effects: null
+- id: APB_PERIPHERAL_ACCESS_1
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: APB_PERIPHERAL_ACCESS_SPLIT_BURST
+    bit_range:
+    - 0
+    - 0
+    description: Need add description
+  side_effects: null
+- id: INTERNAL_SRAM_USAGE_0
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERNAL_SRAM_USAGE_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: Need add description
+  side_effects: null
+- id: INTERNAL_SRAM_USAGE_1
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 15
+  fields:
+  - name: INTERNAL_SRAM_USAGE_CPU_CACHE
+    bit_range:
+    - 0
+    - 0
+    description: Need add description
+  - name: INTERNAL_SRAM_USAGE_CPU_SRAM
+    bit_range:
+    - 3
+    - 1
+    description: Need add description
+  side_effects: null
+- id: INTERNAL_SRAM_USAGE_3
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERNAL_SRAM_USAGE_MAC_DUMP_SRAM
+    bit_range:
+    - 2
+    - 0
+    description: Need add description
+  - name: INTERNAL_SRAM_ALLOC_MAC_DUMP
+    bit_range:
+    - 3
+    - 3
+    description: Need add description
+  side_effects: null
+- id: CACHE_TAG_ACCESS_0
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHE_TAG_ACCESS_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: Need add description
+  side_effects: null
+- id: CACHE_TAG_ACCESS_1
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 15
+  fields:
+  - name: PRO_I_TAG_RD_ACS
+    bit_range:
+    - 0
+    - 0
+    description: Need add description
+  - name: PRO_I_TAG_WR_ACS
+    bit_range:
+    - 1
+    - 1
+    description: Need add description
+  - name: PRO_D_TAG_RD_ACS
+    bit_range:
+    - 2
+    - 2
+    description: Need add description
+  - name: PRO_D_TAG_WR_ACS
+    bit_range:
+    - 3
+    - 3
+    description: Need add description
+  side_effects: null
+- id: CACHE_MMU_ACCESS_0
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHE_MMU_ACCESS_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: Need add description
+  side_effects: null
+- id: CACHE_MMU_ACCESS_1
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: PRO_MMU_RD_ACS
+    bit_range:
+    - 0
+    - 0
+    description: Need add description
+  - name: PRO_MMU_WR_ACS
+    bit_range:
+    - 1
+    - 1
+    description: Need add description
+  side_effects: null
+- id: PIF_ACCESS_MONITOR_0
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PIF_ACCESS_MONITOR_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: Need add description
+  side_effects: null
+- id: PIF_ACCESS_MONITOR_1
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: PIF_ACCESS_MONITOR_NONWORD_VIOLATE_CLR
+    bit_range:
+    - 0
+    - 0
+    description: Need add description
+  - name: PIF_ACCESS_MONITOR_NONWORD_VIOLATE_EN
+    bit_range:
+    - 1
+    - 1
+    description: Need add description
+  side_effects: null
+- id: PIF_ACCESS_MONITOR_2
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PIF_ACCESS_MONITOR_NONWORD_VIOLATE_INTR
+    bit_range:
+    - 0
+    - 0
+    description: Need add description
+  - name: PIF_ACCESS_MONITOR_NONWORD_VIOLATE_STATUS_HSIZE
+    bit_range:
+    - 2
+    - 1
+    description: Need add description
+  side_effects: null
+- id: PIF_ACCESS_MONITOR_3
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PIF_ACCESS_MONITOR_NONWORD_VIOLATE_STATUS_HADDR
+    bit_range:
+    - 31
+    - 0
+    description: Need add description
+  side_effects: null
+- id: XTS_AES_KEY_UPDATE
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XTS_AES_KEY_UPDATE
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to update xts_aes key
+  side_effects: null
+- id: CLOCK_GATE
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: Need add description
+  side_effects: null
+- id: SENSITIVE_REG_DATE
+  address_offset: 4092
+  size: 32
+  access: READ_WRITE
+  reset_value: 34628353
+  fields:
+  - name: SENSITIVE_REG_DATE
+    bit_range:
+    - 27
+    - 0
+    description: Need add description
+  side_effects: null
+interrupts: null
+timing: null

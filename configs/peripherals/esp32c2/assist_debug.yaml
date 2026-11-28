@@ -1,0 +1,204 @@
+peripheral: ASSIST_DEBUG
+version: 0.1.0
+registers:
+- id: CORE_0_MONTR_ENA
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_SP_SPILL_MIN_ENA
+    bit_range:
+    - 0
+    - 0
+    description: enbale sp underlow monitor
+  - name: CORE_0_SP_SPILL_MAX_ENA
+    bit_range:
+    - 1
+    - 1
+    description: enbale sp overflow monitor
+  side_effects: null
+- id: CORE_0_INTR_RAW
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_SP_SPILL_MIN_RAW
+    bit_range:
+    - 0
+    - 0
+    description: sp underlow monitor interrupt status register
+  - name: CORE_0_SP_SPILL_MAX_RAW
+    bit_range:
+    - 1
+    - 1
+    description: sp overflow monitor interupt status register
+  side_effects: null
+- id: CORE_0_INTR_ENA
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_SP_SPILL_MIN_INTR_ENA
+    bit_range:
+    - 0
+    - 0
+    description: enbale sp underlow monitor interrupt
+  - name: CORE_0_SP_SPILL_MAX_INTR_ENA
+    bit_range:
+    - 1
+    - 1
+    description: enbale sp overflow monitor interrupt
+  side_effects: null
+- id: CORE_0_INTR_CLR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_SP_SPILL_MIN_CLR
+    bit_range:
+    - 0
+    - 0
+    description: clr sp underlow monitor interrupt
+  - name: CORE_0_SP_SPILL_MAX_CLR
+    bit_range:
+    - 1
+    - 1
+    description: clr sp overflow monitor interrupt
+  side_effects: null
+- id: CORE_0_SP_MIN
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_SP_MIN
+    bit_range:
+    - 31
+    - 0
+    description: core0 sp region configuration regsiter
+  side_effects: null
+- id: CORE_0_SP_MAX
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CORE_0_SP_MAX
+    bit_range:
+    - 31
+    - 0
+    description: core0 sp pc status register
+  side_effects: null
+- id: CORE_0_SP_PC
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_SP_PC
+    bit_range:
+    - 31
+    - 0
+    description: This regsiter stores the PC when trigger stack monitor.
+  side_effects: null
+- id: CORE_0_RCD_EN
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_RCD_RECORDEN
+    bit_range:
+    - 0
+    - 0
+    description: Set 1 to enable record PC
+  - name: CORE_0_RCD_PDEBUGEN
+    bit_range:
+    - 1
+    - 1
+    description: Set 1 to enable cpu pdebug function, must set this bit can get cpu PC
+  side_effects: null
+- id: CORE_0_RCD_PDEBUGPC
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_RCD_PDEBUGPC
+    bit_range:
+    - 31
+    - 0
+    description: recorded PC
+  side_effects: null
+- id: CORE_0_RCD_PDEBUGSP
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_RCD_PDEBUGSP
+    bit_range:
+    - 31
+    - 0
+    description: recorded sp
+  side_effects: null
+- id: CORE_0_LASTPC_BEFORE_EXCEPTION
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_LASTPC_BEFORE_EXC
+    bit_range:
+    - 31
+    - 0
+    description: cpu's lastpc before exception
+  side_effects: null
+- id: CORE_0_DEBUG_MODE
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_DEBUG_MODE
+    bit_range:
+    - 0
+    - 0
+    description: cpu debug mode status, 1 means cpu enter debug mode.
+  - name: CORE_0_DEBUG_MODULE_ACTIVE
+    bit_range:
+    - 1
+    - 1
+    description: cpu debug_module active status
+  side_effects: null
+- id: CLOCK_GATE
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: clock gate register
+  side_effects: null
+- id: DATE
+  address_offset: 508
+  size: 32
+  access: READ_WRITE
+  reset_value: 34627616
+  fields:
+  - name: DATE
+    bit_range:
+    - 27
+    - 0
+    description: version register
+  side_effects: null
+interrupts:
+  ASSIST_DEBUG: 40
+timing: null

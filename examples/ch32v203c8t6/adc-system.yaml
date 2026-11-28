@@ -1,0 +1,24 @@
+# CH32V203C8T6 with PA0 (ADC1 IN0) held at 1650 mV and PA1 (ADC2 IN1) at
+# 825 mV against the 3.3 V VDDA, for adc-irq-smoke.yaml.
+name: ch32v203c8t6-adc
+chip: ../../configs/chips/ch32v203c8t6.yaml
+cpu_hz: 144000000
+peripherals:
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012400
+    size: "1KB"
+    irq: 34
+    clock: { reg: "apb2enr", bit: 9 }
+    config:
+      profile: "stm32f1"
+      input_mv: { 0: 1650 }
+  - id: "adc2"
+    type: "adc"
+    base_address: 0x40012800
+    size: "1KB"
+    irq: 34
+    clock: { reg: "apb2enr", bit: 10 }
+    config:
+      profile: "stm32f1"
+      input_mv: { 1: 825 }

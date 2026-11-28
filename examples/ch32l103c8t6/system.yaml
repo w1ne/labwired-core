@@ -1,0 +1,3 @@
+name: ch32l103c8t6-gpio-blink
+chip: ../../configs/chips/ch32l103c8t6.yaml
+cpu_hz: 96000000

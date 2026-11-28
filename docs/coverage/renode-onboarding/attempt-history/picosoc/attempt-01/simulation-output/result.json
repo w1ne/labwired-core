@@ -1,0 +1,186 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 100000,
+  "cycles": 200226,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "PICOSOC RV32IMC SIMPLEUART SMOKE"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "uart=0x02000004"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      16777528,
+      16777200,
+      2048,
+      0,
+      10,
+      97,
+      114,
+      16777216,
+      0,
+      33554432,
+      120,
+      48,
+      116,
+      61,
+      52,
+      50,
+      79,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 16778074,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 16777528,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 100000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "bdcb0dc5041ac44de73c8b4df20bcd36ba6d91afd65678a853042a707bd2df74",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-picosoc-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/picosoc.yaml",
+    "script": "examples/renode-onboarding/picosoc-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "uart",
+        "kind": "native",
+        "base": 33554436,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1004,
+    "data_bytes": 0,
+    "bss_bytes": 16777216,
+    "flash_used_bytes": 1004,
+    "ram_static_bytes": 16777216,
+    "flash_total_bytes": 16777216,
+    "ram_total_bytes": 16777216,
+    "flash_used_pct": 0.01,
+    "ram_static_pct": 100.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 200226,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 0,
+    "memory_writes": 1,
+    "peripheral_accesses": 49,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 16778074,
+        "count": 390,
+        "symbol": "main"
+      }
+    ]
+  }
+}

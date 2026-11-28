@@ -1,0 +1,51 @@
+# `labwired test --script ngspice-overtemp-alarm.yaml`: the same sequence as
+# test-overtemp-alarm.yaml solved by ngspice instead of the in-core engine. Ten
+# times a second the firmware reads SNS_AN1 in millivolts on IO1, computes the
+# U4 resistance from the R6 divider, converts it with the beta equation and
+# drives the IO48 LED. The test bench steps the ambient 26 -> 42 -> 38 -> 36 °C;
+# the indicator goes on at 42 °C, stays on at 38 °C and goes off at 36 °C.
+# `loop` returns (10,000 + T in tenths of °C) x 10 + LED.
+#
+# The firmware results, console text and every asserted scope value are the
+# same as the in-core run. The engines differ during fast transients: after the
+# 42 °C step ngspice is up to 2.2e-3 V above the in-core backward-Euler curve,
+# which lags the analytic one; both cross 1.38969 V at the 100.4 ms sample, and
+# settled values agree within 1e-4 V.
+schema_version: "1.0"
+inputs:
+  flex: system-ngspice.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: sensor_v }, { port: user_led_drive }] }
+  - set: { port: ambient_c, value: 26 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 42 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 38 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 36 }
+  - call: { export: loop }
+limits:
+  max_steps: 1000000
+  max_time_ns: 1000000000
+assertions:
+  - entry_result: { equals: 103600 }
+  - entry_result: { equals: 0, step: 0 }
+  - entry_result: { equals: 102600, step: 2 }
+  - entry_result: { equals: 104201, step: 4 }
+  - entry_result: { equals: 103801, step: 6 }
+  # Oscilloscope: the 25 °C operating point at 0 ns, then the settled divider.
+  - analog_sample: { port: sensor_v, at_ns: 0, min: 1.6499, max: 1.6501 }
+  - analog_sample: { port: sensor_v, at_ns: 100000000, min: 1.61873, max: 1.61875 }
+  - analog_sample: { port: sensor_v, at_ns: 210000000, min: 1.26638, max: 1.26640 }
+  - analog_window: { port: sensor_v, min: 1.16064, max: 1.65001 }
+  # C7 transient: the 42 °C step latches at 100.1 ms; the time constant is
+  # 10 kΩ || 5425 Ω x 100 nF = 352 µs, so the node passes the 50 % level
+  # (1.38969 V) 244 µs later. The first sample at or below it is 100.4 ms,
+  # the same sample on both engines.
+  - analog_crossings: { port: sensor_v, level: 1.38969, direction: falling, from_ns: 100000000, to_ns: 200000000, times_ns: [100400000] }
+  - digital_edges: { port: user_led_drive, times_ns: [110000000, 310000000] }
+  - digital_edges: { port: user_led_state, times_ns: [110001000, 310001000] }
+  - port_value: { port: user_led_state, equals: 0 }
+  - final_time_ns: { equals: 400000000 }
+  - console_contains: "T=26.0 C mV=1618\nT=42.0 C mV=1160 ALARM\nT=38.0 C mV=1266 ALARM\nT=36.0 C mV=1321\n"

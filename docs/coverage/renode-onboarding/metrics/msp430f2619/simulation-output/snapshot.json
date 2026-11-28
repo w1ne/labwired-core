@@ -1,0 +1,59 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "msp430",
+    "r": [
+      8922,
+      8432,
+      3,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      8720,
+      4360,
+      0
+    ],
+    "cpux": true,
+    "requested": 0,
+    "cycles": 400038
+  },
+  "steps_executed": 400000,
+  "cycles": 400038,
+  "instructions": 399999,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 400000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 400000
+    }
+  },
+  "limits": {
+    "max_steps": 400000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "fc9ed1b73ac88c22982715bde68b8ede5d2bfe4dedf6b05b240d03ae7b1d000d",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/msp430f2619-uart-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/msp430f2619.yaml",
+    "script": "examples/renode-onboarding/msp430f2619-uart-smoke.yaml"
+  }
+}

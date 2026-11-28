@@ -14,6 +14,12 @@ deliberately unbound: mechanical stall is diagnosed from missing Hall motion,
 so an open-phase/aggregate fault cannot be mislabeled as `FAULT STALL`. TIM1 main outputs use PA8/PA9/PA10 and their
 complementary outputs use PB13/PB14/PB15.
 
+The plant consumes TIM1's output-stage states. The loader checks that the six
+declared GPIO pads exist, but live `MODER`/`AFR` changes do not disconnect or
+remap those plant inputs. The intended physical mapping is AF1 on PA8–PA10
+and PB13–PB15. Native pad capture must verify that mapping separately from
+the plant response.
+
 The firmware begins with open-loop duty, selects a six-step row from the Hall
 sequence `001 → 101 → 100 → 110 → 010 → 011`, and uses a deliberately small
 bounded proportional regulator to adjust duty from Hall edge period. A 100 µs

@@ -1,0 +1,13 @@
+# esp-hal 1.2 on the ESP32-C3 bare-ELF fast boot, printing with esp-println's
+# `uart` backend through the mask-ROM `uart_tx_one_char`. Fixture and build:
+# tests/fixtures/esp32c3-esp-hal-uart-console.md.
+schema_version: "1.0"
+inputs:
+  firmware: ../../tests/fixtures/esp32c3-esp-hal-uart-console.elf
+  system: ../../configs/systems/esp32c3-devkit.yaml
+limits:
+  max_steps: 3000000
+assertions:
+  - uart_contains: "LW-C3 boot"
+  - uart_contains: "LW-C3 tick 2"
+  - uart_contains: "LW-C3 done"

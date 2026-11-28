@@ -35,6 +35,20 @@ io_voltage_v: 5.0
 gpio_input_thresholds:
   vil: 0.3
   vih: 0.6
+# GPIO pad output resistance, ohms: a driven pad is VCC (or 0 V) behind it.
+# Atmel-2549Q (ATmega640/1280/1281/2560/2561, 02/2014), section 31.1 "DC
+# Characteristics", VCC = 5 V, except RESET pin: VOH min 4.2 V at
+# IOH = -20 mA, VOL max 0.9 V at IOL = 20 mA. Source side
+# (5.0 - 4.2) V / 20 mA = 40 ohm (sink side 0.9 V / 20 mA = 45 ohm).
+# Guaranteed limits, so a typical pad is stiffer.
+# Read by the diagram compiler, which places it as the pad driver's
+# on-resistance in the analog netlist.
+gpio_output_ohms: 40
+# Absolute maximum DC current per I/O pin, mA. Atmel-2549Q section 31
+# "Absolute Maximum Ratings": DC Current per I/O Pin 40.0 mA. A run reports a
+# pad whose simulated current went past it; the simulation does not stop or
+# clamp it.
+gpio_abs_max_ma: 40
 
 flash:
   base: 0x00000000
@@ -86,14 +100,20 @@ pins:
   PE5: { gpio: "porte", bit: 5 }
   PE6: { gpio: "porte", bit: 6 }
   PE7: { gpio: "porte", bit: 7 }
-  PF0: { gpio: "portf", bit: 0 }
-  PF1: { gpio: "portf", bit: 1 }
-  PF2: { gpio: "portf", bit: 2 }
-  PF3: { gpio: "portf", bit: 3 }
-  PF4: { gpio: "portf", bit: 4 }
-  PF5: { gpio: "portf", bit: 5 }
-  PF6: { gpio: "portf", bit: 6 }
-  PF7: { gpio: "portf", bit: 7 }
+  # DS40002211A Table 2-1, 64-pin package: Port F is the eight bonded analog
+  # inputs, ADC0 (PF0) .. ADC7 (PF7). They carry an `adc` alternate function
+  # instead of a separate `analog_pins:` block, so the pad table alone answers
+  # "which channel samples this pad?" (`ChipDescriptor::analog_pin_table`).
+  # Consumed by co-simulation `board.analog.<pad>_volts`; PD0..PD7, PE0..PE7
+  # and PG0..PG5 are not analog pins on this package.
+  PF0: { gpio: "portf", bit: 0, functions: [{ type: adc, peripheral: "adc", channel: 0 }] }
+  PF1: { gpio: "portf", bit: 1, functions: [{ type: adc, peripheral: "adc", channel: 1 }] }
+  PF2: { gpio: "portf", bit: 2, functions: [{ type: adc, peripheral: "adc", channel: 2 }] }
+  PF3: { gpio: "portf", bit: 3, functions: [{ type: adc, peripheral: "adc", channel: 3 }] }
+  PF4: { gpio: "portf", bit: 4, functions: [{ type: adc, peripheral: "adc", channel: 4 }] }
+  PF5: { gpio: "portf", bit: 5, functions: [{ type: adc, peripheral: "adc", channel: 5 }] }
+  PF6: { gpio: "portf", bit: 6, functions: [{ type: adc, peripheral: "adc", channel: 6 }] }
+  PF7: { gpio: "portf", bit: 7, functions: [{ type: adc, peripheral: "adc", channel: 7 }] }
   PG0: { gpio: "portg", bit: 0 }
   PG1: { gpio: "portg", bit: 1 }
   PG2: { gpio: "portg", bit: 2 }

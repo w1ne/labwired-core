@@ -64,7 +64,7 @@ pub(crate) fn motor_states_json(
                 ),
                 (
                     "current_a".to_owned(),
-                    serde_json::json!(snapshot.current_a.unwrap_or(0.0)),
+                    serde_json::json!(snapshot.current_a),
                 ),
                 (
                     "bus_voltage_v".to_owned(),
@@ -76,6 +76,15 @@ pub(crate) fn motor_states_json(
                 ),
                 ("faults".to_owned(), serde_json::json!(snapshot.faults)),
             ]);
+            if let Some(coefficient) = snapshot.quadratic_drag_nm_per_rad_s2 {
+                state.insert(
+                    "quadratic_drag_nm_per_rad_s2".to_owned(),
+                    serde_json::json!(coefficient),
+                );
+            }
+            if let Some(coupling) = snapshot.coupling {
+                state.insert("coupling".to_owned(), serde_json::json!(coupling));
+            }
             if let Some(currents) = snapshot.phase_currents_a {
                 state.insert("phase_currents_a".to_owned(), serde_json::json!(currents));
             }
@@ -103,7 +112,7 @@ const EPAPER_TRICOLOR: &[&str] = &[F::EPAPER_TRICOLOR_PLANES];
 /// A string keeps the value exact and keeps it comparable (`!==` is all a
 /// change-detector needs), where an `f64` would silently alias two different
 /// buffers to one generation and a `BigInt` would make `JSON.stringify` throw.
-fn js_safe_meta(meta: &serde_json::Value) -> serde_json::Value {
+pub(crate) fn js_safe_meta(meta: &serde_json::Value) -> serde_json::Value {
     const MAX_EXACT: u64 = 1 << 53;
     match meta {
         serde_json::Value::Number(n) => match n.as_u64() {
@@ -331,7 +340,8 @@ impl WasmSimulator {
     }
 
     /// Returns the current state of all board_io bindings as a JSON array.
-    /// Each entry: { id, active }
+    /// Each entry: { id, active, emission? } — `emission` is the emitted
+    /// `#rrggbb` colour for a binding that declares one (black while off).
     /// Uses peripheral snapshot() to read ODR regardless of register layout.
     #[wasm_bindgen]
     pub fn get_board_io_states(&self) -> JsValue {
@@ -347,10 +357,7 @@ impl WasmSimulator {
 
         for binding in &self.board_io {
             let active = self.read_board_io_state(machine, binding);
-            states.push(serde_json::json!({
-                "id": binding.id,
-                "active": active,
-            }));
+            states.push(binding.state_json(active));
         }
 
         serde_wasm_bindgen::to_value(&states).unwrap_or(JsValue::NULL)
@@ -628,8 +635,10 @@ impl WasmSimulator {
     /// [{ ch, cycle, state }] }` where `state` is `"0"`, `"1"`, `"z"`
     /// (nothing drives the pad: an undriven input, a released open-drain
     /// line) or `"x"` (the MCU output fights an external driver). A channel
-    /// whose pad model cannot report drive has `initial: null` and no edges —
-    /// never a guessed "driven". `read_logic_edges` is unchanged: its boolean
+    /// whose pad model has not reported drive starts with `initial: null`.
+    /// A later explicit drive report starts its state edges at that cycle;
+    /// a never-known channel keeps no state edges. No initial state is guessed.
+    /// `read_logic_edges` is unchanged: its boolean
     /// `value` is what the pad reads, so every existing consumer keeps working.
     #[wasm_bindgen]
     pub fn read_logic_states(&mut self, cursor: f64) -> Result<JsValue, JsValue> {
@@ -861,6 +870,9 @@ impl WasmSimulator {
     /// - `bldc-motor` exports DC-bus `current_a`, `phase_currents_a`, and
     ///   `commutation_sector`
     ///
+    /// Servo `active`, `angle` and `pulse_us` retain the last modeled command.
+    /// `source_status` is a snapshot of modeled source configuration, not
+    /// freshness, servo power, physical output or a reset-fresh observation.
     /// Ids match the diagram part id / external_devices id so the UI maps
     /// straight onto `boardIoStates[partId]`.
     #[wasm_bindgen]
@@ -875,6 +887,7 @@ impl WasmSimulator {
         };
         let mut states: Vec<serde_json::Value> = Vec::new();
 
+        machine.bus.sync_pwm_sourced_servos();
         for servo in machine
             .bus
             .observed_of::<labwired_core::peripherals::components::servo::Servo>()
@@ -889,6 +902,7 @@ impl WasmSimulator {
                 "angle": servo.angle_degrees() as f64,
                 "active": servo.is_commanded(),
                 "pulse_us": servo.pulse_us() as f64,
+                "source_status": machine.bus.modeled_servo_source_status(servo).as_str(),
             }));
         }
         for stepper in machine
@@ -1441,9 +1455,11 @@ mod motor_state_tests {
                 torque_nm: 0.3,
                 current_a: Some(2.5),
                 phase_currents_a: None,
-                bus_voltage_v: 12.0,
+                bus_voltage_v: Some(12.0),
                 commutation_sector: None,
                 control_state: "forward".into(),
+                quadratic_drag_nm_per_rad_s2: Some(9e-7),
+                coupling: None,
                 faults: vec!["stalled".into()],
             },
             MotorSnapshot {
@@ -1457,9 +1473,11 @@ mod motor_state_tests {
                 torque_nm: 0.6,
                 current_a: Some(3.0),
                 phase_currents_a: Some([1.0, -0.25, -0.75]),
-                bus_voltage_v: 24.0,
+                bus_voltage_v: Some(24.0),
                 commutation_sector: Some(4),
                 control_state: "sector:4".into(),
+                quadratic_drag_nm_per_rad_s2: Some(9e-7),
+                coupling: None,
                 faults: vec!["open-phase-a".into()],
             },
         ]);
@@ -1475,7 +1493,42 @@ mod motor_state_tests {
             serde_json::json!([1.0, -0.25, -0.75])
         );
         assert_eq!(states[1]["commutation_sector"], 4);
+        assert_eq!(states[0]["quadratic_drag_nm_per_rad_s2"], 9e-7);
+        assert_eq!(states[1]["quadratic_drag_nm_per_rad_s2"], 9e-7);
         assert_eq!(states[1]["faults"], serde_json::json!(["open-phase-a"]));
+    }
+    #[test]
+    fn circuit_motor_readback_preserves_unknown_measurements_and_boundary_timing() {
+        let states = motor_states_json(vec![labwired_core::bus::MotorSnapshot {
+            id: "M1".into(),
+            kind: "bldc",
+            position_rad: 0.1,
+            speed_rpm: 2.0,
+            speed_rpm_peak_abs: 2.0,
+            speed_rpm_max: 2.0,
+            speed_rpm_min: 0.0,
+            torque_nm: 0.03,
+            current_a: None,
+            phase_currents_a: Some([0.0, -1.0, 1.0]),
+            bus_voltage_v: None,
+            commutation_sector: Some(0),
+            control_state: "circuit".into(),
+            quadratic_drag_nm_per_rad_s2: Some(9e-7),
+            coupling: Some(labwired_core::bus::MotorCoupling {
+                mode: "interval-start-zero-order-hold",
+                step_ns: Some(100),
+                completed_time_ns: Some(300),
+            }),
+            faults: Vec::new(),
+        }]);
+        assert!(states[0]["current_a"].is_null());
+        assert!(states[0]["bus_voltage_v"].is_null());
+        assert_eq!(
+            states[0]["phase_currents_a"],
+            serde_json::json!([0.0, -1.0, 1.0])
+        );
+        assert_eq!(states[0]["coupling"]["step_ns"], 100);
+        assert_eq!(states[0]["coupling"]["completed_time_ns"], 300);
     }
 }
 
@@ -1517,5 +1570,45 @@ mod logic_ref_deserialize_tests {
         assert_eq!(refs[0].kind, "gpio");
         assert_eq!(refs[0].peripheral, "gpiob");
         assert_eq!(refs[0].line, None);
+    }
+}
+
+#[cfg(test)]
+mod js_safe_meta_tests {
+    use super::js_safe_meta;
+    use serde_json::json;
+
+    #[test]
+    fn js_safe_meta_preserves_safe_numbers_and_exact_wide_unsigned_values() {
+        let boundary = 1_u64 << 53;
+        assert_eq!(js_safe_meta(&json!(0)), json!(0));
+        assert_eq!(js_safe_meta(&json!(boundary - 1)), json!(boundary - 1));
+        assert_eq!(js_safe_meta(&json!(boundary)), json!("9007199254740992"));
+        assert_eq!(
+            js_safe_meta(&json!(boundary + 1)),
+            json!("9007199254740993")
+        );
+        assert_eq!(
+            js_safe_meta(&json!(u64::MAX)),
+            json!("18446744073709551615")
+        );
+    }
+
+    #[test]
+    fn js_safe_meta_normalizes_nested_copies_without_changing_native_metadata() {
+        let native = json!({
+            "registers": [u32::MAX, 0],
+            "nested": [{"rsf_due": u64::MAX, "anchor_cycle": 0}],
+            "label": "rtc",
+            "running": false,
+            "missing": null,
+            "negative": -7,
+            "voltage": 3.3,
+        });
+        let normalized = js_safe_meta(&native);
+        let mut expected = native.clone();
+        expected["nested"][0]["rsf_due"] = json!("18446744073709551615");
+        assert_eq!(normalized, expected);
+        assert_eq!(native["nested"][0]["rsf_due"].as_u64(), Some(u64::MAX));
     }
 }

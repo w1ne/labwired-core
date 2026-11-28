@@ -20,7 +20,9 @@
 //! [`Peripheral::set_gpio_input`]. `GPIO_IN` reports the pad: a pin whose
 //! output driver is enabled reads back the level it is *driving*, and only a
 //! pin left as an input reports what the outside world put there. An input pin
-//! nothing drives still floats to 0. `CPUID` reads 0 (core 0).
+//! nothing drives sits at its PADS_BANK0 pull (`PUE`/`PDE`, handed over by the
+//! bus through [`PinPort::set_config_pull`]); with no pull it reads 0.
+//! `CPUID` reads 0 (core 0).
 
 use crate::pins::{External, InputChange, PinPort};
 use crate::{MmioAccessClass, Peripheral, SimResult};
@@ -86,6 +88,45 @@ pub enum SioLayout {
 /// never shows.
 const PAD_COUNT: u8 = 30;
 
+/// Pads an off-chip part holds from outside the bus tick — a part clocked by
+/// a peripheral's wire (the CYW43439 on a PIO gSPI bus answers its data pad
+/// from inside a PIO clock edge, where it cannot reach this model). `GPIO_IN`
+/// reads a held pad's level while the SIO does not drive it, like `ext_in`.
+/// GPIO interrupts see a held level change at the next SIO pad update.
+#[derive(Debug, Default)]
+pub struct HeldPads {
+    mask: std::sync::atomic::AtomicU32,
+    level: std::sync::atomic::AtomicU32,
+}
+
+impl HeldPads {
+    /// Hold `pin` at `level`.
+    pub fn hold(&self, pin: u8, level: bool) {
+        use std::sync::atomic::Ordering;
+        let bit = 1u32 << pin;
+        if level {
+            self.level.fetch_or(bit, Ordering::Relaxed);
+        } else {
+            self.level.fetch_and(!bit, Ordering::Relaxed);
+        }
+        self.mask.fetch_or(bit, Ordering::Relaxed);
+    }
+
+    /// Let go of `pin`.
+    pub fn release(&self, pin: u8) {
+        self.mask
+            .fetch_and(!(1u32 << pin), std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn get(&self) -> (u32, u32) {
+        use std::sync::atomic::Ordering;
+        (
+            self.mask.load(Ordering::Relaxed),
+            self.level.load(Ordering::Relaxed),
+        )
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Rp2040Sio {
     /// Register map variant (RP2040 or RP2350 GPIO offsets).
@@ -102,6 +143,13 @@ pub struct Rp2040Sio {
     /// Pads the outside world holds ([`PinPort::set_external`]); the level on
     /// each is its `ext_in` bit.
     ext_mask: u32,
+    /// PADS_BANK0 pull-ups / pull-downs (`PUE` / `PDE`), handed over by the bus
+    /// after every write to the pad-control block this port names
+    /// ([`PinPort::pad_control`]). A pull holds a pad nothing else drives.
+    pull_up: u32,
+    pull_down: u32,
+    /// The pad-control block (chip yaml `config: { pad_control: <id> }`).
+    pad_control: Option<String>,
     /// Pads bound to peripheral wires, resolved against IO_BANK0's live
     /// FUNCSEL. Empty until `SystemBus::wire_rp2040_pads` binds them.
     pad_routes: crate::peripherals::pad_routing::PadRoutes,
@@ -133,6 +181,9 @@ pub struct Rp2040Sio {
     /// Outside levels that reached a pad routed to a peripheral line since
     /// the bus last collected them (see `sync_wire_input`).
     wire_edges: Vec<crate::peripherals::pad_lines::WireInputEdge>,
+    /// Pads an off-chip part holds directly ([`HeldPads`]); `None` until a
+    /// part asks for it.
+    held: Option<std::sync::Arc<HeldPads>>,
 }
 
 impl Rp2040Sio {
@@ -142,6 +193,13 @@ impl Rp2040Sio {
 
     pub fn with_layout(mut self, layout: SioLayout) -> Self {
         self.layout = layout;
+        self
+    }
+
+    /// Name the PADS_BANK0 block whose `PUE`/`PDE` bits pull this port's pads
+    /// (chip yaml `config: { pad_control: <id> }`).
+    pub fn with_pad_control(mut self, block: impl Into<String>) -> Self {
+        self.pad_control = Some(block.into());
         self
     }
 
@@ -169,7 +227,9 @@ impl Rp2040Sio {
     ///
     /// A pin whose output driver is enabled reads back the level it is
     /// DRIVING; only a pin left as an input reports what the outside world put
-    /// there, and a pad nothing drives floats to 0.
+    /// there. A pad nothing drives sits at its pull: high with `PUE`, else 0
+    /// (`PDE`, or floating, which this model reads as 0). The outside world
+    /// overrides the weak pull.
     ///
     /// If a pin is both driven and externally forced, the output driver wins.
     /// Real silicon has a contention whose winner depends on drive strength; we
@@ -177,7 +237,31 @@ impl Rp2040Sio {
     /// correctly wired board — the same rule the ESP32 model states at
     /// `pad_level_bank0`, so both families answer a button identically.
     fn gpio_in(&self) -> u32 {
-        (self.gpio_out & self.gpio_oe) | (self.ext_in & !self.gpio_oe)
+        let mut outside = self.ext_in | (self.pull_up & !self.ext_mask);
+        if let Some(held) = &self.held {
+            let (mask, level) = held.get();
+            outside = (outside & !mask) | (level & mask);
+        }
+        (self.gpio_out & self.gpio_oe) | (outside & !self.gpio_oe)
+    }
+
+    /// The shared [`HeldPads`] view, created on first use.
+    pub fn held_pads(&mut self) -> std::sync::Arc<HeldPads> {
+        self.held
+            .get_or_insert_with(|| std::sync::Arc::new(HeldPads::default()))
+            .clone()
+    }
+
+    /// The PADS_BANK0 pull on `pin`.
+    fn pull(&self, pin: u8) -> crate::pins::Pull {
+        let bit = 1u32 << pin;
+        if self.pull_up & bit != 0 {
+            crate::pins::Pull::Up
+        } else if self.pull_down & bit != 0 {
+            crate::pins::Pull::Down
+        } else {
+            crate::pins::Pull::None
+        }
     }
 
     /// The function IO_BANK0 currently selects for `pin` — the selector the
@@ -216,13 +300,19 @@ impl Rp2040Sio {
     /// an unassigned pad, and the level firmware reads back on `GPIO_IN` says
     /// the same). A pad handed to a peripheral that publishes its wire is
     /// driven by it; one handed to a peripheral that publishes nothing (PWM,
-    /// PIO, ...) has no known drive (`None`), so a world refuses it. The SIO
-    /// does not model the PADS_BANK0 pulls, so it reports none.
+    /// PIO, ...) has no known drive (`None`), so a world refuses it. The
+    /// PADS_BANK0 pull acts whatever drives the pad, so every answer carries it.
     fn pad_driver(&self, pin: u8) -> Option<crate::pins::PadDriver> {
-        use crate::pins::PadDriver;
         if pin >= PAD_COUNT {
             return None;
         }
+        let pull = self.pull(pin);
+        self.output_stage(pin).map(|d| d.with_pull(pull))
+    }
+
+    /// [`Self::pad_driver`] without the pull.
+    fn output_stage(&self, pin: u8) -> Option<crate::pins::PadDriver> {
+        use crate::pins::PadDriver;
         match self.pad_function(pin) {
             None | Some(super::io_bank0::GPIO_FUNC_SIO) => {
                 Some(if self.gpio_oe & (1 << pin) != 0 {
@@ -735,6 +825,30 @@ impl PinPort for Rp2040Sio {
     /// shares a wire with other chips now.
     fn join_wire(&mut self, pin: u8) {
         self.pad_routes.mark_on_net(pin);
+    }
+
+    fn pad_control(&self) -> Option<(&str, crate::pins::PadControl)> {
+        self.pad_control
+            .as_deref()
+            .map(|block| (block, crate::pins::PadControl::RpPadsBank0))
+    }
+
+    /// Take the PADS_BANK0 pull on `pin`. The bus brackets the call for push
+    /// capture; IO_BANK0 hears the level it may have moved.
+    fn set_config_pull(&mut self, pin: u8, pull: crate::pins::Pull) -> bool {
+        if pin >= PAD_COUNT {
+            return false;
+        }
+        let bit = 1u32 << pin;
+        let (up, down) = match pull {
+            crate::pins::Pull::Up => (bit, 0),
+            crate::pins::Pull::Down => (0, bit),
+            crate::pins::Pull::None => (0, 0),
+        };
+        self.pull_up = (self.pull_up & !bit) | up;
+        self.pull_down = (self.pull_down & !bit) | down;
+        self.report_levels();
+        true
     }
 
     fn input(&self, pin: u8) -> Option<bool> {

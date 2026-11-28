@@ -49,9 +49,9 @@ Rustfmt, whitespace checks, clean patch application against the pinned base and 
 
 ## Gates before an active-source PR
 
-The patch changes `cortex_m.rs`, watched by seven silicon-capture records: `nrf52840`, `seeed-xiao-nrf52840-sense`, `stm32h563`, `nucleo-l476rg`, `nucleo-l073rz`, `stm32f103`, and `stm32f407`. `validation/manifest.yaml` requires human acceptance of the exact new content or a new live capture. The existing acknowledgements apply to earlier digests. These software tests do not renew a hardware capture.
+The patch changes `cortex_m.rs`, watched by seven silicon-capture records: `nrf52840`, `seeed-xiao-nrf52840-sense`, `stm32h563`, `nucleo-l476rg`, `nucleo-l073rz`, `stm32f103`, and `stm32f407`. `validation/manifest.yaml` reports source/capture differences without a mandatory human source-review acknowledgement. Existing acknowledgements are historical metadata and cannot establish a source match. These software tests do not renew a hardware capture; a missing captured digest remains unverified.
 
-Browser runtime execution, full CPU suites, debug-step behavior during WFI, and performance measurements remain unverified. Test those relevant modes before promotion. Keep the upstream performance baselines and existing hardware acknowledgement digests unchanged until their own gates are satisfied.
+Browser runtime execution, full CPU suites, debug-step behavior during WFI, and performance measurements remain unverified. Test those relevant modes before promotion. Keep the upstream performance baselines and historical capture and acknowledgement values unchanged. The normal automated validation and performance gates still apply.
 
 Apply only after reviewing the pinned base and validation gates. The zero-context artifact needs `--unidiff-zero`. To check application without changing the working tree:
 

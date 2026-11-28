@@ -18,6 +18,8 @@ mod esp32;
 pub use esp32::*;
 mod esp32_rom_console;
 pub use esp32_rom_console::*;
+mod esp32s2;
+pub use esp32s2::*;
 mod esp32s3;
 pub use esp32s3::*;
 
@@ -88,6 +90,10 @@ impl std::fmt::Debug for RamPeripheral {
 }
 
 impl crate::Peripheral for RamPeripheral {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     // RAM/ROM windows only store and serve bytes. They have no elapsed-time
     // state, IRQs, DMA, or scheduled events, so the legacy per-step walk is
     // provably unnecessary for every firmware state.
@@ -102,6 +108,11 @@ impl crate::Peripheral for RamPeripheral {
     // Same reasoning, for the MMIO store hooks: none of them can apply.
     fn is_plain_memory(&self) -> bool {
         true
+    }
+
+    fn peek(&self, offset: u64) -> Option<u8> {
+        let offset = usize::try_from(offset).ok()?;
+        self.data.borrow().get(offset).copied()
     }
 
     fn read(&self, offset: u64) -> crate::SimResult<u8> {
@@ -189,6 +200,51 @@ mod tests {
     use crate::Bus;
     use crate::Peripheral;
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn ram_peek_observes_byte_and_word_stores_without_mutation() {
+        let mut ram = RamPeripheral::with_image(8, &[0x5A]);
+        assert_eq!(ram.peek(0), Some(0x5A));
+        ram.write(1, 0xA7).unwrap();
+        ram.write_u32(4, 0x1234_ABCD).unwrap();
+        let before = ram.runtime_snapshot();
+
+        for _ in 0..2 {
+            assert_eq!(ram.peek(1), Some(0xA7));
+            assert_eq!(
+                (4..8).map(|offset| ram.peek(offset)).collect::<Vec<_>>(),
+                vec![Some(0xCD), Some(0xAB), Some(0x34), Some(0x12)]
+            );
+            assert_eq!(ram.peek(8), None);
+            assert_eq!(ram.peek(u64::MAX), None);
+        }
+        assert_eq!(ram.runtime_snapshot(), before);
+        assert_eq!(ram.read_u32(4).unwrap(), 0x1234_ABCD);
+        // Inspection retains its explicit unmapped result; ordinary CPU
+        // reads/writes retain the existing zero/ignored out-of-range behavior.
+        assert_eq!(ram.read(8).unwrap(), 0);
+        ram.write(8, 0xFF).unwrap();
+        assert_eq!(ram.runtime_snapshot(), before);
+    }
+
+    #[test]
+    fn classic_dram_peek_matches_bus_stores() {
+        let mut bus = SystemBus::new();
+        let _ = configure_xtensa_esp32(&mut bus);
+        let addr = 0x3FFA_E020;
+        bus.write_u8(addr, 0xA7).unwrap();
+        bus.write_u32(addr + 4, 0x1234_ABCD).unwrap();
+
+        assert_eq!(bus.peek_byte(addr), Some(0xA7));
+        assert_eq!(
+            (4..8)
+                .map(|offset| bus.peek_byte(addr + offset))
+                .collect::<Vec<_>>(),
+            vec![Some(0xCD), Some(0xAB), Some(0x34), Some(0x12)]
+        );
+        assert_eq!(bus.read_u8(addr).unwrap(), 0xA7);
+        assert_eq!(bus.read_u32(addr + 4).unwrap(), 0x1234_ABCD);
+    }
 
     /// The esp32 (LX6) factory + ESP32_PERIPHERALS table must build each
     /// peripheral with the same window (base, size) as the hand-wired
@@ -483,6 +539,7 @@ mod tests {
         // manifest's external_devices through the generic factory, exactly as the
         // app/CLI do. Declare it, attach it, then probe below.
         let manifest = labwired_config::SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -581,6 +638,7 @@ mod tests {
             serde_yaml::Value::String("GPIO5".to_string()),
         );
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -866,6 +924,7 @@ board_io: []
             serde_yaml::Value::String("GPIO10".to_string()),
         );
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -925,6 +984,7 @@ board_io: []
         use labwired_config::{ExternalDevice, SystemManifest};
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),

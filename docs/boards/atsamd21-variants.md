@@ -35,7 +35,7 @@ different silicon/pinout options and are not aliased to these files. The G17A
 and G18A are also offered in a 45-ball WLCSP; those descriptors describe the
 48-pin TQFP/QFN geometry.
 
-`crates/core/tests/atsamd21_variant_geometry.rs` gates the table above,
+`crates/core/tests/samd/atsamd21_variant_geometry.rs` gates the table above,
 including the four-vs-six SERCOM split and the shared bootable SAM D21 estate.
 `svd_conformance` checks every declared base/IRQ against the vendored SVD.
 

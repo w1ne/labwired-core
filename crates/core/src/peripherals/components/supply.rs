@@ -130,6 +130,15 @@ impl UnpoweredI2cDevice {
 }
 
 impl I2cDevice for UnpoweredI2cDevice {
+    // This wrapper owns fixed wiring only; its live device state is in inner.
+    fn runtime_snapshot(&self) -> Option<Vec<u8>> {
+        self.inner.runtime_snapshot()
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> crate::SimResult<()> {
+        self.inner.restore_runtime_snapshot(bytes)
+    }
+
     fn address(&self) -> u8 {
         // The address it WOULD answer to. Forwarded so listings and the bus
         // trace still name the part; `claims_address` is what decides whether

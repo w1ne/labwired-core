@@ -170,7 +170,47 @@ pub(crate) struct EspI2cCore {
     rx_fifo: RefCell<VecDeque<u8>>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+pub(crate) struct EspI2cCoreSnapshot {
+    rx_fifo: VecDeque<u8>,
+    slaves: Vec<(u8, Option<Vec<u8>>)>,
+}
+
 impl EspI2cCore {
+    pub(crate) fn runtime_snapshot(&self) -> EspI2cCoreSnapshot {
+        EspI2cCoreSnapshot {
+            rx_fifo: self.rx_fifo.borrow().clone(),
+            slaves: self
+                .slaves
+                .iter()
+                .map(|d| (d.address(), d.runtime_snapshot()))
+                .collect(),
+        }
+    }
+
+    pub(crate) fn restore_runtime_snapshot(
+        &mut self,
+        snapshot: EspI2cCoreSnapshot,
+    ) -> crate::SimResult<()> {
+        if snapshot.rx_fifo.len() > FIFO_CAPACITY
+            || snapshot.slaves.len() != self.slaves.len()
+            || snapshot
+                .slaves
+                .iter()
+                .zip(&self.slaves)
+                .any(|((address, bytes), dev)| *address != dev.address() || bytes.is_none())
+        {
+            return Err(crate::SimulationError::NotImplemented(
+                "I2C snapshot has incompatible topology or an unsupported device".into(),
+            ));
+        }
+        for ((_, bytes), dev) in snapshot.slaves.into_iter().zip(&mut self.slaves) {
+            dev.restore_runtime_snapshot(&bytes.expect("snapshot support validated"))?;
+        }
+        *self.rx_fifo.borrow_mut() = snapshot.rx_fifo;
+        Ok(())
+    }
+
     pub(crate) fn new() -> Self {
         Self {
             slaves: Vec::new(),

@@ -126,13 +126,13 @@ def _all_ungated_manifest(tmp_path):
     return m
 
 
-def _run_cli(manifest, event):
-    return subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts/ci/board_matrix.py"),
-         "--event", event, "--repo-root", str(REPO_ROOT),
-         "--manifest", str(manifest)],
-        capture_output=True, text=True,
-    )
+def _run_cli(manifest, event, changed_paths_file=None):
+    cmd = [sys.executable, str(REPO_ROOT / "scripts/ci/board_matrix.py"),
+           "--event", event, "--repo-root", str(REPO_ROOT),
+           "--manifest", str(manifest)]
+    if changed_paths_file is not None:
+        cmd += ["--changed-paths-file", str(changed_paths_file)]
+    return subprocess.run(cmd, capture_output=True, text=True)
 
 
 def test_cli_exits_nonzero_when_a_gate_event_selects_no_boards(tmp_path):
@@ -150,7 +150,7 @@ def test_cli_exits_nonzero_when_a_gate_event_selects_no_boards(tmp_path):
         "board_matrix.py reported success for a gate event that selected zero "
         f"boards; stdout={result.stdout!r}"
     )
-    assert "selected 0" in result.stderr
+    assert "no gated boards" in result.stderr
 
 
 def test_cli_allows_an_empty_selection_on_a_non_gate_event(tmp_path):
@@ -185,3 +185,132 @@ def test_validate_requires_ci_scripts_for_sim_validate():
     errors = bm.validate([bad], str(REPO_ROOT))
     assert any("ci/build.sh" in error for error in errors)
     assert any("ci/test.sh" in error for error in errors)
+
+
+def _real_entries():
+    return bm.load_manifest(str(REPO_ROOT / "configs/ci/boards.yml"))
+
+
+def _push(paths):
+    return {e["id"] for e in bm.select(_real_entries(), "push", paths, str(REPO_ROOT))}
+
+
+def test_trigger_paths_mirror_the_workflow_push_filter():
+    import yaml
+
+    wf = yaml.safe_load((REPO_ROOT / ".github/workflows/core-board-ci.yml").read_text())
+    on = wf.get("on", wf.get(True))
+    assert sorted(on["push"]["paths"]) == sorted(bm.TRIGGER_PATHS)
+
+
+def test_push_ignores_paths_the_workflow_does_not_trigger_on():
+    # A relevant board edit riding with crates/docs changes must not widen to all boards.
+    got = _push(["crates/core/src/lib.rs", "docs/x.md", "examples/nucleo-f411re/io-smoke.yaml"])
+    assert got == {"nucleo-f411re"}
+
+
+def test_push_onboarding_only_changes_select_no_board():
+    assert _push([
+        "configs/chips/onboarding/nrf52840.yaml",
+        "configs/systems/onboarding/nrf52840.yaml",
+        "examples/renode-onboarding/nrf52840-smoke.yaml",
+    ]) == set()
+
+
+def test_push_chip_change_selects_only_boards_that_read_it():
+    got = _push(["configs/chips/stm32f411re.yaml"])
+    assert "nucleo-f411re" in got and 0 < len(got) < 5
+
+
+def test_push_unknown_config_paths_fail_closed():
+    gated = {e["id"] for e in _real_entries() if e.get("gate")}
+    assert _push(["configs/chips-legacy.yaml"]) == gated
+    assert _push(["configs/ci/boards.yml"]) == gated
+    assert _push([".github/workflows/core-board-ci.yml"]) == gated
+
+
+def test_push_new_unmanifested_example_runs_no_board():
+    assert _push(["examples/some-new-board-bme280/bme280-smoke.yaml"]) == set()
+
+
+def _workflow_jobs():
+    import yaml
+
+    wf = yaml.safe_load((REPO_ROOT / ".github/workflows/core-board-ci.yml").read_text())
+    return wf["jobs"]
+
+
+def test_setup_exports_has_boards_from_the_emitted_matrix():
+    """A scoped push may emit {"include": []}; setup must say so explicitly.
+
+    GitHub Actions fails the run when `strategy.matrix` has an empty
+    `include`, so the workflow needs a flag to skip `board` instead.
+    """
+    setup = _workflow_jobs()["setup"]
+    assert setup["outputs"]["has_boards"] == "${{ steps.gen.outputs.has_boards }}"
+    gen = next(s for s in setup["steps"] if s.get("id") == "gen")
+    run = gen["run"]
+    assert 'echo "has_boards=$has_boards"\n' in run
+    # The echo must sit inside the braced block redirected to $GITHUB_OUTPUT.
+    block_start = run.rindex("{\n", 0, run.index('echo "has_boards=$has_boards"'))
+    block_end = run.index('} >> "$GITHUB_OUTPUT"', block_start)
+    assert block_start < run.index('echo "has_boards=$has_boards"') < block_end
+    assert '["include"]' in gen["run"]
+
+
+def test_board_job_runs_only_when_the_matrix_has_boards():
+    cond = " ".join(_workflow_jobs()["board"]["if"].split())
+    assert "needs.setup.outputs.has_boards == 'true'" in cond
+    # The schedule fork guard must survive alongside the new condition.
+    assert (
+        "(github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core')"
+        in cond
+    )
+    assert "&&" in cond
+
+
+def test_scoped_push_with_no_affected_board_emits_empty_include(tmp_path):
+    """The case the has_boards guard exists for: exit 0, empty include.
+
+    Self-contained manifest with one gated board, so a later manifest change
+    cannot make the changed path select a board.
+    """
+    manifest = tmp_path / "boards.yml"
+    manifest.write_text(
+        "boards:\n"
+        "  - id: gated-firmware\n"
+        "    kind: firmware-gate\n"
+        "    path: examples/iolink-station\n"
+        "    gate: true\n"
+    )
+    changed = tmp_path / "changed-paths.txt"
+    changed.write_text("examples/some-new-board-bme280/bme280-smoke.yaml\n")
+    result = _run_cli(manifest, "push", changed)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {"include": []}
+
+
+def test_unscoped_push_with_no_gated_board_still_fails_closed(tmp_path):
+    result = _run_cli(_all_ungated_manifest(tmp_path), "push")
+    assert result.returncode != 0
+    assert "no gated boards" in result.stderr
+
+
+def test_scoped_push_with_no_gated_board_fails_closed(tmp_path):
+    """An all-`gate: false` manifest must not turn a scoped push green.
+
+    The has_boards guard skips `board` on an empty include, so without this
+    check every scoped push would exit 0 and build nothing.
+    """
+    manifest = _all_ungated_manifest(tmp_path)
+    triggering = tmp_path / "triggering.txt"
+    triggering.write_text(".github/workflows/core-board-ci.yml\n")
+    empty = tmp_path / "empty.txt"
+    empty.write_text("")
+    for changed in (triggering, empty):
+        result = _run_cli(manifest, "push", changed)
+        assert result.returncode != 0, (
+            f"{changed.name}: scoped push with no gated board exited 0; "
+            f"stdout={result.stdout!r}"
+        )
+        assert "no gated boards" in result.stderr

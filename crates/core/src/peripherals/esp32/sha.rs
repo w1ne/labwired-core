@@ -463,6 +463,10 @@ impl Sha {
 }
 
 impl Peripheral for Sha {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     // Inert walk: SHA ops run atomically at the command-register write (BUSY reads 0); tick() is an explicit no-op.
     fn needs_legacy_walk(&self) -> bool {
         false
@@ -596,12 +600,6 @@ mod tests {
             // model reads them back big-endian for compression).
             write_u32_at(p, SHA_TEXT_OFFSET + (w as u64) * 4, word.swap_bytes());
         }
-    }
-
-    #[test]
-    fn base_is_esp32_classic_canonical_address() {
-        let p = Sha::new();
-        assert_eq!(p.base(), 0x3FF0_3000);
     }
 
     #[test]

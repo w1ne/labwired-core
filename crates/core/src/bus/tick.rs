@@ -44,7 +44,7 @@ pub(crate) fn reconcile_nvic_level(
     if let Some(nvic) = nvic {
         let idx = (irq / 32) as usize;
         let bit = 1u32 << (irq % 32);
-        if idx < 8 {
+        if idx < nvic.ispr.len() {
             if level {
                 nvic.pend(idx, bit);
                 nvic.level_pended[idx].fetch_or(bit, std::sync::atomic::Ordering::SeqCst);
@@ -76,7 +76,7 @@ fn pend_nvic(
     if let Some(nvic) = nvic {
         let idx = (irq / 32) as usize;
         let bit = irq % 32;
-        if idx < 8 {
+        if idx < nvic.ispr.len() {
             nvic.pend(idx, 1 << bit);
         }
     } else {
@@ -85,6 +85,48 @@ fn pend_nvic(
 }
 
 impl SystemBus {
+    /// [`reconcile_nvic_level`] for a source that may share its NVIC line.
+    /// Silicon ORs every source wired to one vector (STM32 TIM1_UP_TIM16,
+    /// TIM1_UP_TIM10, ADC1_2): a low source must not drop the pend that
+    /// another source on the same line still holds. The peer scan runs only
+    /// when a level-marked pend would be dropped, so the common path is the
+    /// free function unchanged.
+    #[inline]
+    pub(crate) fn reconcile_line_level(&self, idx: usize, irq: u32, level: bool) {
+        if !level && self.level_pend_marked(irq) && self.line_held_elsewhere(idx, irq) {
+            return;
+        }
+        reconcile_nvic_level(&self.nvic, irq, level);
+    }
+
+    #[inline]
+    fn level_pend_marked(&self, irq: u32) -> bool {
+        let Some(nvic) = self.nvic.as_ref() else {
+            return false;
+        };
+        let word = (irq / 32) as usize;
+        word < nvic.level_pended.len()
+            && nvic.level_pended[word].load(std::sync::atomic::Ordering::SeqCst) & (1 << (irq % 32))
+                != 0
+    }
+
+    /// True when a peripheral other than `idx` holds `irq` asserted, through
+    /// its configured line or one of its multi-line levels.
+    fn line_held_elsewhere(&self, idx: usize, irq: u32) -> bool {
+        self.peripherals.iter().enumerate().any(|(i, p)| {
+            if i == idx {
+                return false;
+            }
+            if p.irq == Some(irq) && p.dev.irq_line_level() == Some(true) {
+                return true;
+            }
+            let mut held = false;
+            p.dev
+                .irq_line_levels(&mut |line, level| held |= line == irq && level);
+            held
+        })
+    }
+
     /// Reconcile every NVIC line peripheral `idx` reports through
     /// [`Peripheral::irq_line_levels`] (multi-line level sources: the STM32
     /// EXTI). One call per choke: the walk and the event path after they
@@ -102,7 +144,7 @@ impl SystemBus {
                 if level && sync == LevelSync::DropOnly {
                     return;
                 }
-                reconcile_nvic_level(&self.nvic, irq, level);
+                self.reconcile_line_level(idx, irq, level);
             });
     }
 
@@ -114,6 +156,33 @@ impl SystemBus {
     #[inline]
     pub(crate) fn mark_multi_irq_levels(&self, idx: usize) {
         self.reconcile_multi_irq_levels(idx, LevelSync::Both);
+    }
+
+    /// Route a peripheral IRQ level to any interrupt concentrator that accepts
+    /// the source number. A claimed input suppresses direct delivery of that
+    /// source line; the concentrator reports its CPU outputs through
+    /// `irq_line_levels`.
+    #[inline]
+    pub(crate) fn route_irq_input_level(
+        &self,
+        source_idx: usize,
+        source: u32,
+        level: bool,
+    ) -> bool {
+        let mut claimed = false;
+        for &idx in &self.irq_input_receiver_indices {
+            if idx == source_idx {
+                continue;
+            }
+            let changed = self.peripherals[idx].dev.set_irq_input_level(source, level);
+            if let Some(changed) = changed {
+                claimed = true;
+                if changed {
+                    self.reconcile_multi_irq_levels(idx, LevelSync::Both);
+                }
+            }
+        }
+        claimed
     }
 
     /// Hand interrupt EVENT numbers (from a model whose
@@ -151,7 +220,9 @@ impl SystemBus {
     pub(crate) fn reconcile_irq_levels_after_write(&self, idx: usize) {
         if let Some(irq_line) = self.peripherals[idx].irq {
             if let Some(level) = self.peripherals[idx].dev.irq_line_level() {
-                reconcile_nvic_level(&self.nvic, irq_line, level);
+                if !self.route_irq_input_level(idx, irq_line, level) {
+                    self.reconcile_line_level(idx, irq_line, level);
+                }
             }
         }
         self.reconcile_multi_irq_levels(idx, LevelSync::DropOnly);
@@ -241,6 +312,19 @@ impl SystemBus {
             .peek_u32_raw(offset)
     }
 
+    /// Store `value` into a declarative peripheral's backing word at `offset`
+    /// for a hardware-side status latch (see `GenericPeripheral::poke_u32_raw`).
+    /// No-op when `idx` is not a declarative peripheral.
+    pub(crate) fn poke_cached_declarative_u32(&self, idx: usize, offset: u64, value: u32) {
+        if let Some(generic) = self.peripherals.get(idx).and_then(|p| {
+            p.dev.as_any().and_then(|a| {
+                a.downcast_ref::<crate::peripherals::declarative::GenericPeripheral>()
+            })
+        }) {
+            generic.poke_u32_raw(offset, value);
+        }
+    }
+
     /// Phase 2B.1 (issue #192): pend an NVIC IRQ on behalf of an event
     /// handler. Mirrors the per-tick `pend_nvic` path but collects
     /// non-NVIC fallthroughs into the supplied vector for the caller to
@@ -263,7 +347,7 @@ impl SystemBus {
         if let Some(nvic) = &self.nvic {
             let idx = (irq / 32) as usize;
             let bit = irq % 32;
-            if idx < 8 && (nvic.iser[idx].load(Ordering::SeqCst) & (1 << bit)) != 0 {
+            if idx < nvic.iser.len() && (nvic.iser[idx].load(Ordering::SeqCst) & (1 << bit)) != 0 {
                 fallthrough.push(16 + irq);
             }
         }
@@ -305,12 +389,29 @@ impl SystemBus {
         // controllers and multiplexers, from their live routing registers
         // (`Peripheral::dma_route_request`): F1 fixed channels, L4 CSELR, F4
         // SxCR.CHSEL, G0/G4/WB DMAMUX_CxCR.DMAREQ_ID.
+        // A data-ready request is named after the peripheral alone (`adc1`).
+        if request_id == crate::DMA_SIGNAL_DATA {
+            self.route_named_dma_request(source_name.to_string());
+            return;
+        }
         let line = match request_id {
             crate::DMA_SIGNAL_TX => "tx",
             crate::DMA_SIGNAL_RX => "rx",
+            crate::DMA_SIGNAL_TIMER_UPDATE => "up",
+            crate::DMA_SIGNAL_TIMER_CH1 => "ch1",
+            crate::DMA_SIGNAL_TIMER_CH2 => "ch2",
+            crate::DMA_SIGNAL_TIMER_CH3 => "ch3",
+            crate::DMA_SIGNAL_TIMER_CH4 => "ch4",
+            crate::DMA_SIGNAL_TIMER_COMMUTATION => "com",
+            crate::DMA_SIGNAL_TIMER_TRIGGER => "trig",
             _ => return,
         };
-        let request = format!("{source_name}_{line}");
+        self.route_named_dma_request(format!("{source_name}_{line}"));
+    }
+
+    /// Ask every DMA controller and multiplexer which channels the request
+    /// named `request` drives, and raise it there.
+    fn route_named_dma_request(&mut self, request: String) {
         // `(answering peripheral, target controller, channel)`.
         let mut targets: Vec<(usize, Option<usize>, u32)> = Vec::new();
         let mut routes = Vec::new();
@@ -556,17 +657,21 @@ impl SystemBus {
                 bus_tick_pos += 1;
                 continue;
             }
+            // Same pad-claim bracket as an event (see `Machine` event dispatch).
+            let pad_claim_capture =
+                !self.pad_claim_links.owners.is_empty() && self.begin_pad_claim_write(i);
             let placeholder: Box<dyn Peripheral> =
                 Box::new(crate::peripherals::stub::StubPeripheral::new(0));
             let mut dev = std::mem::replace(&mut self.peripherals[i].dev, placeholder);
             dev.tick_with_bus(self);
             self.peripherals[i].dev = dev;
+            self.finish_pad_claim_write(pad_claim_capture);
             // A level source may have raised its line inside the bus tick
             // (nRF52 UARTE EasyDMA completion). Reconcile it here, the same
             // way the walk and the MMIO write path do.
             if let Some(irq_line) = self.peripherals[i].irq {
                 if let Some(level) = self.peripherals[i].dev.irq_line_level() {
-                    reconcile_nvic_level(&self.nvic, irq_line, level);
+                    self.reconcile_line_level(i, irq_line, level);
                 }
             }
             let still_needs_bus_tick = self.refresh_bus_tick_index(i);
@@ -643,6 +748,167 @@ impl SystemBus {
     #[cfg(feature = "event-scheduler")]
     pub(crate) fn run_idle_poll_bus_tick(&mut self) {
         self.run_bus_tick_pass();
+    }
+
+    /// Diff the input word of every GPIO port against the last-seen levels and
+    /// hand each changed pin to every peripheral's `observe_gpio_change`
+    /// (GPIOTE EVENTS_IN, Series-2 EXTI, SAM EIC).
+    ///
+    /// Event-driven: the bus calls this exactly where a port's input word can
+    /// move (an MMIO write into the port, an external pad drive) and at every
+    /// peripheral tick as a safety net, instead of polling every cycle. See
+    /// [`Self::observe_gpio_edges_if_live`].
+    pub(crate) fn observe_gpio_edges_unconditional(&mut self) {
+        // GPIO edge-detection pass: snapshot the IN registers of GPIO ports
+        // 0 and 1, diff against last-known state, and notify every
+        // peripheral of changed pins. GPIOTE overrides observe_gpio_change
+        // to drive EVENTS_IN[i] when a channel watches a matching pin.
+        //
+        // ESP32-C3 does not use this Nordic GPIO/GPIOTE service path; its
+        // board inputs write the C3 GPIO register model directly. Skipping
+        // this block is important because C3 ROM-boot needs very frequent
+        // ticks for interrupt-matrix correctness.
+        // Which peripheral is which port. Numbered (Nordic) and lettered
+        // (Silicon Labs, ST) spellings map onto the same index space, so a
+        // chip's ports are 0..3 whatever it calls them — and the tuple a
+        // watcher receives means the same thing on both.
+        //
+        // ⚠️ Levels come from `Peripheral::read_gpio_input`, NOT from a
+        // hardcoded register offset. This pass used to read `base + 0x510`,
+        // which is the Nordic IN register and is DOUT on a Series-2 port —
+        // so an EFR32 edge was never observed at all and its EXTI could
+        // never fire. `read_gpio_input` asks each model for its own input
+        // register, and answers the identical value for the Nordic ports
+        // it already served.
+        const GPIO_PORT_IDS: [(&str, usize); 8] = [
+            ("gpio0", 0),
+            ("gpio1", 1),
+            ("gpio2", 2),
+            ("gpio3", 3),
+            ("gpioa", 0),
+            ("gpiob", 1),
+            ("gpioc", 2),
+            ("gpiod", 3),
+        ];
+        // Resolved once, then cached — see `SystemBus::gpio_port_idx`. Doing
+        // it per tick is eight linear scans of the peripheral list with a
+        // string compare each, on every boundary of every chip, to arrive at
+        // the same four indices every time.
+        let gpio_idx = match self.gpio_port_idx {
+            Some(cached) => cached,
+            None => {
+                let mut resolved: [Option<usize>; 4] = [None; 4];
+                for (name, port) in GPIO_PORT_IDS {
+                    if resolved[port].is_none() {
+                        resolved[port] = self.find_peripheral_index_by_name(name);
+                    }
+                }
+                // A few chips, including NXP K32W041, expose a single
+                // generic `gpio` port. Only poll that alias when an edge
+                // service needs it. ESP32-C3 also names its GPIO block
+                // `gpio`, but drives it through its own register path;
+                // polling its computed input word on every tick is costly.
+                let has_edge_observer =
+                    self.peripherals.iter().any(|p| p.dev.observes_gpio_edges());
+                if resolved[0].is_none() && has_edge_observer {
+                    resolved[0] = self.find_peripheral_index_by_name("gpio");
+                }
+                self.gpio_port_idx = Some(resolved);
+                resolved
+            }
+        };
+        let mut changes: Vec<(u8, u8, u8)> = Vec::new();
+        // First pass ADOPTS the live levels as the baseline (see
+        // `last_gpio_in`): nothing has transitioned yet, so `baseline` is
+        // `None` and no change is reported for any pin the outside world
+        // already holds.
+        let baseline = self.last_gpio_in;
+        let mut current_in = baseline.unwrap_or([0; 4]);
+        for (port, idx) in gpio_idx.iter().enumerate() {
+            let Some(idx) = idx else { continue };
+            // Whole port in one call. `read_gpio_input_word`'s default IS
+            // the pin-by-pin loop that used to be written out here (first
+            // `None` ends the port, so a port narrower than 32 pins leaves
+            // the rest of the word clear), so a model that does not
+            // override it produces the identical word; `GpioPort` does
+            // override it, and answers with one register read instead of
+            // 32 evaluations of a computed input register.
+            let cur = self.peripherals[*idx].dev.read_gpio_input_word();
+            current_in[port] = cur;
+            let Some(prev) = baseline.map(|b| b[port]) else {
+                continue;
+            };
+            let diff = cur ^ prev;
+            if diff != 0 {
+                for pin in 0..32u8 {
+                    if diff & (1 << pin) != 0 {
+                        let level = ((cur >> pin) & 1) as u8;
+                        changes.push((port as u8, pin, level));
+                    }
+                }
+            }
+        }
+        self.last_gpio_in = Some(current_in);
+        if !changes.is_empty() {
+            // A GPIO edge can make a dynamic peripheral (e.g. GPIOTE)
+            // newly walk-active through `observe_gpio_change` — a
+            // CROSS-peripheral activation that the per-MMIO-write refresh
+            // choke never observes. Refresh the legacy-tick index of every
+            // dynamic peripheral so a freshly-armed GPIOTE re-enters the
+            // walk and drains its EVENTS_IN on the next tick (before this,
+            // a GPIOTE that opts out of the walk while idle would never be
+            // re-added and its input event would be lost). Guarded by an
+            // actual edge, so this is off the steady-state hot path.
+            for idx in 0..self.peripherals.len() {
+                let latched = self.peripherals[idx].dev.observe_gpio_change(&changes);
+                if self.peripherals[idx].dev.legacy_tick_dynamic() {
+                    self.refresh_legacy_tick_index(idx);
+                }
+                // Walk-free: a scheduler-driven peripheral (GPIOTE) that
+                // latched pending work FROM THIS EDGE needs its delay-0
+                // drain event harvested here — the MMIO write choke never
+                // sees a cross-peripheral edge.
+                //
+                // Only the models that latched. Harvesting from every
+                // scheduler-driven peripheral re-arms a duplicate wake on
+                // models that already have one in flight and cannot latch
+                // anything from a GPIO edge: `take_scheduled_events` is a
+                // query of live state, not a one-shot take, so a second
+                // harvest at a later cycle produces a second heap entry at
+                // a DIFFERENT deadline, which the scheduler's byte-identical
+                // dedup cannot collapse. For the RADIO that duplicate fires
+                // inside the same drain as the EasyDMA event and runs
+                // `tick()` while the air-time countdown is pinned at 1 —
+                // raising ADDRESS/PAYLOAD/END immediately and erasing the
+                // whole packet's transmission time.
+                #[cfg(feature = "event-scheduler")]
+                if latched && self.peripherals[idx].dev.uses_scheduler() {
+                    self.collect_scheduled_events(idx);
+                }
+                #[cfg(not(feature = "event-scheduler"))]
+                let _ = latched;
+            }
+        }
+    }
+
+    /// Cheap gate for the event hooks: no-op unless some peripheral consumes
+    /// edges, and never on the ESP32-C3 routing path (which skips the pass).
+    #[inline]
+    pub(crate) fn observe_gpio_edges_if_live(&mut self) {
+        if self.gpio_edge_observers && !self.irq_fabric.esp32c3.routing {
+            self.observe_gpio_edges_unconditional();
+        }
+    }
+
+    /// Whether bus index `idx` is one of the GPIO ports the edge pass reads.
+    #[inline]
+    pub(crate) fn is_edge_watched_gpio_port(&self, idx: usize) -> bool {
+        match self.gpio_port_idx {
+            Some(ports) => ports.contains(&Some(idx)),
+            // Not resolved yet: resolve through a full pass, which also adopts
+            // the baseline.
+            None => true,
+        }
     }
 
     #[allow(clippy::type_complexity)]
@@ -814,8 +1080,11 @@ impl SystemBus {
             // held). Everything else keeps pulse semantics unchanged.
             match (self.peripherals[peripheral_index].dev.irq_line_level(), irq) {
                 (Some(level), Some(irq)) => {
-                    reconcile_nvic_level(&self.nvic, irq, level);
-                    if res.irq && self.nvic.is_none() {
+                    let routed = self.route_irq_input_level(peripheral_index, irq, level);
+                    if !routed {
+                        self.reconcile_line_level(peripheral_index, irq, level);
+                    }
+                    if res.irq && self.nvic.is_none() && !routed {
                         interrupts.push(irq);
                     }
                 }
@@ -872,7 +1141,16 @@ impl SystemBus {
             // Forced mode walks a fixed one-shot snapshot. Refresh the normal
             // cache for future production ticks, but always advance this
             // snapshot cursor even when a dynamic entry just became inactive.
-            if force_scheduler_walk || still_active {
+            //
+            // An inactive dynamic entry normally leaves the cache, and the
+            // next one takes its slot. It stays when the walk was deleted
+            // earlier in this same pass (two dynamic models going idle
+            // together, e.g. after a system reset): step over it, or the
+            // walk would tick it forever.
+            if force_scheduler_walk
+                || still_active
+                || self.legacy_tick_indices.get(tick_pos) == Some(&peripheral_index)
+            {
                 tick_pos += 1;
             }
         }
@@ -904,136 +1182,7 @@ impl SystemBus {
         }
 
         if !self.irq_fabric.esp32c3.routing {
-            // GPIO edge-detection pass: snapshot the IN registers of GPIO ports
-            // 0 and 1, diff against last-known state, and notify every
-            // peripheral of changed pins. GPIOTE overrides observe_gpio_change
-            // to drive EVENTS_IN[i] when a channel watches a matching pin.
-            //
-            // ESP32-C3 does not use this Nordic GPIO/GPIOTE service path; its
-            // board inputs write the C3 GPIO register model directly. Skipping
-            // this block is important because C3 ROM-boot needs very frequent
-            // ticks for interrupt-matrix correctness.
-            // Which peripheral is which port. Numbered (Nordic) and lettered
-            // (Silicon Labs, ST) spellings map onto the same index space, so a
-            // chip's ports are 0..3 whatever it calls them — and the tuple a
-            // watcher receives means the same thing on both.
-            //
-            // ⚠️ Levels come from `Peripheral::read_gpio_input`, NOT from a
-            // hardcoded register offset. This pass used to read `base + 0x510`,
-            // which is the Nordic IN register and is DOUT on a Series-2 port —
-            // so an EFR32 edge was never observed at all and its EXTI could
-            // never fire. `read_gpio_input` asks each model for its own input
-            // register, and answers the identical value for the Nordic ports
-            // it already served.
-            const GPIO_PORT_IDS: [(&str, usize); 8] = [
-                ("gpio0", 0),
-                ("gpio1", 1),
-                ("gpio2", 2),
-                ("gpio3", 3),
-                ("gpioa", 0),
-                ("gpiob", 1),
-                ("gpioc", 2),
-                ("gpiod", 3),
-            ];
-            // Resolved once, then cached — see `SystemBus::gpio_port_idx`. Doing
-            // it per tick is eight linear scans of the peripheral list with a
-            // string compare each, on every boundary of every chip, to arrive at
-            // the same four indices every time.
-            let gpio_idx = match self.gpio_port_idx {
-                Some(cached) => cached,
-                None => {
-                    let mut resolved: [Option<usize>; 4] = [None; 4];
-                    for (name, port) in GPIO_PORT_IDS {
-                        if resolved[port].is_none() {
-                            resolved[port] = self.find_peripheral_index_by_name(name);
-                        }
-                    }
-                    // A few chips, including NXP K32W041, expose a single
-                    // generic `gpio` port. Only poll that alias when an edge
-                    // service needs it. ESP32-C3 also names its GPIO block
-                    // `gpio`, but drives it through its own register path;
-                    // polling its computed input word on every tick is costly.
-                    let has_edge_observer =
-                        self.peripherals.iter().any(|p| p.dev.observes_gpio_edges());
-                    if resolved[0].is_none() && has_edge_observer {
-                        resolved[0] = self.find_peripheral_index_by_name("gpio");
-                    }
-                    self.gpio_port_idx = Some(resolved);
-                    resolved
-                }
-            };
-            let mut changes: Vec<(u8, u8, u8)> = Vec::new();
-            // First pass ADOPTS the live levels as the baseline (see
-            // `last_gpio_in`): nothing has transitioned yet, so `baseline` is
-            // `None` and no change is reported for any pin the outside world
-            // already holds.
-            let baseline = self.last_gpio_in;
-            let mut current_in = baseline.unwrap_or([0; 4]);
-            for (port, idx) in gpio_idx.iter().enumerate() {
-                let Some(idx) = idx else { continue };
-                // Whole port in one call. `read_gpio_input_word`'s default IS
-                // the pin-by-pin loop that used to be written out here (first
-                // `None` ends the port, so a port narrower than 32 pins leaves
-                // the rest of the word clear), so a model that does not
-                // override it produces the identical word; `GpioPort` does
-                // override it, and answers with one register read instead of
-                // 32 evaluations of a computed input register.
-                let cur = self.peripherals[*idx].dev.read_gpio_input_word();
-                current_in[port] = cur;
-                let Some(prev) = baseline.map(|b| b[port]) else {
-                    continue;
-                };
-                let diff = cur ^ prev;
-                if diff != 0 {
-                    for pin in 0..32u8 {
-                        if diff & (1 << pin) != 0 {
-                            let level = ((cur >> pin) & 1) as u8;
-                            changes.push((port as u8, pin, level));
-                        }
-                    }
-                }
-            }
-            self.last_gpio_in = Some(current_in);
-            if !changes.is_empty() {
-                // A GPIO edge can make a dynamic peripheral (e.g. GPIOTE)
-                // newly walk-active through `observe_gpio_change` — a
-                // CROSS-peripheral activation that the per-MMIO-write refresh
-                // choke never observes. Refresh the legacy-tick index of every
-                // dynamic peripheral so a freshly-armed GPIOTE re-enters the
-                // walk and drains its EVENTS_IN on the next tick (before this,
-                // a GPIOTE that opts out of the walk while idle would never be
-                // re-added and its input event would be lost). Guarded by an
-                // actual edge, so this is off the steady-state hot path.
-                for idx in 0..self.peripherals.len() {
-                    let latched = self.peripherals[idx].dev.observe_gpio_change(&changes);
-                    if self.peripherals[idx].dev.legacy_tick_dynamic() {
-                        self.refresh_legacy_tick_index(idx);
-                    }
-                    // Walk-free: a scheduler-driven peripheral (GPIOTE) that
-                    // latched pending work FROM THIS EDGE needs its delay-0
-                    // drain event harvested here — the MMIO write choke never
-                    // sees a cross-peripheral edge.
-                    //
-                    // Only the models that latched. Harvesting from every
-                    // scheduler-driven peripheral re-arms a duplicate wake on
-                    // models that already have one in flight and cannot latch
-                    // anything from a GPIO edge: `take_scheduled_events` is a
-                    // query of live state, not a one-shot take, so a second
-                    // harvest at a later cycle produces a second heap entry at
-                    // a DIFFERENT deadline, which the scheduler's byte-identical
-                    // dedup cannot collapse. For the RADIO that duplicate fires
-                    // inside the same drain as the EasyDMA event and runs
-                    // `tick()` while the air-time countdown is pinned at 1 —
-                    // raising ADDRESS/PAYLOAD/END immediately and erasing the
-                    // whole packet's transmission time.
-                    #[cfg(feature = "event-scheduler")]
-                    if latched && self.peripherals[idx].dev.uses_scheduler() {
-                        self.collect_scheduled_events(idx);
-                    }
-                    #[cfg(not(feature = "event-scheduler"))]
-                    let _ = latched;
-                }
-            }
+            self.observe_gpio_edges_unconditional();
 
             // CAN synthetic services stay Nordic/non-C3: C3 ROM-boot labs do
             // not host them and the high-frequency IRQ tick must stay lean.
@@ -1254,12 +1403,44 @@ impl SystemBus {
             }
         }
         let mut pending = cache.from_cpu_pending;
+        let mut status = [0u32; 2];
         while pending != 0 {
             let slot = pending.trailing_zeros();
             route_source(from_cpu_source_base + slot);
+            let src = (from_cpu_source_base + slot) as usize;
+            if let Some(word) = status.get_mut(src / 32) {
+                *word |= 1 << (src % 32);
+            }
             pending &= !(1 << slot);
         }
         self.irq_fabric.esp32c3.irq_lines = mask;
+
+        // INTR_STATUS_REG_0/1 (single-bank layout only): the raw level of
+        // every asserted source, routed or not. esp-hal reads it in the
+        // CPU-line handler to pick the source handler, and
+        // `SoftwareInterrupt::raise` polls it until the doorbell is visible.
+        if self.irq_fabric.esp32c3.intpri_idx.is_some() {
+            return;
+        }
+        let (Some(int_idx), Some(ctrl)) = (
+            self.irq_fabric.esp32c3.interrupt_core0_idx,
+            self.irq_fabric.esp32c3.intc.as_ref().map(|c| c.ctrl),
+        ) else {
+            return;
+        };
+        let fabric = &self.irq_fabric.esp32c3;
+        // Both parts number their sources below 64, so word 0 of each bitmap
+        // covers INTR_STATUS_REG_0 and _1.
+        let levels = fabric.walk_sources[0] | fabric.sched_sources[0] | pms_sources[0];
+        for (i, word) in status.iter_mut().enumerate() {
+            *word |= (levels >> (32 * i)) as u32;
+        }
+        if status != self.irq_fabric.esp32c3.intr_status {
+            self.irq_fabric.esp32c3.intr_status = status;
+            for (i, word) in status.iter().enumerate() {
+                self.poke_cached_declarative_u32(int_idx, ctrl.status0 + 4 * i as u64, *word);
+            }
+        }
     }
 
     /// Re-derive the C3 matrix sources asserted by SCHEDULER-driven peripherals
@@ -1507,6 +1688,40 @@ impl SystemBus {
             });
         }
     }
+}
+
+#[cfg(feature = "event-scheduler")]
+impl SystemBus {
+    /// Park a level-hold event chain (`EventResult::level_hold`) of
+    /// peripheral `idx` while every line in `lines` stands in the NVIC:
+    /// enabled, pending and level-marked. Returns false (the caller re-arms
+    /// as before) when any line does not, or when there is no NVIC.
+    pub(crate) fn park_level_event(&mut self, idx: usize, token: u32, lines: &[u32]) -> bool {
+        let Some(nvic) = &self.nvic else {
+            return false;
+        };
+        if lines.is_empty() {
+            return false;
+        }
+        let standing = lines.iter().all(|&irq| {
+            let word = (irq / 32) as usize;
+            let bit = 1u32 << (irq % 32);
+            word < nvic.level_pended.len()
+                && nvic.iser[word].load(std::sync::atomic::Ordering::SeqCst)
+                    & nvic.ispr[word].load(std::sync::atomic::Ordering::SeqCst)
+                    & nvic.level_pended[word].load(std::sync::atomic::Ordering::SeqCst)
+                    & bit
+                    != 0
+        });
+        if !standing {
+            return false;
+        }
+        self.parked_level_events.retain(|&(p, _, _)| p != idx);
+        for &irq in lines {
+            self.parked_level_events.push((idx, token, irq));
+        }
+        true
+    }
 
     /// The ONE per-fabric choke the event path uses to deliver a scheduler-
     /// driven peripheral's level-sensitive IRQ at its exact firing cycle. Every
@@ -1521,7 +1736,6 @@ impl SystemBus {
     /// bus (Cortex-M / nRF), where the caller pends the peripheral's explicit
     /// lines through `pend_irq_for_event` instead (the classic ESP32 DPORT
     /// fabric is a documented TODO — see the PR body).
-    #[cfg(feature = "event-scheduler")]
     pub(crate) fn deliver_scheduled_irq_levels(&mut self) -> bool {
         if self.irq_fabric.esp32c3.routing {
             self.refresh_esp32c3_sched_sources();
@@ -1558,7 +1772,9 @@ impl SystemBus {
             false
         }
     }
+}
 
+impl SystemBus {
     /// Classic ESP32 DPORT interrupt-matrix routing (TRM §7).
     ///
     /// Peripherals emit matrix *source* IDs via `explicit_irqs` (e.g. UART0 =
@@ -1752,7 +1968,7 @@ impl SystemBus {
             if !nvic.any_enabled.load(Ordering::Relaxed) {
                 return;
             }
-            for idx in 0..8 {
+            for idx in 0..nvic.iser.len() {
                 let mask =
                     nvic.iser[idx].load(Ordering::SeqCst) & nvic.ispr[idx].load(Ordering::SeqCst);
                 if mask != 0 {
@@ -1815,6 +2031,7 @@ impl SystemBus {
             if self.esp32s3_irq_audit.is_some() {
                 self.audit_esp32s3_irq_boundary();
             }
+            self.observe_gpio_edges_if_live();
             self.collect_enabled_nvic_interrupts(interrupts);
             return;
         }
@@ -1862,6 +2079,7 @@ impl SystemBus {
             if self.esp32s3_irq_audit.is_some() {
                 self.audit_esp32s3_irq_boundary();
             }
+            self.observe_gpio_edges_if_live();
             let mut interrupts = Vec::new();
             self.collect_enabled_nvic_interrupts(&mut interrupts);
             return (interrupts, Vec::new());
@@ -1906,21 +2124,21 @@ mod nrf_spim_gpio_cs_scheduling_tests;
 #[path = "tick_walk_free_campaign.rs"]
 mod walk_free_campaign;
 
-/// Walk-free C3 SYSTIMER batch — the interrupt-matrix ROUTING identity.
+/// Walk-free C3 level peripheral batches (`spi2`, `apb_saradc`, SYSTIMER, LEDC,
+/// WiFi-MAC) — the interrupt-matrix ROUTING identity.
 ///
-/// A SYSTIMER migrated off the per-cycle walk delivers its alarm as a scheduled
-/// event; the C3 routing arm (`Machine::apply_event_result` → this module's
-/// `refresh_esp32c3_sched_sources` + `recompute_esp32c3_irq_lines`) must route
-/// that level to `irq_fabric.esp32c3.irq_lines` EXACTLY as the legacy walk did when the
-/// SYSTIMER re-emitted source 37 every tick (`aggregate_esp32c3_irqs`). This
-/// pins that equivalence at the bus level (the OLED-lab gate proves it
-/// end-to-end through the real FreeRTOS tick).
-#[cfg(all(test, feature = "event-scheduler"))]
-#[path = "tick_c3_systimer_matrix_routing.rs"]
-mod c3_systimer_matrix_routing;
-
-/// Walk-free C3 level-only peripheral batch (`spi2` + `apb_saradc`) — the
-/// interrupt-matrix ROUTING identity.
+/// SYSTIMER: a migrated alarm is delivered as a scheduled event; the C3 routing
+/// arm (`refresh_esp32c3_sched_sources` + `recompute_esp32c3_irq_lines`) must
+/// route it to `irq_fabric.esp32c3.irq_lines` EXACTLY as the legacy walk did
+/// when the SYSTIMER re-emitted source 37 every tick (`aggregate_esp32c3_irqs`).
+/// LEDC is a TIME-driven pinner (its LSTIMERx_OVF latches on counter wrap) and
+/// the OLED lab never configures it. WiFi-MAC was the LAST walk pinner on the
+/// OLED rom-boot bus: its level is exported through `matrix_irq_sources`, and on
+/// a walk-DELETED bus the `EVENT_CLR` acknowledge is re-routed at the MMIO WRITE
+/// CHOKE (`sync_esp32c3_irq_cache_write`). The WiFi-MAC descriptor-ring PUMP is
+/// covered by the `c3_wifi_mac_walk_differential` module below.
+///
+/// `spi2` + `apb_saradc`:
 ///
 /// Both are one-shot LEVEL re-emitters: `int_raw` is write-armed by a
 /// transaction / conversion (no free-running counter), and the model re-asserts
@@ -1935,22 +2153,6 @@ mod c3_systimer_matrix_routing;
 #[cfg(all(test, feature = "event-scheduler"))]
 #[path = "tick_c3_level_peripheral_matrix_routing.rs"]
 mod c3_level_peripheral_matrix_routing;
-
-/// Walk-free C3 LEDC timer-port batch — the interrupt-matrix ROUTING identity.
-///
-/// Unlike the level-only pair (`spi2`/`apb_saradc`, write-armed), LEDC is a
-/// TIME-driven pinner: its four low-speed timers advance as up-counters and
-/// latch `LSTIMERx_OVF` on wrap. Migrated off the walk, that overflow is
-/// materialised by a scheduled event and the level is exported through
-/// `matrix_irq_sources` (re-derived by the bus); on the legacy walk the same
-/// level is re-emitted every tick via `tick()`'s `explicit_irqs`. This gate
-/// proves the two paths route the LEDC OVF interrupt to the SAME CPU line, and
-/// that INT_CLR de-asserts it — the same bus-level equivalence
-/// `c3_systimer_matrix_routing` pins for the SYSTIMER (the OLED lab can't
-/// exercise it: the demo never configures LEDC).
-#[cfg(all(test, feature = "event-scheduler"))]
-#[path = "tick_c3_ledc_matrix_routing.rs"]
-mod c3_ledc_matrix_routing;
 
 /// ESP32-C6 interrupt-matrix routing through the split INTPRI block.
 ///
@@ -1972,30 +2174,6 @@ mod c6_intpri_matrix_routing;
 #[cfg(test)]
 #[path = "tick_c6_pcr_gate.rs"]
 mod c6_pcr_gate;
-
-/// Walk-free C3 WiFi-MAC batch — the LAST walk pinner on the OLED rom-boot bus.
-///
-/// `wifi_mac` pinned the walk on TWO axes; both are migrated here with NO new
-/// event machinery:
-///
-///   * the interrupt LEVEL (matrix source 0, asserted while a MAC event is
-///     pending) — was re-emitted every walk tick by `tick()`; now exported
-///     through `matrix_irq_sources` and re-derived by the bus. On a walk-DELETED
-///     bus there is no walk tick to re-derive it, so a write-armed level change
-///     (the `EVENT_CLR` acknowledge) is re-routed at the MMIO WRITE CHOKE
-///     (`sync_esp32c3_irq_cache_write`). This module proves both: the scheduler
-///     and walk paths route the MAC level to the SAME CPU line, and the
-///     write-choke de-asserts it on a fully walk-deleted bus.
-///
-///   * the descriptor-ring PUMP (`tick_with_bus`) — was pinned by an
-///     unconditional `needs_bus_tick() == true`; now honestly gated so it only
-///     ticks while WiFi is up (`rx_ring != 0` / a pending TX / medium mode). The
-///     companion `c3_wifi_mac_walk_differential` module drives a real TX + RX
-///     session and proves the pump's ring writeback + IRQ delivery are
-///     byte-identical walk-vs-scheduler at interval 1 AND 64.
-#[cfg(all(test, feature = "event-scheduler"))]
-#[path = "tick_c3_wifi_mac_matrix_routing.rs"]
-mod c3_wifi_mac_matrix_routing;
 
 /// Walk-free C3 WiFi-MAC PUMP fidelity — the WiFi-EXERCISING byte-identity
 /// differential. Drives a real descriptor-ring session (RX ring delivery + a TX

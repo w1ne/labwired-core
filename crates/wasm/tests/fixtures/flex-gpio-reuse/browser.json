@@ -1,0 +1,45 @@
+{
+  "date": "2026-11-18",
+  "status": "passed",
+  "runtime": "compiled-wasm",
+  "firmware_bytes": 471,
+  "firmware_sha256": "2f7e3b35ebb21f02f89edeb657a48a9aa924c52eb8cefe09417e593dc44cf2cc",
+  "cpu_emulation": false,
+  "browser": "Google Chrome 156.0.8078.79",
+  "playwright": "1.61.1",
+  "bindings": {
+    "heypcb_pomodoro": {
+      "drive": "source.U1.PD6",
+      "observables": [
+        "source.D1.logic_state",
+        "source.D2.logic_state"
+      ],
+      "positive_edges": 12,
+      "negative_edges": 0
+    },
+    "arduino_uno_model": {
+      "drive": "arduino.portb.pb5",
+      "observable": "arduino.status_led.logic_state",
+      "workload": "one-microsecond pulse plus two-microsecond pulse (held out from the single-pulse Pomodoro proof)",
+      "positive_edges": 8,
+      "negative_edges": 0
+    }
+  },
+  "native_model_equality": true,
+  "checks": [
+    "portable-firmware-execution",
+    "two-board-bindings",
+    "two-source-led-outputs",
+    "held-out-asymmetric-pulse-workload",
+    "native-model-equality",
+    "positive-output",
+    "negative-control"
+  ],
+  "measured_seconds": {
+    "flex_native_suite_build_and_run": 5.69,
+    "portable_firmware_compile": 0.13,
+    "wasm_pack_web_build": 24.80,
+    "browser_harness": 18.60
+  },
+  "effort_note": "No comparable chip-specific Rust onboarding run was measured; no speed claim."
+}

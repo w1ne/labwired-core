@@ -6,7 +6,59 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
 ### Added
+- The in-core/ngspice device differential now covers coupled inductors (`K`), a PNP stage, a CMOS inverter (PMOS against NMOS) and a P-channel JFET follower. Measured with ngspice-42 as a fraction of full scale: transformer 5.9·10⁻⁴ %, PNP follower 8.0·10⁻⁵ %, CMOS inverter 2.6·10⁻³ %, PJF follower 6.1·10⁻⁵ %. The PJF case fails by 21 % of full scale under the old `VTO` convention below, so it is also the negative control for that fix.
+- The generic Beta NTC divider and Shockley diode load line that 16 board examples share now have a native ngspice reference variant on NUCLEO-F401RE: `examples/nucleo-f401re/analog-ntc-diode-ngspice.yaml` with `ntc-beta.cir` and `diode-load-line.cir`. `ngspice_solves_the_generic_ntc_and_diode_decks_the_in_core_engine_solves` compares the routed `board.analog.pa0_volts` and `pa1_volts` at 0, 25 and 60 °C. Measured with ngspice-42: the NTC route agrees to 4.4·10⁻¹⁶ V and the diode route to 2.1·10⁻⁷ V once the deck pins `.options temp=26.85 tnom=26.85` to the in-core engine's 300.00 K; ngspice's 27 °C default alone moves the diode by 0.3 mV. This extends replacement coverage beyond the Flex fixtures; it is one deck shape, not board-parity evidence.
+- The source-pinned HeyPCB ESP32-S3 LDR sensor-network Flex project has the same reference-solver variant: `system-ngspice.yaml` with `ldr.cir` solves the U4/R6/C7 divider and transient on ngspice through the same `labwired test --script` workflow and named ports. `labwired_test_runs_the_heypcb_ldr_network_deck_on_ngspice` requires the same ADC counts and instrument counts as the in-core manifest, the `source.sha256` netlist pin, and the 0 / 0.5 / 100000 lx range stop on both engines. Measured: bright deviation 4·10⁻⁷ V at 3.95 ms and transient sample 3.6·10⁻³ V (in-core backward-Euler lag); the dim case is still 1.2·10⁻⁴ V from settling and reads the same ADC count.
+- The source-pinned HeyPCB ESP32-S3 NTC Flex project now has a reference-solver variant: `system-ngspice.yaml` with `ntc.cir` solves the same R6/U4/C7 network on ngspice through the same `labwired test --script` workflow and named ports. `labwired-cli`'s `labwired_test_runs_the_heypcb_ntc_deck_on_ngspice` requires the same `loop` results, console text and instrument counts as the in-core manifest, the `source.sha256` netlist pin, and the 61 °C range stop on both engines. Measured: settled scope deviation ≤ 2·10⁻⁷ V, range-script fastest transient 1.05·10⁻² V (in-core backward-Euler lag).
+- ngspice models declare their input domain: `config.input_ranges` (`min`, `max`, `unit`) on an `adapter: ngspice` model. The shared latch refuses a boundary outside it on both the native host and the browser callback, so a deck taken from one datasheet row no longer extrapolates. The committed LDR example declares 1-100 lx, and `cosim_ngspice::a_photoresistor_deck_matches_the_in_core_curve_within_its_range` proves the behavioural deck matches the in-core `photoresistors` curve at 1, 10 and 100 lx and refuses 150 lx on both engines.
+- The second bounded element also has an ngspice deck: [`examples/cosim-ngspice-ntc`](examples/cosim-ngspice-ntc/README.md) writes the NCP18XH103F03RB beta curve as a behavioural current and declares 10-60 °C. `cosim_ngspice::a_thermistor_deck_matches_the_in_core_curve_within_its_range` proves it matches the in-core `thermistors` curve at 10, 25 and 60 °C and refuses 61 °C on both engines; `cosim_ngspice::flex_ntc_divider_runs_on_native_ngspice` runs the same network through `FlexRuntime` with its named ports, oscilloscope channel, source pin and range stop.
+- Flex run reports pin the circuit they solved: each model whose adapter loaded a SPICE netlist carries `source.kind`, `origin`, `bytes`, `sha256` and, for a file, `path`. Editing an `adapter: ngspice` `model:` file now changes the report even when the manifest is unchanged.
+
+### Changed
+- **P-channel JFET `VTO` follows SPICE**: a `PJF` card's `VTO` is now read in the channel's own frame, as ngspice reads it, so a depletion PJF has `VTO < 0` and the default is -2 V for both `NJF` and `PJF`. Before, the in-core engine expected `VTO > 0` for `PJF` and negated it, so a vendor PJF card copied from a SPICE library was a different device in-core (measured: 2.53 V disagreement with ngspice on a source follower). Decks that wrote `PJF(VTO=+2)` for the old convention must now write `VTO=-2`.
+- **CH32V003 pads read a driven voltage**: the F4P6 descriptor and its three package variants declare `io_voltage_v: 3.3` and the datasheet's affine `gpio_input_thresholds` (WCH CH32V003DS0 V1.8, Table 3-16). A co-simulation model that drives PC4/PC3 through `board.gpio_in` now binds and sets the pin, instead of refusing the deck with `NoInputThresholds`.
+- **BMP280 is drivable**: `pressure` (hPa) and `temperature` (°C) SimInput channels. The raw ADC words are the exact inverse of Bosch's integer compensation at the part's calibration block (same derived-program path as BME280), so firmware running the standard Bosch math reads the stimulus back. Defaults 25 °C / 1013.25 hPa (was the constant raw word 0x80000).
+
+## [0.26.0] - 2026-11-15
+
+### Release highlights
+- Multi-MCU systems now exchange timed GPIO, SPI, I2C, UART and CAN traffic;
+  ESP32-C3 nodes can connect and exchange BLE GATT data. The Python SDK and
+  pytest integration use the same core, including multi-node worlds.
+- Source debugging, GDB watchpoints, firmware branch coverage and LCOV/Cobertura
+  exports improve fault diagnosis and regression reporting.
+- New CPU and board paths include PIC16/PIC18/PIC24, RV64, AArch64,
+  Cortex-R5F, Renesas RX, MIPS32 and CH32V003. Coverage remains specific to the
+  documented board and firmware tests. Native ARM system execution is opt-in.
+- Analog work adds device models, supply-aware reset, motor winding circuits,
+  routed resistance and INA219 circuit coupling. New parts include the
+  STM32G0B1RE/TIOL112 IO-Link path, ACS712, joystick and limit-switch models,
+  expanded sensor/display sets and OV3660 camera JPEG output.
+- Recent compatibility fixes cover ESP32 Arduino/IDF 5 startup, NVS persistence,
+  RP2040 boot ROM and flash operations, AVR EEPROM/watchdog behavior, servo pulse
+  timing and AHT20 initialization.
+- See [the release notes](docs/releases/v0.26.0.md) for migration details and
+  links to the merged changes. The detailed entries below preserve each
+  feature's scope and limitations.
+
+### Added
+- Stock Arduino cores on more boards: Arduino Zero (SAMD21, #1739), Teensy 4.1
+  (i.MX RT1062, #1745), NUCLEO-C031C6 (first STM32C0, #1756), Arduino Mega 2560
+  Timer0/1/2 PWM on its pads (#1737) and an executable NUCLEO-F446RE smoke
+  (#1864). Each board's Arduino matrix row lists the levels that pass.
+- nRF54L05 and nRF54L10 application-core subsets (#1865) and a CONTROLLINO MINI
+  logic profile (#1886).
+- One analog circuit can now be shared by several MCU nodes in a world (#1833).
+  Resistors take temperature coefficients (#1900), external-device power rails
+  switch atomically at analog boundaries (#1837), and BLDC shafts couple to
+  shared analog worlds (#1836).
+- STEP/DIR drivers get travel stops, a startup position and limit-switch
+  outputs (#1866), and count real STM32 BSRR edges (#1906).
+- Native firmware/physics co-simulation with typed PCA9685 telemetry (#1881).
+- Classic ESP32 RMT transmit channels drive GPIO and NeoPixel/WS2812 LED
+  strips, with decoded WS2812 output checks through the GPIO path (#1692).
 - Batch 5: ten more declarative parts, closing the high-demand list. LoRa:
   `sx1276` (the LoRa register page with §6.4 reset values, RSSI / packet RSSI /
   SNR from stimulus, write-1-to-clear RegIrqFlags, TX → TxDone) and `sx1262`
@@ -42,9 +94,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a real CASET/RASET/RAMWR (or page/column pointer) sequence and checks the
   exact frame-memory bytes. Its negative control requires every check to FAIL
   against a panel that reads all 0x00 or 0xFF, including one with live flags
-  over mute memory. Each part has a `docs/parts/` page. SSD1327 (needs a
-  4-bit grayscale pixel format) and SK6812 (needs a 32-bit-per-LED strip
-  decoder) were not added.
+  over mute memory. Each part has a `docs/parts/` page. SSD1327 remains unavailable because it needs a 4-bit grayscale pixel
+  format. SK6812 RGBW support is included in the batch 5 entry above.
 - Four more everyday I²C parts as declarative `configs/devices/*.yaml`
   descriptors: `mpu9250` (accel/gyro/temp; AK8963 magnetometer not modelled),
   `ens160` (TVOC/eCO2/AQI, live only in STANDARD mode), `ina260` (fixed-LSB
@@ -62,8 +113,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Darlington sink, `logic_gate`) and `rfm95` (RFM95W / SX1276 SPI register
   shell, no RF air link). Each is in `everyday_sensor_set.rs` with a smoke
   check, a negative control and a stimulus test; the SPI and GPIO parts get
-  their own stand-ins. MCP3008 and ADS1256 are not included: their SPI
-  framings need engine support that does not exist yet.
+  their own stand-ins. MCP3008 and ADS1256 are included in the batch 5 entry above,
+  which adds the required SPI reply handling.
 - Nine everyday I²C sensors as declarative `configs/devices/*.yaml` parts, no
   Rust model: `sht40`, `bme680` (T/P/H; gas not modelled), `icm42688`,
   `icm20948` (accel/gyro/temp; magnetometer not modelled), `sgp40`, `tsl2591`,
@@ -258,6 +309,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a run without any skip. The four-servo trajectory lab (two cores, loopTask
   on APP_CPU) goes from 0.03x to 2.0x real time in WASM (Node, 12 s).
 ### Fixed
+- STM32 USARTs with the v2 register layout transmit only with CR1.UE and TE
+  set, as on silicon; the affected tier-1 fixtures now enable them (#1887,
+  #1923). Firmware that wrote TDR without enabling the USART no longer prints.
+- STM32 SPI, EFR32 timer and asserted NVIC level interrupts stay pending until
+  cleared (#1895, #1894, #1897). STM32F1 GPIO configuration lock and reset are
+  enforced (#1879). Timer alternate-function edges reach GPIO pad observers
+  (#1927).
+- ESP32-C3 GPIO input thresholds follow the supply voltage in mixed-signal
+  runs (#1869). HX711 readings no longer tear when the weight changes
+  mid-frame (#1847). Non-finite resistor conductance is rejected (#1902).
+- Classic megaAVR parts use their own flash and SRAM sizes (#1912), and
+  port-style pin names resolve on SAMD and AVR boards (#1913).
+- An assertions-pass early stop waits for scheduled inputs (#1911); replay is
+  refused only for attached air devices (#1867).
+- Avoid central device-clock work before its next deadline. Empty Renesas RIIC
+  controllers no longer advance a nonexistent device clock; late device
+  attachment and absolute-counter reload behavior remain covered by tests.
+- Preserve full untapped-console messages when UART and USB output share a
+  character prefix. Remove only complete mirrored lines; keep distinct UART0
+  and USB-Serial-JTAG application output intact in browser diagnostics. The
+  full CI lane now runs all eight existing C3 browser API release regressions
+  with the pinned BLE fixture required.
+- Release publication now requires a tag push. Manual artifact dry-runs cannot
+  publish even when dispatched against a tag. Release builds validate the
+  workspace version and tracked notes, use the lockfile, and publish the
+  reviewed release title and body.
+- Move release builds to supported native macOS ARM64 and Intel runners.
+  Require every packaged CLI to execute a UART firmware test and every DAP
+  to complete an initialize/disconnect exchange. Run the Linux archives on
+  Debian 12, Ubuntu 22.04 and AlmaLinux 9 with the GLIBC 2.31 floor preserved.
+- Smoke-test Python wheels on every supported native architecture, including
+  the cross-built Linux ARM64 wheel, before publication.
+- Execute anonymous GHCR runner and installed-action smoke checks on native
+  Linux amd64 and ARM64 runners after publication.
+- Correct classic ESP32 RMT read-only status, address and interrupt register
+  handling. Restore the documented CONF0, CONF1 and TX_LIM reset values and
+  the 32-bit read/write DATE contract. Align the register coverage reference
+  with the removal of false write-echo credits from the former stub.
+- Include the four required RV1103 compile-time JSON inputs in Python source
+  distributions. Rebuild an isolated wheel from the archive and execute UART
+  firmware before publishing the source archive.
+- Require sustained OLED updates in the RP2040 performance workload. Remeasure
+  its invalid reference, which used a ROM that drew one frame and then stalled
+  before enabling PWM. Keep the 25% regression tolerance and other workload
+  baselines unchanged.
+- Complete three onboarding profiles with shipped-board execution oracles:
+  STM32F103RB BME280 SysTick, classic ESP32 GPIO and UART1. Correct the
+  descriptors and validate interrupt delivery with disabled-interrupt controls.
+  Replace their invalid performance waivers with six measured step/batch
+  baselines; preserve all 186 pre-existing board baseline values (#1812).
+- Parse secure-boot P-256 public keys by their DER/SPKI header and length, so
+  a coordinate containing `0x04` cannot be mistaken for the point prefix (#1807).
+- Use the machine clock for observer-path result cycles and resource budgets,
+  matching the clock that enforces cycle limits (#1808).
+- Update installed-CLI documentation fixtures for CH32V003 and STM32F4 paths
+  that the v0.26.0 engine can run. The BlackPill entry uses its dedicated UART
+  smoke fixture; it does not claim the broader family fixture passes.
 - A WAITI-parked secondary core that an interrupt wakes in the middle of a
   quantum-1 window runs from the next cycle. The window stepped a secondary
   only while it was parked, so after a mid-window wake it sat unstepped
@@ -317,7 +425,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   follow the window and format the driver programs (RGB565, YUV422, Y8);
   the scene is synthetic and stimulus-driven (`pattern`, `brightness`,
   `motion`). Espressif's `take_picture` example runs unmodified apart from
-  board pins. JPEG is not modelled (no frames). Under the event scheduler
+  board pins. JPEG output is covered by the baseline-JPEG entry above.
+  Under the event scheduler
   the camera's GDMA pump runs from its own wake-ups rather than the
   per-boundary bus-tick pass, so the CPU keeps batching while frames flow
   (camera-to-ST7789 preview: ~3x faster per frame). Tested in
@@ -719,7 +828,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cortex-M4F/M7: `VMOV Dm, Rt, Rt2`, `VMOV Rt, Rt2, Dm` and their single-precision pair forms decode as register moves. They used to run as a 16-word VSTM/VLDM below `Rt2`, so `Serial.print(float)` on STM32duino 3 (NUCLEO-L476RG, -F401RE) HardFaulted with a BusFault at an address made of the float's high word.
 - The RISC-V cycle counter (ESP32-C3 `PCCR` CSR 0x7E2/0x802, standard `cycle`) counts one tick per simulated CPU clock, the clock SYSTIMER and `micros()` run on. It counted 256 per clock, so Arduino `pulseIn` on the ESP32-C3 gave up after about 117 µs and an HC-SR04 always read 0 (timeout).
 - A `servo` on the ESP32-C3 follows the C3 LEDC duty (`ledcWrite`, ESP32Servo `write()`), as it already did on the classic ESP32. Before, the shaft stayed at its minimum angle.
-- ATmega328P Timer2 now counts in normal and CTC modes (`TCCR2A`/`TCCR2B`/`TCNT2`/`OCR2A`/`OCR2B`/`TIMSK2`/`TIFR2`/`ASSR`, including the `/32` and `/128` prescalers). Compare-match A/B and overflow raise the datasheet vectors, so Arduino `tone()` / `noTone()` on an Uno toggles the requested pin. OC2A/OC2B PWM outputs and Timer1 are still not driven.
+- ATmega328P Timer2 now counts in normal and CTC modes (`TCCR2A`/`TCCR2B`/`TCNT2`/`OCR2A`/`OCR2B`/`TIMSK2`/`TIFR2`/`ASSR`, including the `/32` and `/128` prescalers). Compare-match A/B and overflow raise the datasheet vectors, so Arduino `tone()` / `noTone()` on an Uno toggles the requested pin. OC0A/OC0B/OC2A/OC2B PWM and Timer1 servo support were added in follow-up changes.
 - ESP32-C3/C6 GPIO `FUNCn_OUT_SEL_CFG` resets to 0x80 (`SIG_GPIO_OUT`, the
   matrix bypass, per `esp32c3.svd`) instead of 0, so a bare-metal output pad
   reads as a plain GPIO output rather than as routed to matrix signal 0.

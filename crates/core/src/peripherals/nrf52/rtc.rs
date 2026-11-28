@@ -7,6 +7,11 @@
 //! 32.768 kHz LFCLK; 24-bit counter with a 12-bit prescaler:
 //! f_RTC = 32_768 / (PRESCALER + 1) Hz.
 //!
+//! The walk advances in CPU cycles, so the model needs the core clock to
+//! convert them into LFCLK edges. It takes that from
+//! [`Peripheral::attach_cpu_hz`] (the chip descriptor's `cpu_hz`); the 64 MHz
+//! default below is used only by a hand-built bus that never attaches one.
+//!
 //! Instance-specific CC count (PS §6.21, table 97):
 //!   RTC0       — 3 CC registers (CC[0..2])
 //!   RTC1, RTC2 — 4 CC registers (CC[0..3])
@@ -15,7 +20,10 @@
 //!
 //! EVENTS_* semantics: hardware-generated only. Writes of 1 are ignored;
 //! only writes of 0 clear the event register. HW sets events via tick() /
-//! lazy advance.
+//! lazy advance. An event latches when it is enabled in INTEN or in EVTEN;
+//! EVTEN alone routes it to PPI. (Mbed OS `common_rtc.c` clears EVTEN for
+//! OVRFLW and its ticker COMPARE, enables INTEN only, and its interrupt
+//! handler reads the EVENTS registers.)
 //!
 //! ## Drive modes (walk-free plan Part 1)
 //!
@@ -66,12 +74,23 @@ const EN_COMPARE_SHIFT: u32 = 16;
 const COUNTER_MASK: u32 = 0x00FF_FFFF;
 const PRESCALER_MASK: u32 = 0xFFF;
 
-/// CPU cycles per LFCLK base-clock tick (nRF52840: 64 MHz CPU, 32.768 kHz LFCLK).
-///
+/// LFCLK nominal frequency, Hz. Every nRF51/52/53/54 RTC counts this clock;
+/// the crystal fixes it and it does not follow the core clock.
+pub const LFCLK_HZ: u32 = 32_768;
+
+/// CPU cycles per LFCLK base-clock tick at the 64 MHz nRF52 core clock:
 /// 64_000_000 / 32_768 = 1953.125 exactly = 15625 / 8.
-/// We advance `lfclk_accum` by LFCLK_ACCUM_INC each `tick()` call (once per
-/// CPU cycle) and fire one LFCLK edge when it reaches LFCLK_ACCUM_PERIOD.
-/// This gives exactly 32768 Hz without accumulating rounding error.
+///
+/// We advance `lfclk_accum` by `lfclk_inc` each `tick()` call (once per CPU
+/// cycle) and fire one LFCLK edge when it reaches `lfclk_period`. This gives
+/// exactly 32768 Hz without accumulating rounding error.
+///
+/// These constants are only the fallback for a hand-built bus that never
+/// calls [`Peripheral::attach_cpu_hz`]. On a real machine the bus passes
+/// `ChipDescriptor::cpu_hz` and the ratio becomes `LFCLK_HZ : cpu_hz`. That
+/// matters because the same RTC model also runs on the 16 MHz nRF51 and the
+/// 128 MHz nRF5340, where the 64 MHz ratio makes the counter 4x slow or 2x
+/// fast.
 ///
 /// Unit tests that call tick() directly use `Nrf52Rtc::new_fast()` which sets
 /// both to 1, giving a 1:1 CPU:LFCLK ratio so small tick counts suffice.
@@ -111,6 +130,11 @@ pub struct Nrf52Rtc {
     /// CPU cycle of the last advance (`Cell` so `&self` read-sync is idempotent).
     anchor: Cell<u64>,
     arm_seq: u32,
+    /// Cycles at which queued wakes arrive. Every wake re-evaluates the
+    /// counter and re-arms for what is due next, so a re-arm is queued only
+    /// when no wake already arrives by its deadline: repeated CC/INTEN
+    /// writes then leave a few live events, not one each.
+    live_wakes: Vec<u64>,
     /// IRQ latched by a lazy advance that has not yet been claimed by `on_event`.
     pending_irq: Cell<bool>,
     /// Event bitmap (INTEN/EVTEN bit positions) for PPI `fired_events` not yet
@@ -138,6 +162,7 @@ impl Default for Nrf52Rtc {
             clock: None,
             anchor: Cell::new(0),
             arm_seq: 0,
+            live_wakes: Vec::new(),
             pending_irq: Cell::new(false),
             pending_fired: Cell::new(0),
         }
@@ -169,21 +194,48 @@ impl Nrf52Rtc {
         }
     }
 
+    /// Set the LFCLK accumulator ratio to `LFCLK_HZ : cpu_hz`, reduced so the
+    /// fraction stays exact. A 64 MHz core yields 8/15625, byte-identical to
+    /// the historical default; 16 MHz yields 32/15625 and 128 MHz yields
+    /// 4/15625. Out-of-range or zero clocks keep the previous ratio.
+    fn set_lfclk_ratio(&mut self, cpu_hz: u64) {
+        if cpu_hz == 0 || cpu_hz > u64::from(u32::MAX) {
+            return;
+        }
+        fn gcd(a: u64, b: u64) -> u64 {
+            if b == 0 {
+                a
+            } else {
+                gcd(b, a % b)
+            }
+        }
+        let g = gcd(u64::from(LFCLK_HZ), cpu_hz).max(1);
+        // Both terms are <= u32::MAX (LFCLK_HZ is 2^15, cpu_hz is bounded
+        // above), so the casts cannot truncate.
+        let inc = (u64::from(LFCLK_HZ) / g) as u32;
+        let period = (cpu_hz / g) as u32;
+        // The walk fires at most one LFCLK edge per CPU cycle, so a core
+        // slower than LFCLK cannot be represented exactly. Saturate to 1:1
+        // rather than let `inc` exceed `period`. Every supported nRF core is
+        // >= 16 MHz, so this only guards a hand-built bus.
+        self.lfclk_inc = inc;
+        self.lfclk_period = period.max(inc);
+        // A mid-run re-attach must not leave the leftover phase at or above
+        // the new period: `advance_to` and `cycles_until_next_event` both
+        // assume `lfclk_accum < lfclk_period`, and a smaller period would
+        // otherwise make the next edge fire late.
+        if self.lfclk_accum.get() >= self.lfclk_period {
+            self.lfclk_accum.set(0);
+        }
+    }
+
     crate::cycle_clock::scheduler_mode!();
 
-    /// Advance the LFCLK accumulator by one CPU-cycle increment. Returns true
-    /// if a LFCLK base-clock edge fired (i.e. the prescaler/counter should
-    /// advance this cycle).
-    #[inline]
-    fn advance_lfclk(&self) -> bool {
-        let accum = self.lfclk_accum.get().wrapping_add(self.lfclk_inc);
-        if accum >= self.lfclk_period {
-            self.lfclk_accum.set(accum - self.lfclk_period);
-            true
-        } else {
-            self.lfclk_accum.set(accum);
-            false
-        }
+    /// A queued wake arrives in `[now, deadline]`.
+    fn wake_arrives_by(&self, now: u64, deadline: u64) -> bool {
+        self.live_wakes
+            .iter()
+            .any(|&at| at >= now && at <= deadline)
     }
 
     /// INTEN/EVTEN compare-bit mask: bits 16..16+num_cc.
@@ -202,49 +254,83 @@ impl Nrf52Rtc {
         if !self.running || cycles == 0 {
             return (false, 0);
         }
+        // The ratio is maintained with 0 < inc <= period and phase < period.
+        // Keep the zero-period guard defensive for hand-built/internal states.
+        if self.lfclk_period == 0 {
+            return (false, 0);
+        }
+
+        let lfclk_period = u128::from(self.lfclk_period);
+        let total_lfclk =
+            u128::from(self.lfclk_accum.get()) + u128::from(cycles) * u128::from(self.lfclk_inc);
+        let lfclk_edges = total_lfclk / lfclk_period;
+        self.lfclk_accum.set((total_lfclk % lfclk_period) as u32);
+        if lfclk_edges == 0 {
+            return (false, 0);
+        }
+
+        let divider = u128::from(self.prescaler & PRESCALER_MASK) + 1;
+        let total_psc = u128::from(self.prescaler_accum.get()) + lfclk_edges;
+        let counter_steps = total_psc / divider;
+        self.prescaler_accum.set((total_psc % divider) as u32);
+        if counter_steps == 0 {
+            return (false, 0);
+        }
+
+        let old_counter = self.counter.get() & COUNTER_MASK;
+        let old_plus_steps = u128::from(old_counter) + counter_steps;
+        let new_counter = (old_plus_steps & u128::from(COUNTER_MASK)) as u32;
+        self.counter.set(new_counter);
+
         let mut irq = false;
         let mut fired_mask = 0u32;
-        for _ in 0..cycles {
-            if !self.advance_lfclk() {
-                continue;
+        // TICK is evaluated on every counter step; this aggregate advance
+        // crossed at least one such step.
+        if self.evten & EN_TICK != 0 {
+            fired_mask |= EN_TICK;
+        }
+        if self.inten & EN_TICK != 0 {
+            irq = true;
+        }
+        if (self.evten | self.inten) & EN_TICK != 0 {
+            self.events_tick.set(1);
+        }
+
+        // Any crossing of the 24-bit boundary fires OVRFLW. Repeated wraps
+        // still produce one latched event and one fired-mask bit.
+        if old_plus_steps >= (u128::from(COUNTER_MASK) + 1) {
+            if self.evten & EN_OVRFLW != 0 {
+                fired_mask |= EN_OVRFLW;
             }
-            let divider = (self.prescaler & PRESCALER_MASK) + 1;
-            let psc = self.prescaler_accum.get().wrapping_add(1);
-            if psc < divider {
-                self.prescaler_accum.set(psc);
-                continue;
-            }
-            self.prescaler_accum.set(0);
-            let prev = self.counter.get();
-            let next = (prev.wrapping_add(1)) & COUNTER_MASK;
-            self.counter.set(next);
-            if self.evten & EN_TICK != 0 {
-                self.events_tick.set(1);
-                fired_mask |= EN_TICK;
-            }
-            if self.inten & EN_TICK != 0 {
+            if self.inten & EN_OVRFLW != 0 {
                 irq = true;
             }
-            if prev == COUNTER_MASK && next == 0 {
-                if self.evten & EN_OVRFLW != 0 {
-                    self.events_ovrflw.set(1);
-                    fired_mask |= EN_OVRFLW;
-                }
-                if self.inten & EN_OVRFLW != 0 {
-                    irq = true;
-                }
+            if (self.evten | self.inten) & EN_OVRFLW != 0 {
+                self.events_ovrflw.set(1);
             }
-            for i in 0..self.num_cc {
-                if next == (self.cc[i] & COUNTER_MASK) {
-                    let bit = 1u32 << (EN_COMPARE_SHIFT + i as u32);
-                    if self.evten & bit != 0 {
-                        self.events_compare[i].set(1);
-                        fired_mask |= bit;
-                    }
-                    if self.inten & bit != 0 {
-                        irq = true;
-                    }
-                }
+        }
+
+        // The loop's `next == target` check means a target equal to the
+        // starting counter is hit after one complete 24-bit revolution.
+        for i in 0..self.num_cc {
+            let target = self.cc[i] & COUNTER_MASK;
+            let distance = if target > old_counter {
+                u128::from(target - old_counter)
+            } else {
+                (u128::from(COUNTER_MASK) + 1) - u128::from(old_counter) + u128::from(target)
+            };
+            if counter_steps < distance {
+                continue;
+            }
+            let bit = 1u32 << (EN_COMPARE_SHIFT + i as u32);
+            if self.evten & bit != 0 {
+                fired_mask |= bit;
+            }
+            if self.inten & bit != 0 {
+                irq = true;
+            }
+            if (self.evten | self.inten) & bit != 0 {
+                self.events_compare[i].set(1);
             }
         }
         (irq, fired_mask)
@@ -344,7 +430,11 @@ impl Nrf52Rtc {
             let steps = (COUNTER_MASK - cur) as u64 + 1;
             best_steps = Some(best_steps.map_or(steps, |b| b.min(steps)));
         }
-        let steps = best_steps.unwrap_or(1);
+        // A running RTC keeps counting without generating a scheduled event
+        // when every TICK/OVRFLW/COMPARE source is disabled. Returning a
+        // one-counter-tick wake here turns the free-running LFCLK into a
+        // permanent scheduler source and prevents the CPU from parking.
+        let steps = best_steps?;
         Some(
             cpu_to_lfclk + (steps.saturating_sub(1)) * (lfclk_period.div_ceil(lfclk_inc) * divider),
         )
@@ -354,6 +444,16 @@ impl Nrf52Rtc {
 impl Peripheral for Nrf52Rtc {
     fn read(&self, _offset: u64) -> SimResult<u8> {
         Ok(0)
+    }
+
+    /// Every RTC register read is pure. The only state a read touches is the
+    /// lazily advanced counter (`sync_from_clock`), and what that advance can
+    /// cause is parked in `pending_irq` / `pending_fired` for the scheduled
+    /// event to deliver: the read itself raises nothing. Arduino `millis()`
+    /// on nRF52 is a COUNTER read, so a `delay()` loop no longer ends its
+    /// CPU window on every poll.
+    fn read_is_pure(&self, _offset: u64) -> bool {
+        true
     }
 
     fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
@@ -461,14 +561,22 @@ impl Peripheral for Nrf52Rtc {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
+        self.tick_elapsed(1)
+    }
+
+    fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
         // Legacy / feature-off path. Scheduler mode skips the walk.
         if self.scheduler_mode() {
             return PeripheralTickResult::default();
         }
-        let (irq, fired_mask) = self.advance_and_eval(1);
+        let (irq, fired_mask) = self.advance_and_eval(cycles);
         PeripheralTickResult {
             irq,
-            cycles: 1,
+            // Concurrent with the CPU: do not charge Machine::total_cycles.
+            // Returning 1 per RTC instance used to inflate time by the number
+            // of RTC blocks (three on nRF52840), so COUNTER lagged LFCLK
+            // while the core sat in WFE and the cycle budget ran out early.
+            cycles: 0,
             fired_events: self.fired_mask_to_events(fired_mask),
             ..Default::default()
         }
@@ -492,14 +600,15 @@ impl Peripheral for Nrf52Rtc {
     /// `advance_to` cannot replay the cycles settled here. Never reached from
     /// production `Machine` execution: there the event chain
     /// (`take_scheduled_events` / `on_event`) stays the sole owner.
-    fn tick_elapsed_forced(&mut self, _cycles: u64) -> PeripheralTickResult {
+    fn tick_elapsed_forced(&mut self, cycles: u64) -> PeripheralTickResult {
+        let cycles = cycles.max(1);
         if self.scheduler_mode() {
-            self.anchor.set(self.anchor.get().wrapping_add(1));
+            self.anchor.set(self.anchor.get().wrapping_add(cycles));
         }
-        let (irq, fired_mask) = self.advance_and_eval(1);
+        let (irq, fired_mask) = self.advance_and_eval(cycles);
         PeripheralTickResult {
             irq,
-            cycles: 1,
+            cycles: 0,
             fired_events: self.fired_mask_to_events(fired_mask),
             ..Default::default()
         }
@@ -520,6 +629,16 @@ impl Peripheral for Nrf52Rtc {
         self.clock = Some(clock);
     }
 
+    /// The counter counts LFCLK (32.768 kHz), and the legacy / forced walk
+    /// advances it one CPU cycle at a time. Without this the model assumes a
+    /// 64 MHz core, which is wrong on the nRF51 (16 MHz, counter 4x slow) and
+    /// the nRF5340 (128 MHz, counter 2x fast). The bus passes
+    /// `ChipDescriptor::cpu_hz` here, so the descriptor stays the single
+    /// source of the core clock.
+    fn attach_cpu_hz(&mut self, hz: u64) {
+        self.set_lfclk_ratio(hz);
+    }
+
     fn sync_to(&mut self, now_cycle: u64) {
         if !self.scheduler_mode() {
             return;
@@ -531,39 +650,54 @@ impl Peripheral for Nrf52Rtc {
         if !self.scheduler_mode() || !self.running {
             return Vec::new();
         }
-        if self.pending_irq.get() || self.pending_fired.get() != 0 {
+        let delay = if self.pending_irq.get() || self.pending_fired.get() != 0 {
             // A compare/tick already materialised (a COUNTER/EVENTS read
             // synced past its deadline): deliver at the next drain.
-            self.arm_seq = self.arm_seq.wrapping_add(1);
-            return vec![(0, self.arm_seq)];
-        }
-        let Some(d) = self.cycles_until_next_event() else {
-            return Vec::new();
+            0
+        } else {
+            match self.cycles_until_next_event() {
+                Some(d) => d.saturating_sub(1),
+                None => return Vec::new(),
+            }
         };
+        if let Some(now) = self.clock.as_ref().map(|c| c.now()) {
+            if self.wake_arrives_by(now, now + delay) {
+                return Vec::new();
+            }
+            self.live_wakes.push(now + delay);
+        }
         self.arm_seq = self.arm_seq.wrapping_add(1);
-        vec![(d.saturating_sub(1), self.arm_seq)]
+        vec![(delay, self.arm_seq)]
     }
 
     fn on_event(
         &mut self,
-        event_token: u32,
+        _event_token: u32,
         sched: &mut crate::sched::EventScheduler,
         _bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
-        if !self.scheduler_mode() || event_token != self.arm_seq {
+        if !self.scheduler_mode() {
             return crate::sched::EventResult::default();
         }
+        let now = sched.now();
+        self.live_wakes.retain(|&at| at > now);
         // Bring lazy free-running state up to the drain cycle; this
         // materialises events this wake was scheduled for (and is a no-op
         // if a prior COUNTER/EVENTS poll already advanced to `now`).
-        self.advance_to(sched.now());
+        self.advance_to(now);
         let irq = self.pending_irq.replace(false);
         let fired_mask = self.pending_fired.replace(0);
-        let next = self.cycles_until_next_event();
+        let next = self
+            .cycles_until_next_event()
+            .map(|d| d.saturating_sub(1))
+            .filter(|&d| !self.wake_arrives_by(now, now + d));
+        if let Some(d) = next {
+            self.live_wakes.push(now + d);
+        }
         crate::sched::EventResult {
             raise_own_irq: irq,
             fired_events: self.fired_mask_to_events(fired_mask),
-            reschedule_delay: next.map(|d| d.saturating_sub(1)),
+            reschedule_delay: next,
             ..Default::default()
         }
     }
@@ -572,6 +706,49 @@ impl Peripheral for Nrf52Rtc {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct AdvanceCase {
+        lfclk_inc: u32,
+        lfclk_period: u32,
+        lfclk_accum: u32,
+        prescaler: u32,
+        prescaler_accum: u32,
+        counter: u32,
+        cycles: u64,
+        inten: u32,
+        evten: u32,
+        cc: [u32; 4],
+        expected: (bool, u32),
+        expected_counter: u32,
+        expected_tick: u32,
+        expected_ovrflw: u32,
+        expected_compare: [u32; 4],
+    }
+
+    fn rtc_for_advance_case(case: &AdvanceCase) -> Nrf52Rtc {
+        let mut rtc = Nrf52Rtc::new_with_cc(4);
+        rtc.lfclk_inc = case.lfclk_inc;
+        rtc.lfclk_period = case.lfclk_period;
+        rtc.lfclk_accum.set(case.lfclk_accum);
+        rtc.prescaler = case.prescaler;
+        rtc.prescaler_accum.set(case.prescaler_accum);
+        rtc.counter.set(case.counter);
+        rtc.inten = case.inten;
+        rtc.evten = case.evten;
+        rtc.cc = case.cc;
+        rtc.running = true;
+        rtc
+    }
+
+    fn rtc_advance_state(rtc: &Nrf52Rtc) -> (u32, u32, u32, u32, [u32; 4]) {
+        (
+            rtc.counter.get(),
+            rtc.lfclk_accum.get(),
+            rtc.prescaler_accum.get(),
+            rtc.events_tick.get(),
+            std::array::from_fn(|i| rtc.events_compare[i].get()),
+        )
+    }
 
     #[test]
     fn prescaler_masks_to_12_bits() {
@@ -681,6 +858,30 @@ mod tests {
     }
 
     #[test]
+    fn an_event_enabled_in_inten_alone_latches_but_stays_off_ppi() {
+        let mut r = Nrf52Rtc::new_fast();
+        r.write_u32(OFF_PRESCALER, 0).unwrap();
+        r.write_u32(OFF_CC0 + 4, 3).unwrap();
+        r.write_u32(OFF_CC0 + 8, 3).unwrap();
+        r.write_u32(OFF_EVTENCLR, 0xFFFF_FFFF).unwrap();
+        r.write_u32(OFF_INTENSET, 1 << 17).unwrap();
+        r.write_u32(OFF_TASKS_START, 1).unwrap();
+
+        let mut irqs = 0;
+        let mut routed = 0;
+        for _ in 0..8 {
+            let result = r.tick();
+            irqs += u32::from(result.irq);
+            routed += result.fired_events.len();
+        }
+        assert_eq!(irqs, 1);
+        assert_eq!(routed, 0, "EVTEN is clear: nothing for PPI");
+        assert_eq!(r.read_u32(OFF_EVENTS_COMPARE0 + 4).unwrap(), 1);
+        // CC[2] matched too, with neither enable: no event.
+        assert_eq!(r.read_u32(OFF_EVENTS_COMPARE0 + 8).unwrap(), 0);
+    }
+
+    #[test]
     fn tick_tick_event_fires_when_enabled() {
         let mut r = Nrf52Rtc::new_fast();
         r.write_u32(OFF_PRESCALER, 0).unwrap();
@@ -719,9 +920,292 @@ mod tests {
         assert_eq!(r.read_u32(OFF_EVENTS_OVRFLW).unwrap(), 1);
     }
 
+    #[test]
+    fn elapsed_cpu_cycles_advance_counter_at_the_product_spec_rate() {
+        // PS RTC chapter: f_RTC = 32.768 kHz / (PRESCALER + 1).
+        // With PRESCALER=0, one COUNTER increment takes 64e6/32768 = 1953.125
+        // CPU cycles, modelled as 15625/8 LFCLK accum units.
+        let mut r = Nrf52Rtc::new();
+        r.write_u32(OFF_PRESCALER, 0).unwrap();
+        r.write_u32(OFF_TASKS_START, 1).unwrap();
+        r.tick_elapsed(1953);
+        assert_eq!(
+            r.read_u32(OFF_COUNTER).unwrap(),
+            0,
+            "1953 cycles is just short of one LFCLK edge"
+        );
+        r.tick_elapsed(2);
+        assert!(r.read_u32(OFF_COUNTER).unwrap() >= 1);
+        r.tick_elapsed(1953 * 4);
+        assert!(r.read_u32(OFF_COUNTER).unwrap() >= 4);
+    }
+
+    #[test]
+    fn compare_match_sets_event_and_irq_after_prescaled_elapsed_time() {
+        let mut r = Nrf52Rtc::new();
+        r.write_u32(OFF_PRESCALER, 31).unwrap(); // 32.768 kHz / 32 = 1024 Hz
+        r.write_u32(OFF_CC0, 2).unwrap();
+        r.write_u32(OFF_INTENSET, 1 << 16).unwrap();
+        r.write_u32(OFF_TASKS_START, 1).unwrap();
+        r.tick_elapsed(60_000); // short of two 1024 Hz increments
+        assert_eq!(r.read_u32(OFF_EVENTS_COMPARE0).unwrap(), 0);
+        let result = r.tick_elapsed(70_000);
+        assert!(r.read_u32(OFF_COUNTER).unwrap() >= 2);
+        assert_eq!(r.read_u32(OFF_EVENTS_COMPARE0).unwrap(), 1);
+        assert!(result.irq, "INTEN COMPARE0 must raise the RTC IRQ");
+    }
+
+    #[test]
+    fn attach_cpu_hz_keeps_the_64mhz_ratio_byte_identical() {
+        let mut r = Nrf52Rtc::new();
+        r.attach_cpu_hz(64_000_000);
+        assert_eq!(
+            (r.lfclk_inc, r.lfclk_period),
+            (LFCLK_ACCUM_INC_DEFAULT, LFCLK_ACCUM_PERIOD_DEFAULT),
+            "the 64 MHz core must reproduce the historical 8/15625 ratio exactly"
+        );
+    }
+
+    #[test]
+    fn attach_cpu_hz_reduces_to_an_exact_fraction() {
+        // CPU Hz from each nRF family descriptor, expected reduced ratio.
+        for (hz, inc, period) in [
+            (16_000_000u64, 32u32, 15_625u32), // nRF51
+            (32_000_000, 16, 15_625),          // hypothetical 32 MHz core
+            (64_000_000, 8, 15_625),           // nRF52
+            (128_000_000, 4, 15_625),          // nRF5340 / nRF54L
+            (48_000_000, 32, 46_875),          // 3x the historical divider
+            (25_000_000, 512, 390_625),        // RP2040-class, odd 5^n remainder
+            (32_768, 1, 1),                    // degenerate 1:1
+            (24_576, 4, 4),                    // sub-LFCLK core saturates to 1:1
+        ] {
+            let mut r = Nrf52Rtc::new();
+            r.attach_cpu_hz(hz);
+            assert_eq!(
+                (r.lfclk_inc, r.lfclk_period),
+                (inc, period),
+                "cpu_hz {hz}: expected {inc}/{period}"
+            );
+        }
+    }
+
+    #[test]
+    fn attach_cpu_hz_ignores_zero_and_keeps_the_previous_ratio() {
+        let mut r = Nrf52Rtc::new();
+        r.attach_cpu_hz(128_000_000);
+        r.attach_cpu_hz(0);
+        assert_eq!((r.lfclk_inc, r.lfclk_period), (4, 15_625));
+    }
+
+    #[test]
+    fn a_mid_run_clock_change_keeps_the_phase_inside_the_new_period() {
+        let mut r = Nrf52Rtc::new();
+        r.attach_cpu_hz(128_000_000); // 4/15625
+        r.write_u32(OFF_PRESCALER, 0).unwrap();
+        r.write_u32(OFF_TASKS_START, 1).unwrap();
+        r.tick_elapsed(15_600); // 62_400 accum units = 3 edges + 15_525 phase
+        assert_eq!(r.lfclk_accum.get(), 15_525);
+        // Re-attach to clocks whose reduced period is smaller than that
+        // leftover phase. Without a reset the phase sits at or above the new
+        // period and the next edge fires late.
+        for (hz, inc, period) in [(32_768u64, 1u32, 1u32), (24_576, 4, 4)] {
+            r.attach_cpu_hz(hz);
+            assert_eq!((r.lfclk_inc, r.lfclk_period), (inc, period));
+            assert_eq!(r.lfclk_accum.get(), 0, "cpu_hz {hz}: leftover phase kept");
+            r.tick_elapsed(3);
+            assert!(
+                r.lfclk_accum.get() < r.lfclk_period,
+                "cpu_hz {hz}: phase {} >= period {}",
+                r.lfclk_accum.get(),
+                r.lfclk_period
+            );
+        }
+    }
+
+    /// PRESCALER 0: one COUNTER step per 32768 LFCLK edges, so after `cycles`
+    /// CPU cycles the counter is `cycles * 32768 / cpu_hz`.
+    #[test]
+    fn counter_counts_lfclk_not_cpu_cycles() {
+        for (hz, cycles) in [
+            (16_000_000u64, 15_625u64), // -> 32
+            (64_000_000, 62_500),       // -> 32
+            (128_000_000, 125_000),     // -> 32
+        ] {
+            let mut r = Nrf52Rtc::new();
+            r.attach_cpu_hz(hz);
+            r.write_u32(OFF_PRESCALER, 0).unwrap();
+            r.write_u32(OFF_TASKS_START, 1).unwrap();
+            let res = r.tick_elapsed(cycles);
+            assert!(!res.irq);
+            let expected = (u128::from(cycles) * u128::from(LFCLK_HZ) / u128::from(hz)) as u32;
+            assert_eq!(expected, 32, "test row math");
+            assert_eq!(
+                r.read_u32(OFF_COUNTER).unwrap(),
+                expected,
+                "cpu_hz {hz}: after {cycles} CPU cycles the counter is not {expected} \
+                 (core clock not applied to the LFCLK ratio?)"
+            );
+        }
+    }
+
+    #[test]
+    fn the_widest_accepted_clock_does_not_wrap_the_accumulator() {
+        // u32::MAX is odd, so nothing reduces: inc 32_768, period u32::MAX.
+        // 131_072 cycles x 32_768 = 2^32, exactly one LFCLK edge. A 32-bit
+        // wrapping add reaches 0 there and loses the edge silently.
+        let mut r = Nrf52Rtc::new();
+        r.attach_cpu_hz(u64::from(u32::MAX));
+        assert_eq!((r.lfclk_inc, r.lfclk_period), (32_768, u32::MAX));
+        r.write_u32(OFF_PRESCALER, 0).unwrap();
+        r.write_u32(OFF_TASKS_START, 1).unwrap();
+        r.tick_elapsed(131_072);
+        assert_eq!(
+            r.read_u32(OFF_COUNTER).unwrap(),
+            1,
+            "the accumulator wrapped past the one LFCLK edge"
+        );
+        assert!(r.lfclk_accum.get() < r.lfclk_period);
+    }
+
+    #[test]
+    fn bulk_advance_matches_repeated_single_cycle_advances() {
+        let compare0 = 1 << EN_COMPARE_SHIFT;
+        let compare1 = 1 << (EN_COMPARE_SHIFT + 1);
+        let compare2 = 1 << (EN_COMPARE_SHIFT + 2);
+        let compare3 = 1 << (EN_COMPARE_SHIFT + 3);
+        let cases = [
+            AdvanceCase {
+                // Three LFCLK edges produce three COUNTER steps. COMPARE0 is
+                // exactly at the endpoint, COMPARE1 is crossed, COMPARE2 is
+                // missed, and COMPARE3 equal to the starting counter needs a
+                // full 24-bit revolution. TICK is INTEN-only.
+                lfclk_inc: 4,
+                lfclk_period: 7,
+                lfclk_accum: 6,
+                prescaler: 0,
+                prescaler_accum: 0,
+                counter: 100,
+                cycles: 4,
+                inten: EN_TICK | compare0,
+                evten: compare1,
+                cc: [103, 102, 104, 100],
+                expected: (true, compare1),
+                expected_counter: 103,
+                expected_tick: 1,
+                expected_ovrflw: 0,
+                expected_compare: [1, 1, 0, 0],
+            },
+            AdvanceCase {
+                // Fractional LFCLK phase plus PRESCALER=2 leaves a one-edge
+                // remainder; compare0 lands exactly on the fifth step.
+                lfclk_inc: 3,
+                lfclk_period: 8,
+                lfclk_accum: 7,
+                prescaler: 2,
+                prescaler_accum: 1,
+                counter: 12,
+                cycles: 39,
+                inten: compare0,
+                evten: compare2,
+                cc: [17, 18, 13, 12],
+                expected: (true, compare2),
+                expected_counter: 17,
+                expected_tick: 0,
+                expected_ovrflw: 0,
+                expected_compare: [1, 0, 1, 0],
+            },
+            AdvanceCase {
+                // Three steps start near wrap, crossing OVRFLW and hitting
+                // COMPARE0/1/3, with COMPARE2 outside the closed step range.
+                lfclk_inc: 5,
+                lfclk_period: 13,
+                lfclk_accum: 9,
+                prescaler: 0,
+                prescaler_accum: 0,
+                counter: COUNTER_MASK - 2,
+                cycles: 8,
+                inten: compare1,
+                evten: EN_OVRFLW | compare0 | compare3,
+                cc: [COUNTER_MASK - 1, 0, 3, COUNTER_MASK],
+                expected: (true, EN_OVRFLW | compare0 | compare3),
+                expected_counter: 0,
+                expected_tick: 0,
+                expected_ovrflw: 1,
+                expected_compare: [1, 1, 0, 1],
+            },
+        ];
+
+        for case in &cases {
+            let repeated = rtc_for_advance_case(case);
+            let bulk = rtc_for_advance_case(case);
+            let mut repeated_irq = false;
+            let mut repeated_fired = 0;
+            for _ in 0..case.cycles {
+                let (irq, fired) = repeated.advance_and_eval(1);
+                repeated_irq |= irq;
+                repeated_fired |= fired;
+            }
+            let repeated_result = (repeated_irq, repeated_fired);
+
+            assert_eq!(repeated_result, case.expected);
+            assert_eq!(bulk.advance_and_eval(case.cycles), case.expected);
+            assert_eq!(rtc_advance_state(&bulk), rtc_advance_state(&repeated));
+            assert_eq!(bulk.events_ovrflw.get(), case.expected_ovrflw);
+            assert_eq!(
+                std::array::from_fn::<_, 4, _>(|i| bulk.events_compare[i].get()),
+                case.expected_compare
+            );
+            assert_eq!(bulk.counter.get(), case.expected_counter);
+            assert_eq!(bulk.events_tick.get(), case.expected_tick);
+        }
+    }
+
+    #[test]
+    fn nrf5340_rtc_bulk_advance_handles_a_256_second_idle_jump() {
+        let mut rtc = Nrf52Rtc::new_with_cc(4);
+        rtc.attach_cpu_hz(128_000_000);
+        rtc.write_u32(OFF_PRESCALER, 0).unwrap();
+        rtc.write_u32(OFF_CC0, 0x0080_0000).unwrap();
+        rtc.write_u32(OFF_INTENSET, 1 << EN_COMPARE_SHIFT).unwrap();
+        rtc.write_u32(OFF_EVTENSET, 1 << EN_COMPARE_SHIFT).unwrap();
+        rtc.write_u32(OFF_TASKS_START, 1).unwrap();
+
+        let result = rtc.advance_and_eval(32_768_000_000);
+
+        assert_eq!(rtc.read_u32(OFF_COUNTER).unwrap(), 0x0080_0000);
+        assert_eq!(rtc.read_u32(OFF_EVENTS_COMPARE0).unwrap(), 1);
+        assert_eq!(result, (true, 1 << EN_COMPARE_SHIFT));
+    }
+
     #[cfg(feature = "event-scheduler")]
     mod scheduler_mode {
         use super::*;
+
+        #[test]
+        fn scheduled_read_counts_lfclk_at_every_core_clock() {
+            // The scheduler path (anchor + published cycles) must use the
+            // same attached ratio as the legacy walk. PRESCALER 0: after
+            // `cpu_hz / 1024` cycles the counter is 32.
+            for (hz, cycles) in [
+                (16_000_000u64, 15_625u64), // -> 32
+                (64_000_000, 62_500),       // -> 32
+                (128_000_000, 125_000),     // -> 32
+            ] {
+                let clock = CycleClock::default();
+                let mut r = Nrf52Rtc::new();
+                r.attach_cpu_hz(hz);
+                r.attach_cycle_clock(clock.clone());
+                r.write_u32(OFF_PRESCALER, 0).unwrap();
+                r.write_u32(OFF_TASKS_START, 1).unwrap();
+                assert!(r.uses_scheduler());
+                clock.publish(cycles);
+                assert_eq!(
+                    r.read_u32(OFF_COUNTER).unwrap(),
+                    32,
+                    "cpu_hz {hz}: scheduled read did not count LFCLK"
+                );
+            }
+        }
 
         #[test]
         fn counter_read_syncs_from_cycle_clock() {
@@ -745,6 +1229,37 @@ mod tests {
         fn without_clock_stays_on_legacy_tick_path() {
             let r = Nrf52Rtc::new();
             assert!(!r.uses_scheduler(), "no cycle clock attached → legacy walk");
+        }
+
+        #[test]
+        fn running_rtc_without_enabled_events_does_not_schedule_wakes() {
+            let clock = CycleClock::default();
+            let mut r = Nrf52Rtc::new_fast();
+            r.attach_cycle_clock(clock.clone());
+            r.write_u32(OFF_PRESCALER, 0).unwrap();
+            r.write_u32(OFF_TASKS_START, 1).unwrap();
+
+            assert!(r.cycles_until_next_event().is_none());
+            assert!(r.take_scheduled_events().is_empty());
+
+            // The free-running counter still advances lazily when observed.
+            clock.publish(10);
+            assert_eq!(r.read_u32(OFF_COUNTER).unwrap(), 10);
+            assert!(r.take_scheduled_events().is_empty());
+        }
+
+        #[test]
+        fn enabled_compare_keeps_its_scheduled_wake() {
+            let clock = CycleClock::default();
+            let mut r = Nrf52Rtc::new_fast();
+            r.attach_cycle_clock(clock);
+            r.write_u32(OFF_PRESCALER, 0).unwrap();
+            r.write_u32(OFF_CC0, 4).unwrap();
+            r.write_u32(OFF_INTENSET, 1 << EN_COMPARE_SHIFT).unwrap();
+            r.write_u32(OFF_TASKS_START, 1).unwrap();
+
+            assert_eq!(r.cycles_until_next_event(), Some(4));
+            assert_eq!(r.take_scheduled_events(), vec![(3, 1)]);
         }
     }
 }

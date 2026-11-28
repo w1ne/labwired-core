@@ -1,0 +1,16 @@
+[2m2026-11-20T23:58:38.165415Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stm32f103.yaml
+[2m2026-11-20T23:58:38.247680Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8000497
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+[2m2026-11-20T23:58:38.249023Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 4 byte(s) delivered to 'usart2'
+[2m2026-11-20T23:58:38.249352Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 25 applied
+[2m2026-11-20T23:58:38.249374Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 50 applied
+[2m2026-11-20T23:58:38.255110Z[0m [33m WARN[0m [2mlabwired_core::cpu::cortex_m::exec::misc[0m[2m:[0m Unknown instruction at 0x800025c: Opcode 0xde00
+[2m2026-11-20T23:58:38.255142Z[0m [33m WARN[0m [2mlabwired_core::cpu::cortex_m::exec::misc[0m[2m:[0m Unknown instruction at 0x800025c: Opcode 0xde00
+[2m2026-11-20T23:58:38.478049Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: temperature = 55 applied
+[2m2026-11-20T23:58:38.652063Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: humidity = 35 applied
+[2m2026-11-20T23:58:38.841861Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressure = 1012.5 applied
+labwired-cli test: idle_ff skipped 125 of 50000125 device cycles (50000000 interpreted)
+PASS  92/92 checks · stm32f103-i2c-smoke · 50000000 steps · 0.61s
+FAULT  UsageFault: undefined instruction, at PC 0x0800_025C in `_ZN22firmware_f103_i2c_demo35smoke_trigger_undefined_instruction17h754c402aaf2b7167E`, called from `firmware_f103_i2c_demo::smoke_usagefault_and_hardfault_escalation`.
+       HFSR=0x00000000 CFSR=0x00010000 [UNDEFINSTR]

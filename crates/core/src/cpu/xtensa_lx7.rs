@@ -1815,6 +1815,8 @@ impl XtensaLx7 {
             Mul16u { ar, as_, at } => self.exec_mul16u(bus, len, ar, as_, at),
             // MUL16S: signed 16×16 → 32 product; low 16 sign-extended before multiply.
             Mul16s { ar, as_, at } => self.exec_mul16s(bus, len, ar, as_, at),
+            // MAC16 AA: 16×16 into the 40-bit ACCHI:ACCLO accumulator.
+            Mac16Aa { as_, at, half, op } => self.exec_mac16_aa(bus, len, as_, at, half, op),
 
             // ── DIV family ────────────────────────────────────────────────────
             // Divide-by-zero: set EXCCAUSE=6 (IntegerDivideByZeroCause) and
@@ -2957,7 +2959,7 @@ impl Cpu for XtensaLx7 {
         self.poll_loop_budget(bus, limit)
     }
 
-    fn fast_forward_poll_loop(&mut self, cycles: u64) -> bool {
+    fn fast_forward_poll_loop(&mut self, cycles: u64) -> Option<u64> {
         self.apply_poll_loop_skip(cycles)
     }
 

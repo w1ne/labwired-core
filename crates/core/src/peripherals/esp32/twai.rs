@@ -197,6 +197,10 @@ impl Esp32Twai {
 }
 
 impl crate::Peripheral for Esp32Twai {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     // Inert walk: SJA1000-style controller whose transmits complete instantly at the CMD write; tick() is the trait-default no-op.
     fn needs_legacy_walk(&self) -> bool {
         false

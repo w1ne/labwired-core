@@ -1,0 +1,4 @@
+name: "attiny10-rc"
+chip: "chip.yaml"
+external_devices: []
+board_io: []

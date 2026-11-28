@@ -19,7 +19,7 @@ use super::super::fallback::{HostStep, JitHost, SafetyGate};
 use super::super::{Pc, StateVec};
 
 /// Words in a Cortex-M [`StateVec`].
-pub const STATE_VEC_LEN: usize = 30 + 32 + 1;
+pub const STATE_VEC_LEN: usize = 38 + 32 + 1;
 
 /// Flatten a [`CortexM`] into the differential-harness [`StateVec`].
 ///
@@ -35,9 +35,9 @@ pub const STATE_VEC_LEN: usize = 30 + 32 + 1;
 /// | `19` | `basepri` |
 /// | `20` | `it_state` |
 /// | `21` | `active_exception` |
-/// | `22..30` | `pending_exceptions[0..4]` as lo/hi `u32` pairs |
-/// | `30..62` | `fpu_s[0..32]` (raw IEEE-754 bits) |
-/// | `62` | `fpscr` |
+/// | `22..38` | `pending_exceptions[0..8]` as lo/hi `u32` pairs |
+/// | `38..70` | `fpu_s[0..32]` (raw IEEE-754 bits) |
+/// | `70` | `fpscr` |
 ///
 /// `fpu_s` is in the vector on purpose: a VFP block writes S registers
 /// through the same host pointer the wasm side reads, so a divergence there

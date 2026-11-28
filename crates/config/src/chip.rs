@@ -37,6 +37,9 @@ pub enum Arch {
     /// MIPS32 release 2 (Microchip PIC32MZ, M5150 class).
     #[serde(alias = "mips32", alias = "mips32r2", alias = "pic32")]
     Mips,
+    /// Texas Instruments MSP430 16-bit MCU family (CPU and 20-bit CPUX).
+    #[serde(alias = "msp430x")]
+    Msp430,
     Unknown,
 }
 
@@ -144,19 +147,23 @@ pub struct ClockGate {
     /// Symbolic enable-register name, e.g. "apb1enr" / "apb2enr" / "ahbenr" / "crrcr" / "APBCMASK".
     pub reg: String,
     /// Bit position within that register that must be **set** for the
-    /// peripheral to be clocked.
+    /// peripheral to be clocked, unless `active_low` is true.
     pub bit: u8,
     /// Clock controller peripheral id. Default `"rcc"` preserves STM32 configs.
     #[serde(default = "default_clock_controller")]
     pub controller: String,
+    /// Set when a cleared register bit enables the peripheral (RA module stop).
+    /// Defaults to the active-high convention used by existing configurations.
+    #[serde(default)]
+    pub active_low: bool,
 }
 
 pub(crate) fn default_clock_controller() -> String {
     "rcc".into()
 }
 
-/// A peripheral's `clock:` declaration: **every** listed RCC bit must be set for
-/// the peripheral to answer the CPU.
+/// A peripheral's `clock:` declaration: **every** listed clock bit must indicate
+/// an enabled clock for the peripheral to answer the CPU.
 ///
 /// One key, one mechanism. Silicon can withhold a peripheral's clock for more
 /// than one reason — the bus-enable bit in an `xxxENR` register is the common
@@ -314,10 +321,9 @@ pub struct PeripheralConfig {
     /// Controller id from `irq: nvic@2` sugar. `None` when YAML is a bare line.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub irq_controller: Option<String>,
-    /// Optional RCC clock-gate: the RCC bits that must ALL be set for this
-    /// peripheral to answer the CPU. `None` → the peripheral is never gated
-    /// (the safe default — existing configs and firmware that never enable a
-    /// clock keep working unchanged).
+    /// Optional clock-gate: the declared clock bits that must ALL indicate an
+    /// enabled peripheral clock. `None` → the peripheral is never gated (the
+    /// safe default — existing configs and firmware remain unchanged).
     #[serde(default)]
     pub clock: Option<ClockGates>,
     /// Instance knobs. Unknown top-level keys flatten here (`easyDMA: true`).
@@ -349,12 +355,35 @@ impl From<PeripheralConfigWire> for PeripheralConfig {
 /// output register lives on, and the bit within that port's data register. This
 /// is silicon truth (from the SVD / board pinmux) — the pin *label* no longer
 /// implies a port, so a board whose silkscreen labels a `gpioc` pin "PB0" resolves
-/// correctly. Extra YAML fields (e.g. `functions:`, consumed by the app codegen)
-/// are ignored here.
+/// correctly.
+///
+/// `functions:` is the same table's alternate-function list, transcribed from
+/// the datasheet pinout. The app codegen and the analog engine read it; GPIO
+/// resolution ignores it. It is optional and unknown keys are ignored so a
+/// table written for a future consumer still loads.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PinLoc {
     pub gpio: String,
     pub bit: u8,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub functions: Vec<PinFunction>,
+}
+
+/// One alternate function a pad can take in the chip's `pins:` table.
+///
+/// Only the keys the engine consumes are typed. `type: adc` carries the ADC
+/// peripheral id and the input channel; every other type (`uart`, `spi`,
+/// `timer`, `i2c`, `gpio`, `can`) names a peripheral and a `role` such as
+/// `tx` or `sck`. Unlisted keys are ignored.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct PinFunction {
+    pub r#type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peripheral: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
 }
 
 /// The analog input function of one pad: the ADC peripheral (by descriptor
@@ -820,6 +849,10 @@ pub struct ChipDescriptor {
     pub pins: std::collections::BTreeMap<String, PinLoc>,
     /// Pad label → the ADC input that samples it, transcribed from the
     /// datasheet pinout (e.g. `PA0: { peripheral: adc1, channel: 0 }`).
+    ///
+    /// A part that already transcribes its pin table can instead record the
+    /// same fact as an `adc` function on the pad ([`PinLoc::functions`]);
+    /// [`ChipDescriptor::analog_pin_table`] is the union the router uses.
     ///
     /// Kept apart from [`Self::pins`] on purpose. `pins:` is the AUTHORITATIVE
     /// GPIO map: once a chip declares it, every pad not listed stops resolving
@@ -1321,6 +1354,91 @@ pub(crate) fn expand_chip_includes(
 }
 
 impl ChipDescriptor {
+    /// Every pad this part can hand to an ADC, with the peripheral and channel
+    /// that sample it.
+    ///
+    /// Two descriptor tables can carry the answer, and both are datasheet
+    /// truth transcribed from the same pinout:
+    ///
+    /// * `analog_pins:` — the dedicated table, valid on a chip that declares no
+    ///   authoritative `pins:` map, and the only place to name an analog pad
+    ///   whose GPIO port is not transcribed.
+    /// * `pins: { <pad>: { functions: [{ type: adc, peripheral, channel }] } }`
+    ///   — the pin table's own alternate-function list, already present on
+    ///   parts that transcribe their full pinout.
+    ///
+    /// The union is what the analog router uses, so a part that publishes an
+    /// ADC function in its pin table needs no duplicate `analog_pins:` block.
+    /// `analog_pins:` wins when both name a pad, and [`Self::analog_pin_conflicts`]
+    /// reports the disagreement rather than letting one table silently win.
+    pub fn analog_pin_table(&self) -> std::collections::BTreeMap<String, AdcPinFn> {
+        let mut table = std::collections::BTreeMap::new();
+        for (pad, loc) in &self.pins {
+            for function in &loc.functions {
+                if function.r#type != "adc" {
+                    continue;
+                }
+                let (Some(peripheral), Some(channel)) = (&function.peripheral, function.channel)
+                else {
+                    continue;
+                };
+                table.insert(
+                    pad.clone(),
+                    AdcPinFn {
+                        peripheral: peripheral.clone(),
+                        channel,
+                    },
+                );
+            }
+        }
+        for (pad, pin) in &self.analog_pins {
+            table.insert(pad.clone(), pin.clone());
+        }
+        table
+    }
+
+    /// Pads that `analog_pins:` and the `pins:` alternate-function list assign
+    /// to different ADC inputs, as `(pad, analog_pins, pin_functions)`.
+    ///
+    /// A descriptor that answers "which channel samples this pad?" twice with
+    /// two different numbers is a transcription bug, not a preference. Keeping
+    /// the check here lets a test fail on the file instead of a board silently
+    /// converting the wrong node.
+    pub fn analog_pin_conflicts(&self) -> Vec<(String, AdcPinFn, AdcPinFn)> {
+        let mut conflicts = Vec::new();
+        for (pad, explicit) in &self.analog_pins {
+            let Some(loc) = self.pins.get(pad) else {
+                continue;
+            };
+            for function in &loc.functions {
+                if function.r#type != "adc" {
+                    continue;
+                }
+                let (Some(peripheral), Some(channel)) = (&function.peripheral, function.channel)
+                else {
+                    continue;
+                };
+                let derived = AdcPinFn {
+                    peripheral: peripheral.clone(),
+                    channel,
+                };
+                if &derived != explicit {
+                    conflicts.push((pad.clone(), explicit.clone(), derived));
+                }
+            }
+        }
+        conflicts
+    }
+
+    /// Is this an ESP32-S2 (Xtensa LX7) part?
+    ///
+    /// The S2 is a single-core LX7 with a different memory/peripheral map from
+    /// both the classic dual-core ESP32 and the S3. Keep its constructor
+    /// dispatch explicit so it cannot fall through to the classic ESP32 bank.
+    pub fn is_esp32s2(&self) -> bool {
+        self.arch == Arch::Xtensa && self.name.starts_with("esp32s2")
+    }
+
     /// Is this an ESP32-S3 (Xtensa LX7) part?
     ///
     /// The S3 needs its own memory map — DROM 0x3C00_xxxx, DRAM 0x3FC8_xxxx,
@@ -1335,6 +1453,16 @@ impl ChipDescriptor {
     /// covered by a CLI gate at all.
     pub fn is_esp32s3(&self) -> bool {
         self.arch == Arch::Xtensa && self.name.starts_with("esp32s3")
+    }
+
+    /// Is this an Espressif Xtensa part (classic ESP32 or an S3 variant)?
+    ///
+    /// Those get the code-built ESP32 memory map, mask-ROM thunks at
+    /// `0x4000_0000` and a second core. Any other Xtensa chip — e.g. the
+    /// imported Renode sample controller, whose RAM sits at `0x4000_0000` —
+    /// must get none of that: its bus comes from its own descriptor.
+    pub fn is_espressif_xtensa(&self) -> bool {
+        self.arch == Arch::Xtensa && self.name.starts_with("esp32")
     }
 
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {

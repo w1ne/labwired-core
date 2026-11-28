@@ -1,0 +1,32 @@
+=== LabWired agent skills: install + live hosted MCP ===
+
+$ claude plugin marketplace add w1ne/labwired-skills
+Cleaning up old marketplace cache…
+✔ Successfully added marketplace: labwired-skills (declared in user settings)
+
+$ claude plugin install labwired@labwired-skills
+Installing plugin "labwired@labwired-skills"...✔ Successfully installed plugin: labwired@labwired-skills (scope: user)
+
+$ claude plugin list
+Installed plugins:
+
+  ❯ labwired@labwired-skills
+    Version: 1.0.0
+    Scope: user
+    Status: ✔ enabled
+
+
+$ claude mcp add --transport http labwired https://api.labwired.com/mcp
+Added HTTP MCP server labwired with URL: https://api.labwired.com/mcp to local config
+File modified: /home/andrii/.hermes/profiles/labwired/cache/scratch/claude-demo-JY64Rt/.claude.json [project: /home/andrii/.hermes/profiles/labwired/cache/scratch/mcp-proof]
+
+$ claude mcp list
+Checking MCP server health…
+
+labwired: https://api.labwired.com/mcp (HTTP) - ! Needs authentication
+
+--- live hosted MCP endpoint ---
+POST https://api.labwired.com/mcp -> 401 (OAuth discovery 401)
+GET  https://app.labwired.com/tools/mcp -> 200
+
+=== done ===

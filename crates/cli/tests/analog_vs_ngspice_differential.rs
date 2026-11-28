@@ -135,6 +135,247 @@ fn in_core_analog_matches_ngspice_on_the_rc_example() {
     );
 }
 
+/// Run `cosim-step <manifest> --steps N --json` with optional `--set` seeds and
+/// return, for each step, the value `model` publishes on `signal`.
+fn cosim_series(manifest: &Path, steps: u64, sets: &[&str], model: &str, signal: &str) -> Vec<f64> {
+    let mut command = Command::new(cli_binary());
+    command.arg("cosim-step").arg(manifest);
+    for set in sets {
+        command.arg("--set").arg(set);
+    }
+    let output = command
+        .arg("--steps")
+        .arg(steps.to_string())
+        .arg("--json")
+        .current_dir(repo_root())
+        .output()
+        .expect("cosim-step should run");
+    assert!(
+        output.status.success(),
+        "cosim-step {} failed: {}",
+        manifest.display(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let parsed: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("cosim-step --json emits JSON");
+    parsed
+        .as_array()
+        .expect("a JSON array of steps")
+        .iter()
+        .filter(|step| step["model"] == model)
+        .map(|step| {
+            step["outputs"][signal]
+                .as_f64()
+                .unwrap_or_else(|| panic!("{model} does not publish {signal}"))
+        })
+        .collect()
+}
+
+/// The generic Beta NTC divider and Shockley diode load line that 16 board
+/// examples share, solved by `adapter: ngspice` through the same manifest
+/// routing the in-core `adapter: analog` uses. This is the coverage evidence
+/// for the largest class of in-core decks, not only for the Flex fixtures.
+///
+/// Both decks are algebraic: their settled value is compared at three
+/// temperatures, and the temperature must move the NTC output, so agreement on
+/// a flat wrong value cannot pass. The diode needs ngspice's temperature pinned
+/// to the in-core engine's 300.00 K (26.85 degC); the default 27 degC shifts a
+/// forward-biased diode by 0.3 mV, about 1,500 times the agreement measured
+/// here.
+#[test]
+fn ngspice_solves_the_generic_ntc_and_diode_decks_the_in_core_engine_solves() {
+    const STEPS: u64 = 4;
+    const NTC_SIGNAL: &str = "board.analog.pa0_volts";
+    const DIODE_SIGNAL: &str = "board.analog.pa1_volts";
+    let root = repo_root();
+    let analog = root.join("examples/nucleo-f401re/analog-ntc-diode-system.yaml");
+    let spiced = root.join("examples/nucleo-f401re/analog-ntc-diode-ngspice.yaml");
+
+    // The in-core half always runs: a missing ngspice must not hide a deck the
+    // engine can no longer solve.
+    let mut in_core_ntc = Vec::new();
+    for celsius in ["0", "25", "60"] {
+        let set = format!("ui.ntc.temperature_c={celsius}");
+        let series = cosim_series(&analog, STEPS, &[&set], "ntc_divider", NTC_SIGNAL);
+        assert_eq!(series.len() as u64, STEPS);
+        assert!(
+            series.iter().all(|volts| volts.is_finite()),
+            "{celsius} degC: non-finite in-core sample"
+        );
+        in_core_ntc.push(series);
+    }
+    let in_core_diode = cosim_series(&analog, STEPS, &[], "diode_load_line", DIODE_SIGNAL);
+    assert_eq!(in_core_diode.len() as u64, STEPS);
+    // No stimulus must fall back to the netlist's 25 degC default, not 0 degC.
+    let in_core_default = cosim_series(&analog, STEPS, &[], "ntc_divider", NTC_SIGNAL);
+
+    // The three temperatures must not agree with each other, or a differential
+    // on a temperature-insensitive deck would pass while proving nothing.
+    for pair in in_core_ntc.windows(2) {
+        let (cold, warm) = (pair[0].last().unwrap(), pair[1].last().unwrap());
+        assert!(
+            (warm - cold).abs() > 0.1,
+            "the NTC deck does not respond to temperature: {cold} V vs {warm} V"
+        );
+    }
+
+    if !ngspice_available() {
+        eprintln!(
+            "SKIP: libngspice is not loadable on this host, so the ngspice half of the \
+             NTC/diode differential cannot run. Install it (Debian/Ubuntu: \
+             `apt install libngspice0`) or set LABWIRED_NGSPICE_LIB. The in-core decks \
+             produced {STEPS} finite samples each."
+        );
+        return;
+    }
+
+    for (index, celsius) in ["0", "25", "60"].iter().enumerate() {
+        let set = format!("ui.ntc.temperature_c={celsius}");
+        let theirs = cosim_series(&spiced, STEPS, &[&set], "ntc_divider", NTC_SIGNAL);
+        assert_eq!(theirs.len() as u64, STEPS);
+        let ours = &in_core_ntc[index];
+        let worst = ours
+            .iter()
+            .zip(&theirs)
+            .map(|(a, n)| (a - n).abs())
+            .fold(0.0_f64, f64::max);
+        assert!(
+            worst < 1e-5,
+            "{celsius} degC: in-core NTC {ours:?} V vs ngspice {theirs:?} V, \
+             worst {worst:e} V"
+        );
+        eprintln!(
+            "{celsius} degC NTC: in-core {:.9} V, ngspice {:.9} V, worst {worst:e} V",
+            ours.last().unwrap(),
+            theirs.last().unwrap()
+        );
+    }
+
+    let theirs = cosim_series(&spiced, STEPS, &[], "diode_load_line", DIODE_SIGNAL);
+    assert_eq!(theirs.len() as u64, STEPS);
+    let worst = in_core_diode
+        .iter()
+        .zip(&theirs)
+        .map(|(a, n)| (a - n).abs())
+        .fold(0.0_f64, f64::max);
+    assert!(
+        worst < 1e-5,
+        "diode load line: in-core {in_core_diode:?} V vs ngspice {theirs:?} V, \
+         worst {worst:e} V"
+    );
+    eprintln!(
+        "diode load line: in-core {:.9} V, ngspice {:.9} V, worst {worst:e} V",
+        in_core_diode.last().unwrap(),
+        theirs.last().unwrap()
+    );
+
+    let default_spiced = cosim_series(&spiced, STEPS, &[], "ntc_divider", NTC_SIGNAL);
+    assert_eq!(default_spiced.len() as u64, STEPS);
+    let worst = in_core_default
+        .iter()
+        .zip(&default_spiced)
+        .map(|(a, n)| (a - n).abs())
+        .fold(0.0_f64, f64::max);
+    assert!(
+        worst < 1e-5,
+        "NTC default stimulus: in-core {in_core_default:?} V vs ngspice {default_spiced:?} V, \
+         worst {worst:e} V; an absent input must be 25 degC on both engines"
+    );
+}
+
+/// The same generic NTC and diode decks on the WCH CH32V003EVT, the only
+/// non-ARM board in the analog inventory. The pair differs from the NUCLEO
+/// pair only in the pads the descriptor bonds (PA2/PA1 instead of PA0/PA1);
+/// the netlists and the ngspice decks are the generic ones. This proves
+/// `adapter: ngspice` resolves `board.analog.<pad>_volts` through a second
+/// ADC width and a non-ARM descriptor, not only the 12-bit STM32 map.
+#[test]
+fn ngspice_solves_the_wch_ch32v003_generic_decks_the_in_core_engine_solves() {
+    const STEPS: u64 = 4;
+    const NTC_SIGNAL: &str = "board.analog.pa2_volts";
+    const DIODE_SIGNAL: &str = "board.analog.pa1_volts";
+    const TEMPERATURES: [&str; 3] = ["-20", "25", "85"];
+    let root = repo_root();
+    let analog = root.join("examples/wch-ch32v003evt/analog-ntc-diode-system.yaml");
+    let spiced = root.join("examples/wch-ch32v003evt/analog-ntc-diode-ngspice.yaml");
+
+    // The in-core half always runs: a missing ngspice must not hide a deck the
+    // engine can no longer solve.
+    let mut in_core_ntc = Vec::new();
+    for celsius in TEMPERATURES {
+        let set = format!("ui.ntc.temperature_c={celsius}");
+        let series = cosim_series(&analog, STEPS, &[&set], "ntc_divider", NTC_SIGNAL);
+        assert_eq!(series.len() as u64, STEPS);
+        assert!(
+            series.iter().all(|volts| volts.is_finite()),
+            "{celsius} degC: non-finite in-core sample"
+        );
+        in_core_ntc.push(series);
+    }
+    let in_core_diode = cosim_series(&analog, STEPS, &[], "diode_load_line", DIODE_SIGNAL);
+    assert_eq!(in_core_diode.len() as u64, STEPS);
+
+    // The temperatures must not agree with each other, or a differential on a
+    // temperature-insensitive deck would pass while proving nothing.
+    for pair in in_core_ntc.windows(2) {
+        let (cold, warm) = (pair[0].last().unwrap(), pair[1].last().unwrap());
+        assert!(
+            (warm - cold).abs() > 0.1,
+            "the NTC deck does not respond to temperature: {cold} V vs {warm} V"
+        );
+    }
+
+    if !ngspice_available() {
+        eprintln!(
+            "SKIP: libngspice is not loadable on this host, so the ngspice half of the \
+             CH32V003 differential cannot run. Install it (Debian/Ubuntu: \
+             `apt install libngspice0`) or set LABWIRED_NGSPICE_LIB. The in-core decks \
+             produced {STEPS} finite samples each."
+        );
+        return;
+    }
+
+    for (index, celsius) in TEMPERATURES.iter().enumerate() {
+        let set = format!("ui.ntc.temperature_c={celsius}");
+        let theirs = cosim_series(&spiced, STEPS, &[&set], "ntc_divider", NTC_SIGNAL);
+        assert_eq!(theirs.len() as u64, STEPS);
+        let ours = &in_core_ntc[index];
+        let worst = ours
+            .iter()
+            .zip(&theirs)
+            .map(|(a, n)| (a - n).abs())
+            .fold(0.0_f64, f64::max);
+        assert!(
+            worst < 1e-5,
+            "{celsius} degC: in-core NTC {ours:?} V vs ngspice {theirs:?} V, \
+             worst {worst:e} V"
+        );
+        eprintln!(
+            "{celsius} degC NTC: in-core {:.9} V, ngspice {:.9} V, worst {worst:e} V",
+            ours.last().unwrap(),
+            theirs.last().unwrap()
+        );
+    }
+
+    let theirs = cosim_series(&spiced, STEPS, &[], "diode_load_line", DIODE_SIGNAL);
+    assert_eq!(theirs.len() as u64, STEPS);
+    let worst = in_core_diode
+        .iter()
+        .zip(&theirs)
+        .map(|(a, n)| (a - n).abs())
+        .fold(0.0_f64, f64::max);
+    assert!(
+        worst < 1e-5,
+        "diode load line: in-core {in_core_diode:?} V vs ngspice {theirs:?} V, \
+         worst {worst:e} V"
+    );
+    eprintln!(
+        "CH32V003 diode load line: in-core {:.9} V, ngspice {:.9} V, worst {worst:e} V",
+        in_core_diode.last().unwrap(),
+        theirs.last().unwrap()
+    );
+}
+
 #[test]
 fn the_analog_manifest_writes_a_waveform_trace() {
     let root = repo_root();
@@ -260,30 +501,48 @@ fn an_unsupported_element_fails_manifest_validation() {
 }
 
 // ---------------------------------------------------------------------------
-// Nonlinear devices: the same deck, both engines
+// Devices and reactive elements: the same deck, both engines
 // ---------------------------------------------------------------------------
 
-/// Tolerance on every sample of the nonlinear differentials, as a fraction of
-/// the circuit's full scale.
+/// Tolerance on every sample of these differentials, as a fraction of the
+/// circuit's full scale.
 ///
 /// Full scale rather than the sample: near a zero crossing a relative-to-sample
 /// error is unbounded and meaningless, and what a user sees is an ADC reading
 /// against a rail.
 ///
 /// **5e-4 (0.05 %), not the 2 % a differential like this is usually written
-/// with.** 2 % was measured to be vacuous here. The three decks below actually
-/// agree with ngspice to 2.5e-3 %, 2.6e-5 % and 1.0e-6 % of full scale, and
-/// perturbing the engine's thermal voltage by 1 % — a wrong physical constant,
-/// the exact class of bug this test exists to catch — moves the rectifier by
-/// 0.13 % and the amplifier by 0.24 %. At 2 % that sabotage passes. At 0.05 %
-/// it fails with 2.5x margin, while still leaving 20x headroom over the worst
-/// honest disagreement, which is the fixed-step-versus-adaptive-step
-/// difference between the two integrators.
+/// with.** 2 % was measured to be vacuous here. The decks below actually
+/// agree with ngspice to 2.5e-3 % (rectifier), 4.0e-5 % (common emitter),
+/// 1.0e-6 % (NMOS inverter), 1.1e-3 % (RL low-pass), 6.1e-5 % (JFET
+/// follower), 1.2e-3 % (pulsed sag into an RC), 7.3e-3 % (pulsed sag into a
+/// bypassed load), 5.9e-4 % (coupled-inductor transformer), 8.0e-5 % (PNP
+/// follower), 2.6e-3 % (CMOS inverter) and 6.1e-5 % (P-channel JFET
+/// follower) of full scale, and perturbing the engine's thermal voltage by
+/// 1 % — a wrong physical constant, the exact class of bug this test exists
+/// to catch — moves the rectifier by 0.13 % and the amplifier by 0.24 %. At
+/// 2 % that sabotage passes. At 0.05 % it fails with 2.5x margin, while still
+/// leaving 7x headroom over the worst honest disagreement, which is the
+/// fixed-step-versus-adaptive-step difference between the two integrators.
+/// The common-emitter deck is sine-driven: it used to restart trapezoidal on
+/// every sample, so its 2.6e-5 % was measured under backward Euler; with the
+/// corner rule it keeps trapezoidal and measures 4.0e-5 %. The 1 %
+/// thermal-voltage sabotage still moves it by 0.24 %, 4.8x the tolerance.
+/// The RL deck's 1.1e-3 % is the start-up sample, where one backward-Euler
+/// step follows the initial operating point; after the first 200 samples it is
+/// 2.0e-4 %.
+///
+/// The two pulsed-sag decks are the pulse-driven pair, and they are the ones
+/// that hold the corner rule: restarting backward Euler wherever a source
+/// changes value — the rule before it — measured 6.5e-2 % and 9.8e-2 % on
+/// them, both over the tolerance. Trapezoidal across the same ramps measures
+/// 1.2e-3 % and 7.3e-3 %, and that is the direction the browser's
+/// `analog-regulator/native.json` moved when it was regenerated.
 ///
 /// The MOSFET deck is the weak one and is named as such: a level-1 FET has no
 /// thermal voltage, so that sabotage moves it by 1e-6 %. Its guard is the
 /// operating-point hand calculation in
-/// `crates/core/tests/analog_devices.rs`, which checks `VTO`, `KP` and
+/// `crates/core/tests/analog/analog_devices.rs`, which checks `VTO`, `KP` and
 /// `LAMBDA` against the closed form directly.
 const DEVICE_TOLERANCE: f64 = 5e-4;
 
@@ -310,6 +569,10 @@ struct Differential {
     /// The compared trace must swing at least this far, or the differential is
     /// agreeing about a flat line and proving nothing.
     minimum_swing: f64,
+    /// True when the deck holds a device stamp (D/Q/M/J) and therefore takes
+    /// the Newton–Raphson path. False decks cover the linear stamps — in
+    /// particular the inductor, which carries its own branch unknown.
+    nonlinear: bool,
 }
 
 const DIFFERENTIALS: &[Differential] = &[
@@ -326,6 +589,7 @@ const DIFFERENTIALS: &[Differential] = &[
         samples: 100,
         full_scale: 5.0,
         minimum_swing: 4.0,
+        nonlinear: true,
     },
     Differential {
         name: "common-emitter amplifier",
@@ -350,6 +614,7 @@ const DIFFERENTIALS: &[Differential] = &[
         samples: 100,
         full_scale: 12.0,
         minimum_swing: 1.0,
+        nonlinear: true,
     },
     Differential {
         name: "NMOS inverter",
@@ -365,6 +630,227 @@ const DIFFERENTIALS: &[Differential] = &[
         samples: 400,
         full_scale: 5.0,
         minimum_swing: 4.0,
+        nonlinear: true,
+    },
+    Differential {
+        name: "RL low-pass",
+        // Driven at the corner (R = ωL = 100 Ω), so the inductor's branch
+        // unknown carries a real amplitude and phase, not a small correction.
+        deck: "* RL low-pass at its corner: L + R + VSIN\n\
+               Vin in 0 SIN(0 1 1591.55)\n\
+               L1 in out 10m\n\
+               R1 out 0 100\n",
+        node: "out",
+        sample: 10e-6,
+        substeps: 20,
+        samples: 400,
+        full_scale: 1.0,
+        minimum_swing: 1.0,
+        nonlinear: false,
+    },
+    Differential {
+        name: "JFET source follower",
+        deck: "* JFET source follower: J + R + VDC + VSIN\n\
+               Vdd vdd 0 dc 12\n\
+               Vin in 0 SIN(0 2 1k)\n\
+               Rg in g 100k\n\
+               J1 vdd g s JMOD\n\
+               Rs s 0 1k\n\
+               .model JMOD NJF(VTO=-2 BETA=1m LAMBDA=0.02)\n",
+        node: "s",
+        sample: 20e-6,
+        substeps: 20,
+        samples: 100,
+        full_scale: 12.0,
+        minimum_swing: 0.5,
+        nonlinear: true,
+    },
+    Differential {
+        name: "pulsed sag into an RC",
+        // The drive the regulator browser fixture records: a 9 V rail that
+        // steps to 3.6 V and back once a millisecond, with 50 µs edges — ten
+        // steps, so each edge is a ramp and not a corner — into a 200 µs RC.
+        // The trapezoidal rule carries the ramp's derivative across it. A
+        // solver that restarted backward Euler on every value change measured
+        // 6.5e-2 % here, over the tolerance; this deck is what holds the
+        // corner rule.
+        deck: "* sagged 9 V rail into a 200 us RC: PULSE + R + C\n\
+               Vin in 0 PULSE(9 3.6 200u 50u 50u 500u 1m)\n\
+               R1 in out 20\n\
+               C1 out 0 10u\n\
+               R2 out 0 330\n",
+        node: "out",
+        sample: 5e-6,
+        substeps: 10,
+        samples: 800,
+        full_scale: 9.0,
+        minimum_swing: 4.0,
+        nonlinear: false,
+    },
+    Differential {
+        name: "pulsed sag into a bypassed load",
+        // The same drive into the 11 µs corner a 22 µF bypass and a 0.5 Ω
+        // feed make. This is the shape whose inrush current the regulator
+        // fixture records, and the stiffer corner is where a first-order rule
+        // loses the most: backward Euler measured 9.8e-2 % here.
+        deck: "* sagged 9 V rail into a bypassed load: PULSE + R + C\n\
+               Vin in 0 PULSE(9 3.6 200u 50u 50u 500u 1m)\n\
+               R1 in out 0.5\n\
+               C1 out 0 22u\n\
+               R2 out 0 5\n",
+        node: "out",
+        sample: 5e-6,
+        substeps: 10,
+        samples: 800,
+        full_scale: 9.0,
+        minimum_swing: 4.0,
+        nonlinear: false,
+    },
+    Differential {
+        name: "coupled-inductor transformer",
+        // The mutual term is the only path to the secondary, so a missing or
+        // sign-flipped `K` stamp leaves `sec` flat or inverted. k = 0.95, not
+        // 1: a perfect coupling makes the inductance matrix singular.
+        deck: "* 1:2 transformer at k = 0.95: K + L + R + VSIN\n\
+               Vin in 0 SIN(0 1 1k)\n\
+               Rp in pri 10\n\
+               L1 pri 0 10m\n\
+               L2 sec 0 40m\n\
+               K1 L1 L2 0.95\n\
+               Rl sec 0 1k\n",
+        node: "sec",
+        sample: 10e-6,
+        substeps: 20,
+        samples: 300,
+        full_scale: 2.0,
+        minimum_swing: 1.0,
+        nonlinear: false,
+    },
+    Differential {
+        name: "PNP emitter follower",
+        // The mirrored polarity of the common-emitter deck: the emitter sits
+        // one V_BE above the base and follows it.
+        deck: "* PNP emitter follower: Q(PNP) + R + VDC + VSIN\n\
+               Vee vee 0 dc -12\n\
+               Vin in 0 SIN(-6 2 1k)\n\
+               Rb in b 1k\n\
+               Re 0 e 4.7k\n\
+               Q1 vee b e QMOD\n\
+               .model QMOD PNP(IS=1e-14 BF=150 BR=2 NF=1 NR=1 VAF=60 VAR=100)\n",
+        node: "e",
+        sample: 20e-6,
+        substeps: 20,
+        samples: 100,
+        full_scale: 12.0,
+        minimum_swing: 3.0,
+        nonlinear: true,
+    },
+    Differential {
+        name: "CMOS inverter",
+        // A PMOS pull-up against an NMOS pull-down: both channels conduct
+        // through the transition, so the output is set by the two level-1
+        // curves against each other, not by one FET against a resistor.
+        // 40 substeps, not 10: the 10 pF node slews fast mid-transition, and
+        // at a 10 ns step both integrators measured 4.5e-2 % apart, inside the
+        // tolerance by only 1.1x. At 2.5 ns they agree to 2.6e-3 %, so the
+        // 10 ns gap was the step, not the device equations.
+        deck: "* CMOS inverter: M(PMOS) + M(NMOS) + VPULSE + C\n\
+               Vdd vdd 0 dc 5\n\
+               Vg g 0 PULSE(0 5 2u 2u 2u 8u 20u)\n\
+               M1 d g vdd vdd PMOD\n\
+               M2 d g 0 0 NMOD\n\
+               Cl d 0 10p\n\
+               .model PMOD PMOS(VTO=-1 KP=10u LAMBDA=0.02 W=40u L=2u)\n\
+               .model NMOD NMOS(VTO=1 KP=20u LAMBDA=0.02 W=20u L=2u)\n",
+        node: "d",
+        sample: 100e-9,
+        substeps: 40,
+        samples: 400,
+        full_scale: 5.0,
+        minimum_swing: 4.0,
+        nonlinear: true,
+    },
+    Differential {
+        name: "P-channel JFET source follower",
+        deck: "* PJF source follower: J(PJF) + R + VDC + VSIN\n\
+               Vss vss 0 dc -12\n\
+               Vin in 0 SIN(0 2 1k)\n\
+               Rg in g 100k\n\
+               J1 vss g s JMOD\n\
+               Rs s 0 1k\n\
+               .model JMOD PJF(VTO=-2 BETA=1m LAMBDA=0.02)\n",
+        node: "s",
+        sample: 20e-6,
+        substeps: 20,
+        samples: 100,
+        full_scale: 12.0,
+        minimum_swing: 0.5,
+        nonlinear: true,
+    },
+    Differential {
+        name: "hysteretic voltage switch",
+        // The control swings through both edges of the `VT ± VH` band, and
+        // its negative half must keep the switch open: a magnitude-sensing
+        // switch would close there and fail. The in-core engine switches at
+        // a substep boundary and ngspice cuts its step at the crossing, so
+        // they may disagree by one substep. The 10 ms charging time constant
+        // keeps that offset well under the tolerance; at 1 ms it was 0.14 %.
+        deck: "* voltage switch: S(SW) + R + C + VDC + VSIN\n\
+               Vdd vdd 0 dc 5\n\
+               Vc c 0 SIN(0 2 1k)\n\
+               S1 vdd out c 0 SMOD\n\
+               Rl out 0 10k\n\
+               C1 out 0 10u\n\
+               .model SMOD SW(VT=0.5 VH=0.3 RON=1k ROFF=1e9)\n",
+        node: "out",
+        sample: 20e-6,
+        substeps: 20,
+        samples: 500,
+        full_scale: 5.0,
+        minimum_swing: 0.5,
+        nonlinear: false,
+    },
+    Differential {
+        name: "voltage switch initial state ON",
+        // The control starts inside the `VT ± VH` band, so only the `ON`
+        // keyword closes the switch at the operating point; without it the
+        // output stays near 0 V. At 2 ms the control leaves the band below
+        // and the switch opens; its return to the band at 5 ms keeps it open.
+        deck: "* voltage switch ON: S(SW) ON + R + C + VDC + VPULSE\n\
+               Vdd vdd 0 dc 5\n\
+               Vc c 0 PULSE(0.5 -1 2m 10u 10u 3m 8m)\n\
+               S1 vdd out c 0 SMOD ON\n\
+               Rl out 0 10k\n\
+               C1 out 0 1u\n\
+               .model SMOD SW(VT=0.5 VH=0.3 RON=1k ROFF=1e9)\n",
+        node: "out",
+        sample: 20e-6,
+        substeps: 20,
+        samples: 400,
+        full_scale: 5.0,
+        minimum_swing: 0.5,
+        nonlinear: false,
+    },
+    Differential {
+        name: "voltage switch ON exactly at lower hysteresis edge",
+        // ngspice preserves an ON seed at exactly VT − VH. The pulse then
+        // falls below the lower edge to open the switch, and returns to that
+        // edge while open. This pins the inclusive initial and transient
+        // boundary behavior against the real ngspice transient.
+        deck: "* voltage switch ON at lower edge: S(SW) + R + C + VPULSE\n\
+               Vdd vdd 0 dc 5\n\
+               Vc c 0 PULSE(0.5 -1 2m 10u 10u 3m 8m)\n\
+               S1 vdd out c 0 SMOD ON\n\
+               Rl out 0 10k\n\
+               C1 out 0 1u\n\
+               .model SMOD SW(VT=1 VH=0.5 RON=1 ROFF=1e9)\n",
+        node: "out",
+        sample: 20e-6,
+        substeps: 20,
+        samples: 400,
+        full_scale: 5.0,
+        minimum_swing: 0.5,
+        nonlinear: false,
     },
 ];
 
@@ -372,9 +858,10 @@ const DIFFERENTIALS: &[Differential] = &[
 fn in_core_series(case: &Differential) -> Vec<f64> {
     let circuit = labwired_core::analog::parse_netlist(case.deck)
         .unwrap_or_else(|error| panic!("{}: {error}", case.name));
-    assert!(
+    assert_eq!(
         circuit.is_nonlinear(),
-        "{}: this differential is about a nonlinear device",
+        case.nonlinear,
+        "{}: the deck and its declared `nonlinear` flag disagree",
         case.name
     );
     let mut solver = labwired_core::analog::Solver::new(
@@ -491,7 +978,7 @@ fn nonlinear_devices_match_ngspice_on_the_same_deck() {
              device differential cannot run. Install it (macOS: `brew install ngspice`; \
              Debian/Ubuntu: `apt install ngspice`). The in-core engine solved all \
              {} decks and is covered on its own by \
-             `cargo test -p labwired-core --test analog_devices`.",
+             `cargo test -p labwired-core --test analog analog_devices::`.",
             DIFFERENTIALS.len()
         );
         return;

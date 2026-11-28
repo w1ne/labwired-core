@@ -6,3 +6,10 @@
 
 name: stm32h747
 chip: ../../chips/onboarding/stm32h747.yaml
+external_devices:
+  # Test fixture only; this potentiometer is not an on-board component.
+  - id: pot_adc1_inp16
+    type: potentiometer
+    connection: adc
+    config:
+      channel: 16

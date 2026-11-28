@@ -1,0 +1,31 @@
+# The generic Beta NTC and Shockley diode decks of analog-ntc-diode-system.yaml,
+# solved by ngspice instead of the in-core MNA engine. Names, routes, nets and
+# model parameters are the same; only the adapter and its config keys differ.
+# `model:` resolves from this file's directory for `labwired cosim-step`.
+name: "nucleo-f401re-analog-ngspice"
+chip: "../../configs/chips/stm32f401.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "ngspice"
+    model: "./ntc-beta.cir"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.pa0_volts"
+    config:
+      input_sources:
+        temperature: { element: Vtemp, scale: 1, offset: 0, default_value: 25 }
+      output_nodes:
+        v_sense: { node: sense, scale: 1, offset: 0 }
+  - id: "diode_load_line"
+    adapter: "ngspice"
+    model: "./diode-load-line.cir"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.pa1_volts"
+    config:
+      output_nodes:
+        v_diode: { node: sense, scale: 1, offset: 0 }

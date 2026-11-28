@@ -307,12 +307,25 @@ impl<'a> AttachCtx<'a> {
     /// When direct device-output observers are added, their source roles must
     /// also be included here before applying the filter. Pad bindings are the
     /// only destinations supported by the current bus.
+    /// Roles of this device that something consumes: an MCU pad bound to it,
+    /// or another declared device that names it as `device-output://`. The
+    /// sink may attach after this device, so the declarations are the record.
     pub(crate) fn bound_output_roles(&self) -> impl Iterator<Item = String> + '_ {
-        self.bus
+        let id = self.ext.id.as_str();
+        let pads = self
+            .bus
             .device_pin_pads
             .iter()
-            .filter(move |pad| pad.device_id == self.ext.id)
-            .map(|pad| pad.role.clone())
+            .filter(move |pad| pad.device_id == id)
+            .map(|pad| pad.role.clone());
+        let links = self
+            .bus
+            .external_device_decls
+            .iter()
+            .flat_map(|decl| decl.device_output_links.iter())
+            .filter(move |(source, _)| source == id)
+            .map(|(_, role)| role.clone());
+        pads.chain(links)
     }
 
     pub fn attach_i2c_device(&mut self, mut device: Box<dyn I2cDevice>) -> Result<()> {
@@ -364,6 +377,16 @@ impl<'a> AttachCtx<'a> {
         }
         let routed = self.ext.config.contains_key("supply_rails")
             || self.ext.config.contains_key("supply_domain");
+        // `connection: spi_gpio`: no controller; a decoder on the pads the
+        // config names feeds the device (see `peripherals::spi_gpio`).
+        if self.ext.connection == crate::peripherals::spi_gpio::CONNECTION {
+            anyhow::ensure!(
+                !routed,
+                "device '{}': routed supply is not supported on spi_gpio",
+                self.ext.id
+            );
+            return crate::peripherals::spi_gpio::attach(self, device);
+        }
         anyhow::ensure!(
             !routed || device.supports_power_control(),
             "device '{}' does not support routed SPI power transitions",
@@ -501,9 +524,58 @@ impl<'a> AttachCtx<'a> {
 
     /// Parse a GPIO pad label into a pin number for bit-bang devices
     /// (`Transport::GpioGroup`). Accepts ESP32/S3 spellings (`GPIO15`, `IO4`,
-    /// bare `15`) used by the ESP GPIO edge-observer path.
+    /// bare `15`) used by the ESP GPIO edge-observer path, STM32 port pads, and
+    /// port-style pads the board declares (SAMD `PA15`, AVR `PD6`).
     pub fn parse_gpio_pin(&self, label: &str) -> Option<u8> {
+        // Parse port-qualified STM32 pads *before* the ESP parser: the latter
+        // strips all leading letters and would misread PB0 as ESP GPIO0.
+        let label = label.trim();
+        let mut port_style = false;
+        if let Some(rest) = label.strip_prefix('P') {
+            let mut letters = rest.chars();
+            if let Some(port @ 'A'..='P') = letters.next() {
+                port_style = true;
+                let Ok(pin) = letters.as_str().parse::<u8>() else {
+                    return None;
+                };
+                if pin > 15 {
+                    // Not an STM32-width pad; a wider port family (SAMD) may
+                    // still declare it in the chip pin map.
+                    return self.port_pad(label);
+                }
+                let name = format!("gpio{}", port.to_ascii_lowercase());
+                if let Some(idx) = self.bus.find_peripheral_index_by_name(&name) {
+                    if self.bus.peripherals[idx].dev.is_stm32_gpio_port() {
+                        return Some((port as u8 - b'A') * 16 + pin);
+                    }
+                }
+            }
+        }
+        // Port-style pads of other families (SAMD `PA15`, AVR `PD6`) resolve
+        // through the board's own pin resolution, the same authority
+        // `resolve_pin_odr` uses.
+        if let Some(pad) = self.port_pad(label) {
+            return Some(pad);
+        }
+        if port_style {
+            // A port-qualified pad the chip does not declare: never fall
+            // through to the ESP parser, which would misread PC0 as GPIO0.
+            return None;
+        }
         SystemBus::parse_esp32s3_gpio_pin(label).or_else(|| SystemBus::parse_esp32_gpio_pin(label))
+    }
+
+    /// Pad number for a port-qualified label (`PA15`, `PD6`) on a family that
+    /// is not STM32: `port letter * 32 + bit`, valid only when the board
+    /// resolves the label to a real output latch (chip pin map, AVR/SAM port
+    /// blocks, ...). None when the board does not declare the pin.
+    fn port_pad(&self, label: &str) -> Option<u8> {
+        let port = label.strip_prefix('P')?.chars().next()?;
+        if !port.is_ascii_uppercase() {
+            return None;
+        }
+        let (_, bit) = self.resolve_pin_odr(label)?;
+        u8::try_from(usize::from(port as u8 - b'A') * 32 + usize::from(bit)).ok()
     }
 
     /// Read a GPIO pin config key (or alternate key / default label) as a pad
@@ -538,6 +610,32 @@ impl<'a> AttachCtx<'a> {
         T: crate::peripherals::device::GpioObserver + 'static,
     {
         SystemBus::install_gpio_observer(self.bus, observer)
+    }
+
+    /// Bind one named output role of another external device directly to an
+    /// observer input. The source label is emitted by the compiler as
+    /// `device-output://<device-id>/<role>`; no MCU GPIO is allocated or
+    /// touched. This is the proper path for an I/O expander driving an H-bridge,
+    /// latch, or other off-chip control input.
+    pub fn bind_device_output_observer<T>(
+        &mut self,
+        source_device_id: impl Into<String>,
+        source_role: impl Into<String>,
+        observer: std::sync::Arc<T>,
+        observer_pin: u8,
+    ) where
+        T: crate::peripherals::device::GpioObserver + 'static,
+    {
+        let observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver> = observer;
+        self.bus
+            .device_output_observers
+            .push(crate::bus::DeviceOutputObserverBinding {
+                source_device_id: source_device_id.into(),
+                source_role: source_role.into(),
+                observer,
+                observer_pin,
+                previous_level: false,
+            });
     }
 
     /// Hold an MCU input pin at `level` — for device status lines the host

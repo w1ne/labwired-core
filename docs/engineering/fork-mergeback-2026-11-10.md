@@ -34,7 +34,7 @@ Source: [523dcbca32ec3e2b1f4514dad5a8f389fedc6568](https://github.com/CrispStrob
 
 Current upstream already has the `I2cDevice::clock_stretch_ns` capability and a SAMD51 SERCOM timing consumer. The trace decorator, supply decorator and TCA9548A mux omit forwarding, so they replace a device's hold with the default zero. The prepared patch adds 20 production lines and three regression tests. It preserves live supply cutoff and uses the maximum hold among selected enabled downstream devices. It fixes misplaced method documentation present in the fork patch.
 
-The first mergeback batch ports only the three wrapper methods and adds `crates/core/tests/i2c_clock_stretch_wrappers.rs`. The existing generic trait is sufficient. No new device-specific tool, schema or simulator is needed. Runtime verification is recorded below after testing against the pinned upstream.
+The first mergeback batch ports only the three wrapper methods and adds `crates/core/tests/bus/i2c_clock_stretch_wrappers.rs`. The existing generic trait is sufficient. No new device-specific tool, schema or simulator is needed. Runtime verification is recorded below after testing against the pinned upstream.
 
 The timing test executes the real SERCOM model. At 48 MHz, a payload's nine 10-cycle periods plus 25 us stretch require 1290 cycles. It must remain pending at 1289 and deliver the byte at 1290 for direct, trace, supply, mux and composed wrappers. Other cases cover a live supply cutoff/restart, a live change in hold duration, independent addresses, disabled channels, control-address traffic and maximum rather than first/summed stretching.
 
@@ -48,7 +48,7 @@ Upstream unconditionally clears the sleep state at an ordinary step after a refu
 
 Review then found two gaps that a direct fork copy would retain: warmed native/browser JIT blocks bypass the interpreter sleep check; and WFI can treat already-imported but now cleared/disabled IRQs as wake events. The prepared port covers those paths separately. Do not pull the SAMD-specific chunk executor into this correctness fix.
 
-`cortex_m.rs` is watched by seven existing silicon-capture records. `validation/manifest.yaml` requires human acceptance of the exact changed content or a new capture; simulation tests cannot renew those records. This first batch does not change CPU source or the acknowledged digests. The [prepared WFI patch and evidence](mergeback/cortex-m-wfi.md) remain a separate review item. Its corrected default suite passes 13/13; native JIT plus the event scheduler passes 14/14. A deliberate native negative control fails the warmed-cache and stale-pending tests (12 pass, 2 fail). Browser execution and performance are not established by those results.
+`cortex_m.rs` is watched by seven existing silicon-capture records. `validation/manifest.yaml` now reports source/capture differences without a mandatory human source-review acknowledgement. Simulation tests cannot renew physical capture evidence; a missing captured source digest remains unverified. This first batch does not change CPU source or the acknowledged digests. The [prepared WFI patch and evidence](mergeback/cortex-m-wfi.md) remain a separate review item. Its corrected default suite passes 13/13; native JIT plus the event scheduler passes 14/14. A deliberate native negative control fails the warmed-cache and stale-pending tests (12 pass, 2 fail). Browser execution and performance are not established by those results.
 
 ### Hold the broad SAMD execution bundle for an independent review
 

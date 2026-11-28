@@ -1,6 +1,6 @@
 {
   "esp32": {
-    "modeled": 2701,
+    "modeled": 2694,
     "total": 2997
   },
   "esp32c3": {
@@ -28,7 +28,7 @@
     "total": 1182
   },
   "stm32f103": {
-    "modeled": 275,
+    "modeled": 273,
     "total": 722
   },
   "stm32f401": {

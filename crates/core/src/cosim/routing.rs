@@ -40,7 +40,7 @@ use crate::{
 use labwired_config::{
     CosimAdapter as ManifestCosimAdapter, CosimModelConfig, GpioInputThresholds,
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 /// Default core clock assumed when a bus reports none, in Hz.
@@ -231,7 +231,8 @@ pub enum SignalPath {
     /// drives.
     GpioDriven { pad: String },
     /// `board.analog.<pad>_volts` — the analog level on the ADC input the chip
-    /// descriptor's `analog_pins:` assigns to `<pad>`.
+    /// descriptor assigns to `<pad>`, from `analog_pins:` or the pad's `adc`
+    /// pin function.
     AnalogPad { pad: String },
     /// `adc.<peripheral>.<channel>_volts` — the analog level on an explicitly
     /// named ADC channel, for chips whose descriptor records no analog pads.
@@ -239,14 +240,20 @@ pub enum SignalPath {
     /// `board.power.<rail>_volts` — the chip supply (`vdd`) or ADC reference
     /// (`vdda`).
     SupplyRail { rail: String },
+    /// A declared external device's measured supply rail.
+    DeviceSupply { device: String, rail: String },
     /// Voltage on the separately declared reset pin.
     ResetInput { pin: String },
     /// `board.motor.<id>.back_emf_v` — the back-EMF an `armature: circuit` DC
     /// motor presents to its netlist.
     MotorBackEmf { motor: String },
+    /// Per-phase EMF, positive from the external terminal toward the star.
+    MotorPhaseBackEmf { motor: String, phase: u8 },
     /// `board.motor.<id>.current_a` — the winding current the netlist solved
     /// for an `armature: circuit` DC motor.
     MotorCurrent { motor: String },
+    /// The three solved currents of one circuit-mode BLDC winding.
+    MotorPhaseCurrent { motor: String, phase: u8 },
     /// `board.motor.<id>.supply_v` — the supply rail feeding an
     /// `armature: circuit` DC motor's winding, as the netlist solved it.
     MotorSupply { motor: String },
@@ -294,6 +301,20 @@ impl SignalPath {
             });
         }
         if let Some(rest) = path.strip_prefix("board.motor.") {
+            for (phase, label) in [(0, "a"), (1, "b"), (2, "c")] {
+                if let Some(motor) = rest.strip_suffix(&format!(".phase_{label}_back_emf_v")) {
+                    return (!motor.is_empty()).then(|| Self::MotorPhaseBackEmf {
+                        motor: motor.to_string(),
+                        phase,
+                    });
+                }
+                if let Some(motor) = rest.strip_suffix(&format!(".phase_{label}_current_a")) {
+                    return (!motor.is_empty()).then(|| Self::MotorPhaseCurrent {
+                        motor: motor.to_string(),
+                        phase,
+                    });
+                }
+            }
             if let Some(motor) = rest.strip_suffix(".back_emf_v") {
                 return (!motor.is_empty()).then(|| Self::MotorBackEmf {
                     motor: motor.to_string(),
@@ -315,6 +336,14 @@ impl SignalPath {
             }
             let id = rest.strip_suffix(".current_a")?;
             return (!id.is_empty()).then(|| Self::Ina219Current { id: id.to_string() });
+        }
+        if let Some(rest) = path.strip_prefix("board.device.") {
+            let (device, rail) = rest.rsplit_once(".power.")?;
+            let rail = rail.strip_suffix("_volts")?;
+            return (!device.is_empty() && !rail.is_empty()).then(|| Self::DeviceSupply {
+                device: device.to_owned(),
+                rail: rail.to_owned(),
+            });
         }
         if let Some(rest) = path.strip_prefix("board.reset.") {
             let pin = rest.strip_suffix("_volts")?;
@@ -360,6 +389,7 @@ impl SignalPath {
                 | Self::GpioPadVolts { .. }
                 | Self::GpioDriven { .. }
                 | Self::MotorBackEmf { .. }
+                | Self::MotorPhaseBackEmf { .. }
         )
     }
 
@@ -371,8 +401,10 @@ impl SignalPath {
                 | Self::AnalogPad { .. }
                 | Self::AdcChannel { .. }
                 | Self::SupplyRail { .. }
+                | Self::DeviceSupply { .. }
                 | Self::ResetInput { .. }
                 | Self::MotorCurrent { .. }
+                | Self::MotorPhaseCurrent { .. }
                 | Self::MotorSupply { .. }
                 | Self::Ina219Current { .. }
                 | Self::Ina219BusV { .. }
@@ -439,8 +471,9 @@ pub enum RoutingError {
     NotReadable {
         path: String,
     },
-    /// The chip descriptor's `analog_pins:` names no ADC input for this pad.
-    /// Use the explicit `adc.<peripheral>.<channel>_volts` form instead.
+    /// The chip descriptor's `analog_pins:` and pin `functions:` tables name
+    /// no ADC input for this pad. Use the explicit
+    /// `adc.<peripheral>.<channel>_volts` form instead.
     NoAdcChannel {
         path: String,
         pad: String,
@@ -495,6 +528,10 @@ pub enum RoutingError {
     NoSupplyMonitor {
         path: String,
     },
+    DeviceSupplyRejected {
+        path: String,
+        reason: String,
+    },
     NoResetInput {
         path: String,
         pin: String,
@@ -513,6 +550,10 @@ pub enum RoutingError {
     NotCircuitMotor {
         path: String,
         motor: String,
+    },
+    CircuitMotor {
+        path: String,
+        reason: String,
     },
     /// `board.ina219.<id>.…` names no declared `ina219` external device.
     UnknownIna219 {
@@ -580,7 +621,8 @@ impl std::fmt::Display for RoutingError {
             Self::NoAdcChannel { path, pad } => write!(
                 f,
                 "co-sim path '{path}': the chip descriptor names no ADC input for pad '{pad}' \
-                 (no `analog_pins:` entry); route adc.<peripheral>.<channel>_volts instead"
+                 (neither an `analog_pins:` entry nor an `adc` function in its `pins:` table); \
+                 route adc.<peripheral>.<channel>_volts instead"
             ),
             Self::AdcUnavailable { path, channel } => write!(
                 f,
@@ -633,6 +675,7 @@ impl std::fmt::Display for RoutingError {
                 f,
                 "co-sim path '{path}': one or more reference-capable ADC models refused ADC reference {volts} V"
             ),
+            Self::DeviceSupplyRejected { path, reason } => write!(f, "co-sim path '{path}': {reason}"),
             Self::NoResetInput { path, pin } => write!(
                 f,
                 "co-sim path '{path}': chip has no reset_input declaration for '{pin}'"
@@ -652,9 +695,10 @@ impl std::fmt::Display for RoutingError {
             ),
             Self::NotCircuitMotor { path, motor } => write!(
                 f,
-                "co-sim path '{path}': motor '{motor}' is bridge-driven; only an \
+                "co-sim path '{path}': motor '{motor}' does not have the required circuit winding kind; only an \
                  `armature: circuit` motor takes its winding current from a netlist"
             ),
+            Self::CircuitMotor { path, reason } => write!(f, "co-sim path '{path}': {reason}"),
             Self::UnknownIna219 { path, id } => write!(
                 f,
                 "co-sim path '{path}': there is no ina219 external device '{id}'"
@@ -710,6 +754,10 @@ enum ReadBinding {
     MotorBackEmf {
         motor: usize,
     },
+    MotorPhaseBackEmf {
+        motor: usize,
+        phase: u8,
+    },
 }
 
 /// A resolved store → machine sink.
@@ -730,14 +778,33 @@ enum WriteBinding {
         connection: String,
         channel: u8,
     },
+    /// A pad level by label: its resolved ADC channel (`analog_pins:` or the
+    /// pad's `adc` pin function) and every comparator sampling the pad
+    /// (`SystemBus::set_analog_pad_mv`).
+    AnalogPad {
+        pad: String,
+        // Retain the validated ADC identity for physical writer ownership.
+        // Applying this binding still drives the complete pad fan-out.
+        connection: String,
+        channel: u8,
+    },
     /// The chip's VDD, fed to its supply supervisor.
     SupplyVdd,
+    /// Collected and published once as an atomic device-rail batch.
+    DeviceSupply {
+        device: String,
+        rail: String,
+    },
     ResetInput,
     /// The ADC reference rail, written to each ADC model that supports it.
     AdcReference,
     /// Index of an `armature: circuit` motor; its winding current in amps.
     MotorCurrent {
         motor: usize,
+    },
+    MotorPhaseCurrent {
+        motor: usize,
+        phase: u8,
     },
     /// Index of an `armature: circuit` motor; its supply rail in volts.
     MotorSupply {
@@ -753,12 +820,31 @@ enum WriteBinding {
     },
 }
 
+impl WriteBinding {
+    fn adc_endpoint(&self) -> Option<(&str, u8)> {
+        match self {
+            Self::AdcChannel {
+                connection,
+                channel,
+            }
+            | Self::AnalogPad {
+                connection,
+                channel,
+                ..
+            } => Some((connection.as_str(), *channel)),
+            _ => None,
+        }
+    }
+}
+
 /// Routes manifest signal paths between a running machine and the co-sim
 /// signal store.
 #[derive(Debug, Default, Clone)]
 pub struct SignalRouter {
     reads: Vec<(String, ReadBinding)>,
     writes: Vec<(String, WriteBinding)>,
+    /// One physical shaft per model, with the exact declared boundary step.
+    circuit_bldc: Vec<(usize, String, u64)>,
 }
 
 impl SignalRouter {
@@ -792,6 +878,12 @@ impl SignalRouter {
 
         for path in &sources {
             let Some(parsed) = SignalPath::parse(path) else {
+                if path.starts_with("board.device.") {
+                    errors.push(RoutingError::DeviceSupplyRejected {
+                        path: (*path).to_string(),
+                        reason: "expected board.device.<device>.power.<rail>_volts".into(),
+                    });
+                }
                 continue; // Plain store path — the runner owns it.
             };
             if !parsed.is_readable() {
@@ -814,6 +906,12 @@ impl SignalRouter {
                 continue;
             }
             let Some(parsed) = SignalPath::parse(path) else {
+                if path.starts_with("board.device.") {
+                    errors.push(RoutingError::DeviceSupplyRejected {
+                        path: (*path).to_string(),
+                        reason: "expected board.device.<device>.power.<rail>_volts".into(),
+                    });
+                }
                 continue;
             };
             if !parsed.is_writable() {
@@ -844,7 +942,92 @@ impl SignalRouter {
             WriteBinding::ResetInput => 2,
             _ => 3,
         });
+        // The ordinary sink set deduplicates identical paths. Count declared
+        // rail writers before that deduplication can hide competing producers.
+        let mut rail_writers = BTreeMap::<(String, String), usize>::new();
+        for route in configs.iter().flat_map(|config| config.outputs.values()) {
+            if let Some(SignalPath::DeviceSupply { device, rail }) = SignalPath::parse(route) {
+                *rail_writers.entry((device, rail)).or_default() += 1;
+            }
+        }
+        for ((device, rail), writers) in rail_writers {
+            if writers > 1 {
+                errors.push(RoutingError::DeviceSupplyRejected {
+                    path: format!("board.device.{device}.power.{rail}_volts"),
+                    reason: format!("device supply rail has {writers} model output writers; exactly one is required"),
+                });
+            }
+        }
+        router.bind_circuit_bldc(configs, bus, &mut errors);
         (router, errors)
+    }
+
+    /// All phases must share one model and clock; otherwise one shaft would
+    /// consume observations from different circuit states or advance twice.
+    fn bind_circuit_bldc(
+        &mut self,
+        configs: &[CosimModelConfig],
+        bus: &SystemBus,
+        errors: &mut Vec<RoutingError>,
+    ) {
+        let mut owners = BTreeMap::<String, usize>::new();
+        for (owner, config) in configs.iter().enumerate() {
+            let mut phases = BTreeMap::<String, ([usize; 3], [usize; 3])>::new();
+            for path in config.inputs.values() {
+                if let Some(SignalPath::MotorPhaseBackEmf { motor, phase }) =
+                    SignalPath::parse(path)
+                {
+                    phases.entry(motor).or_default().0[usize::from(phase)] += 1;
+                }
+            }
+            for path in config.outputs.values() {
+                if let Some(SignalPath::MotorPhaseCurrent { motor, phase }) =
+                    SignalPath::parse(path)
+                {
+                    phases.entry(motor).or_default().1[usize::from(phase)] += 1;
+                }
+            }
+            for (motor, (emf, current)) in phases {
+                let path = format!("board.motor.{motor}");
+                let invalid = if emf != [1; 3] || current != [1; 3] {
+                    Some("all three phase currents and back-EMFs must appear exactly once in the same model".to_owned())
+                } else if owners.insert(motor.clone(), owner).is_some() {
+                    Some(
+                        "one physical motor cannot be owned by multiple co-simulation models"
+                            .to_owned(),
+                    )
+                } else if configs.iter().any(|other| other.step_ns != config.step_ns) {
+                    Some("circuit BLDC coupling requires every model in this session to use the same step_ns; mixed-rate motor coupling is unsupported".to_owned())
+                } else if config.adapter != ManifestCosimAdapter::Analog || config.step_ns == 0 {
+                    Some("circuit BLDC coupling requires one in-core analog model with an explicit positive step_ns".to_owned())
+                } else {
+                    None
+                };
+                if let Some(reason) = invalid {
+                    errors.push(RoutingError::CircuitMotor { path, reason });
+                    continue;
+                }
+                match circuit_bldc_motor(bus, &motor, &path) {
+                    Ok(index) => self.circuit_bldc.push((index, path, config.step_ns)),
+                    Err(error) => errors.push(error),
+                }
+            }
+        }
+        for motor in bus.circuit_bldc_motor_ids() {
+            let index = bus
+                .circuit_bldc_motor_index(motor)
+                .expect("enumerated circuit motor");
+            if !self
+                .circuit_bldc
+                .iter()
+                .any(|(bound, _, _)| *bound == index)
+            {
+                errors.push(RoutingError::CircuitMotor {
+                    path: format!("board.motor.{motor}"),
+                    reason: "declared circuit BLDC has no complete analog-model owner; all three phase currents and back-EMFs are required".into(),
+                });
+            }
+        }
     }
 
     fn resolve_read(
@@ -914,12 +1097,18 @@ impl SignalRouter {
             SignalPath::MotorBackEmf { motor } => Ok(ReadBinding::MotorBackEmf {
                 motor: circuit_motor(bus, motor, path)?,
             }),
+            SignalPath::MotorPhaseBackEmf { motor, phase } => Ok(ReadBinding::MotorPhaseBackEmf {
+                motor: circuit_bldc_motor(bus, motor, path)?,
+                phase: *phase,
+            }),
             // `is_readable` already rejected the analog and supply forms.
             SignalPath::AnalogPad { .. }
             | SignalPath::AdcChannel { .. }
             | SignalPath::SupplyRail { .. }
+            | SignalPath::DeviceSupply { .. }
             | SignalPath::ResetInput { .. }
             | SignalPath::MotorCurrent { .. }
+            | SignalPath::MotorPhaseCurrent { .. }
             | SignalPath::MotorSupply { .. }
             | SignalPath::Ina219Current { .. }
             | SignalPath::Ina219BusV { .. } => Err(RoutingError::NotReadable {
@@ -961,7 +1150,8 @@ impl SignalRouter {
                         pad: pad.clone(),
                     })?;
                 check_adc_channel(bus, path, &connection, channel)?;
-                Ok(WriteBinding::AdcChannel {
+                Ok(WriteBinding::AnalogPad {
+                    pad: pad.to_ascii_uppercase(),
                     connection,
                     channel,
                 })
@@ -1016,11 +1206,26 @@ impl SignalRouter {
                     rail: rail.clone(),
                 }),
             },
+            SignalPath::DeviceSupply { device, rail } => {
+                bus.validate_device_supply_route(device, rail)
+                    .map_err(|error| RoutingError::DeviceSupplyRejected {
+                        path: path.to_string(),
+                        reason: error.to_string(),
+                    })?;
+                Ok(WriteBinding::DeviceSupply {
+                    device: device.clone(),
+                    rail: rail.clone(),
+                })
+            }
             SignalPath::MotorCurrent { motor } => Ok(WriteBinding::MotorCurrent {
                 motor: circuit_motor(bus, motor, path)?,
             }),
+            SignalPath::MotorPhaseCurrent { motor, phase } => Ok(WriteBinding::MotorPhaseCurrent {
+                motor: circuit_bldc_motor(bus, motor, path)?,
+                phase: *phase,
+            }),
             SignalPath::MotorSupply { motor } => Ok(WriteBinding::MotorSupply {
-                motor: circuit_motor(bus, motor, path)?,
+                motor: circuit_supply_motor(bus, motor, path)?,
             }),
             SignalPath::Ina219Current { id } => Ok(WriteBinding::Ina219Current {
                 id: circuit_ina219(bus, id, path)?,
@@ -1033,7 +1238,8 @@ impl SignalRouter {
             | SignalPath::GpioPad { .. }
             | SignalPath::GpioPadVolts { .. }
             | SignalPath::GpioDriven { .. }
-            | SignalPath::MotorBackEmf { .. } => Err(RoutingError::NotWritable {
+            | SignalPath::MotorBackEmf { .. }
+            | SignalPath::MotorPhaseBackEmf { .. } => Err(RoutingError::NotWritable {
                 path: path.to_string(),
             }),
         }
@@ -1066,10 +1272,12 @@ impl SignalRouter {
     /// `board.analog.pa0_volts` and `adc.adc1.0_volts` can name one ADC input.
     pub(crate) fn validate_unique_writers(&self) -> Result<(), String> {
         for (index, (path, binding)) in self.writes.iter().enumerate() {
-            if let Some((other, _)) = self.writes[..index]
-                .iter()
-                .find(|(_, previous)| previous == binding)
-            {
+            if let Some((other, _)) = self.writes[..index].iter().find(|(_, previous)| {
+                previous == binding
+                    || binding
+                        .adc_endpoint()
+                        .is_some_and(|endpoint| previous.adc_endpoint() == Some(endpoint))
+            }) {
                 return Err(format!(
                     "world analog routes '{other}' and '{path}' have multiple output writers for one hardware endpoint"
                 ));
@@ -1104,7 +1312,7 @@ impl SignalRouter {
             ReadBinding::Input { peripheral, bit } | ReadBinding::Output { peripheral, bit } => {
                 peripheral == index && bit == pin
             }
-            ReadBinding::MotorBackEmf { .. } => false,
+            ReadBinding::MotorBackEmf { .. } | ReadBinding::MotorPhaseBackEmf { .. } => false,
         }) || self.writes.iter().any(|(_, binding)| match *binding {
             WriteBinding::PadInput { addr, bit, .. } => {
                 addr >= owner.base
@@ -1141,14 +1349,20 @@ impl SignalRouter {
                     } else {
                         0.0
                     };
-                    signals.insert(path.clone(), CosimSignalValue::F64(volts));
+                    put_signal(signals, path, CosimSignalValue::F64(volts));
+                }
+                continue;
+            }
+            if let ReadBinding::MotorPhaseBackEmf { motor, phase } = *binding {
+                if let Some(volts) = bus.circuit_bldc_phase_back_emf_v(motor, phase) {
+                    put_signal(signals, path, CosimSignalValue::F64(volts));
                 }
                 continue;
             }
             if let ReadBinding::MotorBackEmf { motor } = *binding {
                 // Absent, not 0 V, if the motor cannot answer.
                 if let Some(volts) = bus.circuit_motor_back_emf_v(motor) {
-                    signals.insert(path.clone(), CosimSignalValue::F64(volts));
+                    put_signal(signals, path, CosimSignalValue::F64(volts));
                 }
                 continue;
             }
@@ -1178,10 +1392,12 @@ impl SignalRouter {
                     .and_then(|p| p.dev.pins())
                     .and_then(|port| crate::pins::own_drive(port, pad))
                     .map(|drive| matches!(drive, crate::logic_capture::PadDrive::Driven)),
-                ReadBinding::MotorBackEmf { .. } | ReadBinding::PadVolts { .. } => None,
+                ReadBinding::MotorBackEmf { .. }
+                | ReadBinding::MotorPhaseBackEmf { .. }
+                | ReadBinding::PadVolts { .. } => None,
             };
             if let Some(level) = level {
-                signals.insert(path.clone(), CosimSignalValue::Bool(level));
+                put_signal(signals, path, CosimSignalValue::Bool(level));
             }
         }
     }
@@ -1198,11 +1414,42 @@ impl SignalRouter {
         time_ns: u64,
     ) -> Vec<RoutingError> {
         let mut errors = Vec::new();
+        // Validate and collect every supplied device rail before any power
+        // transition. A malformed peer rail must not half-apply the boundary.
+        let mut device_rails = Vec::new();
+        for (path, binding) in &self.writes {
+            let WriteBinding::DeviceSupply { device, rail } = binding else {
+                continue;
+            };
+            let Some(value) = signals.get(path.as_str()) else {
+                continue;
+            };
+            match signal_as_f64(value).filter(|volts| volts.is_finite() && *volts >= 0.0) {
+                Some(volts) => device_rails.push((device.clone(), rail.clone(), volts)),
+                None => errors.push(RoutingError::DeviceSupplyRejected {
+                    path: path.clone(),
+                    reason: format!("device supply needs finite nonnegative volts, got {value}"),
+                }),
+            }
+        }
+        if !errors.is_empty() {
+            return errors;
+        }
+        if let Err(error) = bus.apply_device_supply_voltages(&device_rails) {
+            return vec![RoutingError::DeviceSupplyRejected {
+                path: "board.device".into(),
+                reason: error.to_string(),
+            }];
+        }
+        for (motor, _, _) in &self.circuit_bldc {
+            bus.begin_circuit_bldc_boundary(*motor);
+        }
         for (path, binding) in &mut self.writes {
             let Some(value) = signals.get(path.as_str()) else {
                 continue; // No model produced this output on this step.
             };
             match binding {
+                WriteBinding::DeviceSupply { .. } => {} // Published in the atomic batch above.
                 WriteBinding::PadInput { addr, bit, level } => {
                     let next = match value {
                         CosimSignalValue::F64(volts) => {
@@ -1249,6 +1496,23 @@ impl SignalRouter {
                         errors.push(RoutingError::AdcUnavailable {
                             path: path.clone(),
                             channel: *channel,
+                        });
+                    }
+                }
+                WriteBinding::AnalogPad { pad, .. } => {
+                    let Some(volts) = signal_as_f64(value) else {
+                        errors.push(RoutingError::TypeMismatch {
+                            path: path.clone(),
+                            value: value.clone(),
+                        });
+                        continue;
+                    };
+                    let millivolts = volts_to_millivolts(volts);
+                    if !bus.set_analog_pad_mv(pad, millivolts) {
+                        let channel = bus.analog_pin_map.get(pad).map_or(0, |(_, c)| *c);
+                        errors.push(RoutingError::AdcUnavailable {
+                            path: path.clone(),
+                            channel,
                         });
                     }
                 }
@@ -1313,6 +1577,16 @@ impl SignalRouter {
                         });
                     }
                 }
+                WriteBinding::MotorPhaseCurrent { motor, phase } => {
+                    if !signal_as_f64(value).is_some_and(|amps| {
+                        bus.set_circuit_bldc_phase_current(*motor, *phase, amps)
+                    }) {
+                        errors.push(RoutingError::TypeMismatch {
+                            path: path.clone(),
+                            value: value.clone(),
+                        });
+                    }
+                }
                 WriteBinding::MotorSupply { motor } => {
                     let accepted = signal_as_f64(value)
                         .is_some_and(|volts| bus.set_circuit_motor_supply(*motor, volts));
@@ -1345,8 +1619,28 @@ impl SignalRouter {
                 }
             }
         }
+        if errors.is_empty() {
+            for (motor, path, step_ns) in &self.circuit_bldc {
+                if let Err(reason) = bus.complete_circuit_bldc_boundary(*motor, time_ns, *step_ns) {
+                    errors.push(RoutingError::CircuitMotor {
+                        path: path.clone(),
+                        reason,
+                    });
+                }
+            }
+        }
         bus.flush_ina219_circuit(time_ns);
         errors
+    }
+}
+
+/// Store `value` under `path`, allocating the key only the first time.
+fn put_signal(signals: &mut CosimSignals, path: &str, value: CosimSignalValue) {
+    match signals.get_mut(path) {
+        Some(slot) => *slot = value,
+        None => {
+            signals.insert(path.to_string(), value);
+        }
     }
 }
 
@@ -1363,6 +1657,33 @@ fn circuit_motor(bus: &SystemBus, motor: &str, path: &str) -> Result<usize, Rout
             motor: motor.to_string(),
         },
     })
+}
+
+fn circuit_bldc_motor(bus: &SystemBus, motor: &str, path: &str) -> Result<usize, RoutingError> {
+    bus.circuit_bldc_motor_index(motor)
+        .map_err(|why| circuit_lookup_error(why, motor, path))
+}
+
+fn circuit_supply_motor(bus: &SystemBus, motor: &str, path: &str) -> Result<usize, RoutingError> {
+    bus.circuit_motor_supply_index(motor)
+        .map_err(|why| circuit_lookup_error(why, motor, path))
+}
+
+fn circuit_lookup_error(
+    why: crate::bus::CircuitMotorLookup,
+    motor: &str,
+    path: &str,
+) -> RoutingError {
+    match why {
+        crate::bus::CircuitMotorLookup::Unknown => RoutingError::UnknownMotor {
+            path: path.to_string(),
+            motor: motor.to_string(),
+        },
+        crate::bus::CircuitMotorLookup::NotCircuit => RoutingError::NotCircuitMotor {
+            path: path.to_string(),
+            motor: motor.to_string(),
+        },
+    }
 }
 
 /// Resolve `board.ina219.<id>.…` to a declared ina219 external-device id.
@@ -1457,7 +1778,8 @@ fn output_carries_volts(config: &CosimModelConfig, model_signal: &str) -> bool {
             Some(serde_yaml::Value::Number(number))
                 if number.as_i64().is_none() && number.as_f64().is_some()
         ),
-        ManifestCosimAdapter::ExternalProcess
+        ManifestCosimAdapter::Behavior
+        | ManifestCosimAdapter::ExternalProcess
         | ManifestCosimAdapter::Fmi
         | ManifestCosimAdapter::Ngspice => false,
     }
@@ -1759,6 +2081,14 @@ impl CosimSession {
         if configs.is_empty() {
             return Ok(None);
         }
+        // Checked before any adapter starts: a machine session sends no
+        // `(0, 0)` initialization step.
+        if let Some(refusal) = configs
+            .iter()
+            .find_map(crate::cosim::ngspice::machine_sampling_refusal)
+        {
+            return Err(SimulationError::Other(refusal));
+        }
         let mut models = Vec::with_capacity(configs.len());
         for config in configs {
             models.push(crate::cosim::CosimRunnerModel::new(
@@ -1844,6 +2174,12 @@ impl CosimSession {
             .any(|config| config.adapter == ManifestCosimAdapter::Ngspice)
     }
 
+    /// Why a machine runtime snapshot must not be taken or applied with this
+    /// session; see [`super::ngspice::runtime_snapshot_refusal`].
+    pub fn runtime_snapshot_refusal(&self) -> Option<&'static str> {
+        super::ngspice::runtime_snapshot_refusal(&self.configs)
+    }
+
     /// The runner's analog waveform ring. Every `adapter: analog` model writes
     /// its routed outputs and `config.trace` channels here as it steps; publish
     /// it with [`Machine::attach_analog_trace`](crate::Machine::attach_analog_trace)
@@ -1867,6 +2203,14 @@ impl CosimSession {
     /// The lockstep granularity, in nanoseconds (the finest model `step_ns`).
     pub fn step_ns(&self) -> u64 {
         self.step_ns
+    }
+
+    /// Whether [`CosimAdvance::routed`] is filled in. On by default; a caller
+    /// that never reads it (the CLI run loop without debug logging) turns it
+    /// off to take the per-step report off the hot path. The signal store and
+    /// every routed pin are unaffected.
+    pub fn set_record_routed(&mut self, record: bool) {
+        self.runner.set_record_routed(record);
     }
 
     /// The signal store, for inspection after a step.
@@ -2074,6 +2418,18 @@ impl CosimSession {
         machine: &mut Machine<C>,
         request: AdvanceRequest,
     ) -> Result<CosimAdvance, CosimAdvanceError> {
+        // Co-simulation adapters may perform work for every elapsed cycle.
+        // Until they expose their own work accounting, conservatively spend
+        // at most the work allowance as ordinary fuel across ALL chunks.
+        let work_is_binding = request
+            .limits()
+            .work
+            .is_some_and(|work| request.limits().fuel.is_none_or(|fuel| work < fuel));
+        let request = if work_is_binding {
+            request.with_fuel_limit(request.limits().work)
+        } else {
+            request
+        };
         let limits = request.limits();
         let mut total: Option<CosimAdvance> = None;
         loop {
@@ -2114,7 +2470,7 @@ impl CosimSession {
 
             let budget_spent = match chunk_report.stop {
                 // The chunk's fuel was everything that was left.
-                AdvanceStop::FuelLimit => true,
+                AdvanceStop::FuelLimit | AdvanceStop::WorkLimit => true,
                 // Either the request's own cycle budget, or just a boundary.
                 AdvanceStop::CycleLimit => {
                     cycles_left.is_some_and(|left| chunk_report.elapsed_cycles >= left)
@@ -2127,7 +2483,11 @@ impl CosimSession {
             };
             let made_no_progress = chunk_report.primary_steps == 0 && chunk_report.idle_cycles == 0;
             if budget_spent || made_no_progress {
-                return Ok(total.expect("at least one chunk ran"));
+                let mut total = total.expect("at least one chunk ran");
+                if work_is_binding && total.report.stop == AdvanceStop::FuelLimit {
+                    total.report.stop = AdvanceStop::WorkLimit;
+                }
+                return Ok(total);
             }
         }
     }

@@ -97,6 +97,15 @@ impl MatrixRoutedI2c {
 }
 
 impl I2cDevice for MatrixRoutedI2c {
+    // This wrapper owns fixed wiring only; its live device state is in inner.
+    fn runtime_snapshot(&self) -> Option<Vec<u8>> {
+        self.inner.runtime_snapshot()
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> crate::SimResult<()> {
+        self.inner.restore_runtime_snapshot(bytes)
+    }
+
     fn transaction_generation(&self) -> Option<u64> {
         self.inner.transaction_generation()
     }

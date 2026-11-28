@@ -21,18 +21,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use labwired_core::peripherals::kit::registry;
-use serde::Serialize;
-
-#[derive(Serialize)]
-struct Manifest {
-    /// Schema version. Bumped when the JSON shape changes (the TS reader
-    /// pins to a major; consumers must update together).
-    schema_version: u32,
-    /// All peripherals registered through `PeripheralKit`. One entry per
-    /// kit; legacy hand-written peripherals are not represented here.
-    peripherals: Vec<&'static labwired_core::peripherals::kit::KitMetadata>,
-}
+use labwired_core::peripherals::kit::manifest;
 
 fn main() -> Result<()> {
     let mut out_path: Option<PathBuf> = None;
@@ -51,11 +40,9 @@ fn main() -> Result<()> {
         }
     }
 
-    let manifest = Manifest {
-        schema_version: 2,
-        peripherals: registry::kits().iter().map(|k| k.metadata()).collect(),
-    };
-    let json = serde_json::to_string_pretty(&manifest)?;
+    // The serialiser lives in core so this tool and
+    // `peripheral_kit_gate::manifest_json_matches_registry` cannot drift.
+    let json = manifest::json();
 
     match out_path {
         Some(path) => {
@@ -63,16 +50,11 @@ fn main() -> Result<()> {
                 std::fs::create_dir_all(parent)
                     .with_context(|| format!("creating parent directory {}", parent.display()))?;
             }
-            // Force trailing newline so editors / git don't complain.
-            let mut bytes = json.into_bytes();
-            if !bytes.ends_with(b"\n") {
-                bytes.push(b'\n');
-            }
-            std::fs::write(&path, bytes).with_context(|| format!("writing {}", path.display()))?;
+            std::fs::write(&path, json).with_context(|| format!("writing {}", path.display()))?;
             eprintln!("wrote {}", path.display());
         }
         None => {
-            println!("{json}");
+            print!("{json}");
         }
     }
     Ok(())

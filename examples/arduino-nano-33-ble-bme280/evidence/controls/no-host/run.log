@@ -1,0 +1,8 @@
+2026-11-20T02:39:17.002486Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../../configs/chips/nrf52840.yaml
+2026-11-20T02:39:17.161142Z  INFO labwired_loader: ELF Entry Point: 0x1aa41
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+labwired-cli test: idle_ff skipped 812714408 of 842714408 device cycles (30000000 interpreted)
+2026-11-20T02:39:20.507670Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "NANO_33_BLE_BME280 ID=0x60" }) (captured len=0)
+FAIL  0/1 checks · no-host · 30000000 steps · 3.34s
+no-host exit=1

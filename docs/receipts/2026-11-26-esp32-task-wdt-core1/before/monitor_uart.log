@@ -1,0 +1,45 @@
+MON spLW_iTWDT_AnRM=0 isr=0 fired=0
+
+MON spin=49224 isr=0 fired=0
+MON spin=99116 isr=0 fired=0
+MON spin=149009 isr=0 fired=0
+MON spin=198898 isr=0 fired=0
+E (204) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+E (204) task_wdt:  - loopTask (CPU 1)
+E (204) task_wdt: Tasks currently running:
+E (204) task_wdt: CPU 0: IDLE0
+E (204) task_wdt: CPU 1: loopTask
+ROM(F2R4D task_wdt: Print CPU 1 backtrace
+MON spin=199765 isr=1 fired=1
+MON spin=199765 isr=1 fired=1
+MON spin=199765 isr=1 fired=1
+MON spin=199765 isr=1 fired=1
+E (304) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+E (304) task_wdt:  - loopTask (CPU 1)
+E (304) task_wdt: Tasks currently running:
+E (304) task_wdt: CPU 0: IDLE0
+E (304) task_wdt: CPU 1: IDLE1
+E (304) task_wdt: Print CPU 1 backtrace
+MON spin=199765 isr=2 fired=1
+MON spin=199765 isr=2 fired=1
+MON spin=199765 isr=2 fired=1
+MON spin=199765 isr=2 fired=1
+E (404) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+E (404) task_wdt:  - loopTask (CPU 1)
+E (404) task_wdt: Tasks currently running:
+E (404) task_wdt: CPU 0: IDLE0
+E (404) task_wdt: CPU 1: IDLE1
+E (404) task_wdt: Print CPU 1 backtrace
+MON spin=199765 isr=3 fired=1
+MON spin=199765 isr=3 fired=1
+MON spin=199765 isr=3 fired=1
+MON spin=199765 isr=3 fired=1
+E (504) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+E (504) task_wdt:  - loopTask (CPU 1)
+E (504) task_wdt: Tasks currently running:
+E (504) task_wdt: CPU 0: IDLE0
+E (504) task_wdt: CPU 1: IDLE1
+E (504) task_wdt: Print CPU 1 backtrace
+MON spin=199765 isr=4 fired=1
+MON spin=199765 isr=4 fired=1
+MON spin=199765 isr=4 fired=1

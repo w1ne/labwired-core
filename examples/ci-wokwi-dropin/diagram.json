@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "author": "LabWired Wokwi Drop-In Sample",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-stm32-blackpill-stm32f411", "id": "mcu", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-ssd1306", "id": "oled1", "top": -120, "left": 180, "attrs": {} },
+    { "type": "wokwi-resistor", "id": "r_sda", "top": -60, "left": 120, "attrs": { "value": "4700" } },
+    { "type": "wokwi-resistor", "id": "r_scl", "top": -60, "left": 150, "attrs": { "value": "4700" } }
+  ],
+  "connections": [
+    [ "mcu:PB7", "oled1:SDA", "blue", [] ],
+    [ "mcu:PB6", "oled1:SCL", "yellow", [] ],
+    [ "mcu:3V3", "r_sda:1", "red", [] ],
+    [ "r_sda:2", "oled1:SDA", "blue", [] ],
+    [ "mcu:3V3", "r_scl:1", "red", [] ],
+    [ "r_scl:2", "oled1:SCL", "yellow", [] ],
+    [ "mcu:3V3", "oled1:VCC", "red", [] ],
+    [ "mcu:GND.1", "oled1:GND", "black", [] ]
+  ]
+}

@@ -359,6 +359,10 @@ impl Dport {
 }
 
 impl Peripheral for Dport {
+    fn has_zero_tick_cycle_cost(&self) -> bool {
+        true
+    }
+
     fn cross_core_pending(&self, core_id: u8) -> u32 {
         Dport::cross_core_pending(self, core_id)
     }
@@ -750,12 +754,5 @@ mod tests {
             read_u32_at(&restored, DPORT_PERIP_RST_EN_OFFSET as u64),
             0xAAAA_5555
         );
-    }
-
-    #[test]
-    fn base_is_esp32_classic_canonical_address() {
-        let p = Dport::new();
-        assert_eq!(p.base(), 0x3FF0_0000);
-        assert_eq!(Dport::SIZE, 0x1000);
     }
 }

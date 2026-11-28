@@ -42,6 +42,7 @@ jobs:
           --output "$RUNNER_TEMP/st7735-pxt-caller-trace.json"
       - uses: actions/upload-artifact@v4
         with:
+          retention-days: 2
           name: st7735-pxt-direct-fragment-trace
           path: |
             ${{ runner.temp }}/st7735-pxt-direct-trace.json

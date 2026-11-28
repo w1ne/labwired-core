@@ -1,7 +1,11 @@
 name: SAMD authored strict paired IRQ ARM guest
 on:
   pull_request:
-    paths: ['crates/core/tests/samd_paired_irq_guest.rs', 'scripts/samd-paired-irq/**', '.github/workflows/samd-paired-irq-guest.yml']
+    paths: ['crates/core/tests/samd/samd_paired_irq_guest.rs', 'scripts/samd-paired-irq/**', '.github/workflows/samd-paired-irq-guest.yml']
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 env:
@@ -38,9 +42,9 @@ jobs:
           LABWIRED_PAIRED_FIXTURE_DIR: ${{ runner.temp }}/paired-guests
         run: |
           set -o pipefail
-          cargo test --release -p labwired-core --test samd_paired_irq_guest -- --nocapture
-          cargo test --release -p labwired-core --test samd_paired_irq_guest -- --ignored --nocapture | tee paired-guest-default.log
-          cargo test --release -p labwired-core --features event-scheduler --test samd_paired_irq_guest -- --ignored --nocapture | tee paired-guest-scheduler.log
+          cargo test --release -p labwired-core --test samd -- --nocapture samd_paired_irq_guest::
+          cargo test --release -p labwired-core --test samd -- --ignored --nocapture samd_paired_irq_guest:: | tee paired-guest-default.log
+          cargo test --release -p labwired-core --features event-scheduler --test samd -- --ignored --nocapture samd_paired_irq_guest:: | tee paired-guest-scheduler.log
       - name: Bind actual source, merge, ELF and execution logs
         env:
           LABWIRED_PAIRED_FIXTURE_DIR: ${{ runner.temp }}/paired-guests
@@ -50,6 +54,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
+          retention-days: 2
           name: authored-paired-irq-guest-results
           path: |
             paired-guest-default.log

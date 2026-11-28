@@ -26,7 +26,7 @@ The Arduino column records measured results on `main` from
 [Core Arduino Matrix Smoke run 43199232042](https://github.com/w1ne/labwired-core/actions/runs/43199232042)
 (commit `5136a4ddf78132f5b411972911042c91d5a67121`, 2026-11-12).
 The 23 board rows have 194 passing cells, 13 explicit skips and 0 failures.
-Counts list passes and skips separately. `boards.yaml` records each skip reason.
+Counts list passes and skips separately. each file under `validation/arduino-matrix/boards/` records each skip reason.
 Other columns remain a record of intent.
 
 | Chip | Arduino matrix | Zephyr matrix | L3 I2C kit | Notes |
@@ -57,6 +57,8 @@ Other columns remain a record of intent.
 | stm32wb55 | L0–L7 (8 pass / 1 skip; L8 skipped) | ✅ | ✅ Arduino | |
 | stm32wba52 | L0–L4, L6–L7 (7 pass / 2 skip; L5/L8 skipped) | ✅ | ✅ Arduino | Custom PIO board JSON |
 | atmega328p | L0–L7 (8 pass / 1 skip; L8 skipped) | ❌ | ✅ Arduino TWI | Nano: USART+PORT+Timer0/1/2+TWI+SPI on CPU; L6 on D9 OC1A, pad-proven 490 Hz phase-correct (D13 has no timer output) |
+| atsamd21g18a (Nano 33 IoT) | L0–L7 (8 pass / 1 skip; L8 skipped), local run 2026-11-19, not yet in a CI run | ❌ | ✅ Arduino (L3 exact tier) | Arduino Nano 33 IoT (`nano_33_iot`); Serial = native USB CDC on `samd21_usb` and a scripted host; Wire = SERCOM4, SPI = SERCOM1 (board manifest sets the SERCOM roles); L5 A0 1650 mV → 512; L6 on D5 = PA05 TCC0/WO1, pad-proven (D13 has no timer in this variant) |
+| nrf52840 (Nano 33 BLE Rev2) | L0–L7 (8 pass / 1 skip; L8 skipped), local run 2026-11-20, not yet in a CI run | ❌ | ✅ Arduino (L3 exact tier) | Arduino Nano 33 BLE Rev2 (`nano33ble`, ArduinoCore-mbed); Serial = native USB CDC on `nrf52840_usbd` and a scripted host; image entered at 0x10000 (bootloader not modelled); Wire = TWI0 master with byte registers; SPI = SPIM2; L5 A0 1650 mV → 512; L6 is UART-only, the PWM pad is not proven (PROBLEMS.md) |
 | mkw41z4 | ❌ | ✅ | Zephyr system ready | Zephyr only today |
 
 Legend: ✅ in `validation/*-matrix/boards.yaml` · ❌ not yet · — blocked

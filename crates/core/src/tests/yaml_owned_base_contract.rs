@@ -18,9 +18,9 @@
 //! Two confirmed instances, both of which cost real time:
 //!
 //! * **nRF52 GPIOTE** hardcoded `GPIO1_BASE = 0x5000_0300`, Nordic's
-//!   real-silicon P1 base. Every nRF52840 chip YAML deliberately remaps `gpio1`
-//!   to `0x5000_1000`, because the silicon base sits *inside* GPIO0's 4 KB
-//!   window and a flat bus cannot host both. So a port-1 GPIOTE task wrote
+//!   real-silicon P1 base, while the nRF52840 chip YAMLs then parked `gpio1`
+//!   at `0x5000_1000` (it now maps P1's compact window at `0x5000_0800`, via
+//!   `reg_offset: 0x500`). So a port-1 GPIOTE task wrote
 //!   `0x5000_0810` — inside **gpio0's** window, where it vanished. The model's
 //!   own unit test asserted the wrong base, so it passed while the behaviour
 //!   was broken.
@@ -163,6 +163,14 @@ const HARDCODED_BASE_ALLOWLIST: &[(&str, &str, &str)] = &[
         "NOT A PERIPHERAL BASE. `DRAM0_VIOLATE_STATUS_ADDR_OFFSET`, the DRAM0 \
          twin of the above (CORE_0_DRAM0_PMS_MONITOR_2[27:4] is stored relative \
          to 0x3C00_0000). Same reasoning.",
+    ),
+    (
+        "peripherals/components/cyw43439.rs",
+        "CHIPCOMMON_BASE_ADDRESS",
+        "NOT AN MCU PERIPHERAL BASE. 0x1800_0000 is the CYW43439 external \
+         Wi-Fi chip's internal SiliconBackplane ChipCommon address accessed \
+         over gSPI Function 1 backplane windowing (`SDIO_BACKPLANE_ADDRESS_*`), \
+         not a host MCU MMIO window in any chip YAML.",
     ),
     // ── models naming their own base ────────────────────────────────────────
     (
@@ -376,6 +384,16 @@ const WINDOW_OVERLAP_ALLOWLIST: &[(&str, &str, &str, &str)] = &[
          storage.",
     ),
     (
+        "rp2040-feather.yaml",
+        "clk_rst",
+        "io_bank0",
+        "Same RP2040 clock/reset catch-all as rp2040.yaml: the one 160 KB window \
+         spans CLOCKS/RESETS/PSM/XOSC/PLL_SYS/PLL_USB, with IO_BANK0 inside it. \
+         Narrowing would drop XOSC and PLL registers that firmware polls. \
+         Greatest-start-wins routing gives IO_BANK0 its 4 KB deterministically, \
+         so GPIOn_CTRL.FUNCSEL reaches the pad mux model.",
+    ),
+    (
         "rp2350.yaml",
         "clk_rst",
         "io_bank0",
@@ -384,6 +402,61 @@ const WINDOW_OVERLAP_ALLOWLIST: &[(&str, &str, &str, &str)] = &[
          0x4006_0000) and IO_BANK0 sits inside it at 0x4002_8000, below XOSC \
          and both PLLs. Greatest-start-wins routing gives io_bank0 its 4 KB \
          deterministically, so GPIOn_CTRL.FUNCSEL reaches the pad mux model.",
+    ),
+    (
+        "rp2350-feather.yaml",
+        "clk_rst",
+        "io_bank0",
+        "The Feather-specific descriptor keeps the RP2350 320 KB clock/reset\
+         catch-all from rp2350.yaml so XOSC and both PLL windows remain mapped.\
+         IO_BANK0 is nested at 0x4002_8000; greatest-start-wins routing gives\
+         it its 4 KB deterministically, so GPIOn_CTRL.FUNCSEL reaches the pad\
+         mux model. This profile differs in board flash geometry and pin labels,\
+         not in the peripheral window map.",
+    ),
+    (
+        "rp2040.yaml",
+        "clk_rst",
+        "pads_bank0",
+        "PADS_BANK0 sits inside the same clock/reset catch-all as io_bank0, at \
+         0x4001_C000, below XOSC and both PLLs, so `clk_rst` cannot be narrowed \
+         around it. Greatest-start-wins routing gives pads_bank0 its 4 KB \
+         deterministically, so the PUE/PDE pulls firmware writes keep their \
+         datasheet reset words and reach the SIO's GPIO_IN instead of being \
+         absorbed as zeroed storage.",
+    ),
+    (
+        "rp2040-feather.yaml",
+        "clk_rst",
+        "pads_bank0",
+        "PADS_BANK0 sits inside the same clock/reset catch-all as io_bank0, at \
+         0x4001_C000, below XOSC and both PLLs, so `clk_rst` cannot be narrowed \
+         around it. Greatest-start-wins routing gives pads_bank0 its 4 KB \
+         deterministically, so the PUE/PDE pulls firmware writes keep their \
+         datasheet reset words and reach the SIO's GPIO_IN instead of being \
+         absorbed as zeroed storage.",
+    ),
+    (
+        "rp2350.yaml",
+        "clk_rst",
+        "pads_bank0",
+        "PADS_BANK0 sits inside the same clock/reset catch-all as io_bank0, at \
+         0x4003_8000, below XOSC and both PLLs, so `clk_rst` cannot be narrowed \
+         around it. Greatest-start-wins routing gives pads_bank0 its 4 KB \
+         deterministically, so the PUE/PDE pulls firmware writes keep their \
+         datasheet reset words and reach the SIO's GPIO_IN instead of being \
+         absorbed as zeroed storage.",
+    ),
+    (
+        "rp2350-feather.yaml",
+        "clk_rst",
+        "pads_bank0",
+        "PADS_BANK0 sits inside the same clock/reset catch-all as io_bank0, at \
+         0x4003_8000, below XOSC and both PLLs, so `clk_rst` cannot be narrowed \
+         around it. Greatest-start-wins routing gives pads_bank0 its 4 KB \
+         deterministically, so the PUE/PDE pulls firmware writes keep their \
+         datasheet reset words and reach the SIO's GPIO_IN instead of being \
+         absorbed as zeroed storage.",
     ),
     (
         "esp32.yaml",
@@ -434,27 +507,8 @@ const MMIO_FLOOR: u64 = 0x1000_0000;
 /// (`base_address: 1`, `0xf`) used by the imported Renode-style platform files.
 const MIN_MMIO_WINDOW_BASE: u64 = 0x1000;
 
-fn core_src_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src")
-}
-
 fn configs_chips_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../configs/chips")
-}
-
-fn rust_sources_under(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    let mut paths: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
-    paths.sort();
-    for p in paths {
-        if p.is_dir() {
-            rust_sources_under(&p, out);
-        } else if p.extension().is_some_and(|e| e == "rs") {
-            out.push(p);
-        }
-    }
 }
 
 fn yaml_files_under(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -651,10 +705,10 @@ struct BaseConst {
 /// Find `const|static NAME: uNN = 0x…;` where NAME mentions BASE or ADDR and
 /// the literal is an absolute MMIO address.
 fn scan_hardcoded_bases() -> Vec<BaseConst> {
-    let root = core_src_dir();
-    let scan_root = root.join("peripherals");
-    let mut files = Vec::new();
-    rust_sources_under(&scan_root, &mut files);
+    let files: Vec<PathBuf> = super::src_roots::core_src_files_under("peripherals")
+        .into_iter()
+        .map(|f| f.path)
+        .collect();
     let out_of_line_tests = out_of_line_cfg_test_files(&files);
 
     let mut found = Vec::new();
@@ -666,11 +720,7 @@ fn scan_hardcoded_bases() -> Vec<BaseConst> {
             continue;
         };
         let code = blank_test_modules(&blank_noncode(&raw));
-        let rel = path
-            .strip_prefix(&root)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .replace('\\', "/");
+        let rel = super::src_roots::module_rel(&path);
         for (idx, line) in code.lines().enumerate() {
             if let Some(hit) = parse_base_const(line) {
                 let (name, value) = hit;
@@ -975,9 +1025,7 @@ fn rule1_allowlist_shrinks_only() {
 /// Rule 1 vacuously green forever.
 #[test]
 fn rule1_scanner_is_not_vacuous() {
-    let root = core_src_dir().join("peripherals");
-    let mut files = Vec::new();
-    rust_sources_under(&root, &mut files);
+    let files = super::src_roots::core_src_files_under("peripherals");
     assert!(
         files.len() > 100,
         "expected the peripherals tree to hold >100 .rs files, found {} — \
@@ -1101,8 +1149,8 @@ fn rule2_scanner_is_not_vacuous() {
         "expected >400 declared peripheral windows across all chips, found \
          {total} — Rule 2 is vacuous"
     );
-    // nRF52840 is the chip the GPIOTE defect lived on; its remapped gpio1 must
-    // be visible to the scanner, otherwise the fix's premise is unverified.
+    // nRF52840 is the chip the GPIOTE defect lived on; its compact gpio1 window
+    // must be visible to the scanner, otherwise the fix's premise is unverified.
     let (_, nrf) = windows
         .iter()
         .find(|(f, _)| f == "nrf52840.yaml")
@@ -1112,10 +1160,11 @@ fn rule2_scanner_is_not_vacuous() {
         .find(|w| w.id == "gpio1")
         .expect("nrf52840.yaml must declare gpio1");
     assert_eq!(
-        gpio1.base, 0x5000_1000,
-        "nrf52840.yaml gpio1 is remapped off Nordic's silicon P1 base; if this \
-         ever changes, Nrf52Gpiote follows it via ChipMap and this contract's \
-         premise needs revisiting"
+        (gpio1.base, gpio1.size),
+        (0x5000_0800, Some(0x300)),
+        "nrf52840.yaml gpio1 maps P1's compact window (block base 0x5000_0300 + \
+         reg_offset 0x500); Nrf52Gpiote follows it via ChipMap::register_address. \
+         If this changes, this contract's premise needs revisiting"
     );
 }
 

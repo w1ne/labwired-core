@@ -6,3 +6,4 @@
 
 name: A2_CV32E40P
 chip: ../../chips/onboarding/A2_CV32E40P.yaml
+debug_uart: stdout

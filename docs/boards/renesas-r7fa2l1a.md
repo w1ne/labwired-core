@@ -1,45 +1,61 @@
-# Validation Report: renesas-r7fa2l1a
+# Renesas R7FA2L1A (RA2L1) imported profile
 
-**Architecture:** ARM Cortex-M23.
+## Measured profile
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+LabWired's onboarding profile for the imported Renode `renesas-r7fa2l1a`
+target is narrowed to what the engine executes and the smoke exercises. It
+follows Renode's
+[`renesas-r7fa2l1a.repl`](https://github.com/renode/renode/blob/master/platforms/cpus/renesas-r7fa2l1a.repl),
+which includes `renesas-r7fa2e1a9.repl` and overrides memory, ports and SCI:
 
-```text
-[2m2026-10-18T14:40:20.797233Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:40:20.799156Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/renesas-r7fa2l1a.yaml
-[2m2026-10-18T14:40:20.800042Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'renesasra_gpiomisc' (peripheral 'portMisc') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:40:20.800227Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:40:20.800305Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:40:20.800313Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:40:20.800317Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:40:20.801082Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:40:20.801090Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:40:20.801100Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:40:20.801176Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-[2m2026-10-18T14:40:20.801201Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:40:20.801205Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-[2m2026-10-18T14:40:20.801210Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-[2m2026-10-18T14:40:20.801214Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-[2m2026-10-18T14:40:20.801218Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 2244.01
-```
+- **CPU:** Cortex-M23 (ARMv8-M Baseline).
+- **Memory:** 256 KiB code flash at `0x00000000` and 32 KiB SRAM at
+  `0x20000000`. The 8 KiB data flash is omitted.
+- **SCI3** at `0x40070060` (Renode `RenesasRA6M5_SCI`, FIFO disabled; the
+  RA2L1 REPL adds this channel on top of the RA2E1 base). This uses the
+  classic Renesas SCI UART model: SCR readback, TDR at `+0x03`, SSR at `+0x04`
+  reading TDRE|TEND, RDR at `+0x05`. Polled TX only: no IRQ is declared, ICU
+  event routing is not mapped, and baud timing is not claimed.
+- **PORT5** at `0x400400A0` with the PFS block at `0x40040800`: PCNTR1
+  (PODR/PDR) and PCNTR3 (POSR/PORR) on the RA port model; the smoke does
+  not exercise PCNTR2/PCNTR4.
+  P503 is LED1 on the EK-RA2L1 (FSP `ra/board/ra2l1_ek/board_leds.c`).
 
+Not modelled and omitted from the descriptor: the ICU, GPT, AGT0/1, IIC0/1,
+SCI0/1/2/9, ports 0..4 and 6..8, the `RenesasRA_GPIOMisc` block and Renode's
+`sysc_oscsf` Python script. PORT9 does not exist on RA2L1 (the REPL removes it).
 
-## Hardware Coverage Report
+The earlier report on this page described a 2026-10-18 run of a Thumb-2
+Cortex-M3 fixture (`uart-ok-thumbv7m.elf`) against the unnarrowed import. That
+run hit a memory violation at step 2 and listed zero-answering stubs as
+hardware coverage. It never exercised an RA2L1 peripheral and is withdrawn.
 
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `sci3` | `0x40070060` | `renesasra6m5_sci` |
-| `iic1` | `0x40053100` | `stub` |
-| `portMisc` | `0x40040d00` | `renesasra_gpiomisc` |
-| `gpt` | `0x40078000` | `renesasra_gpt` |
-| `agt0` | `0x40084000` | `renesasra_agt` |
-| `agt1` | `0x40084100` | `renesasra_agt` |
-| `sci0` | `0x40070000` | `renesasra6m5_sci` |
-| `sci1` | `0x40070020` | `renesasra6m5_sci` |
-| `sci2` | `0x40070040` | `renesasra6m5_sci` |
-| `sci9` | `0x40070120` | `renesasra6m5_sci` |
-| `sysc_oscsf` | `0x4001e03c` | `pythonperipheral` |
-| `iic0` | `0x40053000` | `stub` |
+## Smoke evidence
 
-**Total Peripherals:** 12
+The firmware crate `crates/firmware-renesas-r7fa2l1a-smoke`
+(`thumbv8m.base-none-eabi`) stores a MULS result, sets `SCR.TE` on SCI3 and
+stores the SCR readback, then polls `SSR.TDRE` before each byte of
+`RA2L1 SCI3 SMOKE` and waits for `SSR.TEND`. It makes P503 an output through
+PCNTR1, sets it through POSR, and stores the PODR readback. Then it toggles
+P503 through POSR/PORR as a heartbeat. The firmware does not program the PFS
+pin mux, MSTPCRB or the clock tree. Firmware for real silicon must program all
+three.
+
+It ran **200,000 instructions** and passed 6/6 checks: the MULS word `0x143`
+at `0x20000000`, the SCR readback `0x20` at `0x20000004`, the PODR readback
+`0x8` at `0x20000008`, the UART banner, at least 4 edges on `port5:3`,
+and `max_steps`.
+
+With SCI3 removed from the descriptor, the same firmware takes a precise
+BusFault (BFAR `0x40070062`) on its first SCI3 access and passes 2/6
+(`docs/coverage/renode-onboarding/attempt-history/renesas-r7fa2l1a/2026-11-08-sci3-negative-control/`).
+
+The exact system manifest is `configs/systems/onboarding/renesas-r7fa2l1a.yaml`
+and the smoke script is `examples/renode-onboarding/renesas-r7fa2l1a-smoke.yaml`.
+Per-target metrics, JUnit, UART output, simulator result, snapshot and logs are
+under `docs/coverage/renode-onboarding/metrics/renesas-r7fa2l1a/`.
+
+This is local CLI simulation evidence for the smoke assertions. It does not
+show whole-SoC coverage, Renode equivalence or hardware behaviour. See the
+[generated scoreboard](../coverage/renode-onboarding-scoreboard.md) for the
+current global totals.

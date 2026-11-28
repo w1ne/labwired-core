@@ -8,9 +8,10 @@
 # Descriptor reuses the F4-profile shared IP where the F7 carries the same block
 # (RCC/GPIO/USART/SPI/timers/DMA/EXTI/RTC/IWDG/flash/PWR per RM0410 vs RM0368);
 # F7 I2C is the modern v2 peripheral (same IP as L4/H5) and takes the stm32l4
-# profile. F7-only RCC registers (PLLSAICFGR, DCKCFGR1/2) and F7-only
-# peripherals (Ethernet, LTDC/DMA2D, CAN, USB OTG, SAI, QSPI, MDIOS, JPEG,
-# DFSDM, FMC/SDMMC) are NOT declared — see docs/boards/stm32f767.md.
+# profile. bxCAN1 is the F4 block (RM0410 §40 vs RM0390 §30). F7-only RCC
+# registers (PLLSAICFGR, DCKCFGR1/2), CAN2/CAN3 and F7-only peripherals
+# (Ethernet, LTDC/DMA2D, USB OTG, SAI, QSPI, MDIOS, JPEG, DFSDM, FMC/SDMMC)
+# are NOT declared — see docs/boards/stm32f767.md.
 name: "stm32f767zi"
 arch: "arm"
 core: "cortex-m7"
@@ -127,12 +128,16 @@ peripherals:
     irq: 38
     config:
       debug_schema: "../peripherals/stm32f767/usart2.yaml"
+      profile: "stm32v2"
   # Nucleo-F767ZI ST-LINK VCP is on USART3 (PD8/PD9).
   - id: "usart3"
     type: "uart"
     base_address: 0x40004800
     size: "1KB"
     irq: 39
+    config:
+      debug_schema: "../peripherals/stm32f767/usart3.yaml"
+      profile: "stm32v2"
   - id: "uart1"
     type: "uart"
     base_address: 0x40011000
@@ -140,11 +145,15 @@ peripherals:
     irq: 37
     config:
       debug_schema: "../peripherals/stm32f767/usart1.yaml"
+      profile: "stm32v2"
   - id: "usart6"
     type: "uart"
     base_address: 0x40011400
     size: "1KB"
     irq: 71
+    config:
+      debug_schema: "../peripherals/stm32f767/usart6.yaml"
+      profile: "stm32v2"
   # I2C on F7 is the modern v2 peripheral (RM0410 §26 = L4 IP), not the F1/F4
   # legacy one — stm32l4 profile. EV/ER NVIC pairs per RM0410 §10 vector table.
   - id: "i2c1"
@@ -232,6 +241,14 @@ peripherals:
       # F7 flash interface adds ART accelerator bits; the F4 profile covers
       # ACR/CR/OPTCR bring-up. F7-only ART reconfiguration is not modeled.
       profile: "stm32f4"
+  # RM0410 §12: CRC has an 8-bit independent data register.
+  - id: "crc"
+    type: "crc"
+    base_address: 0x40023000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f767/crc.yaml"
+      idr_width: 8
   - id: "pwr"
     type: "pwr"
     base_address: 0x40007000
@@ -239,6 +256,15 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32f767/pwr.yaml"
       profile: "stm32f4"
+      over_drive: true  # RM0410 §5.4: ODEN/ODSWEN handshake
+  # bxCAN1 (RM0410 §40), RCC_APB1ENR.CAN1EN bit 25 (§5.3.13). Same block and
+  # offsets as the F446 bxCAN1. No pads routed; the matrix L8 sketch uses the
+  # register-level loopback.
+  - id: "bxcan1"
+    type: "bxcan"
+    base_address: 0x40006400
+    size: "1KB"
+    clock: { reg: "apb1enr", bit: 25 }
   - id: "tim2"
     type: "timer"
     base_address: 0x40000000
@@ -246,6 +272,10 @@ peripherals:
     irq: 28
     config:
       debug_schema: "../peripherals/stm32f767/tim2.yaml"
+      # F2/F4-generation input stage and AF pad table: DS11532 Table 12 puts
+      # TIM1/TIM2 on AF1 and TIM3/4/5 on AF2, as on the F4. Without it no
+      # channel reaches a pad (stock analogWrite(PA0) drew no edge).
+      input_capture: "stm32f4"
       width: 32
     clock: { reg: "apb1enr", bit: 0 }
   - id: "tim1_pwm"
@@ -256,6 +286,7 @@ peripherals:
     clock: { reg: "apb2enr", bit: 0 }
     config:
       debug_schema: "../peripherals/stm32f767/tim1.yaml"
+      input_capture: "stm32f4"
       advanced: true
   - id: "adc1"
     type: "adc"

@@ -1,6 +1,9 @@
-use crate::cosim::{CosimAdapter, CosimStep, CosimStepResult};
 #[cfg(unix)]
-use crate::cosim::{CosimSignalValue, CosimSignals};
+use crate::cosim::shm::{self, ShmRegion};
+#[cfg(unix)]
+use crate::cosim::CosimSignalValue;
+use crate::cosim::CosimSignals;
+use crate::cosim::{CosimAdapter, CosimStep, CosimStepResult};
 use crate::{SimResult, SimulationError};
 #[cfg(unix)]
 use serde_json::{Map, Value};
@@ -43,6 +46,17 @@ pub struct ExternalProcessCosimAdapter {
     stdout: Option<ChildStdout>,
     options: ExternalProcessCosimOptions,
     failed: bool,
+    /// Present once the child accepted the shared-memory transport; steps then
+    /// bypass the pipes entirely.
+    #[cfg(unix)]
+    shm: Option<ShmLink>,
+}
+
+#[cfg(unix)]
+struct ShmLink {
+    region: ShmRegion,
+    in_names: Vec<String>,
+    out_names: Vec<String>,
 }
 fn error(message: impl Into<String>) -> SimulationError {
     SimulationError::Other(message.into())
@@ -55,6 +69,125 @@ impl ExternalProcessCosimAdapter {
         program: &str,
         args: &[&str],
         options: ExternalProcessCosimOptions,
+    ) -> SimResult<Self> {
+        Self::spawn_inner(program, args, options, None)
+    }
+
+    /// Spawn the child offering the shared-memory transport for the named model
+    /// inputs and outputs. If the child announces support within `handshake`
+    /// the adapter uses it; a child that stays silent is a plain JSONL model
+    /// and keeps working unchanged. Check [`Self::uses_shm`].
+    pub fn spawn_shm(
+        program: &str,
+        args: &[&str],
+        options: ExternalProcessCosimOptions,
+        in_names: &[String],
+        out_names: &[String],
+        handshake: Duration,
+    ) -> SimResult<Self> {
+        #[cfg(not(unix))]
+        {
+            let _ = (in_names, out_names, handshake);
+            Self::spawn_inner(program, args, options, None)
+        }
+        #[cfg(unix)]
+        {
+            let region = ShmRegion::create(in_names, out_names)
+                .map_err(|err| error(format!("co-sim shm create failed: {err}")))?;
+            let mut adapter = Self::spawn_inner(program, args, options, Some(&region))?;
+            match adapter.await_hello(handshake) {
+                Ok(true) => {
+                    // Both sides hold the mapping; the name is no longer needed.
+                    region.unlink();
+                    adapter.shm = Some(ShmLink {
+                        in_names: region.in_names().to_vec(),
+                        out_names: region.out_names().to_vec(),
+                        region,
+                    });
+                    Ok(adapter)
+                }
+                Ok(false) => Ok(adapter), // region dropped and unlinked: JSONL.
+                Err(err) => {
+                    adapter.cleanup();
+                    Err(err)
+                }
+            }
+        }
+    }
+
+    /// True once the shared-memory transport is active for this child.
+    pub fn uses_shm(&self) -> bool {
+        #[cfg(unix)]
+        {
+            self.shm.is_some()
+        }
+        #[cfg(not(unix))]
+        {
+            false
+        }
+    }
+
+    #[cfg(unix)]
+    fn await_hello(&mut self, handshake: Duration) -> SimResult<bool> {
+        let deadline = Instant::now() + handshake;
+        let stdout = self
+            .stdout
+            .as_mut()
+            .ok_or_else(|| error("missing co-sim stdout"))?;
+        let mut line = Vec::new();
+        let mut byte = [0u8; 1];
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return if line.is_empty() {
+                    Ok(false)
+                } else {
+                    Err(error("co-sim shm handshake was cut off"))
+                };
+            }
+            let millis = remaining.as_millis().max(1).min(i32::MAX as u128) as i32;
+            let mut descriptor = libc::pollfd {
+                fd: stdout.as_raw_fd(),
+                events: libc::POLLIN,
+                revents: 0,
+            };
+            let ready = unsafe { libc::poll(&mut descriptor, 1, millis) };
+            if ready <= 0 {
+                continue;
+            }
+            match stdout.read(&mut byte) {
+                Ok(0) => return Err(error("co-sim process exited during shm handshake")),
+                Ok(_) => {
+                    if byte[0] == b'\n' {
+                        return if line == shm::HELLO_LINE.as_bytes() {
+                            Ok(true)
+                        } else {
+                            Err(error(
+                                "unexpected output from co-sim process before first step",
+                            ))
+                        };
+                    }
+                    line.push(byte[0]);
+                    if line.len() > 256 {
+                        return Err(error("co-sim shm handshake line too long"));
+                    }
+                }
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::Interrupted
+                    ) => {}
+                Err(e) => return Err(error(format!("co-sim read failed: {e}"))),
+            }
+        }
+    }
+
+    fn spawn_inner(
+        program: &str,
+        args: &[&str],
+        options: ExternalProcessCosimOptions,
+        #[cfg(unix)] region: Option<&ShmRegion>,
+        #[cfg(not(unix))] _region: Option<()>,
     ) -> SimResult<Self> {
         // Hard ceilings keep even caller-selected settings bounded.
         if options.timeout.is_zero()
@@ -73,8 +206,12 @@ impl ExternalProcessCosimAdapter {
         }
         #[cfg(unix)]
         {
-            let mut child = Command::new(program)
-                .args(args)
+            let mut command = Command::new(program);
+            command.args(args);
+            if let Some(region) = region {
+                command.env(shm::ENV_PATH, region.path());
+            }
+            let mut child = command
                 .process_group(0)
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
@@ -90,6 +227,7 @@ impl ExternalProcessCosimAdapter {
                 stdout,
                 options,
                 failed: false,
+                shm: None,
             };
             let result = (|| {
                 let stdin = adapter
@@ -114,6 +252,10 @@ impl ExternalProcessCosimAdapter {
     fn cleanup(&mut self) {
         self.failed = true;
         #[cfg(unix)]
+        if let Some(mut link) = self.shm.take() {
+            link.region.close();
+        }
+        #[cfg(unix)]
         if let Some(mut child) = self.child.take() {
             // process_group(0) creates our own group before exec. Kill it BEFORE
             // reaping the leader, which also handles descendants inheriting pipes.
@@ -136,6 +278,86 @@ impl ExternalProcessCosimAdapter {
                 std::thread::sleep(Duration::from_millis(1));
             }
         }
+    }
+    #[cfg(unix)]
+    fn shm_exchange(
+        &mut self,
+        time_ns: u64,
+        dt_ns: u64,
+        inputs: &CosimSignals,
+        outputs: &mut CosimSignals,
+    ) -> SimResult<()> {
+        let deadline = Instant::now() + self.options.timeout;
+        let Self { child, shm, .. } = self;
+        let link = shm.as_mut().ok_or_else(|| error("co-sim process failed"))?;
+        let ShmLink {
+            region,
+            in_names,
+            out_names,
+        } = link;
+        let mut matched = 0usize;
+        for (index, name) in in_names.iter().enumerate() {
+            let slot = match inputs.get(name.as_str()) {
+                None => None,
+                Some(value) => {
+                    matched += 1;
+                    Some(match value {
+                        CosimSignalValue::Bool(b) => (shm::KIND_BOOL, *b as u64),
+                        CosimSignalValue::I64(i) => (shm::KIND_I64, *i as u64),
+                        CosimSignalValue::F64(f) if f.is_finite() => (shm::KIND_F64, f.to_bits()),
+                        CosimSignalValue::F64(_) => return Err(error("nonfinite co-sim input")),
+                        CosimSignalValue::Text(_) => {
+                            return Err(error(
+                                "the shm co-sim transport carries bool, integer and float \
+                                 signals only; a text input needs transport: jsonl",
+                            ))
+                        }
+                    })
+                }
+            };
+            region.set_input(index, slot);
+        }
+        if matched != inputs.len() {
+            return Err(error("co-sim input not declared for the shm transport"));
+        }
+        region
+            .exchange(time_ns, dt_ns, deadline, || {
+                child
+                    .as_mut()
+                    .is_some_and(|child| matches!(child.try_wait(), Ok(None)))
+            })
+            .map_err(error)?;
+        if region.fault() != 0 {
+            return Err(error("co-sim process reported a model fault"));
+        }
+        for (index, name) in out_names.iter().enumerate() {
+            match region.output(index) {
+                None => {
+                    outputs.remove(name.as_str());
+                }
+                Some((kind, bits)) => {
+                    let value = match kind {
+                        shm::KIND_BOOL => CosimSignalValue::Bool(bits != 0),
+                        shm::KIND_I64 => CosimSignalValue::I64(bits as i64),
+                        shm::KIND_F64 => {
+                            let f = f64::from_bits(bits);
+                            if !f.is_finite() {
+                                return Err(error("nonfinite co-sim output"));
+                            }
+                            CosimSignalValue::F64(f)
+                        }
+                        _ => return Err(error("unknown co-sim shm signal kind")),
+                    };
+                    match outputs.get_mut(name.as_str()) {
+                        Some(slot) => *slot = value,
+                        None => {
+                            outputs.insert(name.clone(), value);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
     #[cfg(unix)]
     fn exchange(&mut self, step: CosimStep) -> SimResult<CosimStepResult> {
@@ -248,9 +470,42 @@ impl Drop for ExternalProcessCosimAdapter {
     }
 }
 impl CosimAdapter for ExternalProcessCosimAdapter {
+    fn step_into(
+        &mut self,
+        time_ns: u64,
+        dt_ns: u64,
+        inputs: &CosimSignals,
+        outputs: &mut CosimSignals,
+    ) -> SimResult<()> {
+        #[cfg(unix)]
+        if self.shm.is_some() {
+            if self.failed {
+                return Err(error("co-sim adapter is terminally failed; no restart"));
+            }
+            let result = self.shm_exchange(time_ns, dt_ns, inputs, outputs);
+            if result.is_err() {
+                self.cleanup();
+            }
+            return result;
+        }
+        let result = self.step(CosimStep {
+            time_ns,
+            dt_ns,
+            inputs: inputs.clone(),
+        })?;
+        *outputs = result.outputs;
+        Ok(())
+    }
+
     fn step(&mut self, step: CosimStep) -> SimResult<CosimStepResult> {
         if self.failed {
             return Err(error("co-sim adapter is terminally failed; no restart"));
+        }
+        #[cfg(unix)]
+        if self.shm.is_some() {
+            let mut outputs = CosimSignals::new();
+            self.step_into(step.time_ns, step.dt_ns, &step.inputs, &mut outputs)?;
+            return Ok(CosimStepResult { outputs });
         }
         #[cfg(unix)]
         {
@@ -375,6 +630,14 @@ fn json_to_step_result(value: Value) -> SimResult<CosimStepResult> {
     let object = value.as_object().ok_or_else(|| {
         SimulationError::Other("co-sim response must be a JSON object".to_string())
     })?;
+    // A model that cannot answer says why in one `{"error": "..."}` frame;
+    // `"error": null` is no error.
+    if let Some(message) = object.get("error").filter(|value| !value.is_null()) {
+        return Err(SimulationError::Other(format!(
+            "co-sim model reported an error: {}",
+            message.as_str().unwrap_or("(non-string error field)")
+        )));
+    }
     let outputs = object
         .get("outputs")
         .and_then(|value| value.as_object())
@@ -411,5 +674,32 @@ fn json_to_signal(value: &Value) -> SimResult<CosimSignalValue> {
         _ => Err(SimulationError::Other(format!(
             "unsupported co-sim signal value '{value}'"
         ))),
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_null_error_field_is_not_a_model_error() {
+        let result = json_to_step_result(serde_json::json!({
+            "error": null,
+            "outputs": { "v_out": 1.5, "high": true }
+        }))
+        .expect("a null error field is absent");
+        assert_eq!(
+            result.outputs.get("v_out"),
+            Some(&CosimSignalValue::F64(1.5))
+        );
+        assert_eq!(
+            result.outputs.get("high"),
+            Some(&CosimSignalValue::Bool(true))
+        );
+        // Negative control: a string error is still a model error.
+        let error = json_to_step_result(serde_json::json!({ "error": "solver failed" }))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("solver failed"), "{error}");
     }
 }

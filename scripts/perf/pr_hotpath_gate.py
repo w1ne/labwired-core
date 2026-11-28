@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-"""Select the unchanged full perf gate from the actual tested PR merge."""
+"""Select measured PR admission from the actual tested merge, independent of labels."""
 import argparse
 import json
 from pathlib import Path
@@ -9,9 +9,10 @@ import subprocess
 
 OWNED_REPOSITORY = "w1ne/labwired-core"
 RUNTIME_PREFIXES = (
-    "crates/core/src/",
     "crates/cli/src/",
     "crates/config/src/",
+    "crates/wasm/src/",
+    "tests/fixtures/",
     "configs/chips/",
     "configs/systems/",
     "scripts/perf/",
@@ -19,8 +20,9 @@ RUNTIME_PREFIXES = (
 )
 BUILD_FILES = {
     "Cargo.toml", "Cargo.lock", "rust-toolchain", "rust-toolchain.toml",
-    ".github/workflows/core-perf.yml",
-    *(f"crates/{crate}/{name}" for crate in ("core", "cli", "config")
+    ".github/workflows/core-perf.yml", ".github/workflows/core-perf-pr.yml",
+    ".github/workflows/core-ci.yml",
+    *(f"crates/{crate}/{name}" for crate in ("core", "cli", "config", "wasm")
       for name in ("Cargo.toml", "build.rs")),
 }
 FIRMWARE_PREFIXES = tuple(
@@ -29,16 +31,40 @@ FIRMWARE_PREFIXES = tuple(
 )
 
 
+# A missing positive prefix must not silently exempt a new crate or build
+# script. Only known documentation and independently compiled test trees skip.
+# Firmware inputs under tests/fixtures are consumed by performance contracts.
+INDEPENDENT_TEST_RE = re.compile(
+    r"^(?:crates/(?:[^/]+/)*(?:tests|examples|benches)/"
+    r"|crates/(?:[^/]+/)*src/tests/"
+    r"|scripts/(?:[^/]+/)*test_[^/]+\.py$)"
+)
+
+
 def hotpath(path):
-    # These separately compiled tests do not change the release engine.
-    if path.startswith("crates/core/src/tests/"):
+    if INDEPENDENT_TEST_RE.match(path):
         return False
-    return path in BUILD_FILES or path.startswith(RUNTIME_PREFIXES + FIRMWARE_PREFIXES)
+    if path in BUILD_FILES:
+        return True
+    if path.endswith((".md", ".rst")):
+        return False
+    if path.startswith("docs/") and path.endswith(
+        (".txt", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf")
+    ):
+        return False
+    if path.startswith(RUNTIME_PREFIXES + FIRMWARE_PREFIXES):
+        return True
+    if path in {"LICENSE", "LICENSE-MIT", "LICENSE-APACHE", "NOTICE"}:
+        return False
+    if path.startswith("tests/") and not path.startswith("tests/fixtures/"):
+        return False
+    # Includes newly introduced production/build roots. Unknown is measured.
+    return True
 
 
 def select(event, repository, head_ref, paths):
     if event != "pull_request":
-        return True, "existing main/manual/schedule gate"
+        return True, "manual/schedule measurement"
     if repository != OWNED_REPOSITORY:
         return False, "existing upstream PR policy"
     if head_ref.startswith(("merge/upstream-", "up/")):
@@ -60,20 +86,19 @@ def changed_paths(tested, base, head):
     headers = git("cat-file", "commit", tested).split(b"\n\n", 1)[0].splitlines()
     parents = [line[7:].decode() for line in headers if line.startswith(b"parent ")]
     if len(parents) != 2 or parents[1] != head:
-        raise ValueError("tested merge must have two parents and the exact event head second")
-    tested_base = parents[0]
-    for sha in (base, head, tested_base):
+        raise ValueError("tested merge must have exactly two parents and the exact PR head second")
+    first_parent = parents[0]
+    for sha in (base, first_parent, head):
         git("cat-file", "-e", sha + "^{commit}")
-    # GitHub can refresh its synthetic merge after the event was enqueued.
-    # Admit a newer first parent ONLY when the event base is its proven
-    # ancestor. A rewritten/unrelated base or missing history fails closed.
-    # Never relax exact checkout/head identity and never substitute live main.
-    if tested_base != base:
-        git("merge-base", "--is-ancestor", base, tested_base)
-    # The ACTUAL first-parent diff excludes unrelated main changes, including
-    # runtime changes made between event creation and synthetic-merge refresh.
+    try:
+        git("merge-base", "--is-ancestor", base, first_parent)
+    except subprocess.CalledProcessError as exc:
+        if exc.returncode == 1:
+            raise ValueError("tested merge first parent is not a descendant of the event base") from exc
+        raise
+    # Diff from the actual first parent to exclude unrelated later main changes.
     # No rename detection: removing a runtime path must still select the gate.
-    raw = git("diff", "--name-only", "--no-renames", "-z", tested_base, tested)
+    raw = git("diff", "--name-only", "--no-renames", "-z", first_parent, tested)
     if raw and not raw.endswith(b"\0"):
         raise ValueError("incomplete changed-path stream")
     return [p.decode("utf-8", "surrogateescape") for p in raw.split(b"\0") if p]
@@ -87,14 +112,21 @@ def main():
     parser.add_argument("--tested", required=True)
     parser.add_argument("--base", default="")
     parser.add_argument("--head", default="")
+    parser.add_argument("--perf-labeled", choices=("true", "false"), default="false")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     paths = changed_paths(args.tested, args.base, args.head) if args.event == "pull_request" else []
     required, reason = select(args.event, args.repository, args.head_ref, paths)
+    # The label only requests the additional full matrix. It never overrides
+    # the mandatory short measurement selected above.
+    full_required = args.event != "pull_request" or (
+        args.repository == OWNED_REPOSITORY and args.perf_labeled == "true"
+    )
     # No output is written if source admission or Git fails.
     with args.output.open("a") as output:
         output.write(f"required={str(required).lower()}\n")
-    print(json.dumps(dict(required=required, reason=reason, tested=args.tested, base=args.base, head=args.head, paths=paths), sort_keys=True))
+        output.write(f"full_required={str(full_required).lower()}\n")
+    print(json.dumps(dict(required=required, full_required=full_required, reason=reason, tested=args.tested, base=args.base, head=args.head, paths=paths), sort_keys=True))
 
 
 if __name__ == "__main__":

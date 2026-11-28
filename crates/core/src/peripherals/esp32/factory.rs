@@ -36,10 +36,16 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
             Box::new(uart::Esp32Uart::new(echo, p_cfg.irq.unwrap_or(34)))
         }
         "esp32_spi" => Box::new(spi::Esp32Spi::new()),
+        // The S2's own GP-SPI register file (neither the classic nor the S3's).
+        "esp32s2_spi" => Box::new(spi_s2::Esp32s2Spi::new()),
         "esp32_sar_adc" => Box::new(sar_adc::Esp32SarAdc::new()),
         // I2C0 asserts source 49, I2C1 50 (`ETS_I2C_EXT{0,1}_INTR_SOURCE`).
         "esp32_i2c" => Box::new(i2c::Esp32I2c::with_intr_source(
             p_cfg.irq.unwrap_or(i2c::I2C0_INTR_SOURCE_ID),
+        )),
+        // Classic I2C design on the S2; I2C_EXT0 is source 52, I2C_EXT1 53.
+        "esp32s2_i2c" => Box::new(i2c::Esp32I2c::new_esp32s2(
+            p_cfg.irq.unwrap_or(i2c::ESP32S2_I2C0_INTR_SOURCE_ID),
         )),
         "esp32_gpio" | "gpio_esp32" => Box::new(gpio::Esp32Gpio::new()),
         "esp32_dport" => Box::new(dport::Dport::new()),
@@ -48,11 +54,19 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // ESP32-classic is the only chip in this model that HAS a LACT timer
         // (the C3 path in generic_factory.rs deliberately does not opt in —
         // it put INT_ST/INT_CLR/RTCCALICFG2 at those offsets).
+        //
+        // `esp32_timg` is shared: `configs/chips/esp32c3.yaml` names the same
+        // type for TIMG0/TIMG1 at 0x6001_F000/0x6002_0000. So the classic
+        // main-system watchdog is opted into by BASE, not by type. The C3/C6
+        // MWDT is offset-identical over 0x48..0x64 but latches in its own
+        // INT_RAW_TIMERS (0x74, bit 1) and has no classic INT_RAW bit 2, so
+        // handing it the classic layout would seed CONFIG0 with the classic
+        // reset value and put the latch in a register the C3 does not have.
         "esp32_timg" => {
             let model = timg::Timg::new(base).with_lact();
             match base {
-                0x3FF5_F000 => Box::new(model.with_alarms(14)),
-                0x3FF6_0000 => Box::new(model.with_alarms(18)),
+                0x3FF5_F000 => Box::new(model.with_classic_mwdt().with_alarms(14)),
+                0x3FF6_0000 => Box::new(model.with_classic_mwdt().with_alarms(18)),
                 _ => Box::new(model),
             }
         }
@@ -68,6 +82,9 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         "esp32_rtc_io" => Box::new(crate::peripherals::esp_rtc_io::EspRtcIo::new_esp32()),
         // ETS_RMT_INTR_SOURCE = 47 on classic ESP32.
         "esp32_rmt" => Box::new(rmt::Esp32Rmt::new(p_cfg.irq.unwrap_or(47))),
+        // The classic RMT design with 4 channels and moved offsets;
+        // ETS_RMT_INTR_SOURCE is 50 on the S2.
+        "esp32s2_rmt" => Box::new(rmt_s2::Esp32s2Rmt::new(p_cfg.irq.unwrap_or(50))),
         _ => return None,
     };
     Some(dev)
@@ -83,6 +100,9 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32_dport",
     "esp32_sha",
     "esp32_rtc_cntl",
+    "esp32s2_rmt",
+    "esp32s2_i2c",
+    "esp32s2_spi",
     "esp32_timg",
     "esp32_efuse",
     "esp32_syscon",

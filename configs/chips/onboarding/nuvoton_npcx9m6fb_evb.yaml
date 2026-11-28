@@ -6,238 +6,351 @@
 
 name: nuvoton_npcx9m6fb_evb
 arch: arm
+core: cortex-m4f
+# CORE_CLK 15 MHz: Zephyr dts/arm/nuvoton/npcx/npcx9.dtsi pcc (OFMCLK 90 MHz,
+# core-prescaler 6). The HFCG registers below hold values but do not drive the
+# clock, so firmware cannot change it.
+cpu_hz: 15000000
 flash:
-  base: 134217728
+  # LabWired's firmware loader uses the NPCX9 ROM mapped at zero as its
+  # execution backing. Internal-flash boot-ROM handoff is not modeled here.
+  base: 0
   size: 65536B
 ram:
-  base: 537657344
+  # NPCX9 data RAM (Renode data_ram, size 0x17800).
+  base: 0x200C0000
   size: 96256B
+# Plain memory windows from Renode nuvoton_npcx9.repl. The internal flash
+# command medium is modeled behind FIU UMA below; the direct XIP alias at
+# 0x64000000 is not mapped until it can share the same storage.
+memory_regions:
+# Renode data_ram second view: the same bytes as `ram` above.
+- name: data_ram_alias
+  base: 0x100C0000
+  size: 96256B
+  alias_of: 0x200C0000
+# Renode code_ram at 0x10058000 and 0x20058000 (size 0x68000): one backing,
+# two views. Zephyr npcx9 links code at 0x10058000.
+- name: code_ram
+  base: 0x10058000
+  size: 425984B
+- name: code_ram_alias
+  base: 0x20058000
+  size: 425984B
+  alias_of: 0x10058000
+# Battery-backed RAM. Size 0x80 from Zephyr npcx9.dtsi bbram "memory" reg
+# (Renode maps 0x400 and notes the real size is smaller). The BBRAM status
+# byte at 0x400AF100 is not mapped. Contents survive a system reset because
+# memory regions are not cleared on reboot; VBAT loss is not modelled.
+- name: battery_backed_ram
+  base: 0x400AF000
+  size: 128B
+# Renode image_type: one byte of ArrayMemory at 0x4000C009 (inside the MDC).
+- name: image_type
+  base: 0x4000C009
+  size: 1B
+# Power Management Channel 1..4 registers. Renode mocks each as 0x100 bytes of
+# read/write memory; so does this map. No host-interface behaviour (OBF / IBF
+# flags, host IRQs) is modelled.
+- name: pm1
+  base: 0x400C9000
+  size: 256B
+- name: pm2
+  base: 0x400CB000
+  size: 256B
+- name: pm3
+  base: 0x400CD000
+  size: 256B
+- name: pm4
+  base: 0x400CF000
+  size: 256B
 peripherals:
-- id: dwt
-  type: dwt
-  bus: sysbus
-  base_address: 3758100480
+# NPCX9 SMBus0..7 from Renode nuvoton_npcx9.repl. Register map follows the
+# byte-oriented 0x20-byte NPCX_SMBus window. The model covers master byte
+# transfers, attached I2C devices, address NACK and level IRQ; it does not
+# model slave mode, bus timing/arbitration, SMBus extensions or FIFO bursts.
+- id: smbus4
+  type: npcx_smbus
+  base_address: 0x40008000
+  size: 32B
+  irq: 19
+- id: smbus0
+  type: npcx_smbus
+  base_address: 0x40009000
+  size: 32B
+  irq: 13
+- id: smbus1
+  type: npcx_smbus
+  base_address: 0x4000B000
+  size: 32B
+  irq: 14
+- id: smbus5
+  type: npcx_smbus
+  base_address: 0x40017000
+  size: 32B
+  irq: 20
+- id: smbus6
+  type: npcx_smbus
+  base_address: 0x40018000
+  size: 32B
+  irq: 16
+- id: smbus7
+  type: npcx_smbus
+  base_address: 0x40019000
+  size: 32B
+  irq: 8
+- id: smbus2
+  type: npcx_smbus
+  base_address: 0x400C0000
+  size: 32B
+  irq: 36
+- id: smbus3
+  type: npcx_smbus
+  base_address: 0x400C2000
+  size: 32B
+  irq: 37
+# UART1..4. Bases and NVIC lines from Renode nuvoton_npcx9.repl
+# (UART.NPCX_UART, IRQ -> nvicIrq33 / 32 / 38 / 39) and Zephyr npcx9.dtsi.
+# Polled UTBUF / URBUF / UICTRL TBE+RBF, and the FIFO-mode UFTSTS / UFRSTS /
+# UFTCTL / UFRCTL that Zephyr's interrupt-driven uart_npcx.c uses. The IRQ is a
+# level: UFTCTL TEMPTY_EN or NXMIP_EN, or UFRCTL RNEMPTY_EN / RFULL_LVL_EN with
+# RX data, as in Renode. UMDSL.ERD also drives the modeled NPCX MDMA RX request.
+# Not modelled: UICTRL ETI/ERI/EEI (non-FIFO-mode interrupts), USTAT errors,
+# MDMA transmit, baud timing.
 - id: cr_uart1
   type: npcx_uart
   bus: sysbus
-  base_address: 1074659328
+  base_address: 0x400E0000
+  irq: 33
 - id: cr_uart2
   type: npcx_uart
-  bus: sysbus
-  base_address: 1074667520
+  base_address: 0x400E2000
+  size: 4KB
+  irq: 32
 - id: cr_uart3
   type: npcx_uart
-  bus: sysbus
-  base_address: 1074675712
+  base_address: 0x400E4000
+  size: 4KB
+  irq: 38
 - id: cr_uart4
   type: npcx_uart
-  bus: sysbus
-  base_address: 1074683904
+  base_address: 0x400E6000
+  size: 4KB
+  irq: 39
+# GPIO ports. Bases from Renode nuvoton_npcx9.repl (GPIOPort.NPCX_GPIO,
+# 0x40081000 + n * 0x2000 for GPIO0..GPIOF) and Zephyr npcx.dtsi gpio0..gpiof.
+# Ids are port0..portf: a `gpio0`/`gpio1` id would switch on the bus's Nordic
+# GPIOTE pass. Windows are 4 KiB (Renode Size 0x1000). No IRQ: NPCX pin
+# interrupts go through the MIWU, which is not modelled.
+- id: port0
+  type: npcx_gpio
+  base_address: 0x40081000
+  size: 4KB
+- id: port1
+  type: npcx_gpio
+  base_address: 0x40083000
+  size: 4KB
+- id: port2
+  type: npcx_gpio
+  base_address: 0x40085000
+  size: 4KB
+- id: port3
+  type: npcx_gpio
+  base_address: 0x40087000
+  size: 4KB
+- id: port4
+  type: npcx_gpio
+  base_address: 0x40089000
+  size: 4KB
+- id: port5
+  type: npcx_gpio
+  base_address: 0x4008B000
+  size: 4KB
+- id: port6
+  type: npcx_gpio
+  base_address: 0x4008D000
+  size: 4KB
+- id: port7
+  type: npcx_gpio
+  base_address: 0x4008F000
+  size: 4KB
+- id: port8
+  type: npcx_gpio
+  base_address: 0x40091000
+  size: 4KB
+- id: port9
+  type: npcx_gpio
+  base_address: 0x40093000
+  size: 4KB
+- id: porta
+  type: npcx_gpio
+  base_address: 0x40095000
+  size: 4KB
+- id: portb
+  type: npcx_gpio
+  base_address: 0x40097000
+  size: 4KB
+- id: portc
+  type: npcx_gpio
+  base_address: 0x40099000
+  size: 4KB
+- id: portd
+  type: npcx_gpio
+  base_address: 0x4009B000
+  size: 4KB
+- id: porte
+  type: npcx_gpio
+  base_address: 0x4009D000
+  size: 4KB
+- id: portf
+  type: npcx_gpio
+  base_address: 0x4009F000
+  size: 4KB
+# Internal timers. Bases and NVIC lines from Renode nuvoton_npcx9.repl
+# (NPCX_ITIM): ITIM32_1..6 at 0x400B0000 + n * 0x2000 on NVIC 28, 27, 17, 43,
+# 44, 45; ITIM64 at 0x400BE000 on NVIC 58. Zephyr npcx9.dtsi confirms ITIM32_1
+# (0x400B0000, IRQ 28) and ITIM64 (0x400BE000). Register layout: Zephyr
+# reg_def.h itim32_reg / itim64_reg. The APB2 tick clock is the 15 MHz CORE_CLK
+# (Zephyr apb2-prescaler 6; Renode's model defaults to 10 MHz). Windows are
+# 4 KiB (Renode Size 0x1000) and do not reach the HFCG / LFCG at 0x400B5000 or
+# the MTC at 0x400B7000 (both below). Not modelled: PWDWN_CTL gates, deep-sleep wake-up.
 - id: itim32_1
-  type: npcx_itim
-  bus: sysbus
-  base_address: 1074462720
+  type: npcx_itim32
+  base_address: 0x400B0000
+  size: 4KB
+  irq: 28
 - id: itim32_2
-  type: npcx_itim
-  bus: sysbus
-  base_address: 1074470912
+  type: npcx_itim32
+  base_address: 0x400B2000
+  size: 4KB
+  irq: 27
 - id: itim32_3
-  type: npcx_itim
-  bus: sysbus
-  base_address: 1074479104
+  type: npcx_itim32
+  base_address: 0x400B4000
+  size: 4KB
+  irq: 17
 - id: itim32_4
-  type: npcx_itim
-  bus: sysbus
-  base_address: 1074487296
+  type: npcx_itim32
+  base_address: 0x400B6000
+  size: 4KB
+  irq: 43
 - id: itim32_5
-  type: npcx_itim
-  bus: sysbus
-  base_address: 1074495488
+  type: npcx_itim32
+  base_address: 0x400B8000
+  size: 4KB
+  irq: 44
 - id: itim32_6
-  type: npcx_itim
-  bus: sysbus
-  base_address: 1074503680
+  type: npcx_itim32
+  base_address: 0x400BA000
+  size: 4KB
+  irq: 45
 - id: itim64
-  type: npcx_itim
-  bus: sysbus
-  base_address: 1074520064
-- id: image_type
-  type: arraymemory
-  bus: sysbus
-  base_address: 1073790985
-- id: twd
-  type: npcx_twd
-  bus: sysbus
-  base_address: 1074626560
+  type: npcx_itim64
+  base_address: 0x400BE000
+  size: 4KB
+  irq: 58
+# Clock generator register blocks. Bases from Renode nuvoton_npcx9.repl
+# (Miscellaneous.NPCX_HFCG at 0x400B5000, NPCX_LFCG at 0x400B5100, Size 0x100
+# each); offsets and field widths from Renode NPCX_HFCG.cs / NPCX_LFCG.cs and
+# Zephyr reg_def.h cdcg_reg. Values read back (Renode's tags read 0); HFCGCTRL
+# LOAD and CLK_CHNG read 0, so Zephyr's M/N load poll ends at once; LOCK and
+# LFLOC drop later writes to their block. Not modelled: the clock tree. CORE_CLK
+# stays at cpu_hz above and the timers keep their rates whatever M, N, FPRED
+# or the APB dividers say.
+- id: hfcg
+  type: npcx_hfcg
+  base_address: 0x400B5000
+  size: 256B
+- id: lfcg
+  type: npcx_lfcg
+  base_address: 0x400B5100
+  size: 256B
+# Miniature Timer Counter. Base and NVIC line from Renode nuvoton_npcx9.repl
+# (Timers.NPCX_MTC at 0x400B7000, -> nvic@5); register map, 1 Hz tick and
+# 25-bit predefined time from Renode NPCX_MTC.cs. TTC (+0x00) counts once per
+# second; WTC (+0x04) holds PT, PTO (W1C) and WIE; the IRQ is the level
+# WIE && PTO. The window is 8 bytes (Renode Size 0x08). Not modelled: deep-sleep
+# wake-up, LFCG clock selection.
 - id: mtc
   type: npcx_mtc
-  bus: sysbus
-  base_address: 1074491392
+  base_address: 0x400B7000
+  size: 8B
+  irq: 5
+# Timer and Watchdog. Base and NVIC line from Renode nuvoton_npcx9.repl
+# (Timers.NPCX_TWD at 0x400D8000, -> nvic@31); register map, 32768 Hz clock,
+# locks and the 87h/61h/63h / 5Ch service bytes from Renode NPCX_TWD.cs.
+# T0 counts TWDT0..0 at 32768 Hz / 2^MDIV and pulses the IRQ at each terminal
+# count; the watchdog starts on the first WDCNT write, counts T0 periods (or
+# prescaled ticks with WDCT0I) / 2^WDIV and resets the system at 0. The window
+# is 4 KiB (Renode Size 0x1000). Not modelled: TESDIS / WDLTD, MIWU wake-up.
+- id: twd
+  type: npcx_twd
+  base_address: 0x400D8000
+  size: 4KB
+  irq: 31
+# SPI Peripheral Interface. Base from Renode nuvoton_npcx9.repl
+# (SPI.NPCX_SPIP at 0x400D2000, Size 0x1000); NVIC 57 from Zephyr npcx.dtsi
+# spip0 (Renode leaves the IRQ unconnected). Register map and transfer from
+# Renode NPCX_SPIP.cs: DATA +0x00, CTL1 +0x02, STAT +0x04 (BSY reads 0, RBF).
+# The IRQ is a level: EIR && RBF (Renode) or EIW && !RBF (assumption from the
+# Zephyr ISR). Devices attach through `external_devices:`; chip select is a
+# GPIO and is not seen by this block. Not modelled: transfer timing, SPI
+# modes, the clock divider.
+- id: spip
+  type: npcx_spip
+  base_address: 0x400D2000
+  size: 4KB
+  irq: 57
+# NPCX MDMA windows from Renode nuvoton_npcx9.repl (0x40011100..0x40011500,
+# 0x100 bytes each). Context 0 copies UART URBUF to memory on MDMAEN / ERD
+# requests. Context 1, MDMA5 I3C routing and the shared UART/MDMA IRQ combiner
+# are not implemented. The fixed URBUF source and destination address are
+# explicit per instance so both MMIO addresses live in this descriptor.
 - id: mdma1
   type: npcx_mdma
-  bus: sysbus
-  base_address: 1073811712
+  base_address: 0x40011100
+  size: 256B
+  config:
+    source_address: 0x400E0002
+    destination_address: 0x10000000
+    rx_request: cr_uart1_rx
 - id: mdma2
   type: npcx_mdma
-  bus: sysbus
-  base_address: 1073811968
+  base_address: 0x40011200
+  size: 256B
+  config:
+    source_address: 0x400E2002
+    destination_address: 0x10000000
+    rx_request: cr_uart2_rx
 - id: mdma3
   type: npcx_mdma
-  bus: sysbus
-  base_address: 1073812224
+  base_address: 0x40011300
+  size: 256B
+  config:
+    source_address: 0x400E4002
+    destination_address: 0x10000000
+    rx_request: cr_uart3_rx
 - id: mdma4
   type: npcx_mdma
-  bus: sysbus
-  base_address: 1073812480
+  base_address: 0x40011400
+  size: 256B
+  config:
+    source_address: 0x400E6002
+    destination_address: 0x10000000
+    rx_request: cr_uart4_rx
 - id: mdma5
   type: npcx_mdma
-  bus: sysbus
-  base_address: 1073812736
-- id: spip
-  type: stub
-  renode_type: npcx_spip
-  bus: sysbus
-  base_address: 1074601984
-- id: lfcg
-  type: stub
-  renode_type: npcx_lfcg
-  bus: sysbus
-  base_address: 1074483456
-- id: hfcg
-  type: stub
-  renode_type: npcx_hfcg
-  bus: sysbus
-  base_address: 1074483200
+  base_address: 0x40011500
+  size: 256B
+  config:
+    source_address: 0x400E00C0
+    destination_address: 0x400E00B0
+# NPCX9 FIU user-mode access path at 0x40020000. Its sparse 1 MiB medium
+# supports UMA read/program/status/64 KiB erase transactions. Direct XIP access
+# at 0x64000000, bursts, CRC and Quad-SPI are not part of this profile.
 - id: fiu
-  type: stub
-  renode_type: npcx_fiu
-  bus: sysbus
-  base_address: 1073872896
-- id: gpio0
-  type: npcx_gpio
-  bus: sysbus
-  base_address: 1074270208
-- id: gpio1
-  type: npcx_gpio
-  bus: sysbus
-  base_address: 1074278400
-- id: gpio2
-  type: npcx_gpio
-  bus: sysbus
-  base_address: 1074286592
-- id: gpio3
-  type: npcx_gpio
-  bus: sysbus
-  base_address: 1074294784
-- id: gpio4
-  type: npcx_gpio
-  bus: sysbus
-  base_address: 1074302976
-- id: gpio5
-  type: npcx_gpio
-  bus: sysbus
-  base_address: 1074311168
-- id: gpio6
-  type: npcx_gpio
-  bus: sysbus
-  base_address: 1074319360
-- id: gpio7
-  type: npcx_gpio
-  bus: sysbus
-  base_address: 1074327552
-- id: gpio8
-  type: npcx_gpio
-  bus: sysbus
-  base_address: 1074335744
-- id: gpio9
-  type: npcx_gpio
-  bus: sysbus
-  base_address: 1074343936
-- id: gpioa
-  type: npcx_gpio
-  bus: sysbus
-  base_address: 1074352128
-- id: gpiob
-  type: npcx_gpio
-  bus: sysbus
-  base_address: 1074360320
-- id: gpioc
-  type: npcx_gpio
-  bus: sysbus
-  base_address: 1074368512
-- id: gpiod
-  type: npcx_gpio
-  bus: sysbus
-  base_address: 1074376704
-- id: gpioe
-  type: npcx_gpio
-  bus: sysbus
-  base_address: 1074384896
-- id: gpiof
-  type: npcx_gpio
-  bus: sysbus
-  base_address: 1074393088
-- id: smbus0
-  type: stub
-  renode_type: npcx_smbus
-  bus: sysbus
-  base_address: 1073778688
-- id: smbus1
-  type: stub
-  renode_type: npcx_smbus
-  bus: sysbus
-  base_address: 1073786880
-- id: smbus2
-  type: stub
-  renode_type: npcx_smbus
-  bus: sysbus
-  base_address: 1074528256
-- id: smbus3
-  type: stub
-  renode_type: npcx_smbus
-  bus: sysbus
-  base_address: 1074536448
-- id: smbus4
-  type: stub
-  renode_type: npcx_smbus
-  bus: sysbus
-  base_address: 1073774592
-- id: smbus5
-  type: stub
-  renode_type: npcx_smbus
-  bus: sysbus
-  base_address: 1073836032
-- id: smbus6
-  type: stub
-  renode_type: npcx_smbus
-  bus: sysbus
-  base_address: 1073840128
-- id: smbus7
-  type: stub
-  renode_type: npcx_smbus
-  bus: sysbus
-  base_address: 1073844224
-- id: DEV_CTL4
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1074540550
-- id: SWRST_CTL4
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1074540816
-- id: pm1
-  type: arraymemory
-  bus: sysbus
-  base_address: 1074565120
-- id: pm2
-  type: arraymemory
-  bus: sysbus
-  base_address: 1074573312
-- id: pm3
-  type: arraymemory
-  bus: sysbus
-  base_address: 1074581504
-- id: pm4
-  type: arraymemory
-  bus: sysbus
-  base_address: 1074589696
+  type: npcx_fiu
+  base_address: 0x40020000
+  size: 4KB
+  config:
+    flash_size: 1048576

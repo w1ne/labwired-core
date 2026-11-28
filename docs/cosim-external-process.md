@@ -43,7 +43,19 @@ compile without Unix dependencies. Windows previously exposed the unbounded
 synchronous process path; it now fails explicitly until a bounded Windows pipe
 transport is implemented. No bounded Windows behavior is claimed.
 
-Tests: `cargo test -p labwired-core --test cosim_external_process_bounds
---test cosim_contract --test cosim_canonical_basket`. The canonical basket test
+Tests: `cargo test -p labwired-core --test cosim -- cosim_external_process_bounds:: cosim_contract:: cosim_canonical_basket::`. The canonical basket test
 uses the generated native manifest and the existing Python power wrapper,
 not a Linux guest or new private battery/sensor implementation.
+
+## Optional shared-memory transport
+
+`config: {transport: shm}` on an `external_process` model offers a shared-memory
+transport instead of JSONL pipes. The host maps a file in `/dev/shm`, passes its
+path in `LABWIRED_COSIM_SHM` and waits up to `shm_handshake_ms` (default 1000)
+for the child to print `{"labwired_shm":1}` on stdout. A child that does, uses
+the mapping for every step (spin, then futex); a child that stays silent is a
+plain JSONL model and keeps working. Signals are bool, integer and float only
+(text needs JSONL); names and layout are fixed at handshake. Linux clients:
+`tools/cosim/labwired_shm.h` (C) and `tools/cosim/labwired_shm.py` (Python),
+with `echo_shm.c`/`echo_shm.py`. Layout: `crates/core/src/cosim/shm.rs`.
+The JSONL protocol is unchanged.

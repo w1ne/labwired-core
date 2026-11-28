@@ -206,6 +206,22 @@ fn validate_system(path: &PathBuf, plugins: &[&dyn labwired_core::plugin::ChipPl
             Some("cosim_models[]".to_string()),
         );
     }
+    // `adapter: ngspice` entries: netlist and source/node mapping, checked
+    // without starting a solver.
+    for issue in
+        labwired_core::cosim::ngspice::validate_ngspice_models(&system.cosim_models, manifest_dir)
+    {
+        result.add_error(
+            "INVALID_COSIM_MODEL",
+            issue,
+            Some(
+                "Give the netlist a .tran and .end, and map every input in \
+                 config.input_sources and every output in config.output_nodes"
+                    .to_string(),
+            ),
+            Some("cosim_models[]".to_string()),
+        );
+    }
 
     // 2. Load Referenced Chip
     // Resolving chip path relative to system file

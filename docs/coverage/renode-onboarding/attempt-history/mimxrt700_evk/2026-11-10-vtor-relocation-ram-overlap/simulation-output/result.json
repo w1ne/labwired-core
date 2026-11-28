@@ -1,0 +1,707 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 24000000,
+  "cycles": 24000000,
+  "instructions": 24000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 24000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 24000000
+    }
+  },
+  "limits": {
+    "max_steps": 24000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc="
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "padded_context=0000000f padded_xpsr="
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "unaligned_context=0000001f unaligned_xpsr="
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "msp_context=000003ff msp_r0=9bdf1357 msp_xpsr="
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "msp_noalign_context=0000001f msp_noalign_r0=2468ace0 msp_noalign_xpsr=01000000 msp_noalign_sp=200000dc msp_noalign_after=200000fc restore=1"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "nested=000000ff outer=00000017 nested_ipsr=00000018 exc=fffffffd,fffffff1 order=00000002,00000003 active=00000180->00000000 stack=1,1 priorities=00000080,00000020"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "deferred=0000007f outer=00000017 exc=fffffffd active=00000080 order=00000002,00000003 after=00000000 stack=1,1 priorities=00000080,00000080,000000c0"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "basepri=000007ff max=00000080 high=00000018/fffffff9 threshold=00000080 active=00000100 pending=00000280 order=00000002,00000003 after=00000000,00000000 stack=1 priorities=00000080,00000020,000000c0"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "primask=000003ff mask=00000001/00000000 pending=00000380/00000280 active=00000000/00000100 high=00000018/fffffff9/00000000 order=00000002,00000003 after=00000000,00000000 stack=1 priorities=00000080,00000020,000000c0"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "faultmask=000003ff mask=00000001/00000000 pending=00000380/00000280 active=00000000/00000100 high=00000018/fffffff9/00000000 order=00000002,00000003 after=00000000,00000000 stack=1 priorities=00000080,00000020,000000c0"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "vtor=000001ff"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "flexcomm0 pselid=00103070->00103071->00103079",
+          "lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001",
+          "pass=0001ffff"
+        ]
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870920,
+          "expected_value": 323,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870924,
+          "expected_value": 1879179263,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870928,
+          "expected_value": 15,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870932,
+          "expected_value": 305419896,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870940,
+          "expected_value": 16777216,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870944,
+          "expected_value": 536871136,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870948,
+          "expected_value": 15,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870952,
+          "expected_value": 16777728,
+          "mask": 16777728,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870956,
+          "expected_value": 536871128,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870960,
+          "expected_value": 536871164,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870964,
+          "expected_value": 31,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870968,
+          "expected_value": 16777216,
+          "mask": 16777728,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870972,
+          "expected_value": 536871132,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870976,
+          "expected_value": 536871164,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870980,
+          "expected_value": 1023,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870984,
+          "expected_value": 2615087959,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870988,
+          "expected_value": 16777728,
+          "mask": 16777728,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536871008,
+          "expected_value": 255,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536871012,
+          "expected_value": 127,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536871016,
+          "expected_value": 2047,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536871020,
+          "expected_value": 1023,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536871024,
+          "expected_value": 1023,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536871028,
+          "expected_value": 511,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1879113791,
+      1074855956,
+      102,
+      3,
+      65599,
+      323,
+      8912896,
+      542638064,
+      514,
+      67174403,
+      536870928,
+      1074855956,
+      3758157076,
+      542637992,
+      939574369,
+      939574492
+    ],
+    "pc": 939574492,
+    "xpsr": 2701131776,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": true
+  },
+  "firmware_hash": "d718fa16e677ba60d344477e0f607845f5756a30cd1b8d739702997eb681853b",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml",
+    "script": "examples/renode-onboarding/mimxrt700_evk-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "flexcomm0",
+        "kind": "native",
+        "base": 1074855936,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 460000
+      },
+      {
+        "text": "",
+        "cycle_lo": 470000,
+        "cycle": 480000,
+        "end_cycle": 490000
+      },
+      {
+        "text": "msp_noalign_context=0000001f msp_noalign_r0=2468ace0 msp_noalign_xpsr=01000000 msp_noalign_sp=200004dc msp_noalign_after=200004fc restore=1",
+        "cycle_lo": 490000,
+        "cycle": 500000,
+        "end_cycle": 2230000
+      },
+      {
+        "text": "",
+        "cycle_lo": 2230000,
+        "cycle": 2240000,
+        "end_cycle": 2260000
+      },
+      {
+        "text": "nested=000000ff outer=00000017 nested_ipsr=00000018 exc=fffffffd,fffffff1 order=00000002,00000003 active=00000180->00000000 stack=1,1 priorities=00000080,00000020",
+        "cycle_lo": 2260000,
+        "cycle": 2270000,
+        "end_cycle": 4280000
+      },
+      {
+        "text": "",
+        "cycle_lo": 4280000,
+        "cycle": 4290000,
+        "end_cycle": 4310000
+      },
+      {
+        "text": "deferred=0000007f outer=00000017 exc=fffffffd active=00000080 order=00000002,00000003 after=00000000 stack=1,1 priorities=00000080,00000080,000000c0",
+        "cycle_lo": 4310000,
+        "cycle": 4320000,
+        "end_cycle": 6160000
+      },
+      {
+        "text": "",
+        "cycle_lo": 6160000,
+        "cycle": 6170000,
+        "end_cycle": 6180000
+      },
+      {
+        "text": "basepri=000007ff max=00000080 high=00000018/fffffff9 threshold=00000080 active=00000100 pending=00000280 order=00000002,00000003 after=00000000,00000000 stack=1 priorities=00000080,00000020,000000c0",
+        "cycle_lo": 6190000,
+        "cycle": 6200000,
+        "end_cycle": 8650000
+      },
+      {
+        "text": "",
+        "cycle_lo": 8660000,
+        "cycle": 8670000,
+        "end_cycle": 8680000
+      },
+      {
+        "text": "primask=000003ff mask=00000001/00000000 pending=00000380/00000280 active=00000000/00000100 high=00000018/fffffff9/00000000 order=00000002,00000003 after=00000000,00000000 stack=1 priorities=00000080,00000020,000000c0",
+        "cycle_lo": 8680000,
+        "cycle": 8690000,
+        "end_cycle": 11370000
+      },
+      {
+        "text": "",
+        "cycle_lo": 11370000,
+        "cycle": 11380000,
+        "end_cycle": 11390000
+      },
+      {
+        "text": "faultmask=000003ff mask=00000001/00000000 pending=00000380/00000280 active=00000000/00000100 high=00000018/fffffff9/00000000 order=00000002,00000003 after=00000000,00000000 stack=1 priorities=00000080,00000020,000000c0",
+        "cycle_lo": 11400000,
+        "cycle": 11410000,
+        "end_cycle": 14110000
+      },
+      {
+        "text": "",
+        "cycle_lo": 14110000,
+        "cycle": 14120000,
+        "end_cycle": 14140000
+      },
+      {
+        "text": "vtor=000001ff source=00000000 ram=20000000 vector=3800c4df irq=00000017 active=00000080 restored=00000000",
+        "cycle_lo": 14140000,
+        "cycle": 14150000,
+        "end_cycle": 15460000
+      },
+      {
+        "text": "rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc=38000ed2 frame_xpsr=01000000 padded_context=00000000 padded_xpsr=01000200 padded_sp=200004d8 unaligned_context=00000000 unaligned_xpsr=21000000 unaligned_sp=200004dc msp_context=00000000 msp_r0=00000000 msp_xpsr=00000000 msp_sp=00000000 msp_after=00000000 msp_restored=00000000 msp_pad=3800c4df faultmask=0000",
+        "cycle_lo": 15460000,
+        "cycle": 15470000,
+        "end_cycle": 22060000,
+        "text_truncated": true
+      },
+      {
+        "text": "flexcomm0 pselid=00103070->00103071->00103079",
+        "cycle_lo": 22070000,
+        "cycle": 22080000,
+        "end_cycle": 22650000
+      },
+      {
+        "text": "lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001",
+        "cycle_lo": 22650000,
+        "cycle": 22660000,
+        "end_cycle": 23660000
+      },
+      {
+        "text": "pass=0001003f",
+        "cycle_lo": 23660000,
+        "cycle": 23670000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 51096,
+    "data_bytes": 0,
+    "bss_bytes": 1504,
+    "flash_used_bytes": 51096,
+    "ram_static_bytes": 1504,
+    "flash_total_bytes": 134217728,
+    "ram_total_bytes": 5767168,
+    "flash_used_pct": 0.04,
+    "ram_static_pct": 0.03,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 5765664,
+    "main_stack_high_water_bytes": 84,
+    "main_stack_free_min_bytes": 5765340,
+    "main_stack_base": 536872416,
+    "main_stack_top": 542638080,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 5765664,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 5765340,
+    "heap_base": 536872416,
+    "heap_top": 542638080
+  },
+  "metrics": {
+    "cycles": 24000000,
+    "instructions": 24000000,
+    "steps_executed": 24000000,
+    "memory_reads": 25678,
+    "memory_writes": 1525,
+    "peripheral_accesses": 7941867,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 939574606,
+        "count": 744,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939574786,
+        "count": 743,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 939574698,
+        "count": 703,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 939574492,
+        "count": 665,
+        "symbol": "firmware_mimxrt700_evk_smoke::__cortex_m_rt_main"
+      },
+      {
+        "pc": 939574652,
+        "count": 665,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 939574666,
+        "count": 665,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939574832,
+        "count": 664,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939574864,
+        "count": 664,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 939574820,
+        "count": 663,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939574824,
+        "count": 663,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 939574574,
+        "count": 625,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939574598,
+        "count": 625,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 939574686,
+        "count": 625,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 939574876,
+        "count": 625,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 939574744,
+        "count": 624,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      },
+      {
+        "pc": 939574778,
+        "count": 624,
+        "symbol": "firmware_mimxrt700_evk_smoke::putc"
+      }
+    ],
+    "stalled_poll": {
+      "peripheral": "flexcomm0",
+      "offset": 20,
+      "accesses": 8233
+    }
+  }
+}

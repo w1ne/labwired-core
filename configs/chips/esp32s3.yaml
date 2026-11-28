@@ -17,6 +17,27 @@ cpu_hz: 240_000_000
 io_voltage_v: 3.3
 gpio_input_thresholds: { vil: 0.25, vih: 0.75 }
 
+# SAR ADC1 inputs, as the ESP32-S3 Series Datasheet pin table ("Analog
+# Functions": ADC1_CH0..ADC1_CH9) lists them: ADC1_CHn is GPIO(n+1), so
+# GPIO1..GPIO10 are channels 0..9. The analog router reads this table, so a
+# deck that names only `board.analog.gpio4_volts` reaches the SENS SAR1
+# one-shot (the RTC controller ESP-IDF `adc_oneshot_read` drives) without
+# naming a channel. SENS and APB_SARADC share one physical ADC1 pad bank, so
+# the same level converts on either controller. The map is ADC1-only: the
+# model's SAR2 one-shot returns a fixed placeholder, so GPIO11..GPIO20
+# (ADC2_CH0..CH9) are not board analog pads yet.
+analog_pins:
+  GPIO1: { peripheral: "sens_s3", channel: 0 }
+  GPIO2: { peripheral: "sens_s3", channel: 1 }
+  GPIO3: { peripheral: "sens_s3", channel: 2 }
+  GPIO4: { peripheral: "sens_s3", channel: 3 }
+  GPIO5: { peripheral: "sens_s3", channel: 4 }
+  GPIO6: { peripheral: "sens_s3", channel: 5 }
+  GPIO7: { peripheral: "sens_s3", channel: 6 }
+  GPIO8: { peripheral: "sens_s3", channel: 7 }
+  GPIO9: { peripheral: "sens_s3", channel: 8 }
+  GPIO10: { peripheral: "sens_s3", channel: 9 }
+
 flash:
   base: 0x42000000
   # 16 MiB, written in KB on purpose: `parse_size` treats KB as binary (1024)
@@ -112,6 +133,10 @@ peripherals:
 
   # APB SARADC + TWAI — registered programmatically by configure_xtensa_esp32s3
   # (ESP32S3_PERIPHERALS). Declared here so chip map / matrix docs stay honest.
+  - id: "sens_s3"
+    type: "esp32s3_sens"
+    base_address: 0x60008800
+    size: "1KB"
   - id: "sar_adc_s3"
     type: "esp32s3_sar_adc"
     base_address: 0x60040000

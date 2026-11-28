@@ -1,0 +1,15 @@
+id: nucleo-g431rb
+chip: stm32g431rb
+system: systems/nucleo-g431rb.yaml
+# Pinned like the other STM32 rows (ststm32 20.0.0 makes SPI.begin() a no-op).
+pio: { platform: ststm32@19.7.1, board: nucleo_g431rb, framework: arduino }
+max_steps: 20000000
+budget_reason: "L3 Wire.begin runs i2c_computeTiming (~7M+ steps), as on the G474 row"
+# LD2 = PA5 (UM2505 §6.5).
+led_watch: "gpioa:5"
+led_min_edges: 2
+# L6 uses PA0 (TIM2_CH1, AF1): LD2/PA5 is DAC1_OUT2, see L6 sketch.
+pwm_watch: "gpioa:0"
+pwm_min_edges: 20
+family: stm32
+notes: "Stock stm32duino NUCLEO_G431RB; console = LPUART1 (ST-LINK VCP); L8 FDCAN1 loopback"

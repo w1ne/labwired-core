@@ -1,0 +1,7 @@
+[2m2026-11-20T01:13:00.051341Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/mspsim-msp430f5437.yaml
+[2m2026-11-20T01:13:00.055680Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x5d20
+labwired-cli test: idle_ff=on (event_scheduler=on)
+[2m2026-11-20T01:13:00.087167Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 1 byte(s) delivered to 'usci_a0'
+labwired-cli test: idle_ff skipped 33 of 400033 device cycles (400000 interpreted)
+[2m2026-11-20T01:13:00.137302Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["MSP430F5437 boot", "MSP430F5437 checks PPPPZPkPzPPPPP DONE rx=52", "MSP430F5437 PUC WDTIFG=1", "MSP430F5437 smoke complete"] }) (captured len=140)
+FAIL  2/3 checks · msp430f5437-uart-smoke · 400000 steps · 0.08s

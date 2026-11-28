@@ -1,6 +1,6 @@
 //! Browser-safe multi-node World wrapper.
 
-use crate::inspect::LogicRef;
+use crate::inspect::{js_safe_meta, LogicRef};
 use labwired_config::{
     BoardIoBinding, BoardIoKind, BoardIoSignal, ChipDescriptor, EnvironmentManifest, SystemManifest,
 };
@@ -228,7 +228,7 @@ impl WasmWorld {
             .map_err(|e| JsValue::from_str(&format!("get_board_io_config: {e}")))
     }
 
-    /// Node `node_id`'s `board_io` states, `[{ id, active }]`.
+    /// Node `node_id`'s `board_io` states, `[{ id, active, emission? }]`.
     pub fn get_board_io_states(&self, node_id: &str) -> Result<JsValue, JsValue> {
         let machine = self.machine(node_id)?;
         let bindings = self
@@ -262,7 +262,7 @@ impl WasmWorld {
                         }
                     }
                 };
-                serde_json::json!({ "id": b.id, "active": active })
+                b.state_json(active)
             })
             .collect();
         serde_wasm_bindgen::to_value(&states)
@@ -330,6 +330,18 @@ impl WasmWorld {
     pub fn analog_channels(&self) -> Result<JsValue, JsValue> {
         serde_wasm_bindgen::to_value(&self.world.analog_channels())
             .map_err(|error| JsValue::from_str(&format!("analog_channels: {error}")))
+    }
+
+    /// Node-local shaft state; unknown measured electrical quantities stay null.
+    pub fn get_actuator_states(&self, node_id: &str) -> Result<JsValue, JsValue> {
+        let states = crate::inspect::motor_states_json(self.machine(node_id)?.motor_snapshots());
+        serde_wasm_bindgen::to_value(&states)
+            .map_err(|error| JsValue::from_str(&format!("get_actuator_states: {error}")))
+    }
+
+    pub fn motor_series(&self, node_id: &str) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&self.machine(node_id)?.motor_series())
+            .map_err(|error| JsValue::from_str(&format!("motor_series: {error}")))
     }
 
     pub fn analog_trace_snapshot(&self, cursor: f64) -> Result<JsValue, JsValue> {
@@ -407,8 +419,10 @@ impl WasmWorld {
             .map_err(|error| JsValue::from_str(&format!("node '{node_id}' read: {error:?}")))
     }
 
+    /// Diagnostic state with wide peripheral integers represented as exact
+    /// decimal strings, matching `inspect`. Native snapshot state is unchanged.
     pub fn node_snapshot(&self, node_id: &str) -> Result<JsValue, JsValue> {
-        let snapshot = self
+        let mut snapshot = self
             .world
             .machines
             .get(node_id)
@@ -417,6 +431,9 @@ impl WasmWorld {
             .ok_or_else(|| {
                 JsValue::from_str(&format!("node '{node_id}' has no snapshot support"))
             })?;
+        for metadata in snapshot.peripherals.values_mut() {
+            *metadata = js_safe_meta(metadata);
+        }
         serde_wasm_bindgen::to_value(&snapshot)
             .map_err(|error| JsValue::from_str(&format!("node '{node_id}' snapshot: {error}")))
     }
@@ -655,6 +672,15 @@ impl WasmWorld {
             .map(|input| {
                 let system: SystemManifest = serde_yaml::from_str(&input.system_yaml)
                     .map_err(|error| format!("node '{}': system YAML: {error}", input.id))?;
+                if system.resolved_motor_models().map_err(|error| error.to_string())?.iter().any(|motor| {
+                    matches!(motor, labwired_config::MotorModelConfig::Dc(config)
+                        if config.shaft_owner == labwired_config::MotorShaftOwner::External)
+                }) {
+                    return Err(format!(
+                        "node '{}': external mechanical shafts currently require a single-MCU WasmSimulator; World coupling is unsupported",
+                        input.id
+                    ));
+                }
                 let chip: ChipDescriptor = serde_yaml::from_str(&input.chip_yaml)
                     .map_err(|error| format!("node '{}': chip YAML: {error}", input.id))?;
                 board_io.insert(input.id.clone(), system.board_io.clone());
@@ -687,6 +713,54 @@ impl WasmWorld {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn external_mechanical_world_is_rejected_before_any_node_is_constructed() {
+        let environment: EnvironmentManifest = serde_yaml::from_str(
+            r#"
+schema_version: "1.0"
+name: mechanical-world-refusal
+nodes:
+  - { id: motor, system: system.yaml, firmware: firmware.bin }
+interconnects: []
+"#,
+        )
+        .unwrap();
+        let input = ResolvedNodeInput {
+            id: "motor".to_owned(),
+            system_yaml: r#"
+name: external-shaft
+chip: chip.yaml
+motor_models:
+  - kind: dc
+    id: shaft
+    shaft_owner: external
+    resistance_ohm: 2.0
+    inductance_h: 0.001
+    torque_constant_nm_per_a: 0.02
+    back_emf_constant_v_per_rad_s: 0.02
+    rotor_inertia_kg_m2: 0.0
+    viscous_friction_nm_per_rad_s: 0.0
+    supply_voltage_v: 3.7
+    load_torque_nm: 0.0
+    encoder_cpr: 4
+    pwm_pin: 3V3
+    direction_pin: 3V3
+"#
+            .to_owned(),
+            chip_yaml: "intentionally not a chip document".to_owned(),
+            firmware: Vec::new(),
+            blobs: HashMap::new(),
+        };
+        let error = match WasmWorld::from_node_inputs(environment, vec![input]) {
+            Ok(_) => panic!("World must reject external shaft ownership"),
+            Err(error) => error,
+        };
+        assert!(
+            error.contains("single-MCU") && error.contains("World coupling is unsupported"),
+            "{error}"
+        );
+    }
+
     use super::*;
 
     /// The browser's world path end to end, minus the JS boundary: a

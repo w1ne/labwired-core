@@ -1,0 +1,49 @@
+# Generic Beta NTC divider (GPIO2 = ADC1_CH1) and Shockley diode load line
+# (GPIO4 = ADC1_CH3) for every ESP32-C5 board.
+#
+# esp32c5.yaml publishes its ADC1 inputs in an `analog_pins:` table. On the
+# C5 the pad number is not the channel number (GPIO1..GPIO6 are
+# ADC1_CH0..CH5), so these decks also prove that the router reads the map
+# instead of assuming channel == GPIO. Neither netlist names the board, the
+# ADC or a channel: each solves its own circuit and publishes a probe voltage
+# to `board.analog.<pad>_volts`. GPIO2/GPIO4 are not the BME280 profile's I2C
+# pads (GPIO8/GPIO9), the GPIO5 output pad, the GPIO27 RGB LED pad or the
+# UART0 pads (GPIO11/GPIO12). Every profile that loads the C5 descriptor can
+# run this deck unchanged.
+name: "esp32c5-analog-ntc-diode"
+chip: "../../configs/chips/esp32c5.yaml"
+cpu_hz: 240000000
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.gpio2_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 3.3
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.gpio4_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF
+        .model DREF D(IS=2.52n N=1.752 RS=0.568)
+      probes:
+        v_diode: "v(sense)"
+      vdd: 3.3

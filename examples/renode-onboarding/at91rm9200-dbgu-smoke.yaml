@@ -1,0 +1,10 @@
+# Direct ARMv4T A32 fixture against the bounded imported at91rm9200 profile: the ARM926EJ-S model Renode uses for this part, the 0x30000-byte internal memory at 0x00000000, and polled DBGU TX only.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/at91rm9200-dbgu-smoke.elf"
+  system: "../../configs/systems/onboarding/at91rm9200.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "AT91RM9200 DBGU SMOKE"
+  - expected_stop_reason: max_steps

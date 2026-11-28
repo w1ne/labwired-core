@@ -1,0 +1,28 @@
+name: arduino-matrix-nano-33-ble
+chip: configs/chips/nrf52840.yaml
+memory_overrides:
+  reset_vector_offset: '0x10000'
+external_devices:
+- id: ina219
+  type: ina219
+  connection: i2c0
+  config:
+    i2c_address: 64
+- id: max31855
+  type: max31855
+  connection: spi2
+  config:
+    cs_pin: P1.02
+peripherals:
+- id: usbd
+  type: nrf52840_usbd
+  base_address: 1073901568
+  config:
+    host: true
+- id: saadc
+  type: nrf52840_saadc
+  base_address: 1073770496
+  config:
+    input_mv:
+      2: 1650
+board_io: []

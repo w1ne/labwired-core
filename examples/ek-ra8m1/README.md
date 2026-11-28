@@ -117,6 +117,16 @@ hb=0 podr6=0001 s1=1 s2=1
 | Console UART | SCI9 PA14 (TX) / PA15 (RX), SCI_B | Zephyr `ek_ra8m1-pinctrl.dtsi`, `zephyr,console = &uart9`, `renesas,ra8-uart-sci-b` |
 | SCI9 clock / gate | SCICLK (`SCICKCR`/`SCICKDIVCR`), `MSTPCRB` bit 22 | FSP `bsp_clocks.c`, `bsp_module_stop.h` |
 
+## Analog inputs
+
+`analog-ntc-system.yaml` drives a generic Beta-parameter NTC divider into
+`board.analog.p004_volts`. The RA8M1 descriptor maps P004 (AN000, Arduino
+header A0) to ADC0 channel 0, and the test converts it with the production
+`ra_adc12` single-scan path (`ADANSA0`, `ADST`, `ADDR0`). This slice maps only
+AN000: the other Arduino header inputs (A1-A5) are not transcribed from the
+board manual yet, and the router refuses a pad that is not in the map rather
+than guessing a channel.
+
 ## Explicitly not claimed
 
 - **Cortex-M85 extensions.** Helium/MVE, the tail-predicated loops
@@ -128,8 +138,9 @@ hb=0 podr6=0001 s1=1 s2=1
   from the oscillator stop bits and answers the xxxCKCR handshakes, but the
   oscillators settle at once and no rate is derived: `cpu_hz` stays 8 MHz
   after Zephyr switches ICLK to the 480 MHz PLL1P, and `PRCR` gates nothing.
-- **Module stop.** `MSTP` is a stub: SCI9 runs whether or not `MSTPB22` is
-  cleared.
+- **Module stop.** The SVD-derived MSTP register file reads reset values and
+  stores writes; the exact-system smoke checks `MSTPCRB.MSTPB22` readback.
+  Module gating is not modelled, so SCI9 also runs while the bit is set.
 - **ICU / IELSR.** Both ICU windows are stubs, so no peripheral event reaches
   the NVIC; the smoke polls `CSR.TDRE` and the Zephyr console is polled too.
 - **SCI_B beyond polled async.** FIFO mode, `CCR0` interrupt enables, error
