@@ -1,0 +1,40 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+   Compiling labwired-config v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/config)
+   Compiling labwired-core v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/core)
+   Compiling svd-ingestor v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/svd-ingestor)
+   Compiling labwired-loader v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/loader)
+    Finished `test` profile [optimized] target(s) in 2m 23s
+     Running tests/nrf/main.rs (/data/cargo-pool/labwired-core/lanes/renode/debug/deps/nrf-86ed6b121ab0e48d)
+
+running 14 tests
+test nrf54l15_boot::nrf5340_gpio_out_lands_on_the_devicetree_address ... ok
+test nrf5340_ficr::ficr_part_is_read_only ... ok
+test nrf5340_clock_boot::peripherals_mapped_at_secure_cpuapp_view ... ok
+test nrf5340_clock_boot::lfclk_start_raises_started_event ... ok
+test nrf5340_gpiote::legacy_fuzzy_gpio_type_does_not_latch_a_gpiote_task ... ok
+test nrf5340_uicr::declarative_reset_override_rejects_an_unknown_register ... ok
+test nrf5340_ficr::ficr_unspecified_identity_variants_and_trim_table_remain_erased ... ok
+test nrf5340_clock_boot::hfclk_start_raises_started_event ... ok
+test nrf5340_uicr::uicr_protect_words_read_erased_not_the_svd_zero ... ok
+test nrf5340_gpiote::gpiote_task_set_updates_selected_gpio0_input_latch ... ok
+test nrf5340_uicr::uicr_config_otp_and_keyslot_words_read_erased ... ok
+test nrf5340_ficr::ficr_device_fields_match_the_vendored_svd ... ok
+test nrf_timer_base_clock::nrf5340_timers_expose_six_compare_channels ... ok
+test nrf5340_clock_boot::twim1_reads_bmi270_chip_id_over_easydma ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 79 filtered out; finished in 0.16s
+
