@@ -15,8 +15,8 @@
 //! The decks are byte-identical circuits to the NUCLEO-L476RG deck and name
 //! only `board.analog.pa0_volts` / `board.analog.pa1_volts`. The same two pads
 //! are three different channel pairs on these parts (ST STM32_open_pin_data),
-//! so a map copied from another family converts an empty channel and the
-//! count assertion fails.
+//! so each descriptor map is compared against the ST table transcribed here:
+//! a map copied from another family fails that comparison.
 //!
 //! The conversion uses each model's register map: the WB55 and G4 select
 //! `SQR1.SQ1` behind `RCC_AHB2ENR` bit 13, the L031 sets a `CHSELR` bit behind

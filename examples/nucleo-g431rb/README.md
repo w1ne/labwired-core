@@ -48,6 +48,6 @@ line into `board.analog.pa1_volts` (ADC1_IN2). The descriptor's
 (PA0-PA3 = IN1-IN4, PB14 = IN5, PC0-PC3 = IN6-IN9, PB12 = IN11,
 PB1 = IN12, PB11 = IN14, PB0 = IN15), so a deck can route to any of these pads. PF0 (IN10)
 is not routed because the descriptor declares no GPIOF, and pads that reach
-only ADC2, ADC3 or ADC5 are refused because only ADC1 is instantiated. The test is
+only ADC2 are refused because only ADC1 is instantiated. The test is
 `crates/core/tests/analog/cosim_stm32wb_g4_l0_analog.rs`
 (`cargo test -p labwired-core --test analog cosim_stm32wb_g4_l0`).

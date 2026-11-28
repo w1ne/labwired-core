@@ -38,8 +38,8 @@ memory_regions:
 # `STM32G474R(B-C-E)Tx.xml`: PA0-PA3 = IN1-IN4, PB14 = IN5, PC0-PC3 = IN6-IN9,
 # PB12 = IN11, PB1 = IN12, PB11 = IN14, PB0 = IN15. PA0 is IN1 here, not IN0
 # (F1/F4) and not IN5 (L4). PF0 (ADC1_IN10) is left out: this descriptor
-# declares no GPIOF. PA4-PA7, PC4, PC5, PB2 and PB15 reach ADC2 only, PB13
-# ADC3 only, PA8 and PA9 ADC5 only. This descriptor instantiates none of
+# declares no GPIOF. PA4-PA7, PC4, PC5 and PB2 reach ADC2 only, PB15 ADC2 and
+# ADC4, PB13 ADC3 only, PA8 and PA9 ADC5 only. This descriptor instantiates none of
 # those converters, so these pads are refused instead of being put on an
 # ADC1 channel. Consumed by co-simulation `board.analog.<pad>_volts`.
 analog_pins:

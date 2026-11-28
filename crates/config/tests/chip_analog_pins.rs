@@ -758,7 +758,7 @@ fn stm32g4_descriptors_carry_the_lqfp64_adc1_assignment() {
         let map = load(chip).analog_pins;
         assert_eq!(map, adc1_map(&pads), "{chip}");
         for pad in ["PA4", "PA5", "PA6", "PA7", "PC4", "PC5", "PB2", "PB15"] {
-            assert!(!map.contains_key(pad), "{chip}: {pad} is an ADC2-only pad");
+            assert!(!map.contains_key(pad), "{chip}: {pad} has no ADC1 input");
         }
     }
 }
