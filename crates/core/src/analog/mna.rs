@@ -841,7 +841,9 @@ impl Solver {
             let on = control.vt;
             // A magnitude cannot fall below 0, so its dropout is clamped
             // there. A signed control (ngspice `SW`) may open below 0 V.
-            let off = if control.signed {
+            let off = if let Some(dropout) = control.dropout {
+                dropout
+            } else if control.signed {
                 control.vt - control.vh
             } else {
                 (control.vt - control.vh).max(0.0)

@@ -2086,6 +2086,11 @@ pub struct VoltageSwitchControl {
     /// keyword. Inside the hysteresis band the switch keeps it; outside the
     /// band the control decides, as in ngspice. Default false (open).
     pub initially_closed: bool,
+    /// Opening threshold taken straight from an `SW` card as `VT − VH`.
+    /// `vt − vh` rebuilt from the stored `VT + VH` and `2·VH` can miss that
+    /// value by an ulp, which moves ngspice's inclusive lower edge. `None`
+    /// for the inline form, which derives its dropout from `vt − vh`.
+    pub dropout: Option<f64>,
 }
 
 /// `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` — an ideal switch whose control is a
@@ -3045,6 +3050,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                             signed,
                             strict: false,
                             initially_closed: false,
+                            dropout: None,
                         }),
                     });
                 } else {
@@ -3731,6 +3737,7 @@ fn bind_models(
                         signed: true,
                         strict: true,
                         initially_closed: device.switch_on,
+                        dropout: Some(model.vt - model.vh),
                     }),
                 });
             }
