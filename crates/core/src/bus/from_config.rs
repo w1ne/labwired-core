@@ -1388,9 +1388,46 @@ impl SystemBus {
                         )?
                     };
 
-                    Box::new(crate::peripherals::declarative::GenericPeripheral::new(
-                        desc,
-                    ))
+                    let mut peripheral =
+                        crate::peripherals::declarative::GenericPeripheral::new(desc);
+                    // Optional `reset_overrides: { REG_ID: value }`. A generated
+                    // SVD descriptor carries the SVD reset value; NVM-backed
+                    // windows (e.g. nRF UICR) power up at their erased state
+                    // instead. An unknown register id is a config error.
+                    if let Some(overrides) = p_cfg.config.get("reset_overrides") {
+                        let map = overrides.as_mapping().ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "'reset_overrides' for declarative peripheral '{}' must be a mapping",
+                                p_cfg.id
+                            )
+                        })?;
+                        for (reg, value) in map {
+                            let reg = reg.as_str().ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "'reset_overrides' key for '{}' must be a register id",
+                                    p_cfg.id
+                                )
+                            })?;
+                            let value = value
+                                .as_u64()
+                                .and_then(|v| u32::try_from(v).ok())
+                                .ok_or_else(|| {
+                                    anyhow::anyhow!(
+                                        "'reset_overrides.{}' for '{}' must be a 32-bit integer",
+                                        reg,
+                                        p_cfg.id
+                                    )
+                                })?;
+                            if !peripheral.force_register_value(reg, value) {
+                                anyhow::bail!(
+                                    "'reset_overrides' for '{}' names unknown register '{}'",
+                                    p_cfg.id,
+                                    reg
+                                );
+                            }
+                        }
+                    }
+                    Box::new(peripheral)
                 }
                 "strict_ir" => {
                     let descriptor_path = p_cfg

@@ -192,15 +192,15 @@ _SOP8 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verific
 
 ### `nrf5340`
 
-_No tier1 fixture. Unmodified Zephyr v3.7 hello_world boots end-to-end through CLOCK/UARTE0/RTC1. TWIM1 is a behavioural EasyDMA model; nrf5340_clock_boot reads BMI270 CHIP_ID 0x24 over EasyDMA, nrf5340_ficr checks the vendor SVD FICR register file, and nrf5340_gpiote checks GPIOTE task-to-GPIO0.IN readback. Eight other peripheral blocks remain benign boot stubs._
+_No tier1 fixture. Unmodified Zephyr v3.7 hello_world boots end-to-end through CLOCK/UARTE0/RTC1. TWIM1 is a behavioural EasyDMA model; nrf5340_clock_boot reads BMI270 CHIP_ID 0x24 over EasyDMA, nrf5340_ficr checks the vendor SVD FICR register file, nrf5340_gpiote checks GPIOTE task-to-GPIO0.IN readback, and nrf5340_uicr checks the erased UICR register file. Seven other peripheral blocks remain benign boot stubs._
 
 **Functional device/protocol reads** (real driver, decoded value):
 - Unmodified Zephyr v3.7 hello_world boots + prints over UARTE0 EasyDMA — `nrf5340-zephyr` · firmware_survival::test_nrf5340_zephyr_survival (PR gate)
 
-**Advanced peripherals — unit-tested only** (no firmware drives them): `GPIO`, `TIMER0-2`, `RTC0`, `TWIM1 + BMI270 CHIP_ID EasyDMA transaction`, `FICR INFO.PART + flash geometry`, `GPIOTE0 TASKS_SET0 → GPIO0.IN`
+**Advanced peripherals — unit-tested only** (no firmware drives them): `GPIO`, `TIMER0-2`, `RTC0`, `TWIM1 + BMI270 CHIP_ID EasyDMA transaction`, `FICR INFO.PART + flash geometry`, `GPIOTE0 TASKS_SET0 → GPIO0.IN`, `UICR erased APPROTECT/ERASEPROTECT + OTP/KEYSLOT`
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
-- `DCNF/FPU/CACHE/SPU/OSC_REG/CTRLAP/UICR/trim target` (nrf5340_*_stub) — STRUCTURAL: these eight boot-path windows remain bounded zero-answering stubs; GPIOTE0 uses the shared Nordic task/event model for task-to-GPIO input-latch readback (external pad routing is not asserted), FICR is declarative from the vendor SVD, and DPPIC models its channel-enable subset.
+- `DCNF/FPU/CACHE/SPU/OSC_REG/CTRLAP/trim target` (nrf5340_*_stub) — STRUCTURAL: these seven boot-path windows remain bounded zero-answering stubs; GPIOTE0 uses the shared Nordic task/event model for task-to-GPIO input-latch readback (external pad routing is not asserted), FICR is declarative from the vendor SVD, UICR is the SVD register file in its erased state (NVMC write gating not modelled), and DPPIC models its channel-enable subset.
 
 ### `nrf54l05`
 
