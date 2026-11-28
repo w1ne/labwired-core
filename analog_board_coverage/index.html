@@ -4955,8 +4955,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.</p>
 <ul>
 <li>Profiles in <code>configs/systems/</code>: <strong>441</strong></li>
-<li>Covered end to end: <strong>140</strong></li>
-<li>Not covered: <strong>301</strong></li>
+<li>Covered end to end: <strong>141</strong></li>
+<li>Not covered: <strong>300</strong></li>
 <li>Not covered but with an ADC pad map: <strong>0</strong> (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   <code>analog_pins:</code> block or <code>adc</code> pin functions, an ADC model, or a digital
@@ -5147,11 +5147,6 @@ the generic decks can reach without new routing.</p>
 <tr>
 <td><code>nano-33-iot</code></td>
 <td><code>atsamd21</code></td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td><code>nrf52-dk</code></td>
-<td><code>nrf52832</code></td>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
@@ -6800,6 +6795,11 @@ the generic decks can reach without new routing.</p>
 <td><code>microbit-v2</code></td>
 <td><code>nrf52833</code></td>
 <td><code>crates/core/tests/analog/cosim_microbit_v2_analog.rs</code></td>
+</tr>
+<tr>
+<td><code>nrf52-dk</code></td>
+<td><code>nrf52832</code></td>
+<td><code>crates/core/tests/analog/cosim_nrf52840_family_analog.rs</code></td>
 </tr>
 <tr>
 <td><code>nrf52840-dk</code></td>
