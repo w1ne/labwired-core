@@ -61,6 +61,13 @@ fn require_backend_if_configured(available: bool, backend: &str) -> bool {
     .unwrap_or_else(|message| panic!("{message}"))
 }
 
+fn assert_finite_samples(label: &str, samples: &[f64]) {
+    assert!(
+        samples.iter().all(|sample| sample.is_finite()),
+        "{label} contains a non-finite sample: {samples:?}"
+    );
+}
+
 /// True when libngspice can actually be loaded by the wrapper.
 fn ngspice_available() -> bool {
     let probe = Command::new("python3")
@@ -99,7 +106,7 @@ fn v_out_series(manifest: &Path, steps: u64) -> Vec<f64> {
     );
     let parsed: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("cosim-step --json emits JSON");
-    parsed
+    let series = parsed
         .as_array()
         .expect("a JSON array of steps")
         .iter()
@@ -108,7 +115,12 @@ fn v_out_series(manifest: &Path, steps: u64) -> Vec<f64> {
                 .as_f64()
                 .expect("v_out is routed to board.analog.pa0_volts")
         })
-        .collect()
+        .collect::<Vec<_>>();
+    assert_finite_samples(
+        &format!("{} board.analog.pa0_volts", manifest.display()),
+        &series,
+    );
+    series
 }
 
 #[test]
@@ -183,7 +195,7 @@ fn cosim_series(manifest: &Path, steps: u64, sets: &[&str], model: &str, signal:
     );
     let parsed: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("cosim-step --json emits JSON");
-    parsed
+    let series = parsed
         .as_array()
         .expect("a JSON array of steps")
         .iter()
@@ -193,7 +205,9 @@ fn cosim_series(manifest: &Path, steps: u64, sets: &[&str], model: &str, signal:
                 .as_f64()
                 .unwrap_or_else(|| panic!("{model} does not publish {signal}"))
         })
-        .collect()
+        .collect::<Vec<_>>();
+    assert_finite_samples(&format!("{} {model}.{signal}", manifest.display()), &series);
+    series
 }
 
 /// The generic Beta NTC divider and Shockley diode load line that 16 board
@@ -932,6 +946,7 @@ fn in_core_series(case: &Differential) -> Vec<f64> {
         }
         series.push(solver.node_voltage(node));
     }
+    assert_finite_samples(case.name, &series);
     series
 }
 
@@ -992,14 +1007,17 @@ fn ngspice_series(case: &Differential) -> Vec<f64> {
     // `wrdata` writes one `<time> <value>` pair per line. The first row is the
     // operating point at t = 0, which the in-core series does not include
     // because it reports the END of each step.
-    text.lines()
+    let series = text
+        .lines()
         .filter_map(|line| {
             let mut fields = line.split_whitespace();
             let _time = fields.next()?;
             fields.next()?.parse::<f64>().ok()
         })
         .skip(1)
-        .collect()
+        .collect::<Vec<_>>();
+    assert_finite_samples(&format!("{} ngspice", case.name), &series);
+    series
 }
 
 /// True when the `ngspice` binary is on PATH.
