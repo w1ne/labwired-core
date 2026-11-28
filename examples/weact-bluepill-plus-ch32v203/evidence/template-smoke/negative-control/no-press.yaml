@@ -1,0 +1,18 @@
+# Negative control: template-smoke.yaml with the KEY stimuli removed.
+# Without a press the firmware never leaves toggle_tick = 250, so PB2 makes
+# only 6 edges in 14 M cycles: gpio_edges (>= 10) and the 100 ms side of
+# check-blink-rate.py must both fail.
+schema_version: "1.2"
+inputs:
+  firmware: "../../../../../tests/fixtures/weact-bluepill-plus-ch32v203-template.elf"
+  system: "../../../../../configs/systems/weact-bluepill-plus-ch32v203.yaml"
+limits:
+  max_cycles: 14000000
+  max_steps: 14000000
+  wall_time_ms: 240000
+assertions:
+  - uart_ordered:
+      - "WeAct Studio Core Board"
+      - "SystemClk:8000000"
+      - "Template"
+  - gpio_edges: { pin: "gpiob:2", min_edges: 10 }

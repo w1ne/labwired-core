@@ -1,0 +1,31 @@
+# WeAct Studio BluePill Plus, CH32V203C8T6 build (RISC-V QingKe V4B).
+# Board facts: WeActStudio/WeActStudio.BluePill-Plus-CH32 README (MIT):
+# blue user LED on PB2, active high; user KEY on PA0; 8 MHz HSE and
+# 32.768 kHz LSE crystals; USB-C to PA11/PA12; SWD on PA13/PA14.
+# WeAct's own CH32V203 template (Examples/CH32V203/01-template, board.c)
+# drives PB2 push-pull and reads PA0 as an input with the internal
+# pull-down, so the KEY connects PA0 to 3.3 V when pressed.
+#
+# Not modelled on this board: the 8 MHz HSE crystal and the PLL x18 path to
+# 144 MHz (the F1 RCC model decodes PLLMUL with the STM32F1 table), USB on
+# PA11/PA12, the unplaced SPI flash U3. USART1 TX (PA9) is a header pin;
+# debug_uart below is the simulator's console capture route, not an on-board
+# USB-UART bridge.
+name: "weact-bluepill-plus-ch32v203"
+chip: "../chips/ch32v203c8t6.yaml"
+cpu_hz: 8_000_000
+debug_uart: "usart1"
+external_devices: []
+board_io:
+  - id: "led_pb2"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 2
+    signal: "output"
+    active_high: true
+  - id: "key_pa0"
+    kind: "button"
+    peripheral: "gpioa"
+    pin: 0
+    signal: "input"
+    active_high: true

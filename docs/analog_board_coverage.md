@@ -13,9 +13,9 @@ Device-only unit tests, ADC register tests with no netlist, files that only
 list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
-- Profiles in `configs/systems/`: **441**
+- Profiles in `configs/systems/`: **442**
 - Covered end to end: **143**
-- Not covered: **298**
+- Not covered: **299**
 - Not covered but with an ADC pad map: **0** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` block or `adc` pin functions, an ADC model, or a digital
@@ -333,6 +333,7 @@ None.
 | `stm32h735-smoke` | `stm32h735` | 0 |
 | `teensy-41` | `imxrt1064` | 0 |
 | `vegaboard-ri5cy` | `vegaboard-ri5cy` | 0 |
+| `weact-bluepill-plus-ch32v203` | `ch32v203c8t6` | 0 |
 
 ## Covered
 
