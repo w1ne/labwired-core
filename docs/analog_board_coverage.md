@@ -14,8 +14,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **441**
-- Covered end to end: **143**
-- Not covered: **298**
+- Covered end to end: **147**
+- Not covered: **294**
 - Not covered but with an ADC pad map: **0** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` block or `adc` pin functions, an ADC model, or a digital
@@ -62,7 +62,6 @@ None.
 | `litex-vexriscv` | `litex-vexriscv` | 0 |
 | `lp-mspm0g3507` | `mspm0g3507` | 0 |
 | `luckfox-pico-mini-a` | `rv1103` | 0 |
-| `mb1355c` | `stm32wb55` | 0 |
 | `metro-m4` | `atsamd51` | 0 |
 | `microbit-v1` | `nrf51822` | 0 |
 | `mimxrt1062-teensy41` | `mimxrt1062-teensy41` | 0 |
@@ -75,17 +74,14 @@ None.
 | `nrf54l15dk` | `nrf54l15` | 0 |
 | `nrf54lm20dk` | `nrf54lm20a` | 0 |
 | `nucleo-f103rb-bme280` | `stm32f103rb-nucleo-bme280-smoke` | 0 |
-| `nucleo-g431rb` | `stm32g431rb` | 0 |
 | `nucleo-h533re-bme280` | `stm32h533re` | 0 |
 | `nucleo-h533re` | `stm32h533re` | 0 |
 | `nucleo-h563zi-demo` | `stm32h563` | 0 |
 | `nucleo-h723zg` | `stm32h723zg` | 0 |
 | `nucleo-h753zi` | `stm32h753zi` | 0 |
-| `nucleo-l031k6` | `stm32l031k6` | 0 |
 | `nucleo-l073rz` | `stm32l073` | 0 |
 | `nucleo-l552ze-q` | `stm32l552` | 0 |
 | `nucleo-u545re` | `stm32u545` | 0 |
-| `nucleo_g474re` | `stm32g474re` | 0 |
 | `nucleo_wba52cg` | `stm32wba52` | 0 |
 | `A2_CV32E40P` | `A2_CV32E40P` | 0 |
 | `a20` | `a20` | 0 |
@@ -398,6 +394,7 @@ None.
 | `iolink-multiport-demo` | `stm32l476` | `crates/core/tests/analog/cosim_stm32l476_analog.rs` |
 | `iolinki-g0-startup` | `stm32g0b1re` | `crates/core/tests/analog/cosim_stm32g0b1_analog.rs` |
 | `labwired-demo-board` | `stm32f103` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
+| `mb1355c` | `stm32wb55` | `crates/core/tests/analog/cosim_stm32wb_g4_l0_analog.rs` |
 | `microbit-v2` | `nrf52833` | `crates/core/tests/analog/cosim_microbit_v2_analog.rs` |
 | `nrf52-dk` | `nrf52832` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
 | `nrf52840-dk` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
@@ -411,10 +408,13 @@ None.
 | `nucleo-f767zi` | `stm32f767` | `crates/core/tests/analog/cosim_nucleo_f767zi_analog.rs` |
 | `nucleo-g071rb` | `stm32g071` | `crates/core/tests/analog/cosim_stm32g0b1_analog.rs` |
 | `nucleo-g0b1re` | `stm32g0b1re` | `crates/core/tests/analog/cosim_stm32g0b1_analog.rs` |
+| `nucleo-g431rb` | `stm32g431rb` | `crates/core/tests/analog/cosim_stm32wb_g4_l0_analog.rs` |
+| `nucleo-l031k6` | `stm32l031k6` | `crates/core/tests/analog/cosim_stm32wb_g4_l0_analog.rs` |
 | `nucleo-l432kc` | `stm32l432kc` | `crates/core/tests/analog/cosim_stm32l4u5_pin_functions_analog.rs` |
 | `nucleo-l476rg` | `stm32l476` | `crates/core/tests/analog/cosim_stm32l476_analog.rs` |
 | `nucleo-u575zi` | `stm32u575` | `crates/core/tests/analog/cosim_stm32l4u5_pin_functions_analog.rs` |
 | `nucleo-u5a5zj` | `stm32u5a5zj` | `crates/core/tests/analog/cosim_stm32l4u5_pin_functions_analog.rs` |
+| `nucleo_g474re` | `stm32g474re` | `crates/core/tests/analog/cosim_stm32wb_g4_l0_analog.rs` |
 | `nucleo_f767zi` | `nucleo_f767zi` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `stm32f103` | `stm32f103` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `stm32f4` | `stm32f4` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |

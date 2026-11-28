@@ -738,12 +738,64 @@ fn stm32c031c6_descriptor_carries_the_lqfp48_assignment() {
     }
 }
 
+/// STM32G431RB and STM32G474RE LQFP64 (ST STM32_open_pin_data
+/// `STM32G431R(6-8-B)Tx.xml`, `STM32G474R(B-C-E)Tx.xml`): the ADC1 inputs are
+/// PA0..PA3 = IN1..IN4, PB14 = IN5, PC0..PC3 = IN6..IN9, PB12 = IN11,
+/// PB1 = IN12, PB11 = IN14, PB0 = IN15. PF0 (IN10) is absent: no GPIOF is
+/// declared. Pads that reach only ADC2/ADC3/ADC5 are absent: only ADC1 is
+/// instantiated.
+#[test]
+fn stm32g4_descriptors_carry_the_lqfp64_adc1_assignment() {
+    let mut pads: Vec<(String, u8)> = (0..4).map(|i| (format!("PA{i}"), 1 + i)).collect();
+    pads.push(("PB14".to_string(), 5));
+    pads.extend((0..4).map(|i| (format!("PC{i}"), 6 + i)));
+    pads.extend(
+        [("PB12", 11), ("PB1", 12), ("PB11", 14), ("PB0", 15)]
+            .map(|(pad, channel)| (pad.to_string(), channel)),
+    );
+    let pads: Vec<(&str, u8)> = pads.iter().map(|(p, c)| (p.as_str(), *c)).collect();
+    for chip in ["stm32g431rb", "stm32g474re"] {
+        let map = load(chip).analog_pins;
+        assert_eq!(map, adc1_map(&pads), "{chip}");
+        for pad in ["PA4", "PA5", "PA6", "PA7", "PC4", "PC5", "PB2", "PB15"] {
+            assert!(!map.contains_key(pad), "{chip}: {pad} is an ADC2-only pad");
+        }
+    }
+}
+
+/// STM32WB55RG VFQFPN68 (ST STM32_open_pin_data `STM32WB55RGVx.xml`):
+/// PC0..PC3 = IN1..IN4, PA0..PA7 = IN5..IN12, PC4/PC5 = IN13/IN14,
+/// PA8/PA9 = IN15/IN16. Unlike the L476, PB0/PB1 carry no ADC input.
+#[test]
+fn stm32wb55_descriptor_carries_the_vfqfpn68_assignment() {
+    let mut pads: Vec<(String, u8)> = (0..4).map(|i| (format!("PC{i}"), 1 + i)).collect();
+    pads.extend((0..8).map(|i| (format!("PA{i}"), 5 + i)));
+    pads.extend(
+        [("PC4", 13), ("PC5", 14), ("PA8", 15), ("PA9", 16)]
+            .map(|(pad, channel)| (pad.to_string(), channel)),
+    );
+    let pads: Vec<(&str, u8)> = pads.iter().map(|(p, c)| (p.as_str(), *c)).collect();
+    let map = load("stm32wb55").analog_pins;
+    assert_eq!(map, adc1_map(&pads));
+    assert!(map.keys().all(|pad| !pad.starts_with("PB")));
+}
+
+/// STM32L031K6 LQFP32 (ST STM32_open_pin_data `STM32L031K(4-6)Tx.xml`):
+/// PA0..PA7 = IN0..IN7, PB0 = IN8, PB1 = IN9.
+#[test]
+fn stm32l031k6_descriptor_carries_the_lqfp32_assignment() {
+    let mut pads: Vec<(String, u8)> = (0..8).map(|i| (format!("PA{i}"), i)).collect();
+    pads.extend([("PB0".to_string(), 8), ("PB1".to_string(), 9)]);
+    let pads: Vec<(&str, u8)> = pads.iter().map(|(p, c)| (p.as_str(), *c)).collect();
+    assert_eq!(load("stm32l031k6").analog_pins, adc1_map(&pads));
+}
+
 /// Families whose assignment differs from the F1/F4 map were deliberately NOT
-/// transcribed. On a G474 PA0 is ADC1_IN1; an entry there must come from that
-/// part's datasheet, not from this map.
+/// transcribed. An entry there must come from that part's own pin data, not
+/// from this map.
 #[test]
 fn families_with_a_different_assignment_declare_nothing_yet() {
-    for chip in ["stm32g474re", "stm32h563", "stm32wb55"] {
+    for chip in ["stm32h563"] {
         assert!(
             load(chip).analog_pins.is_empty(),
             "{chip} gained analog_pins; check them against its own datasheet and update this test"

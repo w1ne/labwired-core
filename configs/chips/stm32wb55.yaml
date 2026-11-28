@@ -22,6 +22,29 @@ memory_regions:
     base: 0x1FFF0000
     size: "32KB"
 
+# ADC1 regular inputs of the VFQFPN68 package (P-NUCLEO-WB55 MB1355C), from
+# ST STM32_open_pin_data `STM32WB55RGVx.xml`: PC0-PC3 = IN1-IN4, PA0-PA7 =
+# IN5-IN12, PC4/PC5 = IN13/IN14, PA8/PA9 = IN15/IN16. The WB55 has no ADC
+# input on port B. Consumed by co-simulation `board.analog.<pad>_volts`; pads
+# not listed are refused instead of guessing a channel.
+analog_pins:
+  PC0: { peripheral: "adc1", channel: 1 }
+  PC1: { peripheral: "adc1", channel: 2 }
+  PC2: { peripheral: "adc1", channel: 3 }
+  PC3: { peripheral: "adc1", channel: 4 }
+  PA0: { peripheral: "adc1", channel: 5 }
+  PA1: { peripheral: "adc1", channel: 6 }
+  PA2: { peripheral: "adc1", channel: 7 }
+  PA3: { peripheral: "adc1", channel: 8 }
+  PA4: { peripheral: "adc1", channel: 9 }
+  PA5: { peripheral: "adc1", channel: 10 }
+  PA6: { peripheral: "adc1", channel: 11 }
+  PA7: { peripheral: "adc1", channel: 12 }
+  PC4: { peripheral: "adc1", channel: 13 }
+  PC5: { peripheral: "adc1", channel: 14 }
+  PA8: { peripheral: "adc1", channel: 15 }
+  PA9: { peripheral: "adc1", channel: 16 }
+
 peripherals:
   - id: "rcc"
     type: "rcc"
@@ -173,9 +196,10 @@ peripherals:
       # WB AF pinout (SPI1 AF5, NSS on PA4/PA15/PB2), not the L4 one.
       pad_map: "stm32wb"
     clock: { reg: "apb2enr", bit: 12 }
-  # ADC1 (AHB2). RCC_AHB2ENR.ADCEN (bit 13). Model has no conversion engine
-  # (L4 layout) — the genuinely-modelled DEEPPWD→ADVREGEN→ADEN→ADRDY power-up
-  # path is exercised.
+  # ADC1 (AHB2). RCC_AHB2ENR.ADCEN (bit 13). L4 register layout: the
+  # DEEPPWD→ADVREGEN→ADEN→ADRDY power-up path and software-started regular
+  # conversions of the `analog_pins:` inputs are modelled
+  # (tests/analog/cosim_stm32wb_g4_l0_analog.rs).
   - id: "adc1"
     type: "adc"
     base_address: 0x50040000
