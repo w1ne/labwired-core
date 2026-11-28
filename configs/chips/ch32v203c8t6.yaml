@@ -36,7 +36,10 @@
 #     ADC1/ADC2 run the STM32F1 ADC model (12-bit, shared PFIC line 34);
 #     software-started single conversions, calibration and the ADC1 EOC
 #     interrupt are smoke-tested. No PGA gain, TKey or dual-ADC modes.
-#     No I2C, CAN or USB.
+#     I2C1/I2C2 run the STM32F1 I2C model as masters on the default pads
+#     (PB6/PB7, PB10/PB11); polled I2C1 and interrupt-driven I2C2 reads are
+#     smoke-tested. No AFIO I2C1 remap (PB8/PB9), no slave-mode test.
+#     No CAN or USB.
 #   - The debug printf block assumes a WCH-LinkE probe is attached and
 #     polling (its sentinel reads 0). Firmware that waits for a probe
 #     therefore never times out here.
@@ -89,12 +92,12 @@ pins:
   PB3: { gpio: "gpiob", bit: 3 }
   PB4: { gpio: "gpiob", bit: 4 }
   PB5: { gpio: "gpiob", bit: 5 }
-  PB6: { gpio: "gpiob", bit: 6 }
-  PB7: { gpio: "gpiob", bit: 7 }
+  PB6: { gpio: "gpiob", bit: 6, functions: [{ type: i2c, peripheral: "i2c1", role: scl }] }
+  PB7: { gpio: "gpiob", bit: 7, functions: [{ type: i2c, peripheral: "i2c1", role: sda }] }
   PB8: { gpio: "gpiob", bit: 8 }
   PB9: { gpio: "gpiob", bit: 9 }
-  PB10: { gpio: "gpiob", bit: 10 }
-  PB11: { gpio: "gpiob", bit: 11 }
+  PB10: { gpio: "gpiob", bit: 10, functions: [{ type: i2c, peripheral: "i2c2", role: scl }] }
+  PB11: { gpio: "gpiob", bit: 11, functions: [{ type: i2c, peripheral: "i2c2", role: sda }] }
   PB12: { gpio: "gpiob", bit: 12 }
   PB13: { gpio: "gpiob", bit: 13 }
   PB14: { gpio: "gpiob", bit: 14 }
@@ -312,3 +315,29 @@ peripherals:
     clock: { reg: "apb2enr", bit: 10 }
     config:
       profile: "stm32f1"
+
+  # I2C1/I2C2 (ch32v20xhw.h): I2C1_BASE = APB1PERIPH_BASE + 0x5400, I2C2_BASE
+  # = + 0x5800, RCC_APB1Periph_I2C1/I2C2 = APB1PCENR bits 21/22. I2C_TypeDef
+  # (CTLR1, CTLR2, OADDR1, OADDR2, DATAR, STAR1, STAR2, CKCFGR, RTR) is the
+  # STM32F1 register file, so the `i2c` model's default `stm32f1` layout
+  # serves it. PFIC lines: I2C1_EV 47, I2C1_ER 48, I2C2_EV 49, I2C2_ER 50
+  # (F1 vectors 31..34 + 16). Default pads (DS0 Table 3-1-1): I2C1 SCL PB6,
+  # SDA PB7; I2C2 SCL PB10, SDA PB11. The AFIO PCFR1 I2C1 remap to PB8/PB9
+  # is not modelled.
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 47
+    clock: { reg: "apb1enr", bit: 21 }
+    config:
+      irq_error: 48
+
+  - id: "i2c2"
+    type: "i2c"
+    base_address: 0x40005800
+    size: "1KB"
+    irq: 49
+    clock: { reg: "apb1enr", bit: 22 }
+    config:
+      irq_error: 50

@@ -538,6 +538,82 @@ fn ch32v203_adc1_eoc_stays_unhandled_without_irq_34_wired() {
     assert_eq!(out, "ADC_TIMEOUT in0=0 VREF=0 ADC2_IN1=1023 irqs=0\r\n");
 }
 
+/// Runs the CH32V203 I2C fixture against the two BME280s of
+/// `examples/ch32v203c8t6/i2c-system.yaml`, returning the USART1 TX stream
+/// and the last QingKe trap cause.
+fn run_ch32v203_i2c_bme280(chip: &ChipDescriptor) -> (String, u32) {
+    let manifest = SystemManifest::from_file(root().join("examples/ch32v203c8t6/i2c-system.yaml"))
+        .expect("CH32V203 I2C system manifest");
+    let mut bus =
+        SystemBus::from_config(chip, &manifest).expect("CH32V203 peripherals and BME280s");
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+
+    let image =
+        labwired_loader::load_elf(&root().join("examples/ch32v203c8t6/ch32fun/i2c_bme280.elf"))
+            .expect("CH32V203 I2C ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load I2C ELF");
+
+    for _ in 0..8_000_000 {
+        machine.step().expect("CH32V203 I2C instruction");
+        if sink.lock().unwrap().ends_with(b"\r\n") {
+            break;
+        }
+    }
+
+    let out = String::from_utf8_lossy(&sink.lock().unwrap()).into_owned();
+    (out, machine.cpu.mcause)
+}
+
+#[test]
+fn ch32v203_i2c1_polled_and_i2c2_event_irq_49_read_the_bme280s() {
+    let row = CHIPS
+        .iter()
+        .find(|r| r.name == "CH32V203")
+        .expect("CH32V203 row");
+    let chip = descriptor(row);
+    let (out, mcause) = run_ch32v203_i2c_bme280(&chip);
+    // BME280 chip id 0x60 on both buses; dig_T1 = 28528 and the dig_T2 low
+    // byte (26435 = 0x6743) from the model's calibration set. The I2C2 read
+    // takes eight entries of the event handler.
+    assert_eq!(
+        out,
+        "I2C1 id=60 dig_T1=28528 T2l=43 I2C2 id=60 ev_irqs=8\r\n"
+    );
+    assert_eq!(mcause, 0x8000_0031, "last trap was I2C2_EV_IRQn 49");
+}
+
+#[test]
+fn ch32v203_i2c2_read_times_out_without_irq_49_wired() {
+    let row = CHIPS
+        .iter()
+        .find(|r| r.name == "CH32V203")
+        .expect("CH32V203 row");
+    let text = std::fs::read_to_string(descriptor_path(row)).expect("read CH32V203 descriptor");
+    let mut yaml: serde_yaml::Value = serde_yaml::from_str(&text).expect("parse chip descriptor");
+    let i2c2 = yaml["peripherals"]
+        .as_sequence_mut()
+        .expect("peripherals list")
+        .iter_mut()
+        .find(|p| p["id"].as_str() == Some("i2c2"))
+        .expect("i2c2 block");
+    assert_eq!(i2c2["irq"].as_u64(), Some(49), "I2C2_EV_IRQn is wired");
+    i2c2.as_mapping_mut()
+        .unwrap()
+        .remove(serde_yaml::Value::String("irq".to_owned()));
+    let chip: ChipDescriptor = serde_yaml::from_value(yaml).expect("descriptor without I2C2 IRQ");
+
+    let (out, _) = run_ch32v203_i2c_bme280(&chip);
+    // No handler runs, so the I2C2 read never leaves its START; the polled
+    // I2C1 reads are not affected.
+    assert_eq!(
+        out,
+        "I2C1 id=60 dig_T1=28528 T2l=43 I2C2_TIMEOUT id=00 ev_irqs=0\r\n"
+    );
+}
+
 /// Runs the CH32V203 SPI2 TX DMA fixture, returning the USART1 TX stream and
 /// the last QingKe trap cause.
 fn run_ch32v203_spi2_dma(chip: &ChipDescriptor) -> (String, u32) {
