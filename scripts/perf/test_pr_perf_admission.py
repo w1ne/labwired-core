@@ -54,16 +54,56 @@ class WorkflowControls(unittest.TestCase):
         perf = ci["jobs"]["pr-performance"]
         self.assertEqual(perf["uses"], "./.github/workflows/core-perf-pr.yml")
         aggregate = ci["jobs"]["pr-core-feature-off"]
-        self.assertIn("pr-performance", aggregate["needs"])
+        self.assertEqual(aggregate["needs"], [
+            "pr-default-members-lib", "pr-core-feature-off-tests",
+            "pr-ngspice-differential", "pr-performance",
+        ])
         self.assertIn("always()", aggregate["if"])
         self.assertIn("draft-light", aggregate["name"])
         self.assertIn("ready_for_review", ci.get("on", ci.get(True))["pull_request"]["types"])
         step = aggregate["steps"][0]
         self.assertEqual(step["env"]["PERF_RESULT"], "${{ needs.pr-performance.result }}")
-        for result in ["success", "failure", "skipped", "cancelled", ""]:
-            env = dict(os.environ, DEFAULT_MEMBERS_RESULT="success", FEATURE_OFF_RESULT="success", PERF_RESULT=result)
-            proc = subprocess.run(["bash", "-e", "-c", step["run"]], env=env, capture_output=True, text=True)
-            self.assertEqual(proc.returncode == 0, result == "success", proc.stdout + proc.stderr)
+        self.assertEqual(step["env"]["NGSPICE_RESULT"], "${{ needs.pr-ngspice-differential.result }}")
+        ngspice = ci["jobs"]["pr-ngspice-differential"]
+        self.assertFalse(ngspice.get("continue-on-error", False))
+        self.assertEqual(
+            " ".join(ngspice["if"].split()),
+            "!(github.event_name == 'pull_request' && github.event.pull_request.draft) && "
+            "(github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')",
+        )
+        self.assertTrue(any(
+            "apt-get install -y --no-install-recommends ngspice libngspice0" in item.get("run", "")
+            for item in ngspice["steps"]
+        ))
+        self.assertTrue(any(
+            item.get("env", {}).get("LABWIRED_REQUIRE_NGSPICE") == "1"
+            and "--test analog_vs_ngspice_differential" in item.get("run", "")
+            for item in ngspice["steps"]
+        ))
+        worker_results = {
+            "DEFAULT_MEMBERS_RESULT": "success",
+            "FEATURE_OFF_RESULT": "success",
+            "NGSPICE_RESULT": "success",
+            "PERF_RESULT": "success",
+        }
+        worker_jobs = {
+            "DEFAULT_MEMBERS_RESULT": "pr-default-members-lib",
+            "FEATURE_OFF_RESULT": "pr-core-feature-off-tests",
+            "NGSPICE_RESULT": "pr-ngspice-differential",
+            "PERF_RESULT": "pr-performance",
+        }
+        for variable, job in worker_jobs.items():
+            self.assertEqual(step["env"][variable], f"${{{{ needs.{job}.result }}}}")
+            for result in ["failure", "skipped", "cancelled", ""]:
+                env = dict(os.environ, **worker_results)
+                env[variable] = result
+                proc = subprocess.run(["bash", "-e", "-c", step["run"]], env=env, capture_output=True, text=True)
+                self.assertNotEqual(proc.returncode, 0, f"{variable}={result!r} was admitted")
+        proc = subprocess.run(
+            ["bash", "-e", "-c", step["run"]],
+            env=dict(os.environ, **worker_results), capture_output=True, text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
 
     def test_admission_verdict_runs_after_failures_and_has_a_distinct_draft_name(self):
         wf = workflow("core-perf-pr.yml")
@@ -164,7 +204,7 @@ class RealSelectorControls(HistoryControls):
         self.assertEqual(fields["required"], "false")
         self.assertEqual(verdict.check("success", fields["required"], "skipped", "false"), "not-required")
         step = workflow("core-ci.yml")["jobs"]["pr-core-feature-off"]["steps"][0]
-        proc = subprocess.run(["bash", "-e", "-c", step["run"]], env=dict(os.environ, DEFAULT_MEMBERS_RESULT="success", FEATURE_OFF_RESULT="success", PERF_RESULT="success"), capture_output=True, text=True)
+        proc = subprocess.run(["bash", "-e", "-c", step["run"]], env=dict(os.environ, DEFAULT_MEMBERS_RESULT="success", FEATURE_OFF_RESULT="success", NGSPICE_RESULT="success", PERF_RESULT="success"), capture_output=True, text=True)
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
 
 
