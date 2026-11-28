@@ -1,0 +1,7 @@
+[2m2026-11-28T12:25:40.424552Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../configs/chips/ch32v203c8t6.yaml
+[2m2026-11-28T12:25:40.429218Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x0
+labwired-cli test: idle_ff=on (event_scheduler=on)
+[2m2026-11-28T12:25:41.929347Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 1 applied
+[2m2026-11-28T12:25:41.958639Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 0 applied
+[2m2026-11-28T12:25:42.037477Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 1 applied
+PASS  7/7 checks · tim-pwm-capture-smoke · 8000000 steps · 5.56s

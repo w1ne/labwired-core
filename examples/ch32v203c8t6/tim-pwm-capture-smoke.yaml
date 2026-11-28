@@ -1,0 +1,38 @@
+# Local fixture tim_pwm_capture.c on ch32fun startup (build-ch32fun-examples.sh).
+# TIM3 CH1 drives PA6 with a 1 kHz PWM wave, 250 us high. TIM2 captures PA0:
+# CH1 on rising edges, CH2 on falling edges of the same input, through PFIC
+# interrupt 44.
+#
+# The source on PA0 gives rise, fall, rise at 2 000 000, 2 036 000 and
+# 2 144 000 cycles. At 144 MHz that is 250 us high in a 1000 us period, the
+# same wave PA6 carries. A single-chip system has no pad-to-pad wire, so the
+# vendor test (ch32_compiled_firmware.rs) joins PA6 to PA0 and this script
+# checks the two pads separately.
+schema_version: "1.2"
+inputs:
+  firmware: "ch32fun/tim_pwm_capture.elf"
+  system: "./tim-pwm-system.yaml"
+limits:
+  max_cycles: 8000000
+  max_steps: 8000000
+  wall_time_ms: 120000
+stimuli:
+  - target: { component: source_pa0, channel: pressed }
+    trigger: !after_cycles { cycles: 2000000 }
+    value: 1.0
+  - target: { component: source_pa0, channel: pressed }
+    trigger: !after_cycles { cycles: 2036000 }
+    value: 0.0
+  - target: { component: source_pa0, channel: pressed }
+    trigger: !after_cycles { cycles: 2144000 }
+    value: 1.0
+assertions:
+  - uart_contains: "PWM_IC period_10us=100 high_10us=25"
+  # 8 000 000 cycles hold 55 periods of the PA6 wave, two edges each.
+  - gpio_edges: { pin: "gpioa:6", min_edges: 100 }
+  # TIM3: PSC 143, ATRLR 999, CH1CVR 250, PWM mode 1 with preload, CC1E.
+  - memory_value: { address: 0x40000428, size: 32, expected_value: 143 }
+  - memory_value: { address: 0x4000042C, size: 32, expected_value: 999 }
+  - memory_value: { address: 0x40000434, size: 32, expected_value: 250 }
+  - memory_value: { address: 0x40000418, size: 32, expected_value: 0x68 }
+  - memory_value: { address: 0x40000420, size: 32, expected_value: 0x1 }
