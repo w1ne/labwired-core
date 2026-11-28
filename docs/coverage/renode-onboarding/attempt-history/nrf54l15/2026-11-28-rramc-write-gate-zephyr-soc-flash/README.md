@@ -5,7 +5,8 @@
 Unmodified Zephyr v4.4.0 `samples/drivers/soc_flash_nrf`, built for
 `nrf54l15dk/nrf54l15/cpuapp` with the default configuration, now runs to
 `Finished!` on the `nrf54l15` profile. Before this change the same image
-printed nothing. Three defects were in the way.
+printed nothing. Defects 1 and 2 stopped the image. Defect 3 did not stop
+it, but the RRAMC status registers and the WEN gate were wrong.
 
 ## Defects
 
@@ -40,7 +41,8 @@ printed nothing. Three defects were in the way.
   - `CONFIG.WEN` clear: a store into RRAM is dropped.
   - `CONFIG.WEN` set: a byte, half-word or word store commits as written.
     RRAM writes 0 and 1 alike; there is no erase.
-  - `READY` and `READYNEXT` read 1.
+  - `READY` and `READYNEXT` read 1. `EVENTS_READY` latches when a buffer
+    commit completes, and on every store when `WRITEBUFSIZE` is Unbuffered.
   - `BUFSTATUS.WRITEBUFEMPTY` reads NotEmpty from the first buffered store
     until the last byte of the buffer area is written, a store lands outside
     the buffer area, or `TASKS_COMMITWRITEBUF` is triggered.
@@ -75,8 +77,10 @@ Gate `crates/core/tests/nrf/nrf54l15_rramc.rs` (4 tests):
   and `Finished!`; RRAM 0x174000..0x17407F holds bytes 0..127; `CONFIG.WEN`
   is clear and the write-buffer is empty at the end.
 
-Model unit tests: `peripherals::nrf54l::rramc` 6/6,
-`nrf54l::clock::tests::intenset_after_a_latched_event_raises_the_irq`.
+Model unit tests: `peripherals::nrf54l::rramc` 7/7,
+`nrf54l::clock::tests::intenset_after_a_latched_event_raises_the_irq`, and
+under `event-scheduler`
+`nrf54l::clock::tests::intenset_after_a_delivered_event_schedules_a_line_evaluation`.
 
 Negative controls (measured on this branch):
 

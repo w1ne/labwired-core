@@ -31,7 +31,8 @@
 //!     Setting WRITEBUFSIZE to Unbuffered empties the modelled buffer; the
 //!     sources do not state what silicon does with pending data there.
 //!   * No snapshot/restore of the register state.
-//!   * EVENTS_READY latches when a commit or a wake-up completes;
+//!   * EVENTS_READY latches when a commit or a wake-up completes (with
+//!     WRITEBUFSIZE Unbuffered, every store is a commit);
 //!     EVENTS_WOKENUP latches on TASKS_WAKEUP. INTEN/INTENSET/INTENCLR/INTPEND
 //!     are register-accurate, but no NVIC line is driven.
 //!   * ERASE.ERASEALL is not modelled. A write of Erase fails the access
@@ -280,7 +281,10 @@ impl Peripheral for Nrf54lRramc {
             return FlashStoreOutcome::Consumed;
         }
         let lines = self.write_buffer_lines();
-        if lines != 0 {
+        if lines == 0 {
+            // Unbuffered: the store is its own commit.
+            self.events[1] = 1;
+        } else {
             let first = offset / LINE;
             let last_byte = offset + u64::from(width) - 1;
             let start = match self.buffer_start {
@@ -311,7 +315,7 @@ mod tests {
     }
 
     #[test]
-    fn idle_controller_reads_ready_with_svd_reset_values() {
+    fn idle_controller_reads_ready_and_an_empty_write_buffer() {
         let rramc = Nrf54lRramc::new();
         assert_eq!(rramc.read_u32(OFF_READY).unwrap(), 1);
         assert_eq!(rramc.read_u32(OFF_READYNEXT).unwrap(), 1);
@@ -369,6 +373,22 @@ mod tests {
         store(&mut rramc, 0x3000, 1);
         assert_eq!(rramc.read_u32(OFF_EVENTS_READY).unwrap(), 1);
         assert_eq!(rramc.read_u32(OFF_WRITEBUFEMPTY).unwrap(), 0);
+    }
+
+    #[test]
+    fn unbuffered_store_latches_ready() {
+        let mut rramc = Nrf54lRramc::new();
+        rramc.write_u32(OFF_CONFIG, CONFIG_WEN).unwrap();
+        assert_eq!(rramc.read_u32(OFF_EVENTS_READY).unwrap(), 0);
+        assert_eq!(store(&mut rramc, 0x2000, 4), FlashStoreOutcome::Commit);
+        assert_eq!(rramc.read_u32(OFF_EVENTS_READY).unwrap(), 1);
+        assert_eq!(rramc.read_u32(OFF_WRITEBUFEMPTY).unwrap(), 1);
+
+        // A dropped store (WEN clear) is not a commit.
+        rramc.write_u32(OFF_EVENTS_READY, 0).unwrap();
+        rramc.write_u32(OFF_CONFIG, 0).unwrap();
+        assert_eq!(store(&mut rramc, 0x2000, 4), FlashStoreOutcome::Consumed);
+        assert_eq!(rramc.read_u32(OFF_EVENTS_READY).unwrap(), 0);
     }
 
     #[test]
