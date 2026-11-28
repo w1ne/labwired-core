@@ -108,6 +108,7 @@ pub fn try_build(
         // The LFCLK countdown/RR behavior is shared with nRF52. The nRF54L
         // constructor adds its STOPEN + TSEN + STOPPED register subset.
         "nrf54l_wdt" => Box::new(crate::peripherals::nrf52::wdt::Nrf52Wdt::new_nrf54l()),
+        "nrf54l_rramc" => Box::new(crate::peripherals::nrf54l::rramc::Nrf54lRramc::new()),
         _ => return None,
     };
     Some(dev)

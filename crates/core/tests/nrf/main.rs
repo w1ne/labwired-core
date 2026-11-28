@@ -38,6 +38,7 @@ mod nrf5340_gpiote;
 mod nrf5340_uicr;
 mod nrf54l15_boot;
 mod nrf54l15_ficr;
+mod nrf54l15_rramc;
 mod nrf54l15_smart_ring_probe;
 mod nrf54l_gpio_offsets;
 mod nrf54l_wdt;
