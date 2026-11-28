@@ -1,7 +1,7 @@
-# CH32V203C8T6 (LQFP48) GPIO blink, USART1 and SPI2 DMA
+# CH32V203C8T6 (LQFP48) GPIO blink, USART1, SPI2 DMA and timer interrupts
 
 Demand position: WCH is the Tier C vendor bet in the onboarding target list;
-CH32V203 has no measured JetBrains survey rank. This round adds SPI2 and DMA1
+CH32V203 has no measured JetBrains survey rank. This round adds TIM1..TIM4
 coverage to the existing part, so it is capability follow-up work, not a top-ranked
 demand pick.
 
@@ -151,6 +151,30 @@ ch32fun's own `spidmatest` is not used as the smoke: it loads CNTR while the
 channel is enabled, which the RM states is read-only once EN is set, so its
 behaviour on silicon is not defined by the documentation.
 
+## Timer interrupts
+
+The [complete `ch32fun` source](./tim_irq.c) runs TIM2 and TIM1 at PSC 143 and
+ATRLR 999. SystemInit leaves both timer kernels at 144 MHz, so each timer
+counts at 1 MHz and updates at 1 kHz. TIM2 enables only the update interrupt
+(PFIC IRQ 44). TIM1 enables only the CH1 compare interrupt at CH1CVR 250, so
+the event must reach TIM1_CC_IRQn 43 and not TIM1_UP_IRQn 41. The TIM2
+handler reads the 64-bit SysTick (HCLK/8) at update 1 and at update 11, then
+stops both timers. USART1 prints:
+
+```text
+TIM2_UP=11 ms=10 TIM1_CC1=11
+```
+
+```sh
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v203c8t6/tim-irq-smoke.yaml \
+  --output-dir out/boards/ch32v203c8t6/tim-irq-smoke --no-uart-stdout
+```
+
+`ch32_compiled_firmware::ch32v203_tim2_update_stays_unhandled_without_irq_44_wired`
+is the negative control: with the TIM2 `irq` removed from the descriptor, the
+firmware prints `TIM_TIMEOUT up=0`.
+
 ## Scope
 
 These smokes exercise the local simulator's QingKe V4B core, the PFIC, the
@@ -159,9 +183,13 @@ and USART1/USART2 TX. USART1 RXNE is exercised through PFIC IRQ 53; USART2
 IRQ 54 is wired in the descriptor but not firmware-tested. SPI2 TX on DMA1
 channel 5 with its PFIC IRQ 31 is exercised; SPI1, SPI RX, the other DMA
 channels and memory-to-memory DMA run the same F1 models but have no V203
-smoke. The SPI high-speed bit (HSCR) has no timing effect. The model has no
-timers, ADC, I2C, CAN or USB, no PFIC interrupt nesting and no V4
-priority grouping. The RCC
+smoke. The SPI high-speed bit (HSCR) has no timing effect. TIM2 update
+(IRQ 44) and TIM1 CH1 compare (IRQ 43) are exercised; TIM1 BRK/UP/TRG_COM
+(40..42) and TIM3/TIM4 (45/46) are wired but not firmware-tested. Timer
+channel outputs and capture inputs are not routed to GPIO pads, so PWM on a
+pin and input capture do not work on this part in the model. The model has
+no ADC, I2C, CAN or USB, no PFIC interrupt nesting and no V4 priority
+grouping. The RCC
 decodes PLLMUL with the STM32F1 table, so a PLLMUL setting of x18 reads as x16
 in the model; `cpu_hz` states the 144 MHz instead. No CH32V203 has been
 compared with the model over SDI, and CH32V203 is not a hosted LabWired

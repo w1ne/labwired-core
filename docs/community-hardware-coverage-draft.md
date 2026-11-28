@@ -955,7 +955,7 @@ RXNE, vectors IRQ 53 through the QingKe PFIC, and transmits the received bytes
 back through USART1 TX. The no-IRQ negative control prints a timeout marker
 instead of echoing bytes. This is local simulator evidence; it is not hardware
 confirmation. USART2 IRQ
-54 is wired but has no firmware smoke yet. Timers, ADC, I2C, CAN and USB
+54 is wired but has no firmware smoke yet. ADC, I2C, CAN and USB
 remain outside the model.
 
 - [Copy-paste C example, smoke command, and stated model scope](../examples/ch32v203c8t6/README.md#usart-rx-irq)
@@ -974,3 +974,16 @@ V203 smoke.
 
 - [Copy-paste C example, smoke command, and stated model scope](../examples/ch32v203c8t6/README.md#spi2-tx-dma)
 - [Committed SPI2 DMA smoke evidence](../examples/ch32v203c8t6/evidence/spi-dma-smoke/)
+
+### WCH CH32V203C8T6 — TIM2 update and TIM1 compare interrupts
+
+A ch32fun-based fixture runs TIM2 and TIM1 at 1 kHz. The TIM2 update
+interrupt (PFIC IRQ 44) and the TIM1 CH1 compare interrupt (PFIC IRQ 43)
+count events, and USART1 prints `TIM2_UP=11 ms=10 TIM1_CC1=11`: 10 update
+periods measure 10 ms of SysTick time. With the TIM2 IRQ line removed from
+the descriptor, no TIM2 handler runs. This is local simulator evidence; it is
+not hardware confirmation. Timer outputs and capture inputs do not reach GPIO
+pads, and TIM3/TIM4 have no V203 smoke.
+
+- [Copy-paste C example, smoke command, and stated model scope](../examples/ch32v203c8t6/README.md#timer-interrupts)
+- [Committed timer interrupt smoke evidence](../examples/ch32v203c8t6/evidence/tim-irq-smoke/)

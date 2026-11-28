@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="2" failures="0" errors="0" time="1.042312">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="AssertionsPassed"/>
+    <property name="firmware_hash" value="8ca2722244ddce713b6d2e010d94a4c203fad74427973f2d31330a22dacd2787"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="1.042312">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: TIM2_UP=11 ms=10 TIM1_CC1=" time="0.000000">
+  </testcase>
+</testsuite>
