@@ -1,9 +1,9 @@
-# CH32V203C8T6 (LQFP48) GPIO blink, USART1, SPI2 DMA, timers, ADC and I2C
+# CH32V203C8T6 (LQFP48) GPIO blink, USART1, SPI2 DMA, timers, PWM, ADC and I2C
 
 Demand position: WCH is the Tier C vendor bet in the onboarding target list;
-CH32V203 has no measured JetBrains survey rank. This round adds I2C1/I2C2
-coverage to the existing part, so it is capability follow-up work, not a top-ranked
-demand pick.
+CH32V203 has no measured JetBrains survey rank. This round proves timer PWM
+output and input capture on the pads of the existing part, so it is capability
+follow-up work, not a top-ranked demand pick.
 
 The CH32V203C8T6 is a WCH QingKe V4B (RV32IMAC) microcontroller: 144 MHz
 maximum, 64 KB zero-wait flash, 20 KB SRAM and 37 GPIOs in LQFP48
@@ -175,6 +175,41 @@ cargo run -q -p labwired-cli -- test \
 is the negative control: with the TIM2 `irq` removed from the descriptor, the
 firmware prints `TIM_TIMEOUT up=0`.
 
+## PWM output and input capture
+
+The [complete `ch32fun` source](./tim_pwm_capture.c) drives PA6 (TIM3_CH1,
+default map) with PWM mode 1 at PSC 143, ATRLR 999 and CH1CVR 250: a 1 kHz
+wave that is high for 250 us. TIM2 counts at 1 MHz and captures PA0
+(TIM2_CH1): CH1 latches rising edges and CH2 latches falling edges of the same
+input (CC2S = 10, CC2P). The TIM2 handler (PFIC IRQ 44) keeps the first rise,
+the fall after it and the second rise. USART1 prints the period and the high
+time in units of 10 us:
+
+```text
+PWM_IC period_10us=100 high_10us=25
+```
+
+```sh
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v203c8t6/tim-pwm-capture-smoke.yaml \
+  --output-dir out/boards/ch32v203c8t6/tim-pwm-capture-smoke --no-uart-stdout
+```
+
+A single-chip system file has no pad-to-pad wire. The smoke script therefore
+checks the two pads separately: a signal source puts rise, fall, rise on PA0 at
+2 000 000, 2 036 000 and 2 144 000 cycles (the same 250 us in 1000 us at
+144 MHz), and a probe on PA6 must count at least 100 edges. The vendor test
+`ch32_compiled_firmware::ch32v203_tim3_ch1_pwm_reaches_pa6_and_tim2_captures_it_on_pa0`
+joins PA6 to PA0, requires the same UART line, and measures the PA6 pad at
+144 000 cycles per period and 36 000 cycles high. Its negative control,
+`ch32v203_tim2_captures_nothing_without_the_pa6_to_pa0_wire`, removes the wire
+and requires `PWM_IC_TIMEOUT rises=0 fall=0`.
+
+The pads are the STM32F1 default map: TIM1 CH1..4 on PA8..PA11, TIM2 CH1..4
+on PA0..PA3, TIM3 CH1..4 on PA6/PA7/PB0/PB1 and TIM4 CH1..4 on PB6..PB9. The
+openwch Arduino core lists the same pads for this part with every AFIO remap
+disabled (`variants/CH32V20x/CH32V203C8/PeripheralPins.c`, `PinMap_TIM`).
+
 ## ADC
 
 The [complete `ch32fun` source](./adc_irq.c) powers on ADC1 and ADC2, runs
@@ -235,9 +270,11 @@ channel 5 with its PFIC IRQ 31 is exercised; SPI1, SPI RX, the other DMA
 channels and memory-to-memory DMA run the same F1 models but have no V203
 smoke. The SPI high-speed bit (HSCR) has no timing effect. TIM2 update
 (IRQ 44) and TIM1 CH1 compare (IRQ 43) are exercised; TIM1 BRK/UP/TRG_COM
-(40..42) and TIM3/TIM4 (45/46) are wired but not firmware-tested. Timer
-channel outputs and capture inputs are not routed to GPIO pads, so PWM on a
-pin and input capture do not work on this part in the model. The model has
+(40..42) and TIM3/TIM4 (45/46) are wired but not firmware-tested. TIM3 CH1
+PWM on PA6 and TIM2 CH1/CH2 capture on PA0 are exercised; the other channels
+use the same default-map table and have no V203 smoke. The AFIO timer remaps
+(PCFR1) are not decoded, and the TIM1 complementary outputs (CH1N..CH3N on
+PB13..PB15) reach no pad. The model has
 ADC1/ADC2 single software-started
 conversions, calibration and the EOC interrupt (IRQ 34). The model has no
 V20x ADC PGA gain, TKey touch-key mode, dual-ADC modes, external-trigger

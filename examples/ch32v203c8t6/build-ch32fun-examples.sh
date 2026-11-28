@@ -87,7 +87,7 @@ for example in examples_v20x/blink examples_v20x/debugprintfdemo examples_v20x/e
   "${prefix}size" "${out_dir}/${name}.elf"
 done
 
-for name in usart_rx_irq spi_dma_tx tim_irq adc_irq i2c_bme280; do
+for name in usart_rx_irq spi_dma_tx tim_irq tim_pwm_capture adc_irq i2c_bme280; do
   "${prefix}gcc" -o "${out_dir}/${name}.elf" \
     "${src}/ch32fun/ch32fun.c" "${repo_root}/examples/ch32v203c8t6/${name}.c" \
     -g -Os -flto -ffunction-sections -fdata-sections -fmessage-length=0 \

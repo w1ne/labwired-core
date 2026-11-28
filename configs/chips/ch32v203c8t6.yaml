@@ -30,9 +30,13 @@
 #     STM32F1 models; only SPI2 TX on DMA1 channel 5 is smoke-tested. The
 #     SPI high-speed bit (HSCR) has no timing effect.
 #     TIM1 (advanced, split BRK/UP/TRG_COM/CC lines 40..43) and TIM2..TIM4
-#     (44..46) run the STM32F1 timer model for counting and interrupts only:
-#     channel outputs and capture inputs reach no GPIO pad. Only the TIM2
-#     update and TIM1 CH1 compare interrupts are smoke-tested.
+#     (44..46) run the STM32F1 timer model. Channel outputs and capture
+#     inputs use the default (no-remap) pad map, equal to the STM32F1 map
+#     (openwch arduino_core_ch32 variants/CH32V20x/CH32V203C8/PeripheralPins.c):
+#     TIM1 PA8..PA11, TIM2 PA0..PA3, TIM3 PA6/PA7/PB0/PB1, TIM4 PB6..PB9.
+#     The TIM2 update and TIM1 CH1 compare interrupts, TIM3 CH1 PWM on PA6
+#     and TIM2 CH1/CH2 capture on PA0 are smoke-tested. No AFIO timer
+#     remap (PCFR1); TIM1 CH1N..CH3N reach no pad.
 #     ADC1/ADC2 run the STM32F1 ADC model (12-bit, shared PFIC line 34);
 #     software-started single conversions, calibration and the ADC1 EOC
 #     interrupt are smoke-tested. No PGA gain, TKey or dual-ADC modes.
@@ -256,8 +260,11 @@ peripherals:
   # (TIM1EN = APB2PCENR bit 11); TIM2..TIM4 are general-purpose (APB1PCENR
   # bits 0..2). PFIC lines from ch32v20xhw.h IRQn: TIM1_BRK 40, TIM1_UP 41,
   # TIM1_TRG_COM 42, TIM1_CC 43, TIM2 44, TIM3 45, TIM4 46 (F1 vectors
-  # 24..30 + 16). No pad_map: channel outputs and capture inputs are not
-  # routed to GPIO pads on this part.
+  # 24..30 + 16). No `pad_map` key: the F1-layout GPIO ports take the
+  # built-in STM32F1 default map. The openwch Arduino core's PinMap_TIM for
+  # the CH32V203C8 lists the same pads with every AFIO remap disabled (TIM1
+  # PA8..PA11, TIM2 PA0..PA3, TIM3 PA6/PA7/PB0/PB1, TIM4 PB6..PB9). The
+  # AFIO PCFR1 timer remaps are not decoded.
   - id: "tim1"
     type: "timer"
     base_address: 0x40012C00

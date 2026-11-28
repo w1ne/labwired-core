@@ -1,0 +1,12 @@
+# CH32V203C8T6 running tim_pwm_capture.c: PA6 (TIM3_CH1) is the PWM output
+# under a logic probe, and PA0 (TIM2_CH1) is a floating capture input driven
+# by a signal source. The source is declared as a contact to 3.3 V so the
+# smoke script can place its edges at exact engine cycles. Both are test
+# connections, not parts of a board.
+name: ch32v203c8t6-tim-pwm
+chip: ../../configs/chips/ch32v203c8t6.yaml
+cpu_hz: 144000000
+external_devices: []
+board_io:
+  - { id: source_pa0, kind: button, peripheral: gpioa, pin: 0, signal: input, active_high: true }
+  - { id: probe_pa6, kind: led, peripheral: gpioa, pin: 6, signal: output, active_high: true }
