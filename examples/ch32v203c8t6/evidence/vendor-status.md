@@ -9,3 +9,7 @@
   listing describes the CH32V203 family and links the datasheet, but has no
   lifecycle field. The distributor listing is the buyability evidence; this
   is not a WCH lifecycle claim.
+- Rechecked: 2026-11-28. LCSC's live WCH catalog
+  (https://www.lcsc.com/brand/941-271.html) lists CH32V203C8T6 / C3001172 as
+  "13,031 In Stock". The listing is the availability evidence; WCH still does
+  not publish a lifecycle field on the product page.
