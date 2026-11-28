@@ -267,6 +267,15 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no SPI bring-up for the WCH V20x family in this harness yet; SPI2 TX \
          DMA is proven by ch32_compiled_firmware",
     ),
+    // CH32V203C8T6 I2C1/I2C2: F1-layout I2C with no WCH V20x drive in this
+    // harness. Master reads on both buses are proven by
+    // ch32_compiled_firmware::ch32v203_i2c1_polled_and_i2c2_event_irq_49_read_the_bme280s.
+    (
+        "ch32v203c8t6",
+        BusKind::I2c,
+        "no I2C bring-up for the WCH V20x family in this harness yet; I2C1 and \
+         I2C2 master reads are proven by ch32_compiled_firmware",
+    ),
     // F4U6 (QFN20), A4M6 (SOP16) and J4M6 (SOP8) are package variants of the
     // F4P6 die with the same pad-gated USART1 on PD5. Bytes are proven by
     // ch32v003_compiled_firmware::ch32v003_package_variants_print_on_usart1_pd5.

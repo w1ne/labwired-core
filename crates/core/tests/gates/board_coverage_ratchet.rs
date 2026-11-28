@@ -973,8 +973,9 @@ fn every_shipped_descriptor_is_ratcheted() {
         // polled USART1/USART2 TX, USART1/2 RXNE vectors to PFIC IRQs 53/54,
         // EXTI vectors to the PFIC, SPI1/SPI2 with F1-layout DMA1
         // (per-channel PFIC IRQs 27..33), TIM1..TIM4 counting and
-        // interrupts (PFIC IRQs 40..46, no pads), and F1-layout ADC1/ADC2
-        // (shared PFIC IRQ 34). No I2C, CAN or USB.
+        // interrupts (PFIC IRQs 40..46, no pads), F1-layout ADC1/ADC2
+        // (shared PFIC IRQ 34), and F1-layout I2C1/I2C2 masters (PFIC IRQs
+        // 47..50). No CAN or USB.
         // Booted by committed ELFs. No catalog board, no silicon oracle, no
         // differential.
         "ch32v203c8t6",
