@@ -14,8 +14,8 @@ list fixture paths, and helper tests do not count: they prove the model,
 not the board.
 
 - Profiles in `configs/systems/`: **441**
-- Covered end to end: **140**
-- Not covered: **301**
+- Covered end to end: **141**
+- Not covered: **300**
 - Not covered but with an ADC pad map: **0** (these are the
   boards the generic NTC and diode decks can reach next; the rest need an
   `analog_pins:` block or `adc` pin functions, an ADC model, or a digital
@@ -69,7 +69,6 @@ None.
 | `mimxrt595-evk` | `mimxrt595s` | 0 |
 | `mpfs-disco-kit` | `mpfs095t` | 0 |
 | `nano-33-iot` | `atsamd21` | 0 |
-| `nrf52-dk` | `nrf52832` | 0 |
 | `nrf5340dk` | `nrf5340` | 0 |
 | `nrf54l05-sim` | `nrf54l05` | 0 |
 | `nrf54l10-sim` | `nrf54l10` | 0 |
@@ -402,6 +401,7 @@ None.
 | `iolinki-g0-startup` | `stm32g0b1re` | `crates/core/tests/analog/cosim_stm32g0b1_analog.rs` |
 | `labwired-demo-board` | `stm32f103` | `crates/core/tests/analog/cosim_stm32f1f4_catalog_analog.rs` |
 | `microbit-v2` | `nrf52833` | `crates/core/tests/analog/cosim_microbit_v2_analog.rs` |
+| `nrf52-dk` | `nrf52832` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
 | `nrf52840-dk` | `nrf52840` | `crates/core/tests/analog/cosim_nrf52840_family_analog.rs` |
 | `nucleo-f103rb-epaper` | `stm32f103rb` | `crates/core/tests/analog/cosim_nucleo_f103rb_analog.rs` |
 | `nucleo-f103rb` | `stm32f103rb` | `crates/core/tests/analog/cosim_nucleo_f103rb_analog.rs` |
