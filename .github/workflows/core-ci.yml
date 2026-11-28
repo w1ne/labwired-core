@@ -847,7 +847,7 @@ jobs:
           save-if: false
 
       - name: Install ngspice reference engine
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ngspice
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ngspice libngspice0
 
       - name: Compare in-core analog traces against ngspice
         env:
