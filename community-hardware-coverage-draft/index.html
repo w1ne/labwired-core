@@ -5260,6 +5260,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#wch-ch32v203c8t6-spi2-tx-on-dma1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WCH CH32V203C8T6 — SPI2 TX on DMA1
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -6152,12 +6163,24 @@ RXNE, vectors IRQ 53 through the QingKe PFIC, and transmits the received bytes
 back through USART1 TX. The no-IRQ negative control prints a timeout marker
 instead of echoing bytes. This is local simulator evidence; it is not hardware
 confirmation. USART2 IRQ
-54 is wired but has no firmware smoke yet. DMA, timers, ADC, I2C, SPI, CAN and
-USB remain outside the model.</p>
+54 is wired but has no firmware smoke yet. Timers, ADC, I2C, CAN and USB
+remain outside the model.</p>
 <ul>
 <li><a href="../examples/ch32v203c8t6/README.md#usart-rx-irq">Copy-paste C example, smoke command, and stated model scope</a></li>
 <li><a href="../examples/ch32v203c8t6/evidence/vendor-status.md">Live WCH product and LCSC availability receipt</a></li>
 <li><a href="../examples/ch32v203c8t6/evidence/ch32fun-usart-rx-irq-smoke/">Committed USART1 RX IRQ smoke evidence</a></li>
+</ul>
+<h3 id="wch-ch32v203c8t6-spi2-tx-on-dma1">WCH CH32V203C8T6 — SPI2 TX on DMA1</h3>
+<p>A ch32fun-based fixture runs SPI2 as a 16-bit master fed by DMA1 channel 5 in
+circular mode. The channel 5 interrupt (PFIC IRQ 31) logs half-transfer and
+transfer-complete for three laps, and USART1 prints
+<code>SPI2_DMA events=HTHTHT laps=3 cntr=8</code>. With the DMA channel IRQ lines removed
+from the descriptor, no handler runs. This is local simulator evidence; it is
+not hardware confirmation. SPI1, SPI RX and the other DMA channels have no
+V203 smoke.</p>
+<ul>
+<li><a href="../examples/ch32v203c8t6/README.md#spi2-tx-dma">Copy-paste C example, smoke command, and stated model scope</a></li>
+<li><a href="../examples/ch32v203c8t6/evidence/spi-dma-smoke/">Committed SPI2 DMA smoke evidence</a></li>
 </ul>
 
 
