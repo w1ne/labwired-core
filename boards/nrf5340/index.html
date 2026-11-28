@@ -5088,7 +5088,7 @@ authoritative, auto-generated view see the
 </tr>
 <tr>
 <td>Validation</td>
-<td>Zephyr survival + <code>nrf5340_clock_boot</code> + <code>nrf5340_ficr</code></td>
+<td>Zephyr survival + <code>nrf5340_clock_boot</code> + <code>nrf5340_ficr</code> + <code>nrf5340_gpiote</code></td>
 </tr>
 <tr>
 <td>Tier</td>
@@ -5113,6 +5113,11 @@ and its 4-KiB page size × 256-page code size agrees with the chip profile's
 1-MiB flash. The SVD leaves per-device IDs, RAM/FLASH variants, and trim values
 unspecified; the model preserves those erased values rather than assigning a
 specific production device.</p>
+<p>GPIOTE0 uses the shared Nordic task/event model at the secure SVD address
+<code>0x5000D000</code>. The integration gate configures channel 0, triggers
+<code>TASKS_SET0</code>, and observes the selected bit in the GPIO model's <code>GPIO0.IN</code>
+input latch. This checks task-to-port readback; external electrical pad routing
+is not asserted, and this is not a silicon capture.</p>
 <h2 id="peripherals-from-chip-yaml">Peripherals (from chip yaml)</h2>
 <table>
 <thead>
@@ -5179,7 +5184,13 @@ specific production device.</p>
 <td>INFO.PART and flash geometry; unspecified device IDs, variants, and trims remain erased</td>
 </tr>
 <tr>
-<td>DCNF, FPU, CACHE, SPU, OSC/REG, CTRL-AP, GPIOTE0, UICR, trim target</td>
+<td>GPIOTE0</td>
+<td>0x5000_D000</td>
+<td>✅ behavioral</td>
+<td>Task/event model; GPIO0.IN task readback is tested; external pad routing and full cross-peripheral DPPI are not claimed</td>
+</tr>
+<tr>
+<td>DCNF, FPU, CACHE, SPU, OSC/REG, CTRL-AP, UICR, trim target</td>
 <td>various</td>
 <td>⚪ benign stub</td>
 <td>Boot-path windows remain bounded zero-answering placeholders</td>

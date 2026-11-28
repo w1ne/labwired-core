@@ -1,0 +1,24 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+   Compiling labwired-core v0.26.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/core)
+    Finished `test` profile [optimized] target(s) in 3.73s
+     Running tests/nrf/main.rs (/data/cargo-pool/labwired-core/lanes/renode/debug/deps/nrf-c5a11bb656de55fd)
+
+running 2 tests
+test nrf5340_gpiote::gpiote_task_set_updates_selected_gpio0_input_latch ... ok
+test nrf5340_gpiote::legacy_fuzzy_gpio_type_does_not_latch_a_gpiote_task ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 88 filtered out; finished in 0.06s
