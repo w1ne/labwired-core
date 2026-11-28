@@ -16,6 +16,7 @@
 //! actually booted from flash and painted the OLED — proving "the flash image is
 //! the program the real ROM loads" without any ELF present.
 
+use sha2::Digest;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -133,6 +134,21 @@ fn c3_rom_boot_runs_with_flash_and_no_elf() {
     assert!(
         !result_json.contains("\"config_error\""),
         "run ended in a config_error (firmware still required?):\n{result_json}\nstderr:\n{stderr}"
+    );
+
+    let result: serde_json::Value = serde_json::from_str(&result_json).expect("parse result.json");
+    let expected_hash = format!(
+        "{:x}",
+        sha2::Sha256::digest(std::fs::read(&flash).expect("read flash for hash"))
+    );
+    assert_eq!(
+        result.get("firmware_hash").and_then(|v| v.as_str()),
+        Some(expected_hash.as_str()),
+        "result provenance must identify the exact executed flash image"
+    );
+    assert_ne!(
+        expected_hash,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     );
     assert!(
         output.status.success(),
