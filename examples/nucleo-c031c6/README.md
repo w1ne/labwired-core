@@ -37,3 +37,8 @@ Not routable yet: PB2, PB10, PB11 and PB12 (IN19-IN22). The shared `stm32g0`
 ADC model converts CHSEL0..18 only, so the router refuses those pads. The
 test is `crates/core/tests/analog/cosim_stm32g0b1_analog.rs`
 (`cargo test -p labwired-core --test analog cosim_stm32g0b1`).
+
+On this board PA2/PA3 carry the ST-LINK VCP, PA5 drives LD4 and PA13/PA14
+carry SWD (PA14 is also BOOT0). The map lists them because the silicon can
+convert them; a deck on those pads routes without a warning, so keep analog
+loads on free header pads.

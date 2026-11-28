@@ -492,10 +492,21 @@ fn pb0_converts_on_the_family_specific_channel() {
 /// pad instead of binding a channel the model would drop.
 #[test]
 fn c031_pb2_past_the_model_channel_count_is_refused() {
-    let (chip, _machine, session) = session_with_diode_on(
+    let (chip, machine, session) = session_with_diode_on(
         "configs/systems/nucleo-c031c6.yaml",
         "examples/nucleo-c031c6/analog-ntc-diode-pa0-pa1-system.yaml",
         "PB2",
+    );
+    // The exclusion rests on the model's channel count. If the G0/C0 model is
+    // widened, this fails and the C031 map must gain PB2 and PB10..PB12.
+    let adc = machine
+        .bus
+        .find_peripheral_index_by_name("adc1")
+        .expect("the C031 bus carries adc1");
+    assert_eq!(
+        machine.bus.peripherals[adc].dev.adc_channel_count(),
+        Some(19),
+        "the shared stm32g0 model converts CHSEL0..18; update the C031 map if this changes"
     );
     assert!(
         !chip.analog_pin_table().contains_key("PB2"),

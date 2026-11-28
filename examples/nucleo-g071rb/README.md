@@ -85,3 +85,8 @@ line into `board.analog.pa1_volts` (ADC1_IN1). The descriptor's
 PC4/PC5 = IN17/IN18), so a deck can route to any of these pads. The test is
 `crates/core/tests/analog/cosim_stm32g0b1_analog.rs`
 (`cargo test -p labwired-core --test analog cosim_stm32g0b1`).
+
+On this board PA2/PA3 carry the ST-LINK VCP, PA5 drives LD4 and PA13/PA14
+carry SWD. The map lists them because the silicon can
+convert them; a deck on those pads routes without a warning, so keep analog
+loads on free header pads.
